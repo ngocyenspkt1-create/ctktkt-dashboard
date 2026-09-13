@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { metrics, validateMeasurement } from "../lib/metrics";
+import { AnnualPlanner } from "../components/annual-planner";
 
 type Row = { id: number; metricCode: string; period: string; actual: string; limitValue: string; note: string; createdAt: string };
 const format = (v: number) => new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 }).format(v);
@@ -66,6 +67,7 @@ export default function Home() {
   return <main className="min-h-screen bg-[#edf3f4] text-[#15252a]">
     <header className="bg-[#123c47] px-5 py-6 text-white"><div className="mx-auto max-w-7xl"><p className="text-sm font-semibold text-[#aee0df]">PXVH1 · BẢN KIỂM THỬ</p><h1 className="mt-1 text-2xl font-bold">Chỉ tiêu kinh tế kỹ thuật</h1></div></header>
     <div className="mx-auto max-w-7xl space-y-5 p-5">
+      <AnnualPlanner />
       <div className="flex flex-wrap items-end justify-between gap-4"><label className="grid gap-2 font-semibold">Kỳ theo dõi<input aria-label="Kỳ theo dõi" type="month" min="1900-01" max="2199-12" disabled={saving} value={period} onChange={e => setPeriod(e.target.value)} className={control} /></label><button className={button} disabled={saving || loading} onClick={() => setReload(v => v + 1)}>Tải lại dữ liệu</button></div>
       <p className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm leading-6">Định mức tham khảo từ sổ PXVH1, chưa xác nhận kỳ hiệu lực và người phê duyệt. Cảnh báo chỉ phục vụ kiểm thử, chưa dùng để kết luận vận hành. Không có số liệu mẫu trong kết quả.</p>
       {error && <p role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-800">{error}</p>}
