@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const measurements = sqliteTable("measurements", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -10,4 +10,4 @@ export const measurements = sqliteTable("measurements", {
   limitValue: text("limit_value").notNull(),
   note: text("note").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+}, table => [index("idx_measurements_metric_period").on(table.metricCode, table.period)]);

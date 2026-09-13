@@ -4,8 +4,8 @@
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1789185600000,
+      "version": "6",
+      "when": 1789227074395,
       "tag": "0000_initial_measurements",
       "breakpoints": true
     }

@@ -1,15 +1,29 @@
-import { desc } from "drizzle-orm";
-import { getDb } from "../../../db";
-import { measurements } from "../../../db/schema";
+import { getRawDb } from "../../../db";
+import { validateMeasurement } from "../../../lib/metrics";
 
-function unavailable(error: unknown) { const message = error instanceof Error ? error.message : "Không thể truy cập kho dữ liệu."; return Response.json({ error: message }, { status: 500 }); }
-export async function GET() { try { const rows = await getDb().select().from(measurements).orderBy(desc(measurements.id)).limit(100); return Response.json({ measurements: rows }); } catch (error) { return unavailable(error); } }
-export async function POST(request: Request) {
+const unavailable = () => Response.json({ error: "Chưa truy cập được kho dữ liệu. Số liệu chưa được lưu; hãy giữ nội dung nhập và thử lại." }, { status: 503 });
+const columns = "id, metric_code AS metricCode, metric_name AS metricName, period, actual, limit_value AS limitValue, note, created_at AS createdAt";
+export async function GET(request: Request) {
+  const period = new URL(request.url).searchParams.get("period");
+  if (!period || !/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/.test(period)) return Response.json({ error: "Kỳ không hợp lệ." }, { status: 400 });
   try {
-    const input = (await request.json()) as Record<string, unknown>;
-    const metricCode = String(input.metricCode ?? "").trim(); const metricName = String(input.metricName ?? "").trim(); const period = String(input.period ?? "").trim(); const actual = Number(input.actual); const limitValue = Number(input.limitValue); const note = String(input.note ?? "").trim();
-    if (!metricCode || !metricName || !/^\d{4}-\d{2}$/.test(period) || !Number.isFinite(actual) || actual < 0 || !Number.isFinite(limitValue)) return Response.json({ error: "Dữ liệu chỉ tiêu chưa hợp lệ." }, { status: 400 });
-    const [saved] = await getDb().insert(measurements).values({ metricCode, metricName, period, actual: String(actual), limitValue: String(limitValue), note }).returning();
+    const { results: rows } = await getRawDb().prepare(`SELECT ${columns} FROM measurements WHERE period = ? ORDER BY id DESC LIMIT 1000`).bind(period).all();
+    return Response.json({ measurements: rows, truncated: rows.length === 1000 }, { headers: { "Cache-Control": "no-store" } });
+  } catch { return unavailable(); }
+}
+export async function POST(request: Request) {
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
+  if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
+  let values;
+  try {
+    const body = await request.text();
+    if (body.length > 8000) return Response.json({ error: "Dữ liệu quá dài." }, { status: 413 });
+    values = validateMeasurement(JSON.parse(body));
+  } catch (error) { return Response.json({ error: error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ." }, { status: 400 }); }
+  try {
+    const saved = await getRawDb().prepare(`INSERT INTO measurements (metric_code, metric_name, period, actual, limit_value, note) VALUES (?, ?, ?, ?, ?, ?) RETURNING ${columns}`).bind(values.metricCode, values.metricName, values.period, values.actual, values.limitValue, values.note).first();
+    if (!saved) return unavailable();
     return Response.json({ measurement: saved }, { status: 201 });
-  } catch (error) { return unavailable(error); }
+  } catch { return unavailable(); }
 }
