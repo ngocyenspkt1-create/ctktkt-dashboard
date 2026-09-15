@@ -1,3 +1,5 @@
+importScripts("meter-extract.js");
+
 const QLKT_PATTERN = /^https?:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\//i;
 // Địa chỉ cố định của màn hình "Số liệu đo đếm công tơ" — dùng làm mặc định
 // để tiện ích luôn mở đúng thẳng vào đây, không phụ thuộc việc "ghi nhớ"
@@ -76,6 +78,56 @@ async function readValuesWithRetry(tabId, attempts = 10, intervalMs = 500) {
   return result;
 }
 
+async function readMeterFromPageWorld(tabId, operatingDate, sourcePage) {
+  const executions = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: () => {
+      const arrays = [], seenObjects = new WeakSet(), seenArrays = new Set();
+      const collect = (value, depth) => {
+        if (!value || depth < 0 || (typeof value !== "object" && !Array.isArray(value))) return;
+        if (typeof Node !== "undefined" && value instanceof Node) return;
+        if (typeof Window !== "undefined" && value instanceof Window) return;
+        if (Array.isArray(value)) {
+          if (value.some(row => Array.isArray(row) && row.length >= 53)) {
+            let signature;
+            try { signature = JSON.stringify(value); } catch { return; }
+            if (!seenArrays.has(signature)) { seenArrays.add(signature); arrays.push(value); }
+            return;
+          }
+          if (depth > 0) value.slice(0, 100).forEach(item => collect(item, depth - 1));
+          return;
+        }
+        if (seenObjects.has(value)) return;
+        seenObjects.add(value);
+        if (depth === 0) return;
+        let keys = [];
+        try { keys = Object.keys(value).slice(0, 200); } catch { return; }
+        for (const key of keys) {
+          try { collect(value[key], depth - 1); } catch { /* ignore page getters */ }
+        }
+      };
+      const widgets = globalThis.PrimeFaces?.widgets || {};
+      collect(widgets, 4);
+      for (const name of ["sheetWidget", "widget_sheetWidget"]) {
+        try { collect(typeof globalThis.PF === "function" ? globalThis.PF(name) : null, 4); } catch { /* widget not found */ }
+        try { collect(globalThis[name], 4); } catch { /* global not found */ }
+      }
+      return { arrays, widgetNames: Object.keys(widgets), hasPrimeFaces: Boolean(globalThis.PrimeFaces) };
+    },
+  });
+  const snapshot = executions?.[0]?.result;
+  if (!snapshot?.arrays?.length) {
+    return { ok: false, error: `Không đọc được mảng dữ liệu từ widget QLKT. (PrimeFaces: ${snapshot?.hasPrimeFaces ? "có" : "không"}; widgets: ${(snapshot?.widgetNames || []).join(", ") || "không có"}.)` };
+  }
+  try {
+    const payload = globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays(snapshot.arrays, operatingDate, sourcePage);
+    return { ok: true, payload };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không đọc được dữ liệu widget công tơ QLKT." };
+  }
+}
+
 async function readSource(source, url, operatingDate) {
   let tabId;
   let createdTab = false;
@@ -124,7 +176,15 @@ async function readSource(source, url, operatingDate) {
     // hình khác, kể cả sau khi trình duyệt báo trang đã "tải xong". Vì vậy
     // cho nguồn "meter" một khoảng chờ và số lần thử lại nhiều hơn hẳn.
     await wait(isMeter ? (prepared.refreshed ? 4000 : 1500) : (prepared.refreshed ? 2500 : 400));
-    const result = isMeter ? await readValuesWithRetry(tabId, 40, 700) : await readValuesWithRetry(tabId);
+    let result;
+    if (isMeter) {
+      result = await readMeterFromPageWorld(tabId, operatingDate, current.url || url);
+      if (!result?.ok) {
+        const pageWorldError = result?.error || "Không đọc được widget QLKT.";
+        result = await readValuesWithRetry(tabId, 40, 700);
+        if (!result?.ok) result = { ...result, error: `${result?.error || "Không đọc được màn hình Công tơ PPA."} [Đọc trực tiếp widget: ${pageWorldError}]` };
+      }
+    } else result = await readValuesWithRetry(tabId);
     if (!result?.ok) throw new Error(result?.error || `Không đọc được màn hình ${SOURCE_LABELS[source]}.`);
     if (source === "meter") {
       if (result.payload?.kind !== "ppa-meter" || result.payload?.readings?.length !== 4) {

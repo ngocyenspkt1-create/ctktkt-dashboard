@@ -49,6 +49,8 @@ test('extracts the four PPA meters from the ExtSheet <script> data QLKT embeds i
   assert.equal(payload.readings.length, 4);
   assert.deepEqual(payload.readings.map(item => item.meter), ['DHA_S1', 'DH1_285M', 'DHA_S2', 'DH1_283M']);
   assert.ok(payload.readings.every(item => item.intervals.length === 48 && item.channel === 'kWhGiao'));
+  const widgetPayload = globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays([rows], '2026-09-14', 'http://qlkt/example');
+  assert.deepEqual(widgetPayload.readings, payload.readings);
 });
 
 test('script-based extractor rejects when no ExtSheet data is present on the page', () => {

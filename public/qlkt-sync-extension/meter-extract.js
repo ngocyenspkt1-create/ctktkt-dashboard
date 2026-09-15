@@ -155,5 +155,10 @@
     return { version: 1, kind: "ppa-meter", operatingDate, sourcePage, readings };
   }
 
-  globalThis.QlktMeterExtractor = { extractPpaMeterReadings, extractPpaMeterReadingsFromScripts };
+  function extractPpaMeterReadingsFromDataArrays(arrays, operatingDate, sourcePage = "QLKT · Số liệu đo đếm công tơ") {
+    const scriptTexts = (Array.isArray(arrays) ? arrays : []).map(data => `ExtSheet data:${JSON.stringify(data)}`);
+    return extractPpaMeterReadingsFromScripts(scriptTexts, operatingDate, sourcePage);
+  }
+
+  globalThis.QlktMeterExtractor = { extractPpaMeterReadings, extractPpaMeterReadingsFromScripts, extractPpaMeterReadingsFromDataArrays };
 })();
