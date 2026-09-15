@@ -122,13 +122,40 @@
   }
 
   function extractPpaMeterPayload(operatingDate) {
-    const extractor = globalThis.QlktMeterExtractor?.extractPpaMeterReadings;
-    if (!extractor) throw new Error("Bộ đọc công tơ PPA chưa được nạp. Hãy tải lại tiện ích.");
-    const tables = [...document.querySelectorAll("table")].map(table => [...table.rows].map(row => [...row.cells].map(cell => {
-      const input = cell.querySelector("input:not([type='checkbox']):not([type='radio']):not([type='hidden'])");
-      return input ? readValue(input) : cleanText(cell.textContent);
-    })));
-    return extractor(tables, operatingDate, location.href);
+    const extractors = globalThis.QlktMeterExtractor;
+    if (!extractors) throw new Error("Bộ đọc công tơ PPA chưa được nạp. Hãy tải lại tiện ích.");
+
+    // Cách 1 (ưu tiên): đọc thẳng dữ liệu đầy đủ mà QLKT nhúng sẵn trong các
+    // thẻ <script> khởi tạo bảng tính (không phụ thuộc bảng đã cuộn tới đâu).
+    let scriptError = null;
+    if (typeof extractors.extractPpaMeterReadingsFromScripts === "function") {
+      try {
+        const scriptTexts = [...document.querySelectorAll("script")].map(script => script.textContent || "");
+        return extractors.extractPpaMeterReadingsFromScripts(scriptTexts, operatingDate, location.href);
+      } catch (error) {
+        scriptError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    // Cách 2 (dự phòng): dò bảng HTML đang hiển thị trên trang.
+    let tableError = null;
+    if (typeof extractors.extractPpaMeterReadings === "function") {
+      try {
+        const tables = [...document.querySelectorAll("table")].map(table => [...table.rows].map(row => [...row.cells].map(cell => {
+          const input = cell.querySelector("input:not([type='checkbox']):not([type='radio']):not([type='hidden'])");
+          return input ? readValue(input) : cleanText(cell.textContent);
+        })));
+        return extractors.extractPpaMeterReadings(tables, operatingDate, location.href);
+      } catch (error) {
+        tableError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    // Cả hai cách đều thất bại: đính kèm URL/tiêu đề trang thực tế mà tab nền
+    // này đang đứng, để biết nó có đúng là màn hình công tơ hay đã bị chuyển
+    // sang trang khác (đăng nhập lại, chọn đơn vị, v.v.).
+    const pageDiag = `[Trang hiện tại: "${document.title || ""}" — ${location.href}]`;
+    throw new Error(`${scriptError || tableError || "Không đọc được dữ liệu bảng công tơ."} ${pageDiag}`);
   }
 
   function extract() {

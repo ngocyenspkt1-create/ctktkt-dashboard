@@ -2,7 +2,7 @@
 
 Tiện ích đọc dữ liệu trên màn hình QLKT đang mở và chuyển sang web Chỉ tiêu KTKT bằng dữ liệu tạm trong phần `#` của địa chỉ. Web xóa phần dữ liệu tạm này ngay sau khi đọc và luôn yêu cầu người dùng kiểm tra trước khi lưu.
 
-## Phạm vi phiên bản 0.3.1
+## Phạm vi phiên bản 0.4.3
 
 - Sản lượng đầu cực, điểm bán và số giờ phát S1/S2.
 - Nhiệt trị, than tiêu thụ S1/S2, than tồn kho và than nhập.
@@ -25,7 +25,7 @@ Tiện ích không đọc trường mật khẩu, không lưu thông tin đăng 
 ### Đồng bộ PPA bằng một nút trên web
 
 1. Chỉ lần đầu, mở **Vận hành → Số liệu đo đếm công tơ**, chờ bảng hiện đủ dữ liệu rồi mở tiện ích để dòng **Công tơ PPA** báo **Đã ghi nhớ**.
-2. Mở `http://localhost:5173/ppa-heat-rate` và nhấn F5. Trang phải báo **Tiện ích v0.3.1 đã kết nối**.
+2. Mở `http://localhost:5173/ppa-heat-rate` và nhấn F5. Trang phải báo **Tiện ích v0.4.3 đã kết nối**.
 3. Hằng ngày chỉ cần chọn ngày và bấm **Đồng bộ QLKT** ngay trên web. Tiện ích tự mở màn hình công tơ ở thẻ nền, lấy dữ liệu rồi đóng thẻ.
 
 Khi phiên QLKT hết hạn, đăng nhập QLKT lại rồi bấm đồng bộ. Dữ liệu luôn được đưa vào màn hình kiểm tra trước, chưa tự lưu vào kho dữ liệu.

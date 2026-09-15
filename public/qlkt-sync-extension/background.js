@@ -1,4 +1,8 @@
 const QLKT_PATTERN = /^https?:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\//i;
+// Địa chỉ cố định của màn hình "Số liệu đo đếm công tơ" — dùng làm mặc định
+// để tiện ích luôn mở đúng thẳng vào đây, không phụ thuộc việc "ghi nhớ"
+// trang trước đó có đúng/còn hiệu lực hay không.
+const DEFAULT_METER_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/solieucto.jsf";
 const SOURCE_LABELS = {
   production: "Sản lượng",
   fuel: "Nhiên liệu",
@@ -55,20 +59,30 @@ async function sendWithRetry(tabId, message, attempts = 10) {
   throw lastError || new Error("Không kết nối được với màn hình QLKT.");
 }
 
-async function readValuesWithRetry(tabId, attempts = 10) {
+async function readValuesWithRetry(tabId, attempts = 10, intervalMs = 500) {
   let result;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     result = await sendWithRetry(tabId, { type: "READ_QLKT_VALUES" });
     if (result?.ok) return result;
-    await wait(500);
+    await wait(intervalMs);
   }
   return result;
 }
 
 async function readSource(source, url, operatingDate) {
   let tabId;
+  const isMeter = source === "meter";
+  // Màn hình Công tơ PPA chỉ thực sự nạp bảng dữ liệu (ExtSheet) khi tab đang
+  // ở trạng thái hiển thị — QLKT có vẻ trì hoãn dựng bảng nặng này nếu tab
+  // chạy nền (active:false), nên với nguồn "meter" phải mở tab ở chế độ đang
+  // xem, rồi tự quay lại tab làm việc của người dùng sau khi lấy xong dữ liệu.
+  let previousActiveTabId;
   try {
-    const tab = await chrome.tabs.create({ url, active: false });
+    if (isMeter) {
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      previousActiveTabId = currentTab?.id;
+    }
+    const tab = await chrome.tabs.create({ url, active: isMeter });
     tabId = tab.id;
     if (!tabId) throw new Error(`Không mở được màn hình ${SOURCE_LABELS[source]}.`);
     await waitForTab(tabId);
@@ -76,8 +90,12 @@ async function readSource(source, url, operatingDate) {
     if (!QLKT_PATTERN.test(current.url || "")) throw new Error("Phiên đăng nhập QLKT đã hết hạn. Hãy đăng nhập lại rồi thử lại.");
     const prepared = await sendWithRetry(tabId, { type: "PREPARE_QLKT_DATE", operatingDate });
     if (!prepared?.ok) throw new Error(prepared?.error || `Không đặt được ngày tại màn hình ${SOURCE_LABELS[source]}.`);
-    await wait(prepared.refreshed ? 2500 : 400);
-    const result = await readValuesWithRetry(tabId);
+    // Màn hình Công tơ PPA (bảng ExtSheet 4 điểm đo × 48 chu kỳ) thường mất
+    // nhiều thời gian hơn để máy chủ QLKT nạp xong dữ liệu so với các màn
+    // hình khác, kể cả sau khi trình duyệt báo trang đã "tải xong". Vì vậy
+    // cho nguồn "meter" một khoảng chờ và số lần thử lại nhiều hơn hẳn.
+    await wait(isMeter ? (prepared.refreshed ? 4000 : 1500) : (prepared.refreshed ? 2500 : 400));
+    const result = isMeter ? await readValuesWithRetry(tabId, 40, 700) : await readValuesWithRetry(tabId);
     if (!result?.ok) throw new Error(result?.error || `Không đọc được màn hình ${SOURCE_LABELS[source]}.`);
     if (source === "meter") {
       if (result.payload?.kind !== "ppa-meter" || result.payload?.readings?.length !== 4) {
@@ -96,6 +114,7 @@ async function readSource(source, url, operatingDate) {
     return result.payload;
   } finally {
     if (tabId) chrome.tabs.remove(tabId).catch(() => {});
+    if (previousActiveTabId) chrome.tabs.update(previousActiveTabId, { active: true }).catch(() => {});
   }
 }
 
@@ -122,9 +141,10 @@ async function syncAll(operatingDate) {
 }
 
 async function syncPpa(operatingDate) {
-  const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
-  if (!qlktPages.meter) throw new Error("Thiếu địa chỉ Công tơ PPA. Chỉ lần đầu, hãy mở màn hình Số liệu đo đếm công tơ rồi mở tiện ích.");
-  return readSource("meter", qlktPages.meter, operatingDate);
+  // Luôn mở thẳng địa chỉ cố định của màn hình công tơ, không dùng địa chỉ đã
+  // "ghi nhớ" trước đó nữa — địa chỉ ghi nhớ có thể sai hoặc trỏ tới một biến
+  // thể khác của trang, gây mất thời gian dò mà không ra dữ liệu.
+  return readSource("meter", DEFAULT_METER_URL, operatingDate);
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

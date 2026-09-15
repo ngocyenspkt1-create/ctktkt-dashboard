@@ -162,7 +162,7 @@ export function PpaHeatRateComparison() {
     setError(""); setMessage("");
     if (!extensionVersion) {
       window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
-      setError("Web chưa kết nối với tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.3.1 rồi nhấn F5 trang này.");
+      setError("Web chưa kết nối với tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.3 rồi nhấn F5 trang này.");
       return;
     }
     if (qlktRequestRef.current) window.clearTimeout(qlktRequestRef.current.timer);

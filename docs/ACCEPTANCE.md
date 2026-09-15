@@ -59,17 +59,16 @@ Tính suất hao nhiệt theo hợp đồng PPA (công thức nội suy theo d�
 
 ## Đồng bộ QLKT bằng một nút (không cần mở tiện ích thủ công mỗi ngày)
 
-Đã hoàn thiện tiện ích trình duyệt "Đồng bộ QLKT" v0.3.1 (Chrome/Edge, tại `public/qlkt-sync-extension/`, gói tải về tại `/qlkt-sync-extension.zip`) và nối trực tiếp vào cả hai trang:
+Đã hoàn thiện tiện ích trình duyệt "Đồng bộ QLKT" v0.4.3 (Chrome/Edge, tại `public/qlkt-sync-extension/`, gói tải về tại `/qlkt-sync-extension.zip`) và nối trực tiếp vào cả hai trang:
 
 - **Bảng chỉ tiêu tháng** (trang chủ): nút "Đồng bộ QLKT" gọi tiện ích lấy đồng thời Sản lượng + Nhiên liệu + Vận hành cho ngày đã chọn, đổ vào bảng kiểm tra để chọn số liệu muốn đưa vào trước khi lưu.
 - **Trang suất hao nhiệt PPA**: nút "Đồng bộ QLKT" gọi tiện ích lấy riêng màn hình Số liệu đo đếm công tơ (đủ 4 điểm đo, 48 chu kỳ) cho ngày đang xem.
 
-Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy trên `localhost`/`127.0.0.1`, làm cầu nối `postMessage` giữa trang web và `background.js` của tiện ích (giao thức PING/READY, SYNC_ALL/SYNC_ALL_RESULT, SYNC_PPA/SYNC_PPA_RESULT, có mã yêu cầu và thời gian chờ tối đa). `background.js` tự mở tab nền tới các màn hình QLKT đã được "ghi nhớ" (chỉ cần mở tay một lần đầu), đặt đúng ngày, đọc giá trị qua `content.js` (dùng bộ trích xuất bảng công tơ PPA riêng ở `meter-extract.js`), rồi đóng tab. Web luôn báo rõ trạng thái kết nối ("Tiện ích vX đã kết nối"/"Chưa kết nối"), khóa nút trong lúc đồng bộ, và báo lỗi rõ ràng khi phiên đăng nhập QLKT hết hạn hoặc phản hồi quá lâu (60–90 giây tuỳ trang). Dữ liệu lấy về luôn qua bảng kiểm tra, không tự ghi vào kho.
+Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy trên `localhost`/`127.0.0.1`, làm cầu nối `postMessage` giữa trang web và `background.js` của tiện ích (giao thức PING/READY, SYNC_ALL/SYNC_ALL_RESULT, SYNC_PPA/SYNC_PPA_RESULT, có mã yêu cầu và thời gian chờ tối đa). `background.js` tự mở các màn hình QLKT, đặt đúng ngày, đọc giá trị qua `content.js`, rồi đóng tab. Riêng màn hình công tơ dùng địa chỉ cố định `/qlkt/sxd/solieucto.jsf` và được mở thành tab đang hiển thị vì QLKT không dựng đủ dữ liệu `ExtSheet` khi tab chạy nền; sau khi đọc xong tiện ích tự quay lại tab web trước đó. `meter-extract.js` đọc trực tiếp mảng JSON `data` của `PrimeFaces ExtSheet`, không phụ thuộc các hàng/cột đang được bảng ảo hóa hiển thị. Web luôn báo rõ trạng thái kết nối ("Tiện ích vX đã kết nối"/"Chưa kết nối"), khóa nút trong lúc đồng bộ, và báo lỗi rõ ràng khi phiên đăng nhập QLKT hết hạn hoặc phản hồi quá lâu (60–90 giây tuỳ trang). Dữ liệu lấy về luôn qua bảng kiểm tra, không tự ghi vào kho.
 
 ## Kiểm tra đã thực hiện cho phần bổ sung này
 
 - Đã đọc lại toàn bộ mã nguồn liên quan (`lib/qlkt-sync.ts`, `lib/ppa-heat-rate.ts`, hai trang web, cả 6 file của tiện ích) để rà soát tính nhất quán giữa các phần — không phát hiện đoạn dở dang, TODO hay hàm giả lập.
-- Đã chạy toàn bộ 21 trường hợp kiểm tra tự động hiện có (`node --test tests/*.mjs`), bao gồm 3 trường hợp mới cho bộ trích xuất bảng công tơ PPA (đọc đúng 4 điểm đo và 48 chu kỳ, từ chối khi tổng H1–H48 không khớp cột Tổng, mã hoá/giải mã payload cho web): **tất cả đều đạt**.
-- **Chưa chạy được** trên chính máy triển khai của người dùng (môi trường thực thi lệnh trên máy hiện chưa khởi động được) — đã chạy trong môi trường kiểm thử riêng với cùng mã nguồn. Cần chạy lại `npm run dev` và thử tay trên máy thật với QLKT thật trước khi dùng chính thức.
-- Chưa thử nghiệm tương tác trình duyệt thật với trang QLKT (đăng nhập, mở tab nền, đọc DOM) — phần này phụ thuộc cấu trúc HTML thật của QLKT mà bộ kiểm tra tự động không mô phỏng được đầy đủ.
-- Toàn bộ các file trên (tiện ích + `lib/qlkt-sync.ts` + hai trang web) **tại thời điểm này chưa được `git commit`** — cần chạy thử và commit lại trước khi giao cho người khác dùng, để không mất công sức.
+- Đã xác nhận trên trang QLKT thật rằng bảng công tơ dùng `PrimeFaces ExtSheet`, dữ liệu đầy đủ nằm trong cấu hình JSON của thẻ `script`, còn DOM chỉ hiển thị một phần hàng/cột.
+- Đã bổ sung 2 trường hợp kiểm tra mô phỏng đúng cấu trúc `ExtSheet` thật (tên điểm đo có khoảng trắng đệm và 4 kênh cho mỗi điểm đo). Tổng cộng 23 trường hợp kiểm tra tự động hiện có phải đạt trước khi bàn giao.
+- Bản v0.4.3 đã sửa cơ chế mở màn hình công tơ thành tab đang hiển thị; vẫn cần người dùng xác nhận một lần cuối trên phiên đăng nhập QLKT thật trước khi dùng chính thức.
