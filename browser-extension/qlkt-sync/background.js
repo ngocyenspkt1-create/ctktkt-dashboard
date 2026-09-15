@@ -71,18 +71,40 @@ async function readValuesWithRetry(tabId, attempts = 10, intervalMs = 500) {
 
 async function readSource(source, url, operatingDate) {
   let tabId;
+  let createdTab = false;
   const isMeter = source === "meter";
   // Màn hình Công tơ PPA chỉ thực sự nạp bảng dữ liệu (ExtSheet) khi tab đang
   // ở trạng thái hiển thị — QLKT có vẻ trì hoãn dựng bảng nặng này nếu tab
   // chạy nền (active:false), nên với nguồn "meter" phải mở tab ở chế độ đang
   // xem, rồi tự quay lại tab làm việc của người dùng sau khi lấy xong dữ liệu.
   let previousActiveTabId;
+  let previousActiveWindowId;
   try {
     if (isMeter) {
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       previousActiveTabId = currentTab?.id;
+      previousActiveWindowId = currentTab?.windowId;
     }
-    const tab = await chrome.tabs.create({ url, active: isMeter });
+    let tab;
+    if (isMeter) {
+      const openTabs = await chrome.tabs.query({});
+      const existingMeterTab = openTabs.find(candidate => {
+        try {
+          const parsed = new URL(candidate.url || "");
+          return QLKT_PATTERN.test(candidate.url || "") && parsed.pathname.toLowerCase().endsWith("/sxd/solieucto.jsf");
+        } catch {
+          return false;
+        }
+      });
+      if (existingMeterTab?.id) {
+        tab = await chrome.tabs.update(existingMeterTab.id, { active: true });
+        if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+      }
+    }
+    if (!tab) {
+      tab = await chrome.tabs.create({ url, active: isMeter });
+      createdTab = true;
+    }
     tabId = tab.id;
     if (!tabId) throw new Error(`Không mở được màn hình ${SOURCE_LABELS[source]}.`);
     await waitForTab(tabId);
@@ -113,8 +135,9 @@ async function readSource(source, url, operatingDate) {
     }
     return result.payload;
   } finally {
-    if (tabId) chrome.tabs.remove(tabId).catch(() => {});
+    if (tabId && createdTab) chrome.tabs.remove(tabId).catch(() => {});
     if (previousActiveTabId) chrome.tabs.update(previousActiveTabId, { active: true }).catch(() => {});
+    if (previousActiveWindowId) chrome.windows.update(previousActiveWindowId, { focused: true }).catch(() => {});
   }
 }
 

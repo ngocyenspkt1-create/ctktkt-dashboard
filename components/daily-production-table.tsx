@@ -132,7 +132,7 @@ export function DailyProductionTable() {
   }
   function syncFromQlkt(){
     setError("");setMessage("");
-    if(!extensionVersion){window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"PING"},window.location.origin);setSyncHelp(true);setError("Web chưa kết nối với tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.3 rồi nhấn F5 trang này.");return;}
+    if(!extensionVersion){window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"PING"},window.location.origin);setSyncHelp(true);setError("Web chưa kết nối với tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.4 rồi nhấn F5 trang này.");return;}
     if(qlktRequestRef.current)window.clearTimeout(qlktRequestRef.current.timer);
     const requestId=crypto.randomUUID();
     const timer=window.setTimeout(()=>{if(qlktRequestRef.current?.id!==requestId)return;qlktRequestRef.current=null;setSyncingQlkt(false);setError("QLKT phản hồi quá lâu. Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");},90000);
