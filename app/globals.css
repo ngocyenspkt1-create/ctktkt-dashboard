@@ -4,5 +4,19 @@
 :root { --background: #edf3f4; --foreground: #15252a; }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-feature-settings: "cv02", "cv03", "cv04", "cv11"; }
 button, input, select { font: inherit; }
+
+/* Keep the QLKT review actions visible while its indicator list scrolls. */
+[role="dialog"]:has(table) {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+[role="dialog"]:has(table) > div:has(> table) {
+  min-height: 0;
+  overflow-y: auto;
+}
+[role="dialog"]:has(table) thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Đồng bộ QLKT</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Đồng bộ QLKT</h1>
+      <p class="hint">Chọn ngày cần lấy. Tiện ích sẽ tự mở các màn hình QLKT đã ghi nhớ và gom dữ liệu trong một lần.</p>
+      <label>Ngày báo cáo
+        <input id="operatingDate" type="date" />
+      </label>
+      <label>Địa chỉ web Chỉ tiêu KTKT
+        <input id="targetUrl" type="url" value="http://localhost:5173/" spellcheck="false" />
+      </label>
+      <section class="sources" aria-label="Các màn hình nguồn">
+        <div><span>Sản lượng</span><strong id="source-production">Chưa nhận diện</strong></div>
+        <div><span>Nhiên liệu</span><strong id="source-fuel">Chưa nhận diện</strong></div>
+        <div><span>Vận hành</span><strong id="source-operation">Chưa nhận diện</strong></div>
+      </section>
+      <button id="syncAllButton" type="button">Đồng bộ tất cả</button>
+      <button id="syncPageButton" class="secondary" type="button">Chỉ lấy trang đang mở</button>
+      <p id="status" role="status"></p>
+      <p class="privacy">Lần đầu: mở từng màn hình Sản lượng, Nhiên liệu và Vận hành một lần để tiện ích ghi nhớ địa chỉ. Tiện ích không đọc hoặc lưu tên đăng nhập, mật khẩu.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
