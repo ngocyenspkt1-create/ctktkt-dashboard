@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DateField } from "@/components/ui/date-field";
 import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource, type MeterReading, type PpaResult } from "@/lib/ppa-heat-rate";
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from "@/lib/qlkt-sync";
 
@@ -8,6 +9,13 @@ type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type StoredPpa = PpaResult & { operatingDate: string; sourceFiles: string; noteS1: string; noteS2: string; updatedAt: string };
 
 const localToday = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+// Số liệu vận hành của ngày hôm nay thường chưa có (đến sáng hôm sau mới đủ) nên mặc định mở trang
+// là ngày hôm qua (D-1), người dùng cần ngày khác thì tự đổi.
+const localYesterday = () => {
+  const date = new Date(`${localToday()}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+};
 const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const format = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? "—" : numberFormat.format(value);
 
@@ -21,7 +29,7 @@ async function readCsvFile(file: File) {
 }
 
 export function PpaHeatRateComparison() {
-  const [operatingDate, setOperatingDate] = useState(localToday), [readings, setReadings] = useState<MeterReading[]>([]), [sourceFiles, setSourceFiles] = useState<string[]>([]);
+  const [operatingDate, setOperatingDate] = useState(localYesterday), [readings, setReadings] = useState<MeterReading[]>([]), [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [pastedText, setPastedText] = useState(""), [noteS1, setNoteS1] = useState(""), [noteS2, setNoteS2] = useState("");
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]), [history, setHistory] = useState<StoredPpa[]>([]);
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
@@ -198,7 +206,7 @@ export function PpaHeatRateComparison() {
   ] : [];
 
   return <section className="space-y-4">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Theo dõi hiệu suất vận hành</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">So sánh suất hao nhiệt PPA và thực tế</h1><p className="mt-1 text-sm text-slate-500">Nhận trực tiếp từ QLKT hoặc chọn CSV công tơ. Hệ thống tự tính PPA theo 48 chu kỳ nửa giờ.</p></div><div className="flex flex-wrap items-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY VẬN HÀNH<input type="date" value={operatingDate} onChange={event => { setOperatingDate(event.target.value); clearImport(); }} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm"/></label><button type="button" disabled={syncingQlkt} onClick={syncFromQlkt} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-wait disabled:opacity-60">{syncingQlkt ? "Đang đồng bộ…" : "Đồng bộ QLKT"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionVersion ? "text-emerald-700" : "text-amber-700"}`}>{extensionVersion ? `Tiện ích v${extensionVersion} đã kết nối` : "Chưa kết nối tiện ích"}</p></div></div>
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Theo dõi hiệu suất vận hành</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">So sánh suất hao nhiệt PPA và thực tế</h1><p className="mt-1 text-sm text-slate-500">Nhận trực tiếp từ QLKT hoặc chọn CSV công tơ. Hệ thống tự tính PPA theo 48 chu kỳ nửa giờ.</p></div><div className="flex flex-wrap items-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY VẬN HÀNH<DateField value={operatingDate} onChange={value => { setOperatingDate(value); clearImport(); }} className="w-[150px]"/></label><button type="button" disabled={syncingQlkt} onClick={syncFromQlkt} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-wait disabled:opacity-60">{syncingQlkt ? "Đang đồng bộ…" : "Đồng bộ QLKT"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionVersion ? "text-emerald-700" : "text-amber-700"}`}>{extensionVersion ? `Tiện ích v${extensionVersion} đã kết nối` : "Chưa kết nối tiện ích"}</p></div></div>
 
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}
     {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">{message}</p>}

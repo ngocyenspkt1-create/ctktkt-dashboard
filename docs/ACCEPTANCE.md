@@ -80,12 +80,12 @@ Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy
 - **Đã làm:** nâng tiện ích lên v0.4.6, ưu tiên dùng tab công tơ QLKT đang mở và đọc trực tiếp dữ liệu của widget `PrimeFaces/ExtSheet`; đã đóng gói lại ZIP và nối với nút đồng bộ trên web.
 - **Đã kiểm tra:** 23/23 kiểm thử đạt, lint đạt, build đạt và hai thư mục mã tiện ích giống nhau.
 - **Còn thiếu:** chưa có xác nhận chạy thành công cuối cùng từ người dùng trên phiên QLKT thật sau khi Reload v0.4.6.
-- **Bước tiếp theo:** người dùng Reload tiện ích, giữ tab “Số liệu đo đếm công tơ” đang mở, F5 trang PPA và thử “Đồng bộ QLKT”; nếu lỗi, dùng nguyên thông báo mới để tiếp tục chẩn đoán.
+- **Bước tiếp theo:** người dùng Reload tiện ích, giữ tab "Số liệu đo đếm công tơ" đang mở, F5 trang PPA và thử "Đồng bộ QLKT"; nếu lỗi, dùng nguyên thông báo mới để tiếp tục chẩn đoán.
 
 ## Trạng thái cuối lượt — cảnh báo CE/CF
 
 - **Đã làm:** bỏ ràng buộc bắt buộc ghi nguyên nhân khi CE/CF tăng bất thường; thẻ thống kê và dấu hiệu cảnh báo vẫn được hiển thị, nhưng người dùng có thể lưu dữ liệu không cần ghi chú.
-- **Còn thiếu:** cần người dùng F5 trang và xác nhận nút “Lưu thay đổi” không còn bị chặn đối với các ngày CE/CF đang cảnh báo.
+- **Còn thiếu:** cần người dùng F5 trang và xác nhận nút "Lưu thay đổi" không còn bị chặn đối với các ngày CE/CF đang cảnh báo.
 
 ## Trạng thái cuối lượt — bàn giao Git
 
@@ -96,3 +96,34 @@ Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy
 - **GitHub đích:** ảnh người dùng cung cấp là kho `ngocyenspkt1-create/duyen-hai-1-hrm-eam`, thuộc dự án HRM/EAM khác; chưa push dashboard KTKT vào kho này để tránh trộn hai mã nguồn. Còn thiếu URL một kho GitHub riêng cho `ctktkt-dashboard`.
 - **Bàn giao GitHub:** đã thêm remote `github` trỏ tới `ngocyenspkt1-create/ctktkt-dashboard` và push nhánh `main` thành công. Remote nội bộ `origin` được giữ nguyên; máy cục bộ hiện theo dõi `github/main`.
 - **Gói cài tiện ích:** đã xác minh `public/qlkt-sync-extension.zip` khớp hoàn toàn với mã nguồn `browser-extension/qlkt-sync`, manifest phiên bản `0.4.6`; kiểm thử đồng bộ công tơ đạt 5/5. SHA-256 của gói: `1728F39FA63E6F10176705E2C084328FDF57642B6843F715A62305912746BB69`. Người dùng cần giải nén trước rồi chọn thư mục đã giải nén bằng `Load unpacked` trên Chrome/Edge.
+
+---
+
+# Bổ sung 15/09/2026 (lượt 2) — Giao diện "So sánh trực quan SHN Thực tế và PPA" (Claude)
+
+> **Ghi chú về file này:** trong lượt này, mục "Bổ sung 15/09/2026 (lượt 2)" mà Claude ghi đã bị mất/lùi về bản cũ hơn **hai lần liên tiếp** ngay sau khi ghi thành công (nội dung quay lại đúng bản trước đó, không rõ do `git checkout`, Codex ghi đè lại, hay một tiến trình đồng bộ nào khác trên máy). Bản dưới đây là lần ghi thứ ba. Nếu lần sau vẫn thấy phần "lượt 2" này biến mất, đó là dấu hiệu chắc chắn có gì đó trên máy đang tự phục hồi `docs/ACCEPTANCE.md` về bản cũ — cần kiểm tra tiến trình Codex/git đang chạy nền, không phải lỗi của các thay đổi mã nguồn.
+
+Trang `/ppa-heat-rate` giờ có 3 tab (component `components/ppa-heat-rate-page.tsx`):
+
+- **So sánh trực quan** (mặc định, `components/ppa-heat-rate-dashboard.tsx`): tổng hợp nhiều ngày đã lưu trong `ppa_heat_rate_daily` + `daily_inputs`. Lọc theo khoảng ngày, 2 nút nhanh "15 ngày gần nhất"/"Xem tất cả". 3 thẻ tổng hợp S1 (xanh dương)/S2 (vàng)/Chung 2 tổ (tím): SHN Thực tế TB, SHN theo PPA TB, Chênh lệch TB, số ngày vượt/đạt. Mỗi thẻ có biểu đồ Recharts (2 đường + cột chênh lệch). Bảng chi tiết theo ngày nhóm theo tháng (3 cụm cột theo phạm vi × Thực tế/PPA/CL kJ-kWh/CL%/TT, cộng cột Nhận xét). Banner liệt kê các ngày vượt PPA. Nút "Xuất kết quả (.xlsx)".
+- **Nhập & đồng bộ dữ liệu ngày**: công cụ cũ của Codex (nhập CSV/dán/đồng bộ QLKT cho từng ngày) — không đổi.
+- **Nhập nhiều ngày từ Excel** (`components/ppa-heat-rate-bulk-import.tsx`, mới): cho phép tải thẳng một file `.xlsx`/`.xlsm` có nhiều sheet — mỗi sheet là số liệu đo đếm công tơ một ngày, đúng định dạng người dùng đang dùng để theo dõi thủ công (sheet tên `0109`, `0209`… với header `Tên điểm đo/Kênh/Ngày/Tổng/H1…H48`). Với mỗi sheet có đủ 4 điểm đo bắt buộc, hệ thống tự tính SHN PPA (dùng lại đúng `calculatePpaHeatRate` trong `lib/ppa-heat-rate.ts`) rồi lưu vào đúng ngày ghi trong sheet đó qua API `/api/ppa-heat-rate` hiện có (không thêm API mới, không đổi schema DB). Các sheet không phải bảng công tơ (bảng tổng hợp, S1, S2, Standard Line…) tự động bị bỏ qua, có báo lý do. Việc đọc file Excel trong trình duyệt dùng chung thư viện SheetJS tải từ CDN qua `lib/sheetjs-loader.ts` (dùng lại cho cả xuất và nhập, không thêm dependency vào `package.json`).
+
+Dữ liệu "thực tế" trong tab "So sánh trực quan" tính lại từ `daily_inputs` bằng đúng hàm `calculateActualHeatRate` có sẵn — gọi song song `/api/ppa-heat-rate?period=` và `/api/daily-inputs?period=` cho từng tháng trong khoảng ngày chọn.
+
+## Đã tự kiểm tra (không cần Codex, không cần `device_bash` trên máy)
+
+Vì `device_bash` trên máy người dùng vẫn báo lỗi "Workspace unavailable" (bản cập nhật Windows 8/9), Claude đã tự kiểm tra bằng cách clone kho GitHub `ngocyenspkt1-create/ctktkt-dashboard` (commit `2650b4a`, đúng bản Codex đã push) vào một sandbox cloud riêng, tách biệt hoàn toàn với máy người dùng:
+
+- `npm install` — cài xong, `npx tsc --noEmit` — sạch, không lỗi kiểu dữ liệu.
+- `npm run lint` — 4 file mới/sửa không phát sinh lỗi mới (các lỗi/cảnh báo còn lại là nợ kỹ thuật có sẵn từ trước ở file khác của Codex).
+- `node --test tests/*.mjs` — 23/23 đạt.
+- `npm run build` — build production thành công.
+- Chạy `npm run dev` thật, dùng chính file Excel người dùng tải lên (`DH1- Tinh SHN PPA theo cong suat thuc te ngày 14092026.xlsm`, 14 sheet ngày 01/09–14/09/2026) để test chức năng "Nhập nhiều ngày từ Excel" đầu-cuối: cả 14 ngày được nhận diện và lưu đúng qua API thật; 4 sheet tổng hợp (Cả nhà máy DH1, S1, S2, Standard Line) tự động bị bỏ qua đúng như thiết kế. Kết quả tính SHN PPA khớp gần như tuyệt đối với giá trị sẵn có trong chính file Excel của người dùng (ví dụ ngày 01/09: phần mềm ra 10549.396937253216 kJ/kWh, file Excel ghi 10549.396937 kJ/kWh).
+
+## Còn thiếu
+
+- Chưa xác nhận trên trình duyệt thật của người dùng, kể cả tính năng nhập nhiều ngày (mới chỉ test qua API/sandbox riêng, xem ghi chú trên).
+- Nút xuất Excel / nhập nhiều ngày đều cần tải thư viện SheetJS từ CDN lúc dùng — chưa thử trong điều kiện mạng nội bộ hạn chế của người dùng.
+- `device_bash` (kênh Claude chạy lệnh trực tiếp trên máy người dùng) vẫn chưa hoạt động.
+- Xem ghi chú đầu mục này về việc `docs/ACCEPTANCE.md` tự bị lùi về bản cũ nhiều lần — cần người dùng kiểm tra có tiến trình nào (git, Codex, đồng bộ file) đang tự ghi đè file này không.

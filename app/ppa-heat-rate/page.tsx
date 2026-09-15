@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/app-shell";
-import { PpaHeatRateComparison } from "@/components/ppa-heat-rate-comparison";
+import { PpaHeatRatePageClient } from "@/components/ppa-heat-rate-page";
 
 export default function PpaHeatRatePage() {
-  return <AppShell active="ppa"><PpaHeatRateComparison /></AppShell>;
+  return <AppShell active="ppa"><PpaHeatRatePageClient /></AppShell>;
 }

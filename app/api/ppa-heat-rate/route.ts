@@ -16,12 +16,25 @@ function cleanSource(value: unknown): PpaSourceData {
 }
 
 export async function GET(request: Request) {
-  const period = new URL(request.url).searchParams.get("period") || "";
+  const url = new URL(request.url);
+  const period = url.searchParams.get("period") || "";
+  const includeSource = url.searchParams.get("includeSource") === "1";
   if (!periodPattern.test(period)) return Response.json({ error: "Tháng theo dõi không hợp lệ." }, { status: 400 });
   const [year, month] = period.split("-").map(Number), next = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;
   try {
-    const { results } = await getRawDb().prepare("SELECT operating_date AS operatingDate, source_files AS sourceFiles, gross_s1_kwh AS grossS1Kwh, net_s1_kwh AS netS1Kwh, gross_s2_kwh AS grossS2Kwh, net_s2_kwh AS netS2Kwh, ppa_plant AS ppaPlant, ppa_s1 AS ppaS1, ppa_s2 AS ppaS2, note_s1 AS noteS1, note_s2 AS noteS2, updated_at AS updatedAt FROM ppa_heat_rate_daily WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date").bind(`${period}-01`, `${next}-01`).all();
-    return Response.json({ entries: results }, { headers: { "Cache-Control": "no-store" } });
+    const columns = `operating_date AS operatingDate, source_files AS sourceFiles, gross_s1_kwh AS grossS1Kwh, net_s1_kwh AS netS1Kwh, gross_s2_kwh AS grossS2Kwh, net_s2_kwh AS netS2Kwh, ppa_plant AS ppaPlant, ppa_s1 AS ppaS1, ppa_s2 AS ppaS2, note_s1 AS noteS1, note_s2 AS noteS2, updated_at AS updatedAt${includeSource ? ", source_data AS sourceData" : ""}`;
+    const { results } = await getRawDb().prepare(`SELECT ${columns} FROM ppa_heat_rate_daily WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date`).bind(`${period}-01`, `${next}-01`).all();
+    const entries = includeSource
+      ? results.map(row => {
+          const record = row as Record<string, unknown>;
+          const raw = record.sourceData;
+          let source: unknown = null;
+          if (typeof raw === "string") { try { source = JSON.parse(raw); } catch { source = null; } }
+          const { sourceData: _sourceData, ...rest } = record;
+          return { ...rest, source };
+        })
+      : results;
+    return Response.json({ entries }, { headers: { "Cache-Control": "no-store" } });
   } catch { return unavailable(); }
 }
 

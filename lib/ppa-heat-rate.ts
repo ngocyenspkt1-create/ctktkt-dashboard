@@ -24,7 +24,7 @@ export type PpaResult = {
   netS2Kwh: number;
 };
 
-const CAPACITY_KW = { full: 622_500, seventyFive: 466_875, half: 311_266 };
+export const CAPACITY_KW = { full: 622_500, seventyFive: 466_875, half: 311_266 };
 const BASE_PPA_2016 = { full: 10_122.020443242285, seventyFive: 10_351.657211200063, half: 10_882.50751103315 };
 const ANNUAL_DEGRADATION = 0.000896551724137939;
 
@@ -179,25 +179,40 @@ export function ppaCurveForYear(year: number) {
   return { full: BASE_PPA_2016.full * factor, seventyFive: BASE_PPA_2016.seventyFive * factor, half: BASE_PPA_2016.half * factor };
 }
 
-function calculateUnit(gross: number[], net: number[], year: number) {
+export type IntervalDetail = { grossKwh: number; netKwh: number; rate: number; heatKj: number };
+export type UnitDetail = { heat: number; netTotal: number; grossTotal: number; ppa: number; intervals: IntervalDetail[] };
+export type PpaDetailedResult = { s1: UnitDetail; s2: UnitDetail; ppaPlant: number };
+
+function calculateUnit(gross: number[], net: number[], year: number): UnitDetail {
   if (gross.length !== 48 || net.length !== 48 || [...gross, ...net].some(value => !Number.isFinite(value) || value < 0)) throw new Error("Mỗi điểm đo phải có đủ 48 giá trị nửa giờ hợp lệ.");
   const curve = ppaCurveForYear(year);
   let heat = 0, netTotal = 0;
+  const intervals: IntervalDetail[] = [];
   for (let index = 0; index < 48; index += 1) {
     const loadKw = gross[index] * 2;
     const rate = gross[index] > CAPACITY_KW.seventyFive / 2
       ? interpolate(loadKw, CAPACITY_KW.full, curve.full, CAPACITY_KW.seventyFive, curve.seventyFive)
       : interpolate(loadKw, CAPACITY_KW.seventyFive, curve.seventyFive, CAPACITY_KW.half, curve.half);
-    heat += rate * net[index];
+    const heatKj = rate * net[index];
+    heat += heatKj;
     netTotal += net[index];
+    intervals.push({ grossKwh: gross[index], netKwh: net[index], rate, heatKj });
   }
   if (netTotal <= 0) throw new Error("Sản lượng điểm bán phải lớn hơn 0.");
-  return { heat, netTotal, grossTotal: gross.reduce((sum, value) => sum + value, 0), ppa: heat / netTotal };
+  return { heat, netTotal, grossTotal: gross.reduce((sum, value) => sum + value, 0), ppa: heat / netTotal, intervals };
 }
 
 export function calculatePpaHeatRate(source: PpaSourceData, year: number): PpaResult {
   const s1 = calculateUnit(source.grossS1, source.netS1, year), s2 = calculateUnit(source.grossS2, source.netS2, year);
   return { ppaPlant: (s1.heat + s2.heat) / (s1.netTotal + s2.netTotal), ppaS1: s1.ppa, ppaS2: s2.ppa, grossS1Kwh: s1.grossTotal, netS1Kwh: s1.netTotal, grossS2Kwh: s2.grossTotal, netS2Kwh: s2.netTotal };
+}
+
+// Bản chi tiết theo từng chu kỳ 30 phút (48 chu kỳ/ngày) của tổ máy S1/S2 — dùng để
+// tái tạo các sheet "S1"/"S2" giống file mẫu gốc khi xuất Excel (không đổi kết quả
+// calculatePpaHeatRate ở trên, chỉ bổ sung thêm chi tiết nội bộ từng chu kỳ).
+export function calculatePpaHeatRateDetailed(source: PpaSourceData, year: number): PpaDetailedResult {
+  const s1 = calculateUnit(source.grossS1, source.netS1, year), s2 = calculateUnit(source.grossS2, source.netS2, year);
+  return { s1, s2, ppaPlant: (s1.heat + s2.heat) / (s1.netTotal + s2.netTotal) };
 }
 
 export function calculateActualHeatRate(values: Record<string, string>) {
