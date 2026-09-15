@@ -94,3 +94,4 @@ Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy
 - **Bước tiếp theo:** người dùng cung cấp URL kho GitHub đã tạo hoặc đăng nhập lại remote hiện tại trên máy; không gửi mật khẩu hay token trong cuộc trò chuyện.
 - **Thử lại:** lệnh `git fetch origin` tiếp tục trả về `Authentication required`; trong dự án không tìm thấy remote GitHub dự phòng, nên chưa thể push an toàn khi chưa có URL kho đích hoặc phiên đăng nhập hợp lệ.
 - **GitHub đích:** ảnh người dùng cung cấp là kho `ngocyenspkt1-create/duyen-hai-1-hrm-eam`, thuộc dự án HRM/EAM khác; chưa push dashboard KTKT vào kho này để tránh trộn hai mã nguồn. Còn thiếu URL một kho GitHub riêng cho `ctktkt-dashboard`.
+- **Bàn giao GitHub:** đã thêm remote `github` trỏ tới `ngocyenspkt1-create/ctktkt-dashboard` và push nhánh `main` thành công. Remote nội bộ `origin` được giữ nguyên; máy cục bộ hiện theo dõi `github/main`.
