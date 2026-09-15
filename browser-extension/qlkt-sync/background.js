@@ -53,6 +53,13 @@ async function sendWithRetry(tabId, message, attempts = 10) {
       return await chrome.tabs.sendMessage(tabId, message);
     } catch (error) {
       lastError = error;
+      if (attempt === 0) {
+        try {
+          await chrome.scripting.executeScript({ target: { tabId }, files: ["meter-extract.js", "content.js"] });
+        } catch (injectionError) {
+          lastError = injectionError;
+        }
+      }
       await wait(300);
     }
   }

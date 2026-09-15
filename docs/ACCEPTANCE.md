@@ -59,7 +59,7 @@ Tính suất hao nhiệt theo hợp đồng PPA (công thức nội suy theo d�
 
 ## Đồng bộ QLKT bằng một nút (không cần mở tiện ích thủ công mỗi ngày)
 
-Đã hoàn thiện tiện ích trình duyệt "Đồng bộ QLKT" v0.4.4 (Chrome/Edge, tại `public/qlkt-sync-extension/`, gói tải về tại `/qlkt-sync-extension.zip`) và nối trực tiếp vào cả hai trang:
+Đã hoàn thiện tiện ích trình duyệt "Đồng bộ QLKT" v0.4.5 (Chrome/Edge, tại `public/qlkt-sync-extension/`, gói tải về tại `/qlkt-sync-extension.zip`) và nối trực tiếp vào cả hai trang:
 
 - **Bảng chỉ tiêu tháng** (trang chủ): nút "Đồng bộ QLKT" gọi tiện ích lấy đồng thời Sản lượng + Nhiên liệu + Vận hành cho ngày đã chọn, đổ vào bảng kiểm tra để chọn số liệu muốn đưa vào trước khi lưu.
 - **Trang suất hao nhiệt PPA**: nút "Đồng bộ QLKT" gọi tiện ích lấy riêng màn hình Số liệu đo đếm công tơ (đủ 4 điểm đo, 48 chu kỳ) cho ngày đang xem.
@@ -72,3 +72,4 @@ Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy
 - Đã xác nhận trên trang QLKT thật rằng bảng công tơ dùng `PrimeFaces ExtSheet`, dữ liệu đầy đủ nằm trong cấu hình JSON của thẻ `script`, còn DOM chỉ hiển thị một phần hàng/cột.
 - Đã bổ sung 2 trường hợp kiểm tra mô phỏng đúng cấu trúc `ExtSheet` thật (tên điểm đo có khoảng trắng đệm và 4 kênh cho mỗi điểm đo). Tổng cộng 23 trường hợp kiểm tra tự động hiện có phải đạt trước khi bàn giao.
 - Bản v0.4.4 ưu tiên tái sử dụng tab công tơ do người dùng đã mở qua menu QLKT, vì kiểm tra thực tế cho thấy tab tạo trực tiếp dù `active` vẫn chỉ có 21 thẻ script và không dựng `ExtSheet`. Tiện ích kích hoạt tab đó khi đọc, giữ tab mở và tự quay lại tab web; nếu không tìm thấy mới dùng URL cố định làm phương án dự phòng. Vẫn cần người dùng xác nhận một lần cuối trên phiên đăng nhập QLKT thật trước khi dùng chính thức.
+- Bản v0.4.5 tự chèn `meter-extract.js` và `content.js` vào tab QLKT nếu tab đã được mở trước lúc tiện ích Reload, khắc phục lỗi `Could not establish connection. Receiving end does not exist.`.
