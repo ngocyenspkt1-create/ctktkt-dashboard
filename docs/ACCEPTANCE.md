@@ -86,3 +86,9 @@ Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy
 
 - **Đã làm:** bỏ ràng buộc bắt buộc ghi nguyên nhân khi CE/CF tăng bất thường; thẻ thống kê và dấu hiệu cảnh báo vẫn được hiển thị, nhưng người dùng có thể lưu dữ liệu không cần ghi chú.
 - **Còn thiếu:** cần người dùng F5 trang và xác nhận nút “Lưu thay đổi” không còn bị chặn đối với các ngày CE/CF đang cảnh báo.
+
+## Trạng thái cuối lượt — bàn giao Git
+
+- **Đã làm:** kiểm tra working tree sạch trên nhánh `main` và chuẩn bị đẩy mã để bàn giao cho người phát triển tiếp theo.
+- **Còn thiếu:** chưa push được vì `origin` hiện trỏ tới remote nội bộ `git.chatgpt-team.site`, máy chưa có phiên xác thực cho remote này và chưa có URL kho GitHub đích.
+- **Bước tiếp theo:** người dùng cung cấp URL kho GitHub đã tạo hoặc đăng nhập lại remote hiện tại trên máy; không gửi mật khẩu hay token trong cuộc trò chuyện.
