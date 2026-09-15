@@ -81,3 +81,8 @@ Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy
 - **Đã kiểm tra:** 23/23 kiểm thử đạt, lint đạt, build đạt và hai thư mục mã tiện ích giống nhau.
 - **Còn thiếu:** chưa có xác nhận chạy thành công cuối cùng từ người dùng trên phiên QLKT thật sau khi Reload v0.4.6.
 - **Bước tiếp theo:** người dùng Reload tiện ích, giữ tab “Số liệu đo đếm công tơ” đang mở, F5 trang PPA và thử “Đồng bộ QLKT”; nếu lỗi, dùng nguyên thông báo mới để tiếp tục chẩn đoán.
+
+## Trạng thái cuối lượt — cảnh báo CE/CF
+
+- **Đã làm:** bỏ ràng buộc bắt buộc ghi nguyên nhân khi CE/CF tăng bất thường; thẻ thống kê và dấu hiệu cảnh báo vẫn được hiển thị, nhưng người dùng có thể lưu dữ liệu không cần ghi chú.
+- **Còn thiếu:** cần người dùng F5 trang và xác nhận nút “Lưu thay đổi” không còn bị chặn đối với các ngày CE/CF đang cảnh báo.
