@@ -74,3 +74,10 @@ Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy
 - Bản v0.4.4 ưu tiên tái sử dụng tab công tơ do người dùng đã mở qua menu QLKT, vì kiểm tra thực tế cho thấy tab tạo trực tiếp dù `active` vẫn chỉ có 21 thẻ script và không dựng `ExtSheet`. Tiện ích kích hoạt tab đó khi đọc, giữ tab mở và tự quay lại tab web; nếu không tìm thấy mới dùng URL cố định làm phương án dự phòng. Vẫn cần người dùng xác nhận một lần cuối trên phiên đăng nhập QLKT thật trước khi dùng chính thức.
 - Bản v0.4.5 tự chèn `meter-extract.js` và `content.js` vào tab QLKT nếu tab đã được mở trước lúc tiện ích Reload, khắc phục lỗi `Could not establish connection. Receiving end does not exist.`.
 - Bản v0.4.6 đọc trực tiếp các mảng dữ liệu trong đối tượng widget `PrimeFaces/ExtSheet` bằng `chrome.scripting` ở ngữ cảnh trang QLKT; cách quét thẻ `script` và đọc bảng DOM được giữ làm dự phòng.
+
+## Trạng thái cuối lượt 15/09/2026
+
+- **Đã làm:** nâng tiện ích lên v0.4.6, ưu tiên dùng tab công tơ QLKT đang mở và đọc trực tiếp dữ liệu của widget `PrimeFaces/ExtSheet`; đã đóng gói lại ZIP và nối với nút đồng bộ trên web.
+- **Đã kiểm tra:** 23/23 kiểm thử đạt, lint đạt, build đạt và hai thư mục mã tiện ích giống nhau.
+- **Còn thiếu:** chưa có xác nhận chạy thành công cuối cùng từ người dùng trên phiên QLKT thật sau khi Reload v0.4.6.
+- **Bước tiếp theo:** người dùng Reload tiện ích, giữ tab “Số liệu đo đếm công tơ” đang mở, F5 trang PPA và thử “Đồng bộ QLKT”; nếu lỗi, dùng nguyên thông báo mới để tiếp tục chẩn đoán.
