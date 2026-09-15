@@ -34,3 +34,30 @@ test('CSV parser accepts Vietnamese semicolon format and 48 intervals', () => {
   assert.equal(rows[0].intervals.length, 48);
   assert.equal(rows[0].total, 4800);
 });
+
+test('CSV parser accepts QLKT compact files and infers meters from file codes', () => {
+  const intervals = Array.from({length:48}, (_, index) => String(200000 + index));
+  const csv = [
+    ['12-09-26','KwhGiao',...intervals].join(','),
+    ['12-09-26','KwhNhan',...Array.from({length:48}, () => '0')].join(','),
+  ].join('\n');
+  const expected = [
+    ['12096001.CSV', 'DHA_S1'],
+    ['12096002.CSV', 'DHA_S2'],
+    ['12096301.CSV', 'DH1_283M'],
+    ['12096303.CSV', 'DH1_285M'],
+  ];
+  for (const [fileName, meter] of expected) {
+    const rows = parseMeterCsv(csv, fileName);
+    assert.equal(rows[0].meter, meter);
+    assert.equal(rows[0].channel, 'kWhGiao');
+    assert.equal(rows[0].operatingDate, '2026-09-12');
+    assert.equal(rows[0].intervals.length, 48);
+    assert.equal(rows[0].total, intervals.reduce((sum, value) => sum + Number(value), 0));
+  }
+});
+
+test('compact CSV reports a clear error when the meter file code is unknown', () => {
+  const csv = ['12-09-26','KwhGiao',...Array.from({length:48}, () => '100')].join(',');
+  assert.throws(() => parseMeterCsv(csv, 'unknown.CSV'), /Tên file phải kết thúc/);
+});

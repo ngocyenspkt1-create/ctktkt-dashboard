@@ -7,6 +7,7 @@ label { display: grid; gap: 6px; margin-top: 16px; font-size: 12px; font-weight:
 input { height: 38px; border: 1px solid #c9d5e2; border-radius: 9px; padding: 0 10px; background: white; color: #111827; font-size: 13px; }
 button { width: 100%; height: 42px; margin-top: 12px; border: 0; border-radius: 10px; background: #334785; color: white; font-size: 14px; font-weight: 700; cursor: pointer; }
 button:disabled { cursor: wait; opacity: .6; }
+.ppa { background: #176b55; }
 .secondary { margin-top: 8px; border: 1px solid #b8c6d8; background: white; color: #334785; }
 .sources { display: grid; gap: 6px; margin-top: 14px; padding: 10px; border: 1px solid #dce4ed; border-radius: 10px; background: white; }
 .sources div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }

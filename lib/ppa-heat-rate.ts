@@ -70,8 +70,46 @@ function detectDelimiter(lines: string[]) {
 }
 
 function normalizeDate(raw: string) {
-  const match = cleanText(raw).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-  return match ? `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}` : "";
+  const match = cleanText(raw).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})$/);
+  if (!match) return "";
+  const year = match[3].length === 2 ? `20${match[3]}` : match[3];
+  return `${year}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+}
+
+const compactMeterCodes: Record<string, string> = {
+  "6001": "DHA_S1",
+  "6002": "DHA_S2",
+  "6301": "DH1_283M",
+  "6303": "DH1_285M",
+};
+
+function meterFromCompactFileName(sourceName: string) {
+  const fileName = sourceName.split(/[\\/]/).at(-1)?.replace(/\.csv$/i, "") || "";
+  const match = fileName.match(/(6001|6002|6301|6303)(?:\s*\(\d+\))?$/i);
+  return match ? compactMeterCodes[match[1]] : "";
+}
+
+function parseCompactMeterCsv(rows: string[][], sourceName: string) {
+  const meter = meterFromCompactFileName(sourceName);
+  if (!meter) {
+    throw new Error(`${sourceName}: CSV rút gọn chưa có “Tên điểm đo”. Tên file phải kết thúc bằng 6001, 6002, 6301 hoặc 6303.`);
+  }
+  const row = rows.find(candidate => normalizeText(candidate[1] || "") === "kwhgiao");
+  if (!row) throw new Error(`${sourceName}: không tìm thấy dòng KwhGiao.`);
+  if (row.length < 50) throw new Error(`${sourceName}: dòng KwhGiao chưa đủ 48 chu kỳ nửa giờ.`);
+  const operatingDate = normalizeDate(row[0] || "");
+  if (!operatingDate) throw new Error(`${sourceName}: ngày báo cáo không hợp lệ.`);
+  const intervals = row.slice(2, 50).map(value => parseLocaleNumber(value));
+  if (intervals.some(value => value === null || value < 0)) throw new Error(`${sourceName}: có giá trị KwhGiao không hợp lệ.`);
+  const numericIntervals = intervals as number[];
+  return [{
+    meter,
+    channel: "kWhGiao",
+    operatingDate,
+    total: numericIntervals.reduce((sum, value) => sum + value, 0),
+    intervals: numericIntervals,
+    sourceName,
+  }] satisfies MeterReading[];
 }
 
 export function parseMeterCsv(text: string, sourceName = "Dữ liệu dán") {
@@ -80,7 +118,7 @@ export function parseMeterCsv(text: string, sourceName = "Dữ liệu dán") {
   const delimiter = detectDelimiter(lines);
   const rows = lines.map(line => splitDelimitedLine(line, delimiter));
   const headerIndex = rows.findIndex(row => row.some(cell => normalizeText(cell) === "ten diem do") && row.some(cell => normalizeText(cell) === "kenh"));
-  if (headerIndex < 0) throw new Error(`${sourceName}: không tìm thấy hàng tiêu đề “Tên điểm đo / Kênh”.`);
+  if (headerIndex < 0) return parseCompactMeterCsv(rows, sourceName);
   const header = rows[headerIndex].map(normalizeText);
   const meterIndex = header.findIndex(cell => cell === "ten diem do");
   const channelIndex = header.findIndex(cell => cell === "kenh");

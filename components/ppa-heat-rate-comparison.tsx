@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMeterReadings, parseMeterCsv, requiredPpaMeters, selectPpaSource, type MeterReading, type PpaResult } from "@/lib/ppa-heat-rate";
+import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource, type MeterReading, type PpaResult } from "@/lib/ppa-heat-rate";
+import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from "@/lib/qlkt-sync";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type StoredPpa = PpaResult & { operatingDate: string; sourceFiles: string; noteS1: string; noteS2: string; updatedAt: string };
@@ -24,7 +25,9 @@ export function PpaHeatRateComparison() {
   const [pastedText, setPastedText] = useState(""), [noteS1, setNoteS1] = useState(""), [noteS2, setNoteS2] = useState("");
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]), [history, setHistory] = useState<StoredPpa[]>([]);
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
+  const [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const qlktRequestRef = useRef<{ id: string; timer: number } | null>(null);
   const period = operatingDate.slice(0, 7);
 
   async function loadPeriod() {
@@ -40,6 +43,69 @@ export function PpaHeatRateComparison() {
   }
 
   useEffect(() => { void loadPeriod(); }, [period]);
+
+  useEffect(() => {
+    const payload = decodeQlktPpaSyncHash(window.location.hash);
+    if (!payload) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const mergedMap = mergeMeterReadings([payload.readings]);
+        if (!selectPpaSource(mergedMap).source) throw new Error("Dữ liệu QLKT chưa đủ 4 điểm đo PPA.");
+        setReadings([...mergedMap.values()]);
+        setSourceFiles(["QLKT · Số liệu đo đếm công tơ"]);
+        setOperatingDate(payload.operatingDate);
+        setError("");
+        setMessage("Đã nhận đủ 4 điểm đo và 48 chu kỳ từ QLKT. Hãy kiểm tra kết quả trước khi lưu.");
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Không đọc được dữ liệu công tơ từ QLKT.");
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const channel = "ctktkt-qlkt-sync";
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      const data = event.data as { channel?: string; sender?: string; type?: string; version?: string; requestId?: string; result?: { ok?: boolean; payload?: unknown; error?: string } };
+      if (!data || data.channel !== channel || data.sender !== "ctktkt-extension") return;
+      if (data.type === "READY") {
+        setExtensionVersion(String(data.version || "đã kết nối"));
+        return;
+      }
+      if (data.type !== "SYNC_PPA_RESULT" || !qlktRequestRef.current || data.requestId !== qlktRequestRef.current.id) return;
+      window.clearTimeout(qlktRequestRef.current.timer);
+      qlktRequestRef.current = null;
+      setSyncingQlkt(false);
+      if (!data.result?.ok) {
+        setError(data.result?.error || "Chưa đồng bộ được dữ liệu từ QLKT.");
+        return;
+      }
+      const payload = validateQlktPpaSyncPayload(data.result.payload);
+      if (!payload) {
+        setError("Dữ liệu tiện ích trả về chưa đủ 4 điểm đo và 48 chu kỳ.");
+        return;
+      }
+      try {
+        const mergedMap = mergeMeterReadings([payload.readings]);
+        if (!selectPpaSource(mergedMap).source) throw new Error("Dữ liệu QLKT chưa đủ 4 điểm đo PPA.");
+        setReadings([...mergedMap.values()]);
+        setSourceFiles(["QLKT · Số liệu đo đếm công tơ"]);
+        setOperatingDate(payload.operatingDate);
+        setError("");
+        setMessage("Đồng bộ QLKT thành công: đã nhận đủ 4 điểm đo và 48 chu kỳ. Hãy kiểm tra kết quả trước khi lưu.");
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Không đọc được dữ liệu công tơ từ QLKT.");
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    window.postMessage({ channel, sender: "ctktkt-web", type: "PING" }, window.location.origin);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      if (qlktRequestRef.current) window.clearTimeout(qlktRequestRef.current.timer);
+    };
+  }, []);
 
   const actualByDate = useMemo(() => {
     const grouped = new Map<string, Record<string, string>>();
@@ -92,6 +158,26 @@ export function PpaHeatRateComparison() {
 
   function clearImport() { setReadings([]); setSourceFiles([]); setPastedText(""); setNoteS1(""); setNoteS2(""); setMessage(""); setError(""); }
 
+  function syncFromQlkt() {
+    setError(""); setMessage("");
+    if (!extensionVersion) {
+      window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
+      setError("Web chưa kết nối với tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.3.1 rồi nhấn F5 trang này.");
+      return;
+    }
+    if (qlktRequestRef.current) window.clearTimeout(qlktRequestRef.current.timer);
+    const requestId = crypto.randomUUID();
+    const timer = window.setTimeout(() => {
+      if (qlktRequestRef.current?.id !== requestId) return;
+      qlktRequestRef.current = null;
+      setSyncingQlkt(false);
+      setError("QLKT phản hồi quá lâu. Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");
+    }, 60000);
+    qlktRequestRef.current = { id: requestId, timer };
+    setSyncingQlkt(true);
+    window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "SYNC_PPA", requestId, operatingDate }, window.location.origin);
+  }
+
   async function save() {
     if (!selected.source || !calculation) { setError("Chưa đủ 4 điểm đo bắt buộc để tính và lưu."); return; }
     setSaving(true); setError(""); setMessage("");
@@ -112,20 +198,20 @@ export function PpaHeatRateComparison() {
   ] : [];
 
   return <section className="space-y-4">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Theo dõi hiệu suất vận hành</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">So sánh suất hao nhiệt PPA và thực tế</h1><p className="mt-1 text-sm text-slate-500">Dán hoặc chọn CSV công tơ. Hệ thống tự tính PPA theo 48 chu kỳ nửa giờ.</p></div><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY VẬN HÀNH<input type="date" value={operatingDate} onChange={event => { setOperatingDate(event.target.value); clearImport(); }} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm"/></label></div>
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Theo dõi hiệu suất vận hành</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">So sánh suất hao nhiệt PPA và thực tế</h1><p className="mt-1 text-sm text-slate-500">Nhận trực tiếp từ QLKT hoặc chọn CSV công tơ. Hệ thống tự tính PPA theo 48 chu kỳ nửa giờ.</p></div><div className="flex flex-wrap items-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY VẬN HÀNH<input type="date" value={operatingDate} onChange={event => { setOperatingDate(event.target.value); clearImport(); }} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm"/></label><button type="button" disabled={syncingQlkt} onClick={syncFromQlkt} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-wait disabled:opacity-60">{syncingQlkt ? "Đang đồng bộ…" : "Đồng bộ QLKT"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionVersion ? "text-emerald-700" : "text-amber-700"}`}>{extensionVersion ? `Tiện ích v${extensionVersion} đã kết nối` : "Chưa kết nối tiện ích"}</p></div></div>
 
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}
     {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">{message}</p>}
 
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,.85fr)]">
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-extrabold text-[#20345f]">1. Đưa dữ liệu CSV vào</h2><p className="mt-1 text-xs text-slate-500">Có thể chọn nhiều file cùng lúc hoặc mở từng CSV, sao chép toàn bộ rồi dán bên dưới.</p></div><div className="flex gap-2"><label className="cursor-pointer rounded-xl bg-[#4057b5] px-4 py-2 text-sm font-bold text-white shadow-sm">Chọn CSV<input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" multiple className="sr-only" onChange={event => void addFiles(event.target.files)}/></label><button type="button" onClick={clearImport} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600">Làm lại</button></div></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-extrabold text-[#20345f]">1. Đưa dữ liệu PPA vào</h2><p className="mt-1 text-xs text-slate-500">Ưu tiên đồng bộ từ QLKT; chọn hoặc dán CSV được giữ làm phương án dự phòng.</p></div><div className="flex gap-2"><label className="cursor-pointer rounded-xl bg-[#4057b5] px-4 py-2 text-sm font-bold text-white shadow-sm">Chọn CSV<input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" multiple className="sr-only" onChange={event => void addFiles(event.target.files)}/></label><button type="button" onClick={clearImport} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600">Làm lại</button></div></div>
         <textarea value={pastedText} onChange={event => setPastedText(event.target.value)} rows={6} placeholder="Dán nguyên nội dung CSV tại đây…" className="mt-4 w-full resize-y rounded-xl border border-slate-300 bg-[#fbfcfe] p-3 font-mono text-xs text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"/>
         <div className="mt-2 flex items-center justify-between gap-3"><p className="text-xs text-slate-500">Đã nhận: {sourceFiles.length ? sourceFiles.join(", ") : "chưa có CSV"}</p><button type="button" onClick={addPastedData} className="rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-4 py-2 text-sm font-bold text-[#354a9f]">Thêm dữ liệu vừa dán</button></div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">{selected.found.map(item => <div key={item.key} className={`rounded-xl border px-3 py-2 ${item.found ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}><div className="flex items-center justify-between gap-2"><p className="text-sm font-bold text-slate-800">{item.label}</p><span className={`text-xs font-extrabold ${item.found ? "text-emerald-700" : "text-amber-800"}`}>{item.found ? "Đã nhận" : "Còn thiếu"}</span></div><p className="mt-0.5 text-xs text-slate-500">{item.meter} · {item.channel}</p></div>)}</div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="font-extrabold text-[#20345f]">2. Kiểm tra nguồn tính</h2><p className="mt-1 text-xs text-slate-500">PPA lấy từ CSV. Thực tế lấy từ số liệu than, nhiệt trị và điểm bán đã lưu trong “Dữ liệu các tháng”.</p>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="font-extrabold text-[#20345f]">2. Kiểm tra nguồn tính</h2><p className="mt-1 text-xs text-slate-500">PPA lấy từ QLKT hoặc CSV. Thực tế lấy từ số liệu than, nhiệt trị và điểm bán đã lưu trong “Dữ liệu các tháng”.</p>
         <div className="mt-4 grid gap-2 sm:grid-cols-2"><div className={`rounded-xl border p-3 ${calculation ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-slate-50"}`}><p className="text-xs font-bold text-slate-500">DỮ LIỆU PPA</p><p className="mt-1 text-lg font-extrabold text-[#314793]">{calculation ? "Đủ 4 điểm đo" : `${selected.found.filter(item => item.found).length}/4 điểm đo`}</p></div><div className={`rounded-xl border p-3 ${actual ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}><p className="text-xs font-bold text-slate-500">DỮ LIỆU THỰC TẾ</p><p className={`mt-1 text-lg font-extrabold ${actual ? "text-emerald-700" : "text-amber-800"}`}>{actual ? "Đã có trên web" : "Còn thiếu dữ liệu KTKT"}</p></div></div>
         {calculation && <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs"><div className="rounded-lg border p-2"><p className="text-slate-500">Đầu cực S1</p><p className="font-bold text-black">{format(calculation.grossS1Kwh / 1_000_000)} triệu kWh</p></div><div className="rounded-lg border p-2"><p className="text-slate-500">Điểm bán S1</p><p className="font-bold text-black">{format(calculation.netS1Kwh / 1_000_000)} triệu kWh</p></div><div className="rounded-lg border p-2"><p className="text-slate-500">Đầu cực S2</p><p className="font-bold text-black">{format(calculation.grossS2Kwh / 1_000_000)} triệu kWh</p></div><div className="rounded-lg border p-2"><p className="text-slate-500">Điểm bán S2</p><p className="font-bold text-black">{format(calculation.netS2Kwh / 1_000_000)} triệu kWh</p></div></div>}
       </div>

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { decodeQlktSyncHash, qlktFieldLabels, roundQlktValue, type QlktSyncPayload } from "@/lib/qlkt-sync";
+import { decodeQlktSyncHash, qlktFieldLabels, roundQlktValue, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
 
 type Group = "production" | "environment" | "operation";
 type Field = { code: string; label: string; unit?: string; input?: boolean; noteFor?: string; width?: string };
@@ -42,6 +42,7 @@ const fields: Record<Group, Field[]> = {
 
 const numericCodes = new Set(Object.values(fields).flat().filter(f => f.input && f.code !== "CW").map(f => f.code));
 const currentPeriod = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(new Date());
+const previousOperatingDate = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now()-86400000));
 const numberValue = (value?: string) => { if (!value?.trim()) return null; const n = Number(value.replace(",", ".")); return Number.isFinite(n) ? n : null; };
 const safeDivide = (a: number | null, b: number | null, multiplier = 1) => a === null || b === null || b === 0 ? null : a / b * multiplier;
 const formatResult = (value: number | null) => value === null ? "—" : new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(value);
@@ -72,8 +73,10 @@ export function DailyProductionTable() {
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
   const [noteCell, setNoteCell] = useState<{ day: number; code: string; label: string } | null>(null), [noteDraft, setNoteDraft] = useState("");
   const [syncHelp, setSyncHelp] = useState(false), [pendingSync, setPendingSync] = useState<QlktSyncPayload | null>(null), [selectedSyncCodes, setSelectedSyncCodes] = useState<Set<string>>(new Set());
+  const [syncDate, setSyncDate] = useState(previousOperatingDate), [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
   const [focusedCell, setFocusedCell] = useState("");
   const dirty = useRef(new Set<string>());
+  const qlktRequestRef = useRef<{id:string;timer:number}|null>(null);
   const days = useMemo(() => { const [y,m] = period.split("-").map(Number); return new Date(y,m,0).getDate(); }, [period]);
 
   useEffect(() => { const controller = new AbortController(); setLoading(true); setError(""); setMessage(""); dirty.current.clear();
@@ -89,6 +92,25 @@ export function DailyProductionTable() {
     setPeriod(payload.operatingDate.slice(0, 7));
     window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
   }, []);
+
+  useEffect(() => {
+    const channel="ctktkt-qlkt-sync";
+    const handleMessage=(event:MessageEvent)=>{
+      if(event.source!==window||event.origin!==window.location.origin)return;
+      const data=event.data as {channel?:string;sender?:string;type?:string;version?:string;requestId?:string;result?:{ok?:boolean;payload?:unknown;error?:string}};
+      if(!data||data.channel!==channel||data.sender!=="ctktkt-extension")return;
+      if(data.type==="READY"){setExtensionVersion(String(data.version||"đã kết nối"));return;}
+      if(data.type!=="SYNC_ALL_RESULT"||!qlktRequestRef.current||data.requestId!==qlktRequestRef.current.id)return;
+      window.clearTimeout(qlktRequestRef.current.timer); qlktRequestRef.current=null; setSyncingQlkt(false);
+      if(!data.result?.ok){setError(data.result?.error||"Chưa đồng bộ được dữ liệu từ QLKT.");return;}
+      const payload=validateQlktSyncPayload(data.result.payload);
+      if(!payload){setError("Dữ liệu tiện ích trả về không hợp lệ hoặc không có chỉ tiêu.");return;}
+      setPendingSync(payload); setSelectedSyncCodes(new Set(payload.entries.map(entry=>entry.fieldCode))); setPeriod(payload.operatingDate.slice(0,7)); setError("");
+    };
+    window.addEventListener("message",handleMessage);
+    window.postMessage({channel,sender:"ctktkt-web",type:"PING"},window.location.origin);
+    return()=>{window.removeEventListener("message",handleMessage);if(qlktRequestRef.current)window.clearTimeout(qlktRequestRef.current.timer);};
+  },[]);
 
   const visibleFields = fields[group].filter(f => showCalculated ? !f.input && !f.noteFor : f.input || f.noteFor);
   const tableSections = [{ label: "", items: visibleFields }];
@@ -108,6 +130,15 @@ export function DailyProductionTable() {
     setPendingSync(null);
     setMessage(`Đã đưa ${selected.length} số liệu QLKT vào ngày ${day+1}. Kiểm tra bảng rồi nhấn “Lưu thay đổi”.`);
   }
+  function syncFromQlkt(){
+    setError("");setMessage("");
+    if(!extensionVersion){window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"PING"},window.location.origin);setSyncHelp(true);setError("Web chưa kết nối với tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.3.1 rồi nhấn F5 trang này.");return;}
+    if(qlktRequestRef.current)window.clearTimeout(qlktRequestRef.current.timer);
+    const requestId=crypto.randomUUID();
+    const timer=window.setTimeout(()=>{if(qlktRequestRef.current?.id!==requestId)return;qlktRequestRef.current=null;setSyncingQlkt(false);setError("QLKT phản hồi quá lâu. Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");},90000);
+    qlktRequestRef.current={id:requestId,timer};setSyncingQlkt(true);
+    window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"SYNC_ALL",requestId,operatingDate:syncDate},window.location.origin);
+  }
   function noteButton(day:number, field:Field){ const hasNote=Boolean(rows[day][`${field.code}_NOTE`]?.trim()); return <button type="button" onClick={event=>{event.stopPropagation();openNote(day,field);}} aria-label={`${hasNote?"Xem hoặc sửa":"Thêm"} ghi chú cho ${field.label}, ngày ${day+1}`} title={hasNote?rows[day][`${field.code}_NOTE`]:"Thêm ghi chú"} className={`absolute right-0 top-0 z-10 h-4 w-4 ${hasNote?"opacity-100":"opacity-0 group-hover:opacity-100 focus:opacity-100"}`}><span className={`absolute right-0 top-0 h-0 w-0 border-l-[10px] border-l-transparent ${hasNote?"border-t-[10px] border-t-orange-500":"border-t-[10px] border-t-slate-300"}`}/></button>; }
   async function save(){ setError(""); setMessage(""); const missing:string[]=[]; for(let d=0;d<days;d++) for(const code of ["CE","CF"] as const) if(isWaterAbnormal(rows,d,code)&&!rows[d][`${code}_NOTE`]?.trim()) missing.push(`${code} ngày ${d+1}`);
     if(missing.length){setError(`Cần ghi rõ nguyên nhân tăng bất thường tại ${missing.join(", ")}.`); return;} const entries=[...dirty.current].map(key=>{const [dayText,code]=key.split(":"); const day=Number(dayText); return {operatingDate:`${period}-${String(day+1).padStart(2,"0")}`,fieldCode:code,value:rows[day][code]||"",note:rows[day][`${code}_NOTE`]||""};});
@@ -116,7 +147,7 @@ export function DailyProductionTable() {
   return <section className="space-y-3">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Dữ liệu vận hành hằng ngày</p><h2 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">Chỉ tiêu kinh tế kỹ thuật</h2><p className="mt-1 text-sm text-slate-500">Nhập trực tiếp theo tháng · kết quả được tính tự động</p></div>
-      <div className="flex flex-wrap items-end justify-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">THÁNG<input type="month" value={period} onChange={e=>setPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label><button type="button" onClick={()=>setSyncHelp(true)} className="h-10 rounded-xl border border-[#b9cae5] bg-[#eef6fc] px-4 text-sm font-bold text-[#274f78] shadow-sm">Đồng bộ QLKT</button><button disabled={saving||loading} onClick={save} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 text-sm font-bold text-white shadow-md disabled:opacity-50">{saving?"Đang lưu…":"＋ Lưu thay đổi"}</button></div>
+      <div className="flex flex-wrap items-end justify-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">THÁNG<input type="month" value={period} onChange={e=>setPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐỒNG BỘ<input type="date" value={syncDate} onChange={e=>setSyncDate(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label><button type="button" disabled={syncingQlkt} onClick={syncFromQlkt} className="h-10 rounded-xl border border-[#b9cae5] bg-[#eef6fc] px-4 text-sm font-bold text-[#274f78] shadow-sm disabled:cursor-wait disabled:opacity-60">{syncingQlkt?"Đang đồng bộ…":"Đồng bộ QLKT"}</button><button disabled={saving||loading} onClick={save} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 text-sm font-bold text-white shadow-md disabled:opacity-50">{saving?"Đang lưu…":"＋ Lưu thay đổi"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionVersion?"text-emerald-700":"text-amber-700"}`}>{extensionVersion?`Tiện ích v${extensionVersion} đã kết nối`:"Chưa kết nối tiện ích"}</p></div>
     </div>
 
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -141,7 +172,7 @@ export function DailyProductionTable() {
       </TabsContent>)}
     </Tabs>
     <DialogPrimitive.Root open={Boolean(noteCell)} onOpenChange={open=>{if(!open)setNoteCell(null);}}><DialogPrimitive.Portal><DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/><DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"><div className="space-y-1"><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Ghi chú số liệu</DialogPrimitive.Title><DialogPrimitive.Description className="text-sm text-slate-600">{noteCell?`${noteCell.label} · ngày ${noteCell.day+1}/${period.slice(5,7)}/${period.slice(0,4)}`:""}</DialogPrimitive.Description></div><label className="grid gap-2 text-sm font-semibold text-slate-700">Nguyên nhân hoặc nội dung cần lưu ý<textarea autoFocus rows={5} maxLength={500} value={noteDraft} onChange={event=>setNoteDraft(event.target.value)} placeholder="Ví dụ: Tổ máy giảm tải do xử lý thiết bị…" className="resize-none rounded-xl border border-slate-300 bg-white p-3 font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"/></label><p className="text-xs text-slate-500">Ô có ghi chú sẽ được đánh dấu bằng góc màu cam. Xóa hết nội dung để xóa ghi chú.</p><div className="flex justify-end gap-2"><button type="button" onClick={()=>setNoteCell(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" onClick={applyNote} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white">Áp dụng ghi chú</button></div></DialogPrimitive.Content></DialogPrimitive.Portal></DialogPrimitive.Root>
-    <DialogPrimitive.Root open={syncHelp} onOpenChange={setSyncHelp}><DialogPrimitive.Portal><DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/><DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Đồng bộ dữ liệu QLKT</DialogPrimitive.Title><DialogPrimitive.Description className="text-sm leading-6 text-slate-600">Cài tiện ích một lần trên Chrome hoặc Edge. Trong lần thiết lập đầu tiên, mở ba màn hình Sản lượng, Nhiên liệu và Tình hình vận hành để tiện ích ghi nhớ địa chỉ. Từ những lần sau, chỉ cần chọn ngày và nhấn “Đồng bộ tất cả”.</DialogPrimitive.Description><div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-[#274f78]"><p className="font-bold">Tiện ích không đọc hoặc lưu mật khẩu.</p><p className="mt-1">Dữ liệu luôn quay về bảng kiểm tra trước và chỉ được lưu khi bạn xác nhận.</p></div><div className="flex justify-end gap-2"><button type="button" onClick={()=>setSyncHelp(false)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Đóng</button><a href="/qlkt-sync-extension.zip" download className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white">Tải tiện ích mới</a></div></DialogPrimitive.Content></DialogPrimitive.Portal></DialogPrimitive.Root>
+    <DialogPrimitive.Root open={syncHelp} onOpenChange={setSyncHelp}><DialogPrimitive.Portal><DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/><DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Đồng bộ dữ liệu QLKT</DialogPrimitive.Title><DialogPrimitive.Description className="text-sm leading-6 text-slate-600">Cài tiện ích một lần trên Chrome hoặc Edge. Lần đầu, mở các màn hình Sản lượng, Nhiên liệu, Tình hình vận hành và Số liệu đo đếm công tơ để tiện ích ghi nhớ địa chỉ. Sau đó chọn ngày và dùng nút đồng bộ tương ứng.</DialogPrimitive.Description><div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-[#274f78]"><p className="font-bold">Tiện ích không đọc hoặc lưu mật khẩu.</p><p className="mt-1">Dữ liệu luôn quay về bảng kiểm tra trước và chỉ được lưu khi bạn xác nhận.</p></div><div className="flex justify-end gap-2"><button type="button" onClick={()=>setSyncHelp(false)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Đóng</button><a href="/qlkt-sync-extension.zip" download className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white">Tải tiện ích mới</a></div></DialogPrimitive.Content></DialogPrimitive.Portal></DialogPrimitive.Root>
     <DialogPrimitive.Root open={Boolean(pendingSync)} onOpenChange={open=>{if(!open)setPendingSync(null);}}><DialogPrimitive.Portal><DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/><DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid max-h-[86vh] w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"><div><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Kiểm tra dữ liệu từ QLKT</DialogPrimitive.Title><DialogPrimitive.Description className="mt-1 text-sm text-slate-600">Ngày {pendingSync?pendingSync.operatingDate.split("-").reverse().join("/"):""}. Bỏ chọn chỉ tiêu chưa muốn cập nhật.</DialogPrimitive.Description></div><div className="overflow-auto rounded-xl border border-slate-200"><table className="w-full text-sm"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="w-10 p-2 text-center">Chọn</th><th className="p-2 text-left">Chỉ tiêu</th><th className="p-2 text-center">Đang có</th><th className="p-2 text-center">Từ QLKT</th></tr></thead><tbody>{pendingSync?.entries.map(entry=>{const day=Number(pendingSync.operatingDate.slice(8,10))-1;return <tr key={entry.fieldCode} className="border-t"><td className="p-2 text-center"><input type="checkbox" checked={selectedSyncCodes.has(entry.fieldCode)} onChange={event=>setSelectedSyncCodes(old=>{const next=new Set(old);if(event.target.checked)next.add(entry.fieldCode);else next.delete(entry.fieldCode);return next;})} aria-label={`Chọn ${qlktFieldLabels[entry.fieldCode]}`}/></td><td className="p-2"><p className="font-semibold text-black">{qlktFieldLabels[entry.fieldCode]}</p><p className="text-xs text-slate-500">{entry.sourceLabel}</p></td><td className="p-2 text-center tabular-nums text-black">{formatInputValue(rows[day]?.[entry.fieldCode])||"—"}</td><td className="p-2 text-center font-bold tabular-nums text-[#173b64]">{formatInputValue(entry.value)}</td></tr>})}</tbody></table></div><div className="flex items-center justify-between gap-3"><p className="text-xs text-slate-500">Chưa ghi vào kho dữ liệu cho đến khi bạn nhấn “Lưu thay đổi”.</p><div className="flex gap-2"><button type="button" onClick={()=>setPendingSync(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" disabled={loading||selectedSyncCodes.size===0} onClick={applyQlktSync} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Đưa vào bảng</button></div></div></DialogPrimitive.Content></DialogPrimitive.Portal></DialogPrimitive.Root>
   </section>;
 }

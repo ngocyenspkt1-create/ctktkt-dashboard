@@ -1,12 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Đồng bộ QLKT sang Chỉ tiêu KTKT",
-  "version": "0.2.7",
+  "version": "0.3.1",
   "description": "Đọc các chỉ tiêu đã cấu hình trên trang QLKT và chuyển sang bảng Chỉ tiêu KTKT để kiểm tra trước khi lưu.",
   "permissions": ["activeTab", "tabs", "storage"],
   "host_permissions": [
     "http://qlkt.tpcduyenhai.com.vn/qlkt/*",
-    "https://qlkt.tpcduyenhai.com.vn/qlkt/*"
+    "https://qlkt.tpcduyenhai.com.vn/qlkt/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "action": {
     "default_title": "Đồng bộ QLKT",
@@ -21,7 +23,12 @@
         "http://qlkt.tpcduyenhai.com.vn/qlkt/*",
         "https://qlkt.tpcduyenhai.com.vn/qlkt/*"
       ],
-      "js": ["content.js"],
+      "js": ["meter-extract.js", "content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["web-bridge.js"],
       "run_at": "document_idle"
     }
   ]

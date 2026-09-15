@@ -28,6 +28,7 @@
     if (path.includes("rpt_a_production_day")) return "production";
     if (path.includes("nhienlieu")) return "fuel";
     const page = normalized(document.body?.innerText);
+    if (page.includes("so lieu do dem cong to") && page.includes("nguon du lieu") && page.includes("kwhgiao")) return "meter";
     if (page.includes("dien nang dau cuc") && page.includes("sl diem ban")) return "production";
     if (page.includes("nhien lieu than") && page.includes("nhien lieu dau fo")) return "fuel";
     if (page.includes("so gio phat") && page.includes("luy ke so gio van hanh")) return "operation";
@@ -120,10 +121,21 @@
     return result;
   }
 
+  function extractPpaMeterPayload(operatingDate) {
+    const extractor = globalThis.QlktMeterExtractor?.extractPpaMeterReadings;
+    if (!extractor) throw new Error("Bộ đọc công tơ PPA chưa được nạp. Hãy tải lại tiện ích.");
+    const tables = [...document.querySelectorAll("table")].map(table => [...table.rows].map(row => [...row.cells].map(cell => {
+      const input = cell.querySelector("input:not([type='checkbox']):not([type='radio']):not([type='hidden'])");
+      return input ? readValue(input) : cleanText(cell.textContent);
+    })));
+    return extractor(tables, operatingDate, location.href);
+  }
+
   function extract() {
     const operatingDate = parseDate();
     if (!operatingDate) throw new Error("Không xác định được ngày báo cáo trên trang QLKT.");
     const currentPageKind = pageKind();
+    if (currentPageKind === "meter") return extractPpaMeterPayload(operatingDate);
     const entries = new Map(), oilValues = [];
     const add = (fieldCode, candidate, sourceLabel) => {
       if (!candidate || candidate.value === null || entries.has(fieldCode)) return;
