@@ -27,11 +27,13 @@
     const path = location.pathname.toLowerCase();
     if (path.includes("rpt_a_production_day")) return "production";
     if (path.includes("nhienlieu")) return "fuel";
+    if (path.includes("hieusuatlo") || path.includes("suathaonhiet") || path.includes("can_bang_nhiet")) return "heatrate";
     const page = normalized(document.body?.innerText);
     if (page.includes("so lieu do dem cong to") && page.includes("nguon du lieu") && page.includes("kwhgiao")) return "meter";
     if (page.includes("dien nang dau cuc") && page.includes("sl diem ban")) return "production";
     if (page.includes("nhien lieu than") && page.includes("nhien lieu dau fo")) return "fuel";
     if (page.includes("so gio phat") && page.includes("luy ke so gio van hanh")) return "operation";
+    if (page.includes("hieu suat lo") && page.includes("suat hao nhiet")) return "heatrate";
     return null;
   }
 
@@ -121,6 +123,128 @@
     return result;
   }
 
+  // Màn hình "Tính toán hiệu suất lò/suất hao nhiệt" (Cân bằng nhiệt) hiển thị 1 bảng PrimeFaces có
+  // cột đóng băng (frozen columns) — thực chất là 2 <table> tách rời nhưng CÙNG CHỈ SỐ HÀNG:
+  //  - Bảng "nhãn" (cột trái): STT | Tên đại lượng | Ký hiệu | ĐVT | TK/PT test | Hệ số liên hệ.
+  //  - Bảng "giá trị" (cuộn ngang): Ca sáng | Ca chiều | Ca khuya | Trung bình (mỗi hàng ứng với
+  //    đúng 1 đại lượng, cùng thứ tự hàng như bảng nhãn).
+  // Nhờ vậy chỉ cần dò đúng CỘT theo tên (Ký hiệu / Trung bình) rồi khớp theo Ký hiệu chính xác (PG,
+  // L1, Pbn, T) thay vì đoán tên hàng — đáng tin cậy hơn nhiều so với dò theo nhãn tiếng Việt.
+  // PrimeFaces vẽ riêng 1 bảng "chỉ có dòng tiêu đề" (để giữ cố định khi cuộn) TÁCH KHỎI bảng dữ
+  // liệu thật — cả 2 đều khớp cùng tên cột, nên phải chọn bảng có NHIỀU HÀNG NHẤT trong số các bảng
+  // khớp (bảng tiêu đề giả chỉ có 1–2 hàng), nếu không sẽ vô tình vớ phải bảng rỗng không có dữ liệu.
+  function findColumnTableByHeader(headerNames) {
+    let best = null;
+    for (const table of document.querySelectorAll("table")) {
+      for (let rowIndex = 0; rowIndex < table.rows.length; rowIndex++) {
+        const cells = [...table.rows[rowIndex].cells].map(cell => normalized(cell.textContent));
+        if (headerNames.every(name => cells.includes(name)) && (!best || table.rows.length > best.table.rows.length)) {
+          best = { table, headerRowIndex: rowIndex, headerCells: cells };
+        }
+      }
+    }
+    return best;
+  }
+
+  // Tổ máy đang xem trên màn hình QLKT (DH1_MF1/DH1_MF2) được chọn qua dropdown
+  // "formMain:cbSelectMainAsset" (đã xác nhận trực tiếp trên hệ thống QLKT thật) — nhưng vẫn dò theo
+  // kiểu chung (mọi <select> đang chọn, không khoá cứng id) để không vỡ nếu QLKT đổi id.
+  function detectHeatRateUnit() {
+    for (const select of document.querySelectorAll("select")) {
+      const optionText = normalized(select.options?.[select.selectedIndex]?.textContent || "");
+      if (!optionText) continue;
+      if (optionText.includes("mf2")) return "2";
+      if (optionText.includes("mf1")) return "1";
+    }
+    return null;
+  }
+
+  // Dropdown "Tổ máy" (formMain:cbSelectMainAsset) — dò theo kiểu chung (mọi <select> có cả 2 lựa
+  // chọn MF1/MF2 trong danh sách) để không vỡ nếu QLKT đổi id, khác với detectHeatRateUnit() ở trên
+  // vốn chỉ đọc lựa chọn ĐANG chọn chứ không cần liệt kê toàn bộ option.
+  function findMainAssetSelect() {
+    for (const select of document.querySelectorAll("select")) {
+      const optionTexts = [...select.options].map(option => normalized(option.textContent || ""));
+      if (optionTexts.some(text => text.includes("mf1")) && optionTexts.some(text => text.includes("mf2"))) return select;
+    }
+    return null;
+  }
+
+  // Dùng nội dung cột "Trung bình" làm "chữ ký" bảng — QLKT nạp lại dữ liệu bằng AJAX (PrimeFaces)
+  // khi đổi Tổ máy, không đổi URL và cũng không có sự kiện "load" rõ ràng để chờ, nên phải so sánh
+  // nội dung trước/sau để biết khi nào bảng đã thực sự cập nhật xong.
+  function sampleHeatRateSignature() {
+    const values = findColumnTableByHeader(["trung binh"]);
+    return values ? [...values.table.rows].map(row => cleanText(row.textContent)).join("|") : "";
+  }
+
+  async function switchHeatRateUnit(targetUnit) {
+    const select = findMainAssetSelect();
+    if (!select) throw new Error("Không tìm thấy danh sách chọn Tổ máy trên màn hình này.");
+    const targetOption = [...select.options].find(option => normalized(option.textContent || "").includes(`mf${targetUnit}`));
+    if (!targetOption) throw new Error(`Không tìm thấy Tổ máy DH1_MF${targetUnit} trong danh sách chọn.`);
+    if (select.value === targetOption.value) return;
+    const before = sampleHeatRateSignature();
+    select.value = targetOption.value;
+    select.dispatchEvent(new Event("input", { bubbles: true }));
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    const deadline = Date.now() + 12000;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      if (detectHeatRateUnit() === targetUnit && sampleHeatRateSignature() !== before) return;
+    }
+    throw new Error(`Màn hình chưa nạp xong dữ liệu Tổ máy DH1_MF${targetUnit} sau khi chuyển — hãy thử đồng bộ lại.`);
+  }
+
+  // 4 chỉ tiêu mới của báo cáo "THEO PMIS" (Trung bình công suất đầu cực, Tổn thất khói khô trung
+  // bình, Trung bình chân không bình ngưng, Trung bình nhiệt độ nước làm mát tuần hoàn) đọc từ cột
+  // "Trung bình" của bảng kết quả, khớp đúng hàng theo Ký hiệu (PG/L1/Pbn/T) — đã đối chiếu trực
+  // tiếp với màn hình QLKT thật (Vận hành › Tính toán hiệu suất lò/suất hao nhiệt, "Theo Ngày").
+  function readHeatRateEntriesForCurrentUnit(unit) {
+    const labels = findColumnTableByHeader(["ky hieu", "ten dai luong"]);
+    if (!labels) throw new Error("Không tìm thấy bảng \"Ký hiệu\" chỉ tiêu trên màn hình này.");
+    const values = findColumnTableByHeader(["trung binh"]);
+    if (!values) throw new Error("Không tìm thấy cột \"Trung bình\" trên màn hình này — hãy chắc chắn đang chọn \"Theo Ngày\".");
+    const symbolColumn = labels.headerCells.indexOf("ky hieu");
+    const avgColumn = values.headerCells.indexOf("trung binh");
+    const codeByMetric = unit === "2" ? { PG: "DB", L1: "DD", Pbn: "DF", T: "DH" } : { PG: "DA", L1: "DC", Pbn: "DE", T: "DG" };
+    const entries = [];
+    for (const [symbol, fieldCode] of Object.entries(codeByMetric)) {
+      let rowIndex = -1;
+      for (let index = 0; index < labels.table.rows.length; index++) {
+        const cell = labels.table.rows[index].cells[symbolColumn];
+        if (cell && cleanText(cell.textContent) === symbol) { rowIndex = index; break; }
+      }
+      if (rowIndex === -1) continue;
+      const valueCell = values.table.rows[rowIndex]?.cells[avgColumn];
+      const value = valueCell ? parseNumber(valueCell.textContent) : null;
+      if (value === null) continue;
+      entries.push({ fieldCode, value, sourceLabel: `QLKT · DH1_MF${unit} · Trung bình` });
+    }
+    return entries;
+  }
+
+  // Đọc cả 2 Tổ máy (S1+S2) trong 1 lần gọi: đọc Tổ máy đang chọn trước, rồi tự chuyển dropdown
+  // "Tổ máy" sang Tổ máy còn lại, chờ bảng nạp lại xong (AJAX), đọc tiếp, rồi khôi phục lại đúng
+  // Tổ máy ban đầu — để người dùng chỉ cần bấm 1 nút đồng bộ trên web Chỉ tiêu KTKT.
+  async function extractHeatRatePayload(operatingDate) {
+    const originalUnit = detectHeatRateUnit();
+    if (!originalUnit) throw new Error("Không xác định được Tổ máy (DH1_MF1/DH1_MF2) đang chọn trên màn hình QLKT.");
+    const otherUnit = originalUnit === "2" ? "1" : "2";
+    const entriesByUnit = { [originalUnit]: readHeatRateEntriesForCurrentUnit(originalUnit) };
+    try {
+      await switchHeatRateUnit(otherUnit);
+      entriesByUnit[otherUnit] = readHeatRateEntriesForCurrentUnit(otherUnit);
+    } finally {
+      if (detectHeatRateUnit() !== originalUnit) {
+        try { await switchHeatRateUnit(originalUnit); } catch { /* đã lấy đủ dữ liệu cần thiết, bỏ qua lỗi khôi phục */ }
+      }
+    }
+    const entries = [...(entriesByUnit["1"] || []), ...(entriesByUnit["2"] || [])];
+    if (!entries.length) throw new Error("Không tìm thấy các chỉ tiêu suất hao nhiệt (công suất đầu cực, khói khô, chân không bình ngưng, nhiệt độ nước làm mát) trên màn hình này.");
+    return { version: 1, operatingDate, sourcePage: location.href, kind: "heatrate", entries };
+  }
+
   function extractPpaMeterPayload(operatingDate) {
     const extractors = globalThis.QlktMeterExtractor;
     if (!extractors) throw new Error("Bộ đọc công tơ PPA chưa được nạp. Hãy tải lại tiện ích.");
@@ -163,6 +287,7 @@
     if (!operatingDate) throw new Error("Không xác định được ngày báo cáo trên trang QLKT.");
     const currentPageKind = pageKind();
     if (currentPageKind === "meter") return extractPpaMeterPayload(operatingDate);
+    if (currentPageKind === "heatrate") return extractHeatRatePayload(operatingDate);
     const entries = new Map(), oilValues = [];
     const add = (fieldCode, candidate, sourceLabel) => {
       if (!candidate || candidate.value === null || entries.has(fieldCode)) return;
@@ -291,8 +416,14 @@
       return;
     }
     if (message?.type !== "READ_QLKT_VALUES") return;
-    try { sendResponse({ ok: true, payload: extract(), pageKind: pageKind() }); }
-    catch (error) { sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đọc được dữ liệu QLKT." }); }
+    // extract() đồng bộ với hầu hết màn hình, nhưng bất đồng bộ (Promise) với màn hình Cân bằng
+    // nhiệt (phải chuyển dropdown Tổ máy và chờ AJAX) — bọc trong Promise.resolve().then() để xử lý
+    // đúng cả 2 trường hợp mà không cần biết trước extract() trả về gì.
+    Promise.resolve()
+      .then(() => extract())
+      .then(payload => sendResponse({ ok: true, payload, pageKind: pageKind() }))
+      .catch(error => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đọc được dữ liệu QLKT." }));
+    return true;
   });
 
   rememberPage();

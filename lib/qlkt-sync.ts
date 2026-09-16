@@ -13,6 +13,14 @@ export const qlktFieldLabels: Record<string, string> = {
   AT: "Than nhập trong ngày",
   CC: "Nước bổ sung S1",
   CD: "Nước bổ sung S2",
+  DA: "Công suất đầu cực BQ S1",
+  DB: "Công suất đầu cực BQ S2",
+  DC: "Tổn thất khói khô BQ S1",
+  DD: "Tổn thất khói khô BQ S2",
+  DE: "Chân không bình ngưng BQ S1",
+  DF: "Chân không bình ngưng BQ S2",
+  DG: "Nhiệt độ nước làm mát tuần hoàn BQ S1",
+  DH: "Nhiệt độ nước làm mát tuần hoàn BQ S2",
 };
 
 export type QlktSyncEntry = {

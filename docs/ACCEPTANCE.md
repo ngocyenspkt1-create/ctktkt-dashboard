@@ -80,12 +80,12 @@ Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy
 - **Đã làm:** nâng tiện ích lên v0.4.6, ưu tiên dùng tab công tơ QLKT đang mở và đọc trực tiếp dữ liệu của widget `PrimeFaces/ExtSheet`; đã đóng gói lại ZIP và nối với nút đồng bộ trên web.
 - **Đã kiểm tra:** 23/23 kiểm thử đạt, lint đạt, build đạt và hai thư mục mã tiện ích giống nhau.
 - **Còn thiếu:** chưa có xác nhận chạy thành công cuối cùng từ người dùng trên phiên QLKT thật sau khi Reload v0.4.6.
-- **Bước tiếp theo:** người dùng Reload tiện ích, giữ tab "Số liệu đo đếm công tơ" đang mở, F5 trang PPA và thử "Đồng bộ QLKT"; nếu lỗi, dùng nguyên thông báo mới để tiếp tục chẩn đoán.
+- **Bước tiếp theo:** người dùng Reload tiện ích, giữ tab “Số liệu đo đếm công tơ” đang mở, F5 trang PPA và thử “Đồng bộ QLKT”; nếu lỗi, dùng nguyên thông báo mới để tiếp tục chẩn đoán.
 
 ## Trạng thái cuối lượt — cảnh báo CE/CF
 
 - **Đã làm:** bỏ ràng buộc bắt buộc ghi nguyên nhân khi CE/CF tăng bất thường; thẻ thống kê và dấu hiệu cảnh báo vẫn được hiển thị, nhưng người dùng có thể lưu dữ liệu không cần ghi chú.
-- **Còn thiếu:** cần người dùng F5 trang và xác nhận nút "Lưu thay đổi" không còn bị chặn đối với các ngày CE/CF đang cảnh báo.
+- **Còn thiếu:** cần người dùng F5 trang và xác nhận nút “Lưu thay đổi” không còn bị chặn đối với các ngày CE/CF đang cảnh báo.
 
 ## Trạng thái cuối lượt — bàn giao Git
 
@@ -99,31 +99,206 @@ Cơ chế: mỗi trang có một `content script` (`web-bridge.js`) chỉ chạy
 
 ---
 
-# Bổ sung 15/09/2026 (lượt 2) — Giao diện "So sánh trực quan SHN Thực tế và PPA" (Claude)
+# Bổ sung 16/09/2026 — Báo cáo PMIS, đồng bộ 2 tổ máy 1 nút, đồng bộ theo khoảng ngày
 
-> **Ghi chú về file này:** trong lượt này, mục "Bổ sung 15/09/2026 (lượt 2)" mà Claude ghi đã bị mất/lùi về bản cũ hơn **hai lần liên tiếp** ngay sau khi ghi thành công (nội dung quay lại đúng bản trước đó, không rõ do `git checkout`, Codex ghi đè lại, hay một tiến trình đồng bộ nào khác trên máy). Bản dưới đây là lần ghi thứ ba. Nếu lần sau vẫn thấy phần "lượt 2" này biến mất, đó là dấu hiệu chắc chắn có gì đó trên máy đang tự phục hồi `docs/ACCEPTANCE.md` về bản cũ — cần kiểm tra tiến trình Codex/git đang chạy nền, không phải lỗi của các thay đổi mã nguồn.
+## Đã làm
 
-Trang `/ppa-heat-rate` giờ có 3 tab (component `components/ppa-heat-rate-page.tsx`):
+- **Trang "Báo cáo PMIS" (`/pmis-report`)**: hiển thị theo đúng khuôn mẫu "THEO PMIS" của người dùng — chọn khoảng ngày tuỳ ý, mỗi tổ máy (S1-DH1/S2-DH1) có 5 chỉ tiêu: 4 chỉ tiêu mới lấy từ QLKT (Trung bình công suất đầu cực, Tổn thất khói khô trung bình, Trung bình chân không bình ngưng, Trung bình nhiệt độ nước làm mát tuần hoàn — lưu vào mã dùng chung `DA`–`DH`) và 1 chỉ tiêu tính lại từ công thức NH3 đầu cực đã có (`BQ/B`, `BR/H`). Đã thêm mục điều hướng "Báo cáo PMIS" thay cho mục cũ.
+- **Đọc đúng dữ liệu QLKT màn hình "Cân bằng nhiệt"**: đã trực tiếp kiểm tra DOM thật trên máy người dùng (Claude in Chrome, phiên đăng nhập của người dùng, không nhập mật khẩu) để sửa lại thuật toán đọc cột "Trung bình" — bảng PrimeFaces có cột đóng băng thực chất là 2 `<table>` tách rời cùng chỉ số hàng, cộng thêm 1 bảng "chỉ có dòng tiêu đề" giả để giữ cố định khi cuộn (phải chọn bảng có nhiều hàng nhất). Đã khớp đúng theo "Ký hiệu" (`PG`/`L1`/`Pbn`/`T`) thay vì dò nhãn tiếng Việt, xác nhận đúng số liệu thật cho cả 2 tổ máy.
+- **Đồng bộ 2 tổ máy trong 1 lần bấm**: `content.js` tự phát hiện dropdown "Tổ máy" (không khoá cứng id), đọc tổ máy đang chọn, tự chuyển sang tổ máy còn lại, chờ bảng nạp lại (so sánh nội dung cột "Trung bình" trước/sau vì AJAX không có sự kiện "load" rõ ràng), đọc tiếp, rồi tự trả lại đúng tổ máy ban đầu. `background.js` có `syncHeatRate()`/`SYNC_HEATRATE_QLKT`, `web-bridge.js` dịch `SYNC_HEATRATE` ↔ `SYNC_HEATRATE_QLKT`/`_RESULT`, web gọi đúng loại thông điệp mới (trước đó bị lỗi kiến trúc: nút web gọi nhầm `SYNC_ALL`, chỉ nút "Chỉ lấy trang đang mở" của tiện ích mới thực sự chạy đúng). Tiện ích lên bản `0.4.8`.
+- **Đồng bộ theo khoảng ngày**: thêm khối "Đồng bộ nhiều ngày" trên trang PMIS — chọn Từ ngày/Đến ngày (tối đa 62 ngày/lần), tự lặp qua từng ngày, gọi lại đúng luồng "1 ngày · 2 tổ máy" ở trên rồi **tự lưu thẳng** vào kho dữ liệu cho từng ngày (không hỏi xác nhận từng ngày vì có thể tới vài chục ngày), có thanh tiến trình và nút "Dừng" giữa chừng, báo tổng kết số ngày lưu được/lỗi khi xong.
 
-- **So sánh trực quan** (mặc định, `components/ppa-heat-rate-dashboard.tsx`): tổng hợp nhiều ngày đã lưu trong `ppa_heat_rate_daily` + `daily_inputs`. Lọc theo khoảng ngày, 2 nút nhanh "15 ngày gần nhất"/"Xem tất cả". 3 thẻ tổng hợp S1 (xanh dương)/S2 (vàng)/Chung 2 tổ (tím): SHN Thực tế TB, SHN theo PPA TB, Chênh lệch TB, số ngày vượt/đạt. Mỗi thẻ có biểu đồ Recharts (2 đường + cột chênh lệch). Bảng chi tiết theo ngày nhóm theo tháng (3 cụm cột theo phạm vi × Thực tế/PPA/CL kJ-kWh/CL%/TT, cộng cột Nhận xét). Banner liệt kê các ngày vượt PPA. Nút "Xuất kết quả (.xlsx)".
-- **Nhập & đồng bộ dữ liệu ngày**: công cụ cũ của Codex (nhập CSV/dán/đồng bộ QLKT cho từng ngày) — không đổi.
-- **Nhập nhiều ngày từ Excel** (`components/ppa-heat-rate-bulk-import.tsx`, mới): cho phép tải thẳng một file `.xlsx`/`.xlsm` có nhiều sheet — mỗi sheet là số liệu đo đếm công tơ một ngày, đúng định dạng người dùng đang dùng để theo dõi thủ công (sheet tên `0109`, `0209`… với header `Tên điểm đo/Kênh/Ngày/Tổng/H1…H48`). Với mỗi sheet có đủ 4 điểm đo bắt buộc, hệ thống tự tính SHN PPA (dùng lại đúng `calculatePpaHeatRate` trong `lib/ppa-heat-rate.ts`) rồi lưu vào đúng ngày ghi trong sheet đó qua API `/api/ppa-heat-rate` hiện có (không thêm API mới, không đổi schema DB). Các sheet không phải bảng công tơ (bảng tổng hợp, S1, S2, Standard Line…) tự động bị bỏ qua, có báo lý do. Việc đọc file Excel trong trình duyệt dùng chung thư viện SheetJS tải từ CDN qua `lib/sheetjs-loader.ts` (dùng lại cho cả xuất và nhập, không thêm dependency vào `package.json`).
+## Kiểm tra đã thực hiện
 
-Dữ liệu "thực tế" trong tab "So sánh trực quan" tính lại từ `daily_inputs` bằng đúng hàm `calculateActualHeatRate` có sẵn — gọi song song `/api/ppa-heat-rate?period=` và `/api/daily-inputs?period=` cho từng tháng trong khoảng ngày chọn.
+- `npx tsc --noEmit`: đạt (không lỗi mới).
+- `npm run lint`: các lỗi hiện có là lỗi nền có từ trước (react-hooks/refs ở `daily-production-table.tsx`, react-hooks/set-state-in-effect ở `pmis-report.tsx` dòng đầu hiệu ứng đọc hash và ở `ppa-heat-rate-comparison.tsx`, 2 cảnh báo biến không dùng trong `background.js`) — không có lỗi lint mới phát sinh từ các thay đổi lần này.
+- `npm run build`: đạt, dựng đủ cả route `/pmis-report`.
+- Đã xác minh trực tiếp trên dữ liệu QLKT thật (đăng nhập của người dùng) rằng thuật toán đọc "Ký hiệu"/"Trung bình" đúng cho cả `DH1_MF1` và `DH1_MF2` trước khi viết lại thành bản đọc-cả-2-tổ-máy.
 
-## Đã tự kiểm tra (không cần Codex, không cần `device_bash` trên máy)
+## Còn thiếu / chưa xác nhận được
 
-Vì `device_bash` trên máy người dùng vẫn báo lỗi "Workspace unavailable" (bản cập nhật Windows 8/9), Claude đã tự kiểm tra bằng cách clone kho GitHub `ngocyenspkt1-create/ctktkt-dashboard` (commit `2650b4a`, đúng bản Codex đã push) vào một sandbox cloud riêng, tách biệt hoàn toàn với máy người dùng:
+- **Chưa kiểm chứng trực tiếp trên hệ thống QLKT thật** phần tự động chuyển đổi dropdown "Tổ máy" + chờ AJAX nạp lại + khôi phục tổ máy ban đầu (`findMainAssetSelect`, `switchHeatRateUnit`) — phần đọc từng tổ máy riêng lẻ đã kiểm chứng, nhưng phần tự-chuyển-qua-lại thì chưa, vì không còn phiên trình duyệt đang đăng nhập QLKT của người dùng tại thời điểm viết. Cần người dùng thử thật và báo lỗi cụ thể nếu có (đặc biệt: dropdown có khôi phục đúng tổ máy ban đầu không, việc đổi dropdown trong tab chạy nền — `background:false` — có hoạt động ổn định như tab đang xem hay không).
+- **Đồng bộ theo khoảng ngày lưu thẳng không qua bảng xem trước** — khác với nút đồng bộ 1 ngày (luôn qua bảng kiểm tra trước khi lưu). Đây là lựa chọn có chủ đích để tránh vài chục hộp thoại xác nhận, nhưng người dùng cần biết trước khi bấm: dữ liệu cũ của các ngày đó (nếu có) sẽ bị ghi đè ngay, không có bước "xem lại rồi mới lưu".
+- **Sự cố đồng bộ file lên máy người dùng**: có 1 lần `device_commit_files` báo thành công nhưng file thực tế trên máy không đổi (do gián đoạn kết nối tạm thời đúng lúc đó) — đã phát hiện và ghi đè lại đúng, đã xác minh lại bằng cách tải file từ máy về kiểm tra nội dung. Nên nhớ: báo "written" từ công cụ đồng bộ không phải lúc nào cũng nghĩa là file trên máy đã đổi, nhất là quanh thời điểm mất kết nối — nếu người dùng báo "chưa thấy thay đổi", nên tải lại file thật từ máy để đối chiếu trước khi đoán nguyên nhân khác.
+- **Câu hỏi cũ chưa có câu trả lời**: ô "Địa chỉ web Chỉ tiêu KTKT" trong popup tiện ích vẫn để mặc định `http://localhost:5173/`. Người dùng xác nhận đang chạy `npm run dev` + mở `localhost:5173` (không phải địa chỉ đã triển khai thật), nên hiện tại giá trị mặc định này là đúng cho quy trình hằng ngày của người dùng — không cần đổi trừ khi sau này triển khai lên một địa chỉ web thật khác.
+- Chưa kiểm thử tự động (không có bộ test riêng cho `content.js`/`background.js` của tiện ích — các file này không chạy qua Vitest/Jest, chỉ được kiểm chứng thủ công qua Claude in Chrome trên dữ liệu thật).
 
-- `npm install` — cài xong, `npx tsc --noEmit` — sạch, không lỗi kiểu dữ liệu.
-- `npm run lint` — 4 file mới/sửa không phát sinh lỗi mới (các lỗi/cảnh báo còn lại là nợ kỹ thuật có sẵn từ trước ở file khác của Codex).
-- `node --test tests/*.mjs` — 23/23 đạt.
-- `npm run build` — build production thành công.
-- Chạy `npm run dev` thật, dùng chính file Excel người dùng tải lên (`DH1- Tinh SHN PPA theo cong suat thuc te ngày 14092026.xlsm`, 14 sheet ngày 01/09–14/09/2026) để test chức năng "Nhập nhiều ngày từ Excel" đầu-cuối: cả 14 ngày được nhận diện và lưu đúng qua API thật; 4 sheet tổng hợp (Cả nhà máy DH1, S1, S2, Standard Line) tự động bị bỏ qua đúng như thiết kế. Kết quả tính SHN PPA khớp gần như tuyệt đối với giá trị sẵn có trong chính file Excel của người dùng (ví dụ ngày 01/09: phần mềm ra 10549.396937253216 kJ/kWh, file Excel ghi 10549.396937 kJ/kWh).
+---
 
-## Còn thiếu
+# Bổ sung 16/09/2026 (tiếp) — Bố cục lại bảng PMIS + biểu đồ theo ngày
 
-- Chưa xác nhận trên trình duyệt thật của người dùng, kể cả tính năng nhập nhiều ngày (mới chỉ test qua API/sandbox riêng, xem ghi chú trên).
-- Nút xuất Excel / nhập nhiều ngày đều cần tải thư viện SheetJS từ CDN lúc dùng — chưa thử trong điều kiện mạng nội bộ hạn chế của người dùng.
-- `device_bash` (kênh Claude chạy lệnh trực tiếp trên máy người dùng) vẫn chưa hoạt động.
-- Xem ghi chú đầu mục này về việc `docs/ACCEPTANCE.md` tự bị lùi về bản cũ nhiều lần — cần người dùng kiểm tra có tiến trình nào (git, Codex, đồng bộ file) đang tự ghi đè file này không.
+## Đã làm
+
+- **Thu hẹp cột nhãn chỉ tiêu** từ 220px xuống 150px (đủ chứa nhãn dài nhất xuống 3 dòng).
+- **Đóng băng 5 cột ngày đầu**: bảng tách làm 2 `<table>` đặt cạnh nhau — bảng trái (nhãn + 5 ngày đầu) đứng yên, bảng phải (các ngày còn lại) cuộn ngang riêng trong vùng của nó, cùng kiểu "cột đóng băng" như chính màn hình QLKT dùng (PrimeFaces). Cả 2 bảng dùng chung hằng số chiều cao hàng cố định (`HEADER_ROW_H`/`BAND_ROW_H`/`METRIC_ROW_H`) để không bị lệch hàng — đây đúng là lỗi tương tự đã gặp và sửa ở phía đọc dữ liệu QLKT, nay tự áp dụng lại cho bảng của chính mình. Đã dựng thử bằng Playwright ở nhiều kích thước màn hình (700px, 1100px, 1280px, 1600px) và cuộn thử vùng bên phải để xác nhận 2 bảng luôn khớp hàng.
+- **Cột ngày rộng 56px** — đủ hẹp để một màn hình rộng vừa phải (khoảng ≥1150px, sau khi trừ menu bên trái) hiển thị được ít nhất 12 ngày cùng lúc không cần cuộn; màn hình hẹp hơn vẫn xem đủ nhờ cuộn vùng bên phải, 5 ngày đầu luôn cố định.
+- **Biểu đồ theo ngày**: thêm 5 ô biểu đồ đường (1 ô/chỉ tiêu, vì mỗi chỉ tiêu 1 đơn vị đo khác nhau nên không gộp chung 1 trục) hiển thị dưới bảng, mỗi ô có 2 đường S1 (xanh dương `#2f6fb0`)/S2 (hổ phách `#b9860f`) — dùng đúng cặp màu tổ máy đã có sẵn ở trang "So sánh SHN PPA & thực tế" để nhất quán giữa các trang, dùng thư viện `recharts` đã có sẵn trong dự án.
+- **Đưa khối "Đồng bộ nhiều ngày" lên trên** khối "Từ ngày/Đến ngày" (xem báo cáo), thu gọn padding 2 khối để nhường không gian cho bảng + biểu đồ; bỏ luôn dòng cảnh báo cũ "hãy đổi Tổ máy trên QLKT rồi đồng bộ lần lượt" (không còn đúng từ khi có bản đồng bộ 2 tổ máy 1 nút).
+
+## Kiểm tra đã thực hiện
+
+- `npx tsc --noEmit`, `npm run lint` (chỉ còn đúng lỗi nền cũ dòng hiệu ứng đọc hash), `npm run build`: đều đạt.
+- Dựng `npm run dev` trong sandbox, dùng Playwright chụp ảnh và cuộn thử trực tiếp ở 4 kích thước màn hình khác nhau để xác nhận bảng không bị lệch hàng và vẫn giữ đúng cột đóng băng — không chỉ đọc code mà đã nhìn thấy kết quả hiển thị thật trước khi bàn giao.
+
+## Còn thiếu / cần lưu ý
+
+- Biểu đồ hiện trống vì môi trường sandbox không có dữ liệu D1 thật — cần người dùng tự xem trên dữ liệu thật của họ để xác nhận biểu đồ hiển thị đúng khi có số liệu (đường nối liền/đứt đoạn ở ngày thiếu số liệu, trục tự co giãn theo giá trị).
+- "Ít nhất 12 ngày không cần cuộn" chỉ đúng ở màn hình đủ rộng (ước tính ≥1150px sau khi trừ menu) — trên máy tính xách tay màn nhỏ hoặc cửa sổ trình duyệt thu hẹp, vẫn xem được đủ nhưng phải cuộn phần bên phải; 5 ngày đầu luôn cố định trong mọi trường hợp.
+
+---
+
+# Bổ sung 16/09/2026 (tiếp #2) — Gộp thanh công cụ 1 hàng, lấp đầy bảng, biểu đồ theo tổ máy, cố gắng vừa 1 trang
+
+## Đã làm
+
+- **Gộp 2 khối điều khiển thành đúng 1 hàng** trên cùng (xem báo cáo + đồng bộ 1 ngày + đồng bộ nhiều ngày đều trên 1 hàng, tự xuống dòng khi màn hình hẹp).
+- **Bảng lấp đầy hết chiều rộng còn trống**: cột ngày ở phần cuộn không còn khoá cứng bề rộng (chỉ giữ bề rộng tối thiểu), bảng đặt `width:100%` nên khi ít ngày các cột tự giãn ra lấp đầy, không còn để trống mảng lớn bên phải như trước; khi nhiều ngày vượt quá khung nhìn, cột vẫn giữ đủ rộng để đọc số và sinh thanh cuộn ngang bình thường.
+- **Nhãn chỉ tiêu rút còn 1 dòng** (cắt bớt bằng `truncate`, xem đầy đủ khi rê chuột) thay vì xuống dòng 2-3 dòng như trước — để hàng bảng thấp lại đáng kể, dồn không gian cho biểu đồ.
+- **Biểu đồ đổi bố cục theo đúng yêu cầu mới**: 2 khối (1 khối/tổ máy) thay vì 5 khối theo từng chỉ tiêu như bản trước; mỗi khối tổ máy gộp đủ cả 5 chỉ tiêu, hiển thị thành 5 ô nhỏ xếp 1 hàng bên trong khối đó. Không gộp 5 chỉ tiêu vào chung 1 trục (vì 5 đơn vị đo khác nhau — làm vậy sẽ vẽ sai lệch, đường gần như phẳng), mỗi ô vẫn giữ đúng 1 trục riêng, chỉ tô theo màu tổ máy.
+- **Cố gắng vừa 1 trang, hạn chế cuộn dọc**: chiều cao cả trang đặt tối thiểu bằng chiều cao khung nhìn trừ phần header (`min-h-[calc(100vh-88px)]`), bảng giữ chiều cao cố định gọn, phần biểu đồ giãn lấp phần còn lại. Đã đặt biểu đồ có chiều cao tối thiểu (không cho co nhỏ tới mức không đọc được) — vì vậy khi thanh công cụ phải xuống 2 dòng (màn hình hẹp hơn ~1400px), tổng nội dung có thể nhỉnh hơn khung nhìn vài chục đến ~150px và trang sẽ cuộn dọc một chút; đây là đánh đổi có chủ đích để biểu đồ không bị bóp méo tới mức vô dụng.
+
+## Kiểm tra đã thực hiện
+
+- `npx tsc --noEmit`, `npm run lint` (chỉ còn lỗi nền cũ), `npm run build`: đều đạt.
+- Dựng `npm run dev`, dùng Playwright chụp ảnh ở 4 kích thước màn hình phổ biến (1280×720, 1366×768, 1600×900, 1920×1080): ở 1600×900 trở lên (khớp với màn hình thật của người dùng qua ảnh chụp họ gửi) toàn bộ trang — thanh công cụ, bảng, 2 khối biểu đồ — vừa đúng 1 khung nhìn, không cần cuộn dọc; ở 2 độ phân giải hẹp hơn (1280×720, 1366×768) thanh công cụ xuống 2 dòng và trang cuộn dọc thêm một khoảng ngắn, biểu đồ vẫn hiển thị rõ ràng, không bị bóp méo.
+
+## Còn thiếu / cần lưu ý
+
+- Ngưỡng "1 trang không cuộn" ước tính cho chiều rộng cửa sổ trình duyệt khoảng ≥1500-1600px trở lên; cửa sổ hẹp hơn (laptop nhỏ, chia đôi màn hình) sẽ có cuộn dọc nhẹ — đã kiểm chứng đây là mức cuộn nhỏ (dưới ~150px), không phải toàn bộ trang.
+- Đã bỏ dòng cảnh báo màu vàng cũ ("hãy đổi Tổ máy trên QLKT rồi đồng bộ lần lượt") để tiết kiệm chỗ — thông tin đó đã lỗi thời từ khi có bản đồng bộ 2 tổ máy 1 nút nên bỏ không ảnh hưởng.
+---
+# Bổ sung 16/09/2026 (tiếp #3) — Sửa lỗi bảng chọn ngày trong suốt, gộp 5 chỉ tiêu vào chung 1 biểu đồ/tổ máy
+## Lỗi đã sửa
+- Bảng chọn ngày (DateField/Calendar, dùng ở tất cả các ô "Từ ngày/Đến ngày/Ngày đồng bộ") bị trong
+  suốt, chữ số của bảng dữ liệu phía sau lộ ra đè lên lịch, không đọc được. Nguyên nhân: các class
+  Tailwind kiểu `bg-popover`, `text-muted-foreground`, `bg-primary`, `bg-accent`... mà shadcn/ui
+  dùng chưa từng được định nghĩa biến CSS tương ứng (`--popover`, `--primary`...) trong
+  `app/globals.css` — nên toàn bộ các class này âm thầm không sinh ra CSS gì (không lỗi, không
+  cảnh báo), khiến khung lịch không có nền. Đã bổ sung đầy đủ bộ biến màu chuẩn của shadcn (nền,
+  chữ, viền, màu nhấn...) vào `app/globals.css`, đồng thời set thẳng `bg-white` cho khung lịch trong
+  `components/ui/date-field.tsx` để chắc chắn luôn có nền trắng dù sau này theme đổi. Lỗi này ảnh
+  hưởng tiềm ẩn tới mọi popover/dialog khác dùng các class trên trong toàn bộ ứng dụng, không riêng
+  trang PMIS — nên sửa ở gốc (globals.css) thay vì chỉ vá riêng 1 chỗ.
+- Biểu đồ trước đó vẫn còn chia nhỏ theo từng chỉ tiêu (5 ô nhỏ/tổ máy) dù đã gộp vào 1 khối — chưa
+  đúng ý "gộp cả 5 thông số vào chung 1 biểu đồ". Đã sửa: mỗi tổ máy giờ chỉ còn ĐÚNG 1 biểu đồ, có
+  5 đường (1 đường/chỉ tiêu), có chú giải (legend) màu cố định theo chỉ tiêu ở dưới mỗi biểu đồ.
+  Vì 5 chỉ tiêu có đơn vị đo khác nhau (MW/%/kPa/°C/g·kWh⁻¹) nên không thể vẽ chung true theo giá
+  trị gốc (chỉ tiêu giá trị lớn sẽ "đè phẳng" chỉ tiêu giá trị nhỏ) — đã quy đổi mỗi đường về "chỉ số
+  tương đối" so với giá trị đầu kỳ của chính chỉ tiêu đó (ngày đầu tiên có số liệu = 100), nên vẫn 1
+  trục Y duy nhất nhưng xem được xu hướng tăng/giảm của cả 5 chỉ tiêu cùng lúc; giá trị gốc đúng đơn
+  vị vẫn hiển thị đầy đủ khi rê chuột vào biểu đồ (tooltip).
+## Kiểm tra đã thực hiện
+- `tsc --noEmit` đạt (không còn lỗi kiểu dữ liệu của phần tooltip/legend mới).
+- Playwright: mở bảng chọn ngày ở ô "Từ ngày" tại 1600×900 — xác nhận nền trắng, chữ rõ, không còn
+  đè lên bảng dữ liệu phía sau; xác nhận khu vực biểu đồ chỉ còn đúng 2 khối (S1, S2), mỗi khối có
+  chú giải 5 màu tương ứng 5 chỉ tiêu.
+- Đã đẩy `components/pmis-report.tsx`, `components/ui/date-field.tsx`, `app/globals.css` sang máy
+  người dùng và xác minh lại đúng số byte đã ghi thành công (kể cả sau khi phải gửi lại 2 lần do
+  hiện tượng "báo ghi thành công nhưng chưa cập nhật thật" như các lần trước).
+## Còn thiếu / cần lưu ý
+- Chưa kiểm tra trực quan với dữ liệu thật (sandbox không có dữ liệu D1) — biểu đồ mới chỉ được xác
+  minh về mặt cấu trúc (đúng 2 khối, đúng 5 đường, tooltip/legend hiển thị đúng nhãn), chưa xác nhận
+  hình dạng đường với số liệu thực tế của người dùng.
+- Bộ biến màu shadcn mới thêm dùng theo bảng màu mặc định (chưa tuỳ biến theo thương hiệu riêng);
+  nếu sau này cần đổi màu chủ đạo của toàn bộ nút bấm/hộp thoại thì sửa ở khối `:root`/`@theme
+  inline` mới thêm trong `app/globals.css`.
+---
+# Bổ sung 16/09/2026 (tiếp #4) — Bỏ ô tìm kiếm, đổi tên trang, biểu đồ cạnh nhau + khoảng ngày riêng
+## Đã làm
+- Bỏ ô tìm kiếm ở đầu trang (chỉ trên trang Báo cáo PMIS — thêm prop `hideSearch` cho `AppShell`,
+  các trang khác dùng chung `AppShell` vẫn giữ nguyên ô tìm kiếm).
+- Đổi tiêu đề trang: bỏ 2 dòng "BÁO CÁO LẤY TỪ QLKT" / "Báo cáo THEO PMIS", chỉ còn 1 dòng "Bảng
+  thông số tổn thất khói".
+- Biểu đồ: đổi bố cục từ xếp chồng (S1 trên, S2 dưới) sang đặt cạnh nhau (S1 trái, S2 phải); tăng
+  độ đậm nét vẽ (strokeWidth 2→3) và đổi sang bảng màu bão hòa hơn cho từng chỉ tiêu; nới biên trục Y
+  (`dataMin - 5` / `dataMax + 5`) để các đường không bị bó sát viền, dễ phân biệt hơn.
+- Thêm khoảng ngày riêng cho biểu đồ (độc lập với khoảng ngày của bảng phía trên) — mặc định trùng
+  bảng, có nút "Áp dụng" riêng. Dữ liệu tải về (`loadRange`) giờ luôn gộp đủ các tháng cho CẢ khoảng
+  ngày của bảng lẫn của biểu đồ trong 1 lần gọi (`reloadForBothRanges`), nên đổi 1 trong 2 khoảng
+  không làm mất dữ liệu của khoảng còn lại.
+## Kiểm tra đã thực hiện
+- `tsc --noEmit` đạt.
+- Playwright tại 1600×900: xác nhận không còn ô tìm kiếm, tiêu đề đúng 1 dòng, khối chọn khoảng ngày
+  biểu đồ hiển thị đúng vị trí (trên biểu đồ, dưới bảng), 2 biểu đồ nằm cạnh nhau S1/S2.
+- Đã đẩy `components/pmis-report.tsx`, `components/app-shell.tsx`, `app/pmis-report/page.tsx` sang
+  máy người dùng và xác minh lại đúng số byte (pmis-report.tsx phải gửi lại 1 lần do hiện tượng cũ).
+## Còn thiếu / cần lưu ý
+- Chưa xem được hình dạng đường thật với dữ liệu thật (sandbox không có dữ liệu D1).
+---
+# Bổ sung 16/09/2026 (tiếp #5) — Trục Y riêng cho từng chỉ tiêu trong biểu đồ, bỏ đóng băng cột ngày
+## Đã làm
+- Biểu đồ: bỏ cách "quy về chỉ số tương đối" (vì domain vẫn tính chung nên chỉ tiêu biên độ nhỏ như
+  PBN vẫn nhìn phẳng). Đổi sang: mỗi chỉ tiêu có 1 trục Y RIÊNG (ẩn, không hiện số/đường trục) chỉ để
+  tự tính tỷ lệ hiển thị cho đúng đường của nó — vẫn 1 biểu đồ, 1 trục X (ngày) chung như yêu cầu,
+  nhưng mỗi đường được co giãn theo đúng biên độ dao động thật của chỉ tiêu đó nên luôn thấy rõ thay
+  đổi, không còn bị "đè phẳng" bởi chỉ tiêu có giá trị lớn hơn nhiều. Tooltip vẫn hiện đúng giá trị
+  gốc theo đơn vị của từng chỉ tiêu.
+- "Trung bình công suất đầu cực" (PG): đổi màu đỏ, khoảng hiển thị trục Y cố định 400–625 MW theo
+  đúng yêu cầu.
+- Các chỉ tiêu còn lại: khoảng hiển thị tự tính theo min/max thực tế trong khoảng ngày đang xem,
+  cộng đệm 12% (tối thiểu 1 đơn vị) mỗi bên — không cần đặt cứng từng chỉ tiêu.
+- Bỏ đóng băng 5 ngày đầu ở bảng số liệu: gộp lại thành 1 bảng duy nhất, cuộn ngang khi nhiều ngày;
+  cột nhãn chỉ tiêu vẫn đứng yên bên trái khi cuộn (dùng `sticky`, không cần tách 2 bảng như trước).
+## Kiểm tra đã thực hiện
+- `tsc --noEmit` đạt (phải thêm `AxisDomainItem` từ `recharts/types/util/types` để domain theo hàm
+  min/max có kiểu đúng).
+- Đã nạp dữ liệu mẫu vào CSDL sandbox (chỉ trong máy chủ mô phỏng, không đụng dữ liệu thật của người
+  dùng) để xác nhận trực quan bằng Playwright: cả 5 đường đều thấy rõ dao động, đường PG (đỏ) đúng
+  khoảng 400–625, bảng hiển thị đủ cả 10 ngày trong 1 bảng không còn tách rời.
+- Đã đẩy `components/pmis-report.tsx` sang máy người dùng và xác minh lại đúng số byte đã ghi (phải
+  gửi lại 1 lần do hiện tượng cũ).
+## Còn thiếu / cần lưu ý
+- Khoảng đệm 12% cho các chỉ tiêu còn lại là số mặc định hợp lý chung — nếu muốn khoảng cố định
+  riêng cho chỉ tiêu nào khác (như đã làm với PG), chỉ cần thêm vào `METRIC_DOMAIN` trong
+  `components/pmis-report.tsx`.
+---
+# Bổ sung 16/09/2026 (tiếp #6) — Thêm lưới ngang nét đứt mờ trong biểu đồ
+## Đã làm
+- Thêm đường lưới ngang (gạch nét đứt, màu mờ `#c9d2e0`) trải đều theo chiều cao mỗi biểu đồ để dễ
+  so sánh mức cao/thấp giữa các đường — tắt hẳn lưới dọc (chỉ giữ lưới ngang) cho đỡ rối mắt.
+- Sự cố kỹ thuật gặp phải: vì mỗi chỉ tiêu giờ có 1 trục Y riêng (`yAxisId` khác nhau, xem bổ sung
+  tiếp #5), `CartesianGrid` mặc định tìm trục có `yAxisId="0"` để lấy vạch chia — không khớp trục nào
+  trong 5 trục đã đặt tên riêng, nên chỉ vẽ được đúng 1 vạch. Đã sửa bằng cách chỉ định rõ
+  `yAxisId="PG"` cho `CartesianGrid` để nó lấy đúng vạch chia của 1 trục cụ thể làm lưới ngang.
+## Kiểm tra đã thực hiện
+- `tsc --noEmit` đạt.
+- Playwright + dữ liệu mẫu (sandbox, không đụng dữ liệu thật): xác nhận cả 2 biểu đồ đều hiện nhiều
+  vạch lưới ngang nét đứt mờ trải đều, không còn tình trạng chỉ có 1 vạch.
+- Đã đẩy `components/pmis-report.tsx` sang máy người dùng, xác minh lại đúng số byte (gửi lại 1 lần
+  do hiện tượng "báo thành công nhưng chưa cập nhật" như các lần trước).
+---
+# Trạng thái cuối lượt — bàn giao Codex (16/09/2026)
+
+Phần này tóm tắt lại toàn bộ trạng thái hiện tại của trang "Báo cáo PMIS" (`/pmis-report`) sau nhiều lượt chỉnh sửa liên tiếp trong ngày 16/09/2026 (các mục "Bổ sung 16/09/2026" và "(tiếp #1..#6)" ở trên là nhật ký chi tiết theo từng lượt) — để Codex không cần đọc lại toàn bộ lịch sử mà vẫn nắm được trạng thái cuối cùng.
+
+## File liên quan
+
+- `components/pmis-report.tsx` — toàn bộ trang, gồm cả bảng số liệu và biểu đồ.
+- `components/ui/date-field.tsx` — ô chọn ngày dùng chung toàn app (đã sửa lỗi nền trong suốt, xem tiếp #3).
+- `components/app-shell.tsx` — khung layout dùng chung, có thêm prop `hideSearch` cho riêng trang PMIS (tiếp #4).
+- `app/pmis-report/page.tsx` — trang gọi `AppShell` với `hideSearch`.
+- `app/globals.css` — đã bổ sung bộ biến màu chuẩn shadcn/ui còn thiếu (`--popover`, `--primary`...), ảnh hưởng chung toàn app, không riêng trang PMIS.
+- `public/qlkt-sync-extension/` (+ bản zip `public/qlkt-sync-extension.zip`) — tiện ích trình duyệt đồng bộ QLKT, hiện ở bản `0.4.8`, có luồng `SYNC_HEATRATE` riêng cho trang PMIS (đọc đồng thời cả S1 và S2 trong 1 lần bấm).
+
+## Trạng thái hiện tại của trang PMIS
+
+**Bảng số liệu**: 1 bảng duy nhất (đã bỏ kiểu "đóng băng 5 cột đầu / 2 bảng tách rời" — xem tiếp #5), cuộn ngang khi nhiều ngày, cột nhãn chỉ tiêu dùng `sticky left-0` để luôn đứng yên bên trái khi cuộn. Tiêu đề trang chỉ còn 1 dòng "Bảng thông số tổn thất khói" (tiếp #4). Không còn ô tìm kiếm ở header (chỉ ẩn riêng trang này qua `hideSearch`, các trang khác không đổi).
+
+**Toolbar**: gộp thành 1 hàng trên cùng gồm 3 nhóm — xem báo cáo theo khoảng ngày (Từ ngày/Đến ngày + Áp dụng), đồng bộ 1 ngày từ QLKT, đồng bộ nhiều ngày từ QLKT (tự lưu thẳng, tối đa 62 ngày/lần, có thanh tiến trình + nút Dừng).
+
+**Biểu đồ**: đúng 2 biểu đồ đặt cạnh nhau (S1 trái, S2 phải — tiếp #4), mỗi biểu đồ gộp chung cả 5 chỉ tiêu theo giá trị gốc (không quy đổi chỉ số tương đối nữa — đã bỏ cách đó ở tiếp #5 vì vẫn bị đè phẳng). Mỗi chỉ tiêu có 1 trục Y ẩn riêng (`yAxisId` = mã chỉ tiêu: `PG`/`L1`/`PBN`/`TNM`/`NH3`) để tự co giãn theo đúng biên độ của chính nó — xem hàm `domainFor()` trong `pmis-report.tsx`. Riêng "Trung bình công suất đầu cực" (PG) cố định khoảng trục 400–625 MW và tô màu đỏ theo yêu cầu người dùng; các chỉ tiêu còn lại tự tính khoảng theo min/max thực tế + đệm 12%. Có lưới ngang nét đứt màu mờ trải đều theo chiều cao biểu đồ để dễ so sánh (tiếp #6) — lưu ý kỹ thuật: `CartesianGrid` phải được gán `yAxisId="PG"` tường minh thì mới lấy đúng vạch chia, vì mặc định nó tìm trục `yAxisId="0"` không khớp trục nào trong 5 trục đã đặt tên riêng. Biểu đồ có khoảng ngày xem riêng, độc lập với khoảng ngày của bảng phía trên (đặt mặc định trùng nhau, có nút Áp dụng riêng) — dữ liệu tải về luôn gộp đủ tháng cho cả 2 khoảng cùng lúc (`reloadForBothRanges()`), tránh mất dữ liệu khi đổi 1 trong 2 khoảng.
+
+## Đã kiểm tra
+
+- `npx tsc --noEmit`, `npm run build`: đạt ở mọi lượt.
+- Đã dựng `npm run dev` trong sandbox và dùng Playwright chụp ảnh nhiều lần trong ngày để xác nhận trực quan (không chỉ đọc code): bảng chọn ngày có nền, bảng số liệu không còn tách rời, biểu đồ đúng bố cục 2 khối cạnh nhau, các đường đều thấy rõ dao động, lưới ngang hiện đều.
+- Có 1 lượt đã nạp dữ liệu mẫu vào CSDL D1 của sandbox (chỉ trong máy chủ mô phỏng cục bộ, không đụng dữ liệu thật của người dùng) để xác nhận hình dạng đường biểu đồ thật thay vì chỉ xác nhận cấu trúc rỗng.
+
+## Còn thiếu / Codex cần lưu ý khi tiếp nhận
+
+- **Chưa xác nhận trên dữ liệu thật của người dùng** — mọi xác nhận trực quan về biểu đồ (trừ 1 lần) đều dựa trên bảng trống hoặc dữ liệu mẫu tự tạo trong sandbox, chưa phải số liệu QLKT thật của người dùng.
+- **Phần tự động chuyển đổi dropdown "Tổ máy" trên QLKT thật** (`findMainAssetSelect`, `switchHeatRateUnit` trong `content.js`) — chỉ mới kiểm chứng từng tổ máy đọc riêng lẻ trên dữ liệu thật, phần tự-chuyển-qua-lại-rồi-khôi-phục chưa được người dùng xác nhận chạy thật trên QLKT (xem chi tiết ở mục "Bổ sung 16/09/2026" phía trên).
+- **Đồng bộ theo khoảng ngày lưu thẳng, không qua bảng xem trước** — là lựa chọn có chủ đích, nhưng ghi đè ngay dữ liệu cũ của các ngày đó nếu có.
+- **Khoảng đệm 12% cho trục Y** của các chỉ tiêu (trừ PG) là giá trị mặc định chung, chưa tinh chỉnh riêng theo từng chỉ tiêu — nếu người dùng thấy đường nào vẫn chưa đủ rõ, chỉnh trong `METRIC_DOMAIN`/`domainFor()`.
+- **Bộ biến màu shadcn thêm vào `app/globals.css`** dùng theo bảng màu mặc định (chưa theo thương hiệu riêng của công ty) — ảnh hưởng toàn app chứ không riêng trang PMIS, nên khi đổi cần kiểm tra rộng hơn phạm vi trang này.
+- **Hiện tượng đồng bộ file lên máy người dùng không ổn định** (không liên quan Codex nếu làm việc trực tiếp trên máy/qua Git, chỉ liên quan cách Claude đẩy file qua cầu nối thiết bị) — ghi lại để tránh nhầm lẫn nếu thấy nhắc tới trong các mục "Bổ sung" phía trên.

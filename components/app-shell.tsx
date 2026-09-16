@@ -7,10 +7,10 @@ const navigation = [
   { icon: "◎", label: "Định mức chỉ tiêu", href: "/", key: "limits" },
   { icon: "≋", label: "So sánh SHN PPA & thực tế", href: "/ppa-heat-rate", key: "ppa" },
   { icon: "!", label: "Cảnh báo bất thường", href: "/", key: "alerts" },
-  { icon: "▤", label: "Báo cáo tổng hợp", href: "/", key: "reports" },
+  { icon: "▤", label: "Báo cáo PMIS", href: "/pmis-report", key: "pmis" },
 ];
 
-export function AppShell({ children, active }: { children: ReactNode; active: string }) {
+export function AppShell({ children, active, hideSearch }: { children: ReactNode; active: string; hideSearch?: boolean }) {
   return <main className="flex min-h-screen bg-[#f5f6f8] text-[#17213b]">
     <aside className="sticky top-0 hidden h-screen w-[235px] shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
       <div className="m-3 rounded-2xl bg-gradient-to-br from-[#314793] via-[#4369b5] to-[#8c9272] px-4 py-4 text-white shadow-md"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-xl text-[#3b4f9c]">✦</span><div><p className="text-base font-extrabold tracking-wide">VẬN HÀNH 1</p><p className="text-[10px] font-semibold tracking-[0.16em] text-blue-100">DIGITAL OPERATIONS</p></div></div></div>
@@ -21,7 +21,7 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
       <div className="border-t p-4"><p className="text-xs font-semibold text-slate-500">© 2026 · Phân xưởng Vận hành 1</p><div className="mt-3 rounded-xl border bg-[#f8faff] px-3 py-2 text-center text-xs font-bold text-[#4057a8]">Hệ thống nội bộ</div></div>
     </aside>
     <div className="min-w-0 flex-1">
-      <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm"><div className="flex items-center gap-3"><button aria-label="Mở trình đơn" className="grid h-9 w-9 place-items-center rounded-xl bg-[#56b792] text-lg font-bold text-white">≡</button><label className="hidden h-9 w-[300px] items-center gap-2 rounded-xl border border-slate-200 bg-[#fafbfc] px-3 text-sm text-slate-400 sm:flex"><span>⌕</span><input aria-label="Tìm kiếm chức năng" placeholder="Tìm kiếm chức năng, chỉ tiêu…" className="min-w-0 flex-1 bg-transparent outline-none"/></label></div><div className="flex items-center gap-2"><span className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">● Kho dữ liệu hoạt động</span><div className="hidden border-l pl-3 text-right sm:block"><p className="text-sm font-extrabold">PXVH1</p><p className="text-[10px] font-semibold text-slate-500">NGƯỜI VẬN HÀNH</p></div><span className="grid h-9 w-9 place-items-center rounded-full bg-[#e9edf8] font-extrabold text-[#3c4f99]">VH</span></div></header>
+      <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm"><div className="flex items-center gap-3"><button aria-label="Mở trình đơn" className="grid h-9 w-9 place-items-center rounded-xl bg-[#56b792] text-lg font-bold text-white">≡</button>{!hideSearch && <label className="hidden h-9 w-[300px] items-center gap-2 rounded-xl border border-slate-200 bg-[#fafbfc] px-3 text-sm text-slate-400 sm:flex"><span>⌕</span><input aria-label="Tìm kiếm chức năng" placeholder="Tìm kiếm chức năng, chỉ tiêu…" className="min-w-0 flex-1 bg-transparent outline-none"/></label>}</div><div className="flex items-center gap-2"><span className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">● Kho dữ liệu hoạt động</span><div className="hidden border-l pl-3 text-right sm:block"><p className="text-sm font-extrabold">PXVH1</p><p className="text-[10px] font-semibold text-slate-500">NGƯỜI VẬN HÀNH</p></div><span className="grid h-9 w-9 place-items-center rounded-full bg-[#e9edf8] font-extrabold text-[#3c4f99]">VH</span></div></header>
       <div className="p-3 lg:p-4">{children}</div>
     </div>
   </main>;

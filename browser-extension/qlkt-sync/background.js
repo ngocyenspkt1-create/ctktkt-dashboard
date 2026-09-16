@@ -10,12 +10,16 @@ const SOURCE_LABELS = {
   fuel: "Nhiên liệu",
   operation: "Vận hành",
   meter: "Công tơ PPA",
+  heatrate: "Cân bằng nhiệt",
 };
 const DAILY_SOURCES = ["production", "fuel", "operation"];
 const REQUIRED_FIELDS = {
   production: ["B", "C", "H", "I"],
   fuel: ["X", "AE", "AF", "AJ", "AR", "AT", "CC", "CD"],
   operation: ["F", "L"],
+  // 8 mã của cả 2 tổ máy (S1+S2) — content.js tự đổi "Tổ máy" trên màn hình Cân bằng nhiệt và đọc
+  // lần lượt cả 2 trong 1 lần gọi READ_QLKT_VALUES, nên chỉ cần 1 tab, không cần mở 2 lần như trước.
+  heatrate: ["DA", "DB", "DC", "DD", "DE", "DF", "DG", "DH"],
 };
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -237,8 +241,22 @@ async function syncPpa(operatingDate) {
   return readSource("meter", DEFAULT_METER_URL, operatingDate);
 }
 
+async function syncHeatRate(operatingDate) {
+  const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
+  if (!qlktPages.heatrate) {
+    throw new Error("Chưa ghi nhớ địa chỉ màn hình Cân bằng nhiệt. Hãy mở màn hình đó trên QLKT một lần rồi thử lại.");
+  }
+  // content.js tự đổi dropdown "Tổ máy" trên màn hình Cân bằng nhiệt và đọc lần lượt cả S1 + S2
+  // trong 1 lần gọi READ_QLKT_VALUES, nên chỉ cần đọc 1 nguồn "heatrate" duy nhất — không cần mở
+  // hoặc chọn lại tổ máy thủ công như trước.
+  return readSource("heatrate", qlktPages.heatrate, operatingDate);
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  const task = message?.type === "SYNC_ALL_QLKT" ? syncAll : message?.type === "SYNC_PPA_QLKT" ? syncPpa : null;
+  const task = message?.type === "SYNC_ALL_QLKT" ? syncAll
+    : message?.type === "SYNC_PPA_QLKT" ? syncPpa
+    : message?.type === "SYNC_HEATRATE_QLKT" ? syncHeatRate
+    : null;
   if (!task) return;
   task(message.operatingDate)
     .then(payload => sendResponse({ ok: true, payload }))

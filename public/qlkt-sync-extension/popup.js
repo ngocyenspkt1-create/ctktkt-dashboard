@@ -26,6 +26,7 @@ function encodePayload(payload) {
 
 function openTarget(target, payload) {
   if (payload?.kind === "ppa-meter") target = new URL("ppa-heat-rate", target);
+  else if (payload?.kind === "heatrate") target = new URL("pmis-report", target);
   target.hash = `qlkt-sync=${encodePayload(payload)}`;
   return chrome.tabs.create({ url: target.toString() });
 }

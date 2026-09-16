@@ -1,5 +1,5 @@
 (() => {
-  if (!/^(?:\/|\/ppa-heat-rate\/?)$/.test(window.location.pathname)) return;
+  if (!/^(?:\/|\/ppa-heat-rate\/?|\/pmis-report\/?)$/.test(window.location.pathname)) return;
   const channel = "ctktkt-qlkt-sync";
   const post = message => window.postMessage({ channel, sender: "ctktkt-extension", ...message }, window.location.origin);
 
@@ -11,8 +11,13 @@
       post({ type: "READY", version: chrome.runtime.getManifest().version });
       return;
     }
-    const runtimeType = message.type === "SYNC_PPA" ? "SYNC_PPA_QLKT" : message.type === "SYNC_ALL" ? "SYNC_ALL_QLKT" : "";
-    const resultType = message.type === "SYNC_PPA" ? "SYNC_PPA_RESULT" : "SYNC_ALL_RESULT";
+    const runtimeType = message.type === "SYNC_PPA" ? "SYNC_PPA_QLKT"
+      : message.type === "SYNC_HEATRATE" ? "SYNC_HEATRATE_QLKT"
+      : message.type === "SYNC_ALL" ? "SYNC_ALL_QLKT"
+      : "";
+    const resultType = message.type === "SYNC_PPA" ? "SYNC_PPA_RESULT"
+      : message.type === "SYNC_HEATRATE" ? "SYNC_HEATRATE_RESULT"
+      : "SYNC_ALL_RESULT";
     if (!runtimeType || !/^\d{4}-\d{2}-\d{2}$/.test(String(message.operatingDate || ""))) return;
     try {
       const result = await chrome.runtime.sendMessage({ type: runtimeType, operatingDate: message.operatingDate });

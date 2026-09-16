@@ -58,7 +58,7 @@ export function DateField({ value, onChange, min, max, className, placeholder = 
         {selected ? formatDisplay(selected) : placeholder}
       </Button>
     </PopoverTrigger>
-    <PopoverContent className="w-auto p-0" align="start">
+    <PopoverContent className="w-auto border-slate-200 bg-white p-0 text-black shadow-lg" align="start">
       <Calendar
         mode="single"
         locale={vi}

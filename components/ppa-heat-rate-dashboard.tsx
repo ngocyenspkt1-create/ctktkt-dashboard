@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DateField } from "@/components/ui/date-field";
 import { CAPACITY_KW, calculateActualHeatRate, calculatePpaHeatRateDetailed, compareHeatRate, ppaCurveForYear, type PpaSourceData, type UnitDetail } from "@/lib/ppa-heat-rate";
 import { loadSheetJs, type SheetJsLib } from "@/lib/sheetjs-loader";
@@ -34,11 +34,18 @@ type Row = {
   noteS1: string; noteS2: string;
 };
 
-const UNIT_META: Record<UnitKey, { label: string; accent: string; border: string; bg: string; text: string; gradient: string; lineActual: string; linePpa: string; bar: string }> = {
-  s1: { label: "Tổ máy S1", accent: "#2f6fb0", border: "border-blue-200", bg: "bg-blue-50", text: "text-blue-800", gradient: "from-[#2f6fb0] to-[#5fa3e0]", lineActual: "#1d4f8a", linePpa: "#7fb2e8", bar: "#a9c9ef" },
-  s2: { label: "Tổ máy S2", accent: "#b9860f", border: "border-amber-200", bg: "bg-amber-50", text: "text-amber-800", gradient: "from-[#b9860f] to-[#e0ad3d]", lineActual: "#8a620a", linePpa: "#e3b95c", bar: "#f0d69a" },
-  plant: { label: "Chung 2 tổ", accent: "#6b4fa0", border: "border-purple-200", bg: "bg-purple-50", text: "text-purple-800", gradient: "from-[#6b4fa0] to-[#9b7bc9]", lineActual: "#4d3577", linePpa: "#b09bd6", bar: "#d4c6ea" },
+// Màu đường "thực tế" đậm nhất (đường chính), đường "theo PPA" dùng màu accent của tổ máy — đậm hơn
+// hẳn bản trước để 2 đường không bị nhạt nhòe trên nền biểu đồ. Cột chênh lệch không còn dùng 1 màu
+// cố định theo tổ máy nữa mà tô theo dấu: barUnder (xanh) khi thực tế dưới/đúng PPA, barOver (đỏ
+// nhạt) khi vượt PPA — xem renderBarColor bên dưới.
+const UNIT_META: Record<UnitKey, { label: string; accent: string; border: string; bg: string; text: string; gradient: string; lineActual: string; linePpa: string }> = {
+  s1: { label: "Tổ máy S1", accent: "#2f6fb0", border: "border-blue-200", bg: "bg-blue-50", text: "text-blue-800", gradient: "from-[#2f6fb0] to-[#5fa3e0]", lineActual: "#0f2d52", linePpa: "#2f6fb0" },
+  s2: { label: "Tổ máy S2", accent: "#b9860f", border: "border-amber-200", bg: "bg-amber-50", text: "text-amber-800", gradient: "from-[#b9860f] to-[#e0ad3d]", lineActual: "#5c4106", linePpa: "#b9860f" },
+  plant: { label: "Chung 2 tổ", accent: "#6b4fa0", border: "border-purple-200", bg: "bg-purple-50", text: "text-purple-800", gradient: "from-[#6b4fa0] to-[#9b7bc9]", lineActual: "#2e1f47", linePpa: "#6b4fa0" },
 };
+
+const BAR_UNDER_PPA = "#4caf7d"; // dưới/đúng PPA — xanh lá
+const BAR_OVER_PPA = "#f2a29b"; // vượt PPA — đỏ nhạt
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const percentFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -432,7 +439,9 @@ export function PpaHeatRateDashboard() {
                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} width={40} domain={diffDomain} allowDataOverflow/>
                 <Tooltip formatter={(value: unknown) => format(typeof value === "number" ? value : Number(value))} labelFormatter={label => `Ngày ${label}`}/>
                 <Legend wrapperStyle={{ fontSize: 11 }}/>
-                <Bar yAxisId="right" dataKey="chenhLech" name="Chênh lệch" fill={meta.bar} radius={[3, 3, 0, 0]}/>
+                <Bar yAxisId="right" dataKey="chenhLech" name="Chênh lệch" radius={[3, 3, 0, 0]}>
+                  {unitChartData.map((point, index) => <Cell key={index} fill={(point.chenhLech ?? 0) > 0 ? BAR_OVER_PPA : BAR_UNDER_PPA}/>)}
+                </Bar>
                 <Line yAxisId="left" type="monotone" dataKey="thucTe" name="SHN thực tế" stroke={meta.lineActual} strokeWidth={2} dot={false}/>
                 <Line yAxisId="left" type="monotone" dataKey="ppa" name="SHN theo PPA" stroke={meta.linePpa} strokeWidth={2} strokeDasharray="4 3" dot={false}/>
               </ComposedChart>
