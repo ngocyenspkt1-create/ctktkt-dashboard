@@ -2,6 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
+  let pendingDateRefresh = null;
   const parseNumber = raw => {
     const original = cleanText(raw);
     if (/[A-Za-zÀ-ỹ]/u.test(original) || /\d{1,2}\/\d{1,2}\/\d{4}/.test(original)) return null;
@@ -59,6 +60,7 @@
     const firstRowTop = Math.min(...visibleDateInputs.map(({ rect }) => rect.top));
     const dateInputs = visibleDateInputs.filter(({ rect }) => Math.abs(rect.top - firstRowTop) < 24).map(({ input }) => input);
     const changed = dateInputs.some(input => readValue(input) !== displayDate);
+    if (changed) pendingDateRefresh = displayDate;
     dateInputs.forEach(input => {
       input.focus();
       input.value = displayDate;
@@ -66,11 +68,11 @@
       input.dispatchEvent(new Event("change", { bubbles: true }));
       input.blur();
     });
-    if (!changed) return { refreshed: false };
-    const refreshIcon = document.querySelector(".ui-icon-refresh, [class*='icon-refresh'], [class*='refresh-icon'], [class*='arrowrefresh'], img[src*='refresh' i], img[src*='reload' i]");
+    if (!changed && pendingDateRefresh !== displayDate) return { refreshed: false };
+    const refreshIcon = document.querySelector(".ui-icon-refresh, [class*='icon-refresh'], [class*='refresh-icon'], [class*='arrowrefresh'], [class*='arrowreturn'], [class*='circle-arrow'], img[src*='refresh' i], img[src*='reload' i]");
     const labelledControl = [...document.querySelectorAll("button, a, input[type='button'], input[type='image'], input[type='submit'], input[type='reset'], [role='button']")].find(element => {
       const label = normalized(`${element.textContent} ${element.getAttribute("title") || ""} ${element.getAttribute("aria-label") || ""} ${element.getAttribute("alt") || ""} ${element.getAttribute("src") || ""} ${element.className || ""}`);
-      return label.includes("lam moi") || label.includes("refresh") || label.includes("reload") || label.includes("arrowrefresh");
+      return label.includes("lam moi") || label.includes("cap nhat") || label.includes("tai lai") || label.includes("refresh") || label.includes("reload") || label.includes("arrowrefresh") || label.includes("arrowreturn");
     });
     const dateRect = dateInputs[dateInputs.length - 1].getBoundingClientRect();
     const nearbyControl = [...document.querySelectorAll("button, a, input[type='button'], input[type='image'], input[type='submit'], input[type='reset'], img, [role='button'], [onclick]")]
@@ -79,14 +81,19 @@
         if (!rect.width || !rect.height) return false;
         const label = normalized(`${element.textContent} ${element.getAttribute("title") || ""} ${element.getAttribute("aria-label") || ""} ${element.getAttribute("alt") || ""} ${element.getAttribute("src") || ""} ${element.className || ""}`);
         const sameLine = Math.abs((rect.top + rect.height / 2) - (dateRect.top + dateRect.height / 2)) < 24;
-        const toTheRight = rect.left >= dateRect.right - 4 && rect.left - dateRect.right < 180;
-        const excluded = label.includes("calendar") || label.includes("datepicker") || label.includes("cal-btn") || label.includes("calbutton") || label.includes("ghi") || label.includes("save") || label.includes("xuat") || label.includes("export");
+        const toTheRight = rect.left >= dateRect.right - 6 && rect.left - dateRect.right < 320;
+        const excluded = label.includes("calendar") || label.includes("datepicker") || label.includes("cal-btn") || label.includes("calbutton") || label.includes("ghi") || label.includes("save") || label.includes("xuat") || label.includes("export") || label.includes("xoa") || label.includes("delete") || label.includes("trash");
         return sameLine && toTheRight && !excluded;
       })
       .sort((left, right) => left.rect.left - right.rect.left)[0]?.element;
     const refreshControl = refreshIcon?.closest("button, a, input, [role='button'], [onclick]") || refreshIcon || labelledControl || nearbyControl;
-    if (!refreshControl) throw new Error("Không tìm thấy nút cập nhật ngày trên màn hình QLKT.");
+    if (!refreshControl) {
+      const visibleControls = [...document.querySelectorAll("button, a, input[type='button'], input[type='image'], input[type='submit'], [role='button'], [onclick]")]
+        .filter(element => { const rect = element.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }).length;
+      throw new Error(`Không tìm thấy nút cập nhật ngày trên màn hình QLKT (đang chờ giao diện tải xong; đã thấy ${visibleControls} nút).`);
+    }
     refreshControl.click();
+    pendingDateRefresh = null;
     return { refreshed: true };
   }
 
@@ -412,7 +419,10 @@
     }
     if (message?.type === "PREPARE_QLKT_DATE") {
       try { sendResponse({ ok: true, ...prepareDate(message.operatingDate) }); }
-      catch (error) { sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đặt được ngày QLKT." }); }
+      catch (error) {
+        const message = error instanceof Error ? error.message : "Không đặt được ngày QLKT.";
+        sendResponse({ ok: false, retryable: message.includes("nút cập nhật ngày"), error: message });
+      }
       return;
     }
     if (message?.type !== "READ_QLKT_VALUES") return;

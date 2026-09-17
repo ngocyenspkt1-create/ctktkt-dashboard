@@ -1,7 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from '../lib/qlkt-sync.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
+
+test('extension package 0.4.9 retries the delayed QLKT date refresh control', () => {
+  const files = ['background.js', 'content.js', 'manifest.json'];
+  for (const file of files) {
+    const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
+    const published = readFileSync(new URL(`../public/qlkt-sync-extension/${file}`, import.meta.url), 'utf8');
+    assert.equal(published, source, `${file} phải giống nhau ở bản nguồn và bản phát hành`);
+  }
+  const manifest = JSON.parse(readFileSync(new URL('../public/qlkt-sync-extension/manifest.json', import.meta.url), 'utf8'));
+  const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
+  const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
+  assert.equal(manifest.version, '0.4.9');
+  assert.match(background, /prepareDateWithRetry/);
+  assert.match(content, /pendingDateRefresh/);
+  assert.match(content, /retryable: message\.includes\("nút cập nhật ngày"\)/);
+});
 
 const headers = ['', 'Tên điểm đo', 'Kênh', 'Ngày', 'Nguồn dữ liệu', 'Tổng', ...Array.from({ length: 48 }, (_, index) => `H${index + 1}`)];
 const meterRows = ['DHA_S1', 'DH1_285M', 'DHA_S2', 'DH1_283M'].map((meter, meterIndex) => {

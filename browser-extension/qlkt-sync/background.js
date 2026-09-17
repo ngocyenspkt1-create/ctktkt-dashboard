@@ -82,6 +82,16 @@ async function readValuesWithRetry(tabId, attempts = 10, intervalMs = 500) {
   return result;
 }
 
+async function prepareDateWithRetry(tabId, operatingDate, attempts = 20, intervalMs = 500) {
+  let result;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    result = await sendWithRetry(tabId, { type: "PREPARE_QLKT_DATE", operatingDate });
+    if (result?.ok || !result?.retryable) return result;
+    await wait(intervalMs);
+  }
+  return result;
+}
+
 async function readMeterFromPageWorld(tabId, operatingDate, sourcePage) {
   const executions = await chrome.scripting.executeScript({
     target: { tabId },
@@ -173,7 +183,7 @@ async function readSource(source, url, operatingDate) {
     await waitForTab(tabId);
     const current = await chrome.tabs.get(tabId);
     if (!QLKT_PATTERN.test(current.url || "")) throw new Error("Phiên đăng nhập QLKT đã hết hạn. Hãy đăng nhập lại rồi thử lại.");
-    const prepared = await sendWithRetry(tabId, { type: "PREPARE_QLKT_DATE", operatingDate });
+    const prepared = await prepareDateWithRetry(tabId, operatingDate);
     if (!prepared?.ok) throw new Error(prepared?.error || `Không đặt được ngày tại màn hình ${SOURCE_LABELS[source]}.`);
     // Màn hình Công tơ PPA (bảng ExtSheet 4 điểm đo × 48 chu kỳ) thường mất
     // nhiều thời gian hơn để máy chủ QLKT nạp xong dữ liệu so với các màn
