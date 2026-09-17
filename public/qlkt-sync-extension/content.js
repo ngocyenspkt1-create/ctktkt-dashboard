@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.17";
+  const CONTENT_SCRIPT_VERSION = "0.4.18";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   let pendingDateRefresh = null;
   // Ngày cuối cùng ĐÃ THỰC SỰ bấm nút cập nhật cho tab này (không phải ngày đang
@@ -51,6 +51,13 @@
     if (path.includes("rpt_a_production_day")) return "production";
     if (path.includes("nhienlieu")) return "fuel";
     if (path.includes("hieusuatlo") || path.includes("suathaonhiet") || path.includes("can_bang_nhiet")) return "heatrate";
+    // "rpt_a_bu_tru_day.jsf" (Cập nhật sản lượng bù trừ) là 1 báo cáo KHÁC
+    // nhưng có chung các cụm "điện năng đầu cực"/"SL điểm bán" trong nội dung
+    // với đúng màn hình Sản lượng — từng khiến rememberPage() ghi nhớ NHẦM
+    // URL của trang bù trừ này làm URL "production", làm đồng bộ đọc ra 0 chỉ
+    // tiêu mỗi khi mở lại. Loại trừ tường minh theo path trước khi thử heuristic
+    // theo nội dung trang.
+    if (path.includes("bu_tru")) return null;
     const page = normalized(document.body?.innerText);
     if (page.includes("so lieu do dem cong to") && page.includes("nguon du lieu") && page.includes("kwhgiao")) return "meter";
     if (page.includes("dien nang dau cuc") && page.includes("sl diem ban")) return "production";
