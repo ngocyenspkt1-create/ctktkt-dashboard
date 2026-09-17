@@ -8,6 +8,7 @@ const navigation = [
   { icon: "≋", label: "So sánh SHN PPA & thực tế", href: "/ppa-heat-rate", key: "ppa" },
   { icon: "!", label: "Cảnh báo bất thường", href: "/", key: "alerts" },
   { icon: "▤", label: "Báo cáo PMIS", href: "/pmis-report", key: "pmis" },
+  { icon: "✎", label: "Nhập liệu BCSX", href: "/bcsx-report", key: "bcsx" },
 ];
 
 export function AppShell({ children, active, hideSearch }: { children: ReactNode; active: string; hideSearch?: boolean }) {

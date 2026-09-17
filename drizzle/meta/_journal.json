@@ -22,6 +22,13 @@
       "when": 1789431081521,
       "tag": "0002_ppa_heat_rate",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789610485555,
+      "tag": "0003_smooth_trish_tilby",
+      "breakpoints": true
     }
   ]
 }

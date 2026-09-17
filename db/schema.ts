@@ -21,6 +21,27 @@ export const dailyInputs = sqliteTable("daily_inputs", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("uidx_daily_inputs_date_field").on(table.operatingDate, table.fieldCode), index("idx_daily_inputs_date").on(table.operatingDate)]);
 
+export const shiftReadings = sqliteTable("shift_readings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  operatingDate: text("operating_date").notNull(),
+  unit: text("unit").notNull(),
+  timeSlot: text("time_slot").notNull(),
+  metric: text("metric").notNull(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("uidx_shift_readings").on(table.operatingDate, table.unit, table.timeSlot, table.metric), index("idx_shift_readings_date").on(table.operatingDate)]);
+
+export const operatingEvents = sqliteTable("operating_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  operatingDate: text("operating_date").notNull(),
+  unit: text("unit").notNull(),
+  startAt: text("start_at").notNull(),
+  endAt: text("end_at").notNull().default(""),
+  eventType: integer("event_type").notNull(),
+  description: text("description").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [index("idx_operating_events_date").on(table.operatingDate, table.unit)]);
+
 export const ppaHeatRateDaily = sqliteTable("ppa_heat_rate_daily", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   operatingDate: text("operating_date").notNull(),

@@ -304,49 +304,111 @@ Phần này tóm tắt lại toàn bộ trạng thái hiện tại của trang "
 - **Hiện tượng đồng bộ file lên máy người dùng không ổn định** (không liên quan Codex nếu làm việc trực tiếp trên máy/qua Git, chỉ liên quan cách Claude đẩy file qua cầu nối thiết bị) — ghi lại để tránh nhầm lẫn nếu thấy nhắc tới trong các mục "Bổ sung" phía trên.
 
 ---
+# Module mới: Nhập liệu BCSX — Giai đoạn 1 (17/09/2026)
 
-# Bổ sung 17/09/2026 — Đẩy dữ liệu Chỉ tiêu lên Google Sheet DH1
+## Bối cảnh
+
+Người dùng gửi 5 file Excel thật (CHỈ TIÊU KINH TẾ KỸ THUẬT + 3 file BCSX_NMD A0/S1/S2 + BẢNG THEO DÕI NƯỚC) và yêu cầu: đọc kỹ để đề xuất đưa việc nhập liệu lên web, giữ nguyên công thức gốc, phần nào lấy được từ QLKT thì tự đồng bộ, cuối cùng xuất lại đúng file gốc để trưởng ca gửi mail — không đổi quy trình phía nhận (NSMO/lãnh đạo phân xưởng).
+
+Đã publish phân tích chi tiết vào Project claude.ai "chỉ tiêu kinh tế kỹ thuật DH1" (`claude/phan-tich-de-xuat-nhap-lieu-ktkt.md`). Người dùng xác nhận qua AskUserQuestion: (1) file `[2]` (chất lượng than/tro xỉ) tạm bỏ qua, vẫn nhập tay; (2) bảng P/Q nửa giờ trong BCSX là trưởng ca gõ tay từng điểm, không có nguồn tự động; (3) làm Giai đoạn 1 trước — form nhập công tơ + xuất file BCSX.
+
+## Đã đọc kỹ cấu trúc thật (không đoán) — bằng openpyxl trên file người dùng gửi
+
+- File CHỈ TIÊU: khối "Bảng ghi công tơ" (cột M-R cho S1 giờ 6/10/14/18/22/24, cột AG-AL cho S2) là nơi nhập tay P/Q, dầu, nước, mực bồn... theo giờ; khối nhãn cột V/AF (than 12 công tơ/tổ máy A1-F2, công tơ máy phát/MBT/tự dùng...) đọc theo lịch riêng: một số mốc 6/8/14/16/22/24h (điện), một số 6/14/22/24h (than) — **lịch đọc không đều giữa các nhóm công tơ**, đã xác nhận bằng dữ liệu thật chứ không suy đoán.
+- File BCSX_NMD (mỗi unit 1 file, 16 sheet = 16 ngày): mỗi sheet gồm đúng 3 khối cần nhập tay — (a) bảng 48 điểm nửa giờ (00:30→23:59) × 4 cột (P đầu cực, Q, P điểm bán, điện áp thanh cái), hàng 11-58, cột A-E; (b) 5 số tổng cuối ngày ở C60:C64 (đầu cực/thương phẩm/tự dùng/than tiêu thụ/than tồn kho); (c) nhật ký sự kiện vận hành hàng 72 trở đi (bắt đầu/kết thúc/loại 1-5/mô tả).
+- **Đã xác nhận A0 = S1 + S2 theo từng ô** (ví dụ B11: A0=876=438+438, C60: A0=23195.72≈11605.08+S2), nghĩa là **file A0 không cần nhập riêng, tính tự động** từ S1+S2 (trừ cột điện áp thanh cái — giữ theo S1; "than tồn kho" là số toàn nhà máy, không cộng đôi).
+- **Đã xác nhận trùng lặp thật**: C60 (Sản lượng đầu cực S1, BCSX) = J157 (khối PMIS, file CHỈ TIÊU) = 11605.08 — cùng 1 số, đang gõ tay 2 nơi. 3/5 số tổng (đầu cực, thương phẩm, than tiêu thụ) trùng đúng với các mã QLKT-sync **đã có sẵn** trong hệ thống (`B`/`C`/`AE` cho S1, `H`/`I`/`AF` cho S2, `AR` cho than tồn kho — xem `lib/qlkt-sync.ts`), và đã có UI nhập/đồng bộ sẵn ở trang "/" (`daily-production-table.tsx`). "Tự dùng" = đầu cực − thương phẩm (tính, không cần nhập).
+
+## Đã làm (Giai đoạn 1 — form nhập công tơ + xuất file BCSX)
+
+Phạm vi chọn cho giai đoạn 1: đúng phần người dùng chọn ưu tiên — **KHÔNG** đụng tới file CHỈ TIÊU (đó là giai đoạn 3), chỉ tập trung dữ liệu BCSX cần cho 3 file A0/S1/S2.
+
+- **CSDL** (`db/schema.ts`, migration `drizzle/0003_smooth_trish_tilby.sql`): 2 bảng mới —
+  - `shift_readings` (operating_date, unit, time_slot, metric, value) — 48 mốc giờ × 4 thông số (P/Q/D/E) × 2 tổ máy/ngày.
+  - `operating_events` (operating_date, unit, start_at, end_at, event_type, description) — nhật ký sự kiện, ghi đè toàn bộ theo (ngày, tổ máy) mỗi lần lưu (đơn giản, phù hợp vì chỉ 1 người nhập/ngày).
+- **API**: `app/api/shift-readings/route.ts` (GET/POST), `app/api/operating-events/route.ts` (GET/POST, POST thay toàn bộ danh sách theo ngày+tổ máy), `app/api/bcsx-export/route.ts` (GET, trả file .xlsx) — theo đúng khuôn mẫu validate/allowedCodes như `daily-inputs/route.ts` đã có.
+- **Xuất file**: `lib/bcsx.ts` dùng thư viện `exceljs` (đã thêm vào `package.json`), nạp file mẫu (template) rỗng đã tách sẵn cho từng tổ máy, điền đúng ô cần điền, giữ nguyên toàn bộ công thức/định dạng còn lại — **không tự viết lại file bằng tay**, nên không có rủi ro sai định dạng.
+  - Template gốc: `assets/bcsx-templates/bcsx-{s1,s2,a0}-template.xlsx` — tách ra từ chính sheet "16" (ngày 16/09/2026) của 3 file người dùng gửi, chỉ xóa các ô nhập tay (48 điểm, 5 số tổng, nhật ký sự kiện), giữ nguyên mọi công thức/style/merge cell khác.
+  - Vì Cloudflare Workers không có filesystem lúc chạy, base64 hóa cả 3 template thành `lib/bcsx-templates.generated.ts` (sinh tự động bằng `scripts/gen-bcsx-templates.mjs` — chạy lại script này nếu cần sửa template).
+  - Đã xác nhận `exceljs` đọc/ghi/roundtrip đúng trong môi trường `nodejs_compat` của Workers (test cục bộ bằng Node trước, sau đó test qua API thật của app).
+- **Giao diện**: trang mới `/bcsx-report` (`components/bcsx-report.tsx`, menu "Nhập liệu BCSX" trong `app-shell.tsx`) gồm 4 phần: (1) bảng 48 điểm nửa giờ theo tổ máy đang chọn (tab S1/S2), (2) hiển thị trạng thái đã đủ/thiếu số liệu PMIS tổng ngày (đọc từ `daily_inputs` có sẵn, dẫn link sang trang "/" nếu thiếu — **không nhập trùng lần 2**), (3) nhật ký sự kiện (thêm/xóa dòng, lưu theo tổ máy), (4) 3 nút xuất file BCSX_NMD_A0/S1/S2.
+
+## Đã kiểm tra
+
+- `npx tsc --noEmit`: sạch. `npx eslint` trên toàn bộ file mới: sạch (đã sửa 2 lỗi ban đầu — `<a>` → `next/link`, và kiểu `any` khi import `exceljs` động).
+- Áp migration `0003` vào D1 cục bộ (`wrangler d1 execute ... --file drizzle/0003_....sql`), test trực tiếp cả 3 API bằng `curl`: lưu 48-điểm, lưu sự kiện, lưu số liệu PMIS mẫu vào `daily_inputs`, rồi xuất thử cả 3 file (S1/A0/kiểm tra tổ máy không hợp lệ trả lỗi đúng).
+- Mở file .xlsx xuất ra bằng `openpyxl`, xác nhận đúng từng ô: A11/B11/C11/D11/E11 (giờ + 4 thông số), C60-C64 (5 số tổng, đúng bằng số liệu thật của ngày 16/09/2026 đã seed vào `daily_inputs`), A72-D72 (dòng sự kiện), và **font/style ô tiêu đề vẫn giữ nguyên** (kiểm `B9.font.bold == True`).
+- Dựng `npm run dev`, dùng Playwright: xác nhận trang render đúng bố cục, đổi ngày qua lịch load đúng dữ liệu đã lưu, badge "Đã có đủ số liệu PMIS..." hiện đúng khi đã có `B/C/AE` cho ngày đó, nút xuất file tải file `.xlsx` về đúng tên `BCSX_NMD_S1_17.09.2026.xlsx`.
+
+## Còn thiếu / bước tiếp theo (chưa làm trong lượt này)
+
+- **Chưa xuất được file CHỈ TIÊU KINH TẾ KỸ THUẬT** (đó là Giai đoạn 3 theo đề xuất đã chốt) — bảng tính này còn nhiều khối công thức phức tạp hơn nhiều (suất hao nhiệt, quy đổi VCF dầu, PMIS…), cần làm riêng và có khả năng cần xác nhận thêm với người dùng về từng công thức trước khi tự động hóa.
+- **Chưa mở rộng đồng bộ QLKT cho các mã PMIS còn thiếu** (Giai đoạn 2) — hiện chỉ tái dùng đúng các mã đã có sẵn (B/C/AE/H/I/AF/AR), chưa thêm mã mới nào vào `qlktFieldLabels`.
+- **Chưa làm form nước bổ sung theo ca** (Giai đoạn 4, file `BẢNG THEO DÕI LƯỢNG NƯỚC...`) — vẫn nhập trực tiếp trong Excel như cũ.
+- **48 điểm nửa giờ vẫn phải gõ tay** (đúng theo xác nhận của người dùng — QLKT/DCS chưa có nguồn xuất), chỉ chuyển từ gõ trong Excel sang gõ trên web + validate ngay, chưa giảm được số lượng phải gõ. Có thể cân nhắc thêm sau: nút "sao chép giá trị dòng trên" cho các điểm ít biến động, nếu người dùng thấy vẫn mất thời gian.
+- **Chưa thử trên số liệu thật của người dùng** — mọi xác nhận trong lượt này dùng dữ liệu mẫu tự nhập vào D1 cục bộ của sandbox (không đụng dữ liệu thật), khớp đúng với các số liệu có sẵn trong file mẫu ngày 16/09/2026 người dùng gửi (dùng làm "đáp án" để so sánh) — nhưng người dùng nên tự nhập thử 1 ngày thật và so sánh file xuất ra với file đang làm tay trước khi dùng chính thức.
+- **File export là 1 sheet/ngày độc lập** (đặt tên `BCSX_NMD_<unit>_<dd.mm.yyyy>.xlsx`), **không tự nối vào workbook nhiều sheet của cả tháng** như cách trưởng ca đang làm (copy sheet ngày hôm trước, đổi tên) — nếu người dùng cần giữ đúng thói quen 1 file/tháng nhiều sheet, cần làm thêm bước "chèn sheet vào file tháng đang có" (phức tạp hơn vì phải tự tăng số sheet và không được phép ghi đè sheet cũ).
+
+---
+# Điều chỉnh Giai đoạn 1 theo làm rõ của người dùng (17/09/2026, tiếp)
+
+Người dùng làm rõ thêm 4 điểm sau khi thấy bản đầu; đã sửa code theo đúng yêu cầu:
+
+1. **Mục "1. Thông số vận hành" (48 điểm nửa giờ) của S1/S2 luôn nhập tay** — xác nhận đúng thiết kế ban đầu, không đổi.
+2. **5 số tổng ngày (đầu cực/thương phẩm/tự dùng/than tiêu thụ/than tồn kho) lấy từ QLKT đồng bộ** — người dùng sẽ chỉ vị trí chính xác trên QLKT sau; **đã đổi UI mục 2 từ "chỉ hiển thị trạng thái + link sang trang khác" thành 4 ô nhập trực tiếp ngay tại trang này** (dùng chung đúng 4 mã field code đã có sẵn `B/C/AE` cho S1, `H/I/AF` cho S2, `AR` dùng chung — cùng 1 chỗ lưu với trang "Dữ liệu các tháng", nên nhập ở đâu cũng ra cùng 1 số). Đang chờ người dùng chỉ rõ màn hình QLKT để nối nút "Đồng bộ" riêng cho trang này (hiện chưa có nút đồng bộ riêng, chỉ có ô nhập tay).
+3. **"Tình hình vận hành" (nhật ký sự kiện) cũng lấy từ QLKT** — trước đó code hiểu nhầm là chỉ nhập tay. Đã sửa lại nhãn mục 3 ghi rõ "sẽ đồng bộ trực tiếp từ QLKT khi có vị trí cụ thể — hiện nhập tay tạm thời". Chưa nối đồng bộ thật (chưa có vị trí QLKT), UI nhập tay vẫn giữ nguyên làm phương án tạm/ghi đè.
+4. **File A0 — đã sửa đúng 3 quy tắc người dùng nêu**:
+   - Mục 1 (48 điểm): tổng S1+S2 tại **từng ô kể cả cột điện áp thanh cái** (trước đó code chỉ lấy theo S1 cho cột điện áp — đã bỏ ngoại lệ này).
+   - Mục 2 (5 số tổng): tổng S1+S2 cho đầu cực/thương phẩm/than tiêu thụ. **Riêng than tồn kho: đang giữ nguyên KHÔNG cộng đôi** (không sửa theo yêu cầu chung "tổng S1+S2"), vì bằng chứng từ chính file thật 16/09/2026 người dùng gửi cho thấy than tồn kho là 1 số toàn nhà máy dùng chung (C64 ở cả S1 và A0 đều = 200076.77, không phải tổng 2 tổ máy cộng lại) — **cần người dùng xác nhận lại xem than tồn kho có nên cộng đôi hay không trước khi đổi**, vì nếu cộng nhầm sẽ sai số liệu gửi NSMO.
+   - Mục 3 (nhật ký sự kiện): các dòng của **S1 đứng trước, S2 tiếp theo sau** — không sắp xếp lại theo thời gian (trước đó code sắp xếp gộp theo thời gian, đã bỏ).
+
+Đã kiểm tra lại bằng dữ liệu mẫu: cột điện áp A0 = tổng đúng 2 tổ máy, thứ tự sự kiện A0 đúng S1 trước/S2 sau (không theo giờ), số tổng ngày cộng đúng. `tsc`/`eslint` sạch.
+
+**Đã chốt (17/09/2026)**: người dùng xác nhận than tồn kho ở A0 là 1 kho dùng chung cho cả nhà máy, KHÔNG cộng đôi S1+S2 — giữ nguyên đúng theo code hiện tại, không cần sửa gì thêm. Đã dọn lại ghi chú "TODO" trong `lib/bcsx.ts` và `app/api/bcsx-export/route.ts` cho khỏi để trạng thái "đang chờ xác nhận" nữa.
+
+---
+# Bổ sung 17/09/2026 — Hiển thị nhận xét S1/S2 và làm rõ thiết lập Google Sheet
 
 ## Đã làm
 
-- Thêm nút **“Đẩy Google Sheet”** tại trang Dữ liệu các tháng, dùng chung ngày đang chọn ở ô “Ngày đồng bộ”.
-- Lần đầu trên mỗi máy, người dùng nhập URL Apps Script và mã kết nối; hai giá trị chỉ lưu trong trình duyệt, không ghi vào mã nguồn/GitHub và mã kết nối không đi qua API của web Chỉ tiêu.
-- Thêm bước xem trước và xác nhận trước khi ghi. Dữ liệu được ánh xạ sang ba nhóm S1, S2 và NMNĐ gồm sản lượng, công suất bình quân, suất hao than, nhiệt trị, SHN thực tế, SHN PPA, chênh lệch và đánh giá.
-- Giữ nguyên các cột nhập thủ công trên Google Sheet: tình hình vận hành, chỉ đạo và công suất khả dụng. Web chỉ xác định đúng hàng theo ngày rồi cập nhật các cột tính toán đã cấu hình trong Apps Script.
-- Kiểm tra API xem trước bằng dữ liệu thật ngày 13/09/2026: S1 `10,69696` triệu kWh, S2 `10,69244` triệu kWh, NMNĐ `21.389,4` MWh.
+- Tách cột `Nhận xét` ở bảng chi tiết trang `/ppa-heat-rate` thành hai cột riêng `Nhận xét S1` và `Nhận xét S2`; hiển thị nguyên văn, giữ xuống dòng và tự ngắt dòng dài.
+- Thu hẹp cột ngày, các cột số liệu và badge trạng thái; dành 280 px cho mỗi cột nhận xét để xem được nhiều nội dung hơn.
+- Hộp thiết lập Google Sheet ghi rõ Apps Script URL phải kết thúc bằng `/exec`, cảnh báo không dán link `docs.google.com/spreadsheets/...`, và giải thích mã kết nối là Token riêng của công cụ chứ không phải mật khẩu Google.
+- Kiểm tra URL ngay trước khi lưu; URL sai được báo ngay trong hộp thiết lập và không ghi vào bộ nhớ trình duyệt.
 
 ## Kiểm tra đã thực hiện
 
-- `node --test tests/*.mjs`: đạt 27/27 kiểm thử.
-- `npx tsc --noEmit`: đạt.
-- ESLint riêng các file mới: đạt. Lint toàn kho vẫn còn lỗi cũ tại `daily-production-table.tsx`, `pmis-report.tsx` và `ppa-heat-rate-comparison.tsx`, không phát sinh từ logic Google Sheet.
-- `npm run build`: đạt; route `/api/google-sheet-sync` có trong bản dựng.
-- Kiểm tra trực quan trên `http://localhost:5173/`: nút “Đẩy Google Sheet” và nút thiết lập hiển thị đúng trên thanh công cụ.
+- `node --test tests/*.mjs`: đạt 29/29.
+- `npx.cmd tsc --noEmit`: đạt.
+- ESLint riêng `components/google-sheet-sync-button.tsx` và `components/ppa-heat-rate-dashboard.tsx`: đạt.
+- `npm.cmd run build`: đạt.
+- Kiểm tra trực quan trên localhost: nút Google Sheet vẫn ở trang So sánh trực quan; hộp thiết lập hiện đúng hướng dẫn; bảng có đủ hai cột `Nhận xét S1`/`Nhận xét S2`.
 
-## Còn thiếu / cần người dùng xác nhận
+## Còn thiếu
 
-- Chưa thực hiện lần ghi thật cuối cùng vì thao tác đó sẽ thay đổi Google Sheet báo cáo. Người dùng cần thiết lập URL/mã kết nối, chọn một ngày, xem trước rồi bấm “Xác nhận đẩy lên Sheet”.
-- Nếu Apps Script báo từ chối, cần kiểm tra lại đúng URL bản triển khai `/exec`, mã kết nối và quyền truy cập của bản triển khai; không cần cung cấp mật khẩu Google cho web.
+- Các dòng đang hiện dấu `—` cho đến khi triển khai lại Apps Script có nhánh `readAssessments` và bấm `Nhập đánh giá cũ` để nạp nội dung lịch sử về web.
+- Chưa ghi thử lên Google Sheet thật trong lượt này để tránh thay đổi báo cáo khi người dùng chưa xác nhận.
 
-## Bổ sung giao diện 17/09/2026
+---
+# Bổ sung 17/09/2026 — QLKT v0.4.9 chờ nút cập nhật ngày
 
-- Làm nổi bật ô chọn ngày bằng khung xanh và đổi nhãn thành **“NGÀY CẦN ĐỒNG BỘ / ĐẨY SHEET”**.
-- Nút Google Sheet hiển thị luôn ngày sẽ ghi, ví dụ **“Đẩy Google Sheet · 13/09/2026”**, để tránh chọn nhầm ngày.
+## Đã làm
 
-## Điều chỉnh vị trí đồng bộ Google Sheet 17/09/2026
+- Sửa lỗi khi đồng bộ PPA báo `Không tìm thấy nút cập nhật ngày trên màn hình QLKT`: tiện ích không dừng ngay sau lần dò đầu mà chờ widget QLKT dựng xong và thử lại tối đa khoảng 10 giây.
+- Giữ trạng thái đang chờ cập nhật sau khi đã đổi ô ngày, tránh lần thử kế tiếp hiểu nhầm rằng ngày đã được tải chỉ vì giá trị trong ô đã thay đổi.
+- Mở rộng nhận diện nút PrimeFaces theo biểu tượng/lớp `refresh`, `arrowrefresh`, `arrowreturn`, `circle-arrow`, nhãn `Làm mới`, `Cập nhật`, `Tải lại` và vùng lân cận bên phải ô ngày; loại trừ nút lịch, ghi, xuất và xóa.
+- Thông báo lỗi cuối có thêm số nút đang hiển thị để chẩn đoán nếu QLKT tiếp tục thay đổi giao diện.
+- Đồng bộ hai bản `browser-extension/qlkt-sync` và `public/qlkt-sync-extension`, tăng phiên bản lên `0.4.9`, đóng gói lại `public/qlkt-sync-extension.zip`.
 
-- Đã bỏ nút Google Sheet khỏi trang **Dữ liệu các tháng**; ô ngày tại đây chỉ còn phục vụ **Đồng bộ QLKT**.
-- Đã chuyển ô **Ngày đẩy Google Sheet**, nút đẩy và nút thiết lập sang tab **So sánh trực quan SHN Thực tế và PPA**. Khi mở trang, hệ thống tự chọn ngày có kết quả PPA đã lưu gần nhất trong khoảng đang xem.
-- Nút đẩy bị khóa nếu ngày chọn chưa có kết quả PPA đã lưu; người dùng phải nhập/đồng bộ dữ liệu ngày và lưu kết quả PPA trước.
-- Đã đạt `node --test tests/*.mjs` (27/27), `npx tsc --noEmit` và `npm run build`.
-- Còn thiếu: lượt kiểm tra trực quan cuối bị người dùng dừng giữa chừng; chưa thực hiện ghi thật lên Google Sheet để tránh thay đổi báo cáo khi chưa có xác nhận.
+## Kiểm tra đã thực hiện
 
-## Đề xuất lấy cột Đánh giá từ Google Sheet về web 17/09/2026
+- `node --check` cho `content.js` và `background.js`: đạt.
+- `node --test tests/*.mjs`: đạt 30/30; có kiểm tra phiên bản 0.4.9 và ba file phát hành quan trọng giống bản nguồn.
+- `npx.cmd tsc --noEmit`: đạt.
+- `npm.cmd run build`: đạt.
+- Hai thư mục tiện ích giống nhau đủ 9/9 file; ZIP chứa `manifest.json` ngay thư mục gốc.
 
-- Đã xác nhận có thể ánh xạ nội dung **Đánh giá suất hao nhiệt, nguyên nhân tăng/giảm** của S1 và S2 vào hai trường `note_s1`, `note_s2` đang có trên web, không cần thay đổi cấu trúc kho dữ liệu.
-- Đã thêm nút **“Nhập đánh giá cũ”** trên tab So sánh trực quan. Nút đọc toàn bộ lịch sử, hiển thị xem trước theo ngày và chỉ cập nhật `note_s1`, `note_s2` sau khi người dùng xác nhận.
-- API `/api/ppa-heat-rate/notes` chỉ chạy lệnh `UPDATE` trên ngày đã có PPA; ngày chưa có PPA bị bỏ qua, không tạo dòng mới và không thay đổi số liệu thực tế/PPA.
-- Đã giữ nguyên nội dung đánh giá đầy đủ khi đẩy trở lại Google Sheet, tránh lặp tiền tố “Đạt/Vượt PPA”.
-- Mã Apps Script cần bổ sung và hướng dẫn triển khai nằm tại `docs/GOOGLE_SHEET_HISTORY_IMPORT.md`; bộ đọc dò cột theo tiêu đề thay vì cố định vị trí cột.
-- Đã kiểm tra: 29/29 test đạt, TypeScript đạt, ESLint các file thay đổi đạt, build đạt và route `/api/ppa-heat-rate/notes` có trong bản dựng.
-- Đã kiểm tra trực quan trên localhost: nút nhập lịch sử hiển thị đúng. Chưa chạy nhập thật vì Apps Script đang dùng chưa được triển khai lại với nhánh `readAssessments`.
+## Còn thiếu / bước tiếp theo
+
+- Chưa thể xác nhận lần đồng bộ thật ngày 15/09/2026 vì cần phiên đăng nhập QLKT trên trình duyệt của người dùng.
+- Người dùng cần vào trang quản lý tiện ích, bấm `Reload` cho tiện ích, xác nhận phiên bản `0.4.9`, quay lại web và bấm `Đồng bộ QLKT` lần nữa. Nếu vẫn lỗi, gửi nguyên thông báo mới có phần `đã thấy ... nút` để tiếp tục đối chiếu DOM thật.
