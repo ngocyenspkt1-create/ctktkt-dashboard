@@ -5,6 +5,13 @@ const QLKT_PATTERN = /^https?:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\//i;
 // để tiện ích luôn mở đúng thẳng vào đây, không phụ thuộc việc "ghi nhớ"
 // trang trước đó có đúng/còn hiệu lực hay không.
 const DEFAULT_METER_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/solieucto.jsf";
+// Tương tự, màn hình "Sản lượng" (Vận hành → Sản lượng) từng bị ghi nhớ NHẦM
+// địa chỉ của báo cáo khác cùng module ("Cập nhật sản lượng bù trừ",
+// rpt_a_bu_tru_day.jsf — xem content.js/pageKind) vì 2 trang có nội dung giống
+// nhau, khiến đồng bộ luôn đọc ra 0 chỉ tiêu mà người dùng không biết vì sao.
+// Cố định luôn địa chỉ đúng (đã xác nhận trực tiếp trên hệ thống QLKT thật)
+// thay vì phụ thuộc "ghi nhớ", để lỗi này không thể tái diễn.
+const DEFAULT_PRODUCTION_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/rpt_a_production_day.jsf";
 const SOURCE_LABELS = {
   production: "Sản lượng",
   fuel: "Nhiên liệu",
@@ -266,14 +273,15 @@ async function readSource(source, url, operatingDate) {
 
 async function syncAll(operatingDate) {
   const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
-  const missing = DAILY_SOURCES.filter(key => !qlktPages[key]);
+  const urlFor = source => source === "production" ? DEFAULT_PRODUCTION_URL : qlktPages[source];
+  const missing = DAILY_SOURCES.filter(key => !urlFor(key));
   if (missing.length) {
     const labels = missing.map(key => SOURCE_LABELS[key]).join(", ");
     throw new Error(`Thiếu địa chỉ: ${labels}. Chỉ lần đầu, hãy mở từng màn hình này một lần rồi thử lại.`);
   }
   const payloads = [];
   for (const source of DAILY_SOURCES) {
-    payloads.push(await readSource(source, qlktPages[source], operatingDate));
+    payloads.push(await readSource(source, urlFor(source), operatingDate));
   }
   const entries = new Map();
   payloads.flatMap(payload => payload.entries || []).forEach(entry => entries.set(entry.fieldCode, entry));

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from '../lib/qlkt-sync.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
 
-test('extension package 0.4.18 aligns production values by screen position and preserves the prepared date', () => {
+test('extension package 0.4.19 aligns production values by screen position and preserves the prepared date', () => {
   const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
@@ -15,7 +15,7 @@ test('extension package 0.4.18 aligns production values by screen position and p
   const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
   const popup = readFileSync(new URL('../public/qlkt-sync-extension/popup.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.18');
+  assert.equal(manifest.version, '0.4.19');
   assert.ok(manifest.host_permissions.includes('https://ctktkt-dashboard.vercel.app/*'));
   assert.ok(manifest.content_scripts.some(item => item.js.includes('web-bridge.js') && item.matches.includes('https://ctktkt-dashboard.vercel.app/*')));
   assert.match(popup, /DEFAULT_TARGET_URL = "https:\/\/ctktkt-dashboard\.vercel\.app\/"/);
@@ -26,10 +26,14 @@ test('extension package 0.4.18 aligns production values by screen position and p
   assert.match(content, /sessionStorage\.setItem\(PREPARED_DATE_KEY, operatingDate\)/);
   assert.match(content, /preparedDate === expectedOperatingDate/);
   assert.match(content, /aligned \|\| sameIndex/);
-  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.18"/);
+  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.19"/);
   // "rpt_a_bu_tru_day.jsf" (Cập nhật sản lượng bù trừ) từng bị nhận nhầm là
   // màn hình Sản lượng do trùng cụm từ trong nội dung — loại trừ tường minh.
   assert.match(content, /path\.includes\("bu_tru"\)\) return null/);
+  // Địa chỉ Sản lượng giờ cố định (đã xác nhận trên hệ thống thật), không còn
+  // phụ thuộc "ghi nhớ" — tránh lặp lại lỗi mở nhầm trang bù trừ.
+  assert.match(background, /DEFAULT_PRODUCTION_URL = "http:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\/sxd\/rpt_a_production_day\.jsf"/);
+  assert.match(background, /source === "production" \? DEFAULT_PRODUCTION_URL/);
   assert.match(content, /candidate\.rect\.left > label\.rect\.left/);
   assert.match(content, /s1\[0\].*SL phát/);
   assert.match(content, /s1\[2\].*SL điểm bán/);
