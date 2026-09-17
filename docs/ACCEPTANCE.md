@@ -302,3 +302,28 @@ Phần này tóm tắt lại toàn bộ trạng thái hiện tại của trang "
 - **Khoảng đệm 12% cho trục Y** của các chỉ tiêu (trừ PG) là giá trị mặc định chung, chưa tinh chỉnh riêng theo từng chỉ tiêu — nếu người dùng thấy đường nào vẫn chưa đủ rõ, chỉnh trong `METRIC_DOMAIN`/`domainFor()`.
 - **Bộ biến màu shadcn thêm vào `app/globals.css`** dùng theo bảng màu mặc định (chưa theo thương hiệu riêng của công ty) — ảnh hưởng toàn app chứ không riêng trang PMIS, nên khi đổi cần kiểm tra rộng hơn phạm vi trang này.
 - **Hiện tượng đồng bộ file lên máy người dùng không ổn định** (không liên quan Codex nếu làm việc trực tiếp trên máy/qua Git, chỉ liên quan cách Claude đẩy file qua cầu nối thiết bị) — ghi lại để tránh nhầm lẫn nếu thấy nhắc tới trong các mục "Bổ sung" phía trên.
+
+---
+
+# Bổ sung 17/09/2026 — Đẩy dữ liệu Chỉ tiêu lên Google Sheet DH1
+
+## Đã làm
+
+- Thêm nút **“Đẩy Google Sheet”** tại trang Dữ liệu các tháng, dùng chung ngày đang chọn ở ô “Ngày đồng bộ”.
+- Lần đầu trên mỗi máy, người dùng nhập URL Apps Script và mã kết nối; hai giá trị chỉ lưu trong trình duyệt, không ghi vào mã nguồn/GitHub và mã kết nối không đi qua API của web Chỉ tiêu.
+- Thêm bước xem trước và xác nhận trước khi ghi. Dữ liệu được ánh xạ sang ba nhóm S1, S2 và NMNĐ gồm sản lượng, công suất bình quân, suất hao than, nhiệt trị, SHN thực tế, SHN PPA, chênh lệch và đánh giá.
+- Giữ nguyên các cột nhập thủ công trên Google Sheet: tình hình vận hành, chỉ đạo và công suất khả dụng. Web chỉ xác định đúng hàng theo ngày rồi cập nhật các cột tính toán đã cấu hình trong Apps Script.
+- Kiểm tra API xem trước bằng dữ liệu thật ngày 13/09/2026: S1 `10,69696` triệu kWh, S2 `10,69244` triệu kWh, NMNĐ `21.389,4` MWh.
+
+## Kiểm tra đã thực hiện
+
+- `node --test tests/*.mjs`: đạt 27/27 kiểm thử.
+- `npx tsc --noEmit`: đạt.
+- ESLint riêng các file mới: đạt. Lint toàn kho vẫn còn lỗi cũ tại `daily-production-table.tsx`, `pmis-report.tsx` và `ppa-heat-rate-comparison.tsx`, không phát sinh từ logic Google Sheet.
+- `npm run build`: đạt; route `/api/google-sheet-sync` có trong bản dựng.
+- Kiểm tra trực quan trên `http://localhost:5173/`: nút “Đẩy Google Sheet” và nút thiết lập hiển thị đúng trên thanh công cụ.
+
+## Còn thiếu / cần người dùng xác nhận
+
+- Chưa thực hiện lần ghi thật cuối cùng vì thao tác đó sẽ thay đổi Google Sheet báo cáo. Người dùng cần thiết lập URL/mã kết nối, chọn một ngày, xem trước rồi bấm “Xác nhận đẩy lên Sheet”.
+- Nếu Apps Script báo từ chối, cần kiểm tra lại đúng URL bản triển khai `/exec`, mã kết nối và quyền truy cập của bản triển khai; không cần cung cấp mật khẩu Google cho web.

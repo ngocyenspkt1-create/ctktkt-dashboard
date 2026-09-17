@@ -1,0 +1,138 @@
+export type DailyInputEntry = { fieldCode: string; value: string };
+
+export type StoredPpaEntry = {
+  ppaPlant: string | number;
+  ppaS1: string | number;
+  ppaS2: string | number;
+  noteS1?: string | null;
+  noteS2?: string | null;
+};
+
+export type GoogleSheetUnitPayload = {
+  sanLuong: number | null;
+  csKhaDung?: number | null;
+  csBinhQuan: number | null;
+  suatHaoThan: number | null;
+  nhietTri: number | null;
+  shnThucTe: number | null;
+  shnPPA: number | null;
+  chenhLech: string;
+  danhGia: string;
+};
+
+export type GoogleSheetDayPayload = {
+  date: string;
+  row: number | null;
+  S1: GoogleSheetUnitPayload;
+  S2: GoogleSheetUnitPayload;
+  NMND: GoogleSheetUnitPayload;
+};
+
+const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
+
+function numeric(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || !value.trim()) return null;
+  const text = value.trim().replace(/\s+/g, "");
+  const normalized = text.includes(",")
+    ? text.replace(/\./g, "").replace(",", ".")
+    : text;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function divide(numerator: number | null, denominator: number | null, multiplier = 1) {
+  return numerator === null || denominator === null || denominator === 0 ? null : numerator / denominator * multiplier;
+}
+
+function differenceText(actual: number | null, ppa: number | null) {
+  if (actual === null || ppa === null || ppa === 0) return "";
+  const difference = actual - ppa;
+  const percent = difference / ppa * 100;
+  return `${difference >= 0 ? "+" : ""}${numberFormat.format(difference)} kJ/kWh (${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%)`;
+}
+
+function assessment(actual: number | null, ppa: number | null, note?: string | null) {
+  if (actual === null || ppa === null) return "";
+  const status = actual <= ppa ? "Đạt PPA" : "Không đạt PPA";
+  const cleanNote = String(note || "").trim();
+  return cleanNote ? `${status} - ${cleanNote}` : status;
+}
+
+function required(value: number | null, label: string) {
+  if (value === null) throw new Error(`Thiếu dữ liệu “${label}” của ngày đã chọn.`);
+  return value;
+}
+
+export function buildGoogleSheetDayPayload(
+  operatingDate: string,
+  entries: DailyInputEntry[],
+  ppa: StoredPpaEntry | null,
+): GoogleSheetDayPayload {
+  if (!/^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(operatingDate)) throw new Error("Ngày đồng bộ không hợp lệ.");
+  if (!ppa) throw new Error("Ngày đã chọn chưa có kết quả PPA. Hãy đồng bộ và lưu kết quả PPA trước.");
+
+  const values = new Map(entries.map(entry => [entry.fieldCode, entry.value]));
+  const read = (code: string, label: string) => required(numeric(values.get(code)), label);
+  const grossS1 = read("B", "Đầu cực S1"), netS1 = read("C", "Điểm bán S1"), hoursS1 = read("F", "Giờ phát S1");
+  const grossS2 = read("H", "Đầu cực S2"), netS2 = read("I", "Điểm bán S2"), hoursS2 = read("L", "Giờ phát S2");
+  const coalS1 = read("AE", "Than tiêu thụ S1"), coalS2 = read("AF", "Than tiêu thụ S2"), heatingValue = read("AJ", "Nhiệt trị");
+  const ppaS1 = required(numeric(ppa.ppaS1), "SHN PPA S1"), ppaS2 = required(numeric(ppa.ppaS2), "SHN PPA S2"), ppaPlant = required(numeric(ppa.ppaPlant), "SHN PPA NMNĐ");
+
+  const actualS1 = divide(coalS1 * heatingValue, netS1, 1 / 1000);
+  const actualS2 = divide(coalS2 * heatingValue, netS2, 1 / 1000);
+  const actualPlant = divide((coalS1 + coalS2) * heatingValue, netS1 + netS2, 1 / 1000);
+  const grossPlantMwh = (grossS1 + grossS2) * 1000;
+  const netPlant = netS1 + netS2;
+
+  const unit = (
+    sanLuong: number,
+    csBinhQuan: number | null,
+    suatHaoThan: number | null,
+    actual: number | null,
+    ppaValue: number,
+    note?: string | null,
+  ): GoogleSheetUnitPayload => ({
+    sanLuong,
+    csKhaDung: null,
+    csBinhQuan,
+    suatHaoThan,
+    nhietTri: heatingValue,
+    shnThucTe: actual,
+    shnPPA: ppaValue,
+    chenhLech: differenceText(actual, ppaValue),
+    danhGia: assessment(actual, ppaValue, note),
+  });
+
+  const [year, month, day] = operatingDate.split("-");
+  return {
+    date: `${Number(month)}/${Number(day)}/${year}`,
+    row: null,
+    S1: unit(grossS1, divide(grossS1, hoursS1, 1000), divide(coalS1, netS1), actualS1, ppaS1, ppa.noteS1),
+    S2: unit(grossS2, divide(grossS2, hoursS2, 1000), divide(coalS2, netS2), actualS2, ppaS2, ppa.noteS2),
+    NMND: unit(grossPlantMwh, divide(grossPlantMwh, hoursS1 + hoursS2), divide(coalS1 + coalS2, netPlant), actualPlant, ppaPlant),
+  };
+}
+
+export function validateGoogleAppsScriptUrl(value: string) {
+  let url: URL;
+  try { url = new URL(value); }
+  catch { throw new Error("URL Google Apps Script không hợp lệ."); }
+  if (url.protocol !== "https:" || url.hostname !== "script.google.com" || !/^\/macros\/s\/[^/]+\/exec$/.test(url.pathname)) {
+    throw new Error("Chỉ chấp nhận URL triển khai Google Apps Script dạng https://script.google.com/macros/s/.../exec.");
+  }
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+export function resolveGoogleSheetRow(operatingDate: string, rows: unknown) {
+  if (!Array.isArray(rows)) return null;
+  const match = rows.find(item => {
+    if (!item || typeof item !== "object") return false;
+    const row = item as Record<string, unknown>;
+    return row.iso === operatingDate;
+  }) as Record<string, unknown> | undefined;
+  const rowNumber = Number(match?.row);
+  return Number.isInteger(rowNumber) && rowNumber > 0 ? rowNumber : null;
+}
