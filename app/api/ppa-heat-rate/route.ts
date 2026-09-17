@@ -1,5 +1,6 @@
 import { getRawDb } from "@/db";
 import { calculatePpaHeatRate, type PpaSourceData } from "@/lib/ppa-heat-rate";
+import { requireEditor } from "@/lib/auth/server";
 
 const datePattern = /^(20\d{2})-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const periodPattern = /^20\d{2}-(0[1-9]|1[0-2])$/;
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const guard = await requireEditor(); if (!guard.ok) return guard.response;
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });

@@ -1,7 +1,17 @@
--- Gộp 4 file migration (0000-0003) thành một script duy nhất, đã bỏ các dòng
+-- Gộp 5 file migration (0000-0004) thành một script duy nhất, đã bỏ các dòng
 -- "--> statement-breakpoint" (chỉ là dấu mốc riêng của drizzle-kit, không phải
 -- SQL hợp lệ) — để dán một lần vào SQL Shell trên dashboard Turso khi khởi tạo
 -- database mới thay thế Cloudflare D1.
+CREATE TABLE `users` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`username` text NOT NULL,
+	`password_hash` text NOT NULL,
+	`display_name` text NOT NULL,
+	`role` text NOT NULL,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE UNIQUE INDEX `uidx_users_username` ON `users` (`username`);
+
 CREATE TABLE `measurements` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`metric_code` text NOT NULL,

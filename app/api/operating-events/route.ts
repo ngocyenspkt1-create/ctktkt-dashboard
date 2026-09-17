@@ -1,5 +1,6 @@
 import { getRawDb } from "@/db";
 import { EVENT_TYPES } from "@/lib/bcsx";
+import { requireEditor } from "@/lib/auth/server";
 
 const units = new Set(["S1", "S2"]);
 const eventTypes = new Set(EVENT_TYPES.map(t => t.code));
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
 
 // Replaces the full event list for (date, unit) — simplest model for a short daily log edited by one person.
 export async function POST(request: Request) {
+  const guard = await requireEditor(); if (!guard.ok) return guard.response;
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
