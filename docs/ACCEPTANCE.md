@@ -584,7 +584,8 @@ Người dùng làm rõ thêm 4 điểm sau khi thấy bản đầu; đã sửa 
 
 - Bỏ chiều rộng tối thiểu 1.480 px của bảng `Bảng chi tiết theo ngày`; phân bổ lại 18 cột theo tỷ lệ phần trăm để bảng vừa chiều rộng khung trang và không cần thanh cuộn ngang.
 - Thu gọn cỡ chữ/khoảng đệm; ở màn hình hẹp, ngày hiển thị dạng `dd/MM`, còn màn hình lớn vẫn hiển thị đủ `dd/MM/yyyy`.
-- Hai cột `Nhận xét S1` và `Nhận xét S2` mặc định chỉ hiện tối đa hai dòng. Bấm vào từng ô để mở toàn bộ nội dung, bấm lại để thu gọn.
+- Hai cột `Nhận xét S1` và `Nhận xét S2` mặc định chỉ hiện một dòng. Bấm vào từng ô để mở toàn bộ nội dung, bấm lại để thu gọn.
+- Thêm đường kẻ dọc màu xám nhạt giữa tất cả cột ngày, số liệu, trạng thái và nhận xét để dễ dò dữ liệu.
 
 ## Kiểm tra đã thực hiện
 
