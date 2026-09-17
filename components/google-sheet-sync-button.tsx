@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { resolveGoogleSheetRow, validateGoogleAppsScriptUrl, type GoogleSheetDayPayload } from "@/lib/google-sheet-sync";
+import { parseGoogleSheetAssessmentRows, resolveGoogleSheetRow, validateGoogleAppsScriptUrl, type GoogleSheetAssessmentEntry, type GoogleSheetDayPayload } from "@/lib/google-sheet-sync";
 
 const URL_KEY = "ctktkt-google-script-url";
 const TOKEN_KEY = "ctktkt-google-script-token";
@@ -11,10 +11,12 @@ const format = (value: number | null | undefined) => value === null || value ===
 
 type PreviewResponse = { preview?: GoogleSheetDayPayload; error?: string };
 
-export function GoogleSheetSyncButton({ operatingDate, disabled = false, disabledReason = "" }: { operatingDate: string; disabled?: boolean; disabledReason?: string }) {
+export function GoogleSheetSyncButton({ operatingDate, disabled = false, disabledReason = "", onImported }: { operatingDate: string; disabled?: boolean; disabledReason?: string; onImported?: () => void | Promise<void> }) {
   const [scriptUrl, setScriptUrl] = useState(() => typeof window === "undefined" ? "" : window.localStorage.getItem(URL_KEY) || "");
   const [token, setToken] = useState(() => typeof window === "undefined" ? "" : window.localStorage.getItem(TOKEN_KEY) || "");
   const [settingsOpen, setSettingsOpen] = useState(false), [preview, setPreview] = useState<GoogleSheetDayPayload | null>(null);
+  const [assessmentPreview, setAssessmentPreview] = useState<GoogleSheetAssessmentEntry[] | null>(null);
+  const [pendingAction, setPendingAction] = useState<"push" | "import">("push");
   const [loading, setLoading] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
 
   async function requestPreview() {
@@ -52,8 +54,32 @@ export function GoogleSheetSyncButton({ operatingDate, disabled = false, disable
 
   function start() {
     setError(""); setMessage("");
+    setPendingAction("push");
     if (!scriptUrl.trim() || !token) { setSettingsOpen(true); return; }
     void loadPreview();
+  }
+
+  async function loadHistoricalAssessments() {
+    setLoading(true); setError(""); setMessage("");
+    try {
+      const response = await fetch(validateGoogleAppsScriptUrl(scriptUrl.trim()), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ token, action: "readAssessments" }),
+      });
+      const body = await response.json() as { ok?: boolean; error?: string; rows?: unknown };
+      if (!response.ok || body.ok === false) throw new Error(body.error || "Apps Script chưa đọc được cột Đánh giá.");
+      const rows = parseGoogleSheetAssessmentRows(body.rows);
+      if (!rows.length) throw new Error("Google Sheet chưa có đánh giá S1/S2 để nhập.");
+      setAssessmentPreview(rows);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Không đọc được đánh giá lịch sử từ Google Sheet."); }
+    finally { setLoading(false); }
+  }
+
+  function startHistoricalImport() {
+    setError(""); setMessage(""); setPendingAction("import");
+    if (!scriptUrl.trim() || !token) { setSettingsOpen(true); return; }
+    void loadHistoricalAssessments();
   }
 
   function saveSettings() {
@@ -61,7 +87,26 @@ export function GoogleSheetSyncButton({ operatingDate, disabled = false, disable
     window.localStorage.setItem(URL_KEY, scriptUrl.trim());
     window.localStorage.setItem(TOKEN_KEY, token);
     setSettingsOpen(false);
-    void loadPreview();
+    if (pendingAction === "import") void loadHistoricalAssessments();
+    else void loadPreview();
+  }
+
+  async function importHistoricalAssessments() {
+    setLoading(true); setError(""); setMessage("");
+    try {
+      if (!assessmentPreview?.length) throw new Error("Chưa có đánh giá lịch sử để nhập.");
+      const response = await fetch("/api/ppa-heat-rate/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries: assessmentPreview.map(item => ({ operatingDate: item.iso, noteS1: item.noteS1, noteS2: item.noteS2 })) }),
+      });
+      const body = await response.json() as { updated?: number; skipped?: number; error?: string };
+      if (!response.ok) throw new Error(body.error || "Web chưa lưu được đánh giá lịch sử.");
+      setAssessmentPreview(null);
+      setMessage(`Đã nhập đánh giá cho ${body.updated || 0} ngày. ${body.skipped ? `${body.skipped} ngày chưa có kết quả PPA trên web nên được bỏ qua.` : ""}`.trim());
+      await onImported?.();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Không nhập được đánh giá lịch sử."); }
+    finally { setLoading(false); }
   }
 
   async function sync() {
@@ -90,6 +135,7 @@ export function GoogleSheetSyncButton({ operatingDate, disabled = false, disable
     <div className="flex flex-col items-end gap-1">
       <div className="flex gap-1">
         <button type="button" disabled={loading || disabled} onClick={start} title={disabled ? disabledReason : `Đẩy dữ liệu ngày ${displayDate} lên Google Sheet`} className="h-10 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80">{loading ? "Đang kiểm tra…" : `Đẩy Google Sheet · ${displayDate}`}</button>
+        <button type="button" disabled={loading} onClick={startHistoricalImport} title="Nhập một lần các đánh giá S1/S2 cũ từ Google Sheet về web" className="h-10 whitespace-nowrap rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-bold text-amber-800 shadow-sm disabled:opacity-60">Nhập đánh giá cũ</button>
         <button type="button" onClick={() => { setError(""); setSettingsOpen(true); }} aria-label="Cài đặt đồng bộ Google Sheet" title="Cài đặt Google Sheet" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">⚙</button>
       </div>
       {disabled && disabledReason && <p className="max-w-sm text-right text-[11px] font-semibold text-amber-700">{disabledReason}</p>}
@@ -105,6 +151,15 @@ export function GoogleSheetSyncButton({ operatingDate, disabled = false, disable
         <label className="grid gap-1 text-sm font-bold text-slate-700">Mã kết nối<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="off" className="rounded-xl border border-slate-300 px-3 py-2 font-normal text-black"/></label>
         <p className="text-xs leading-5 text-slate-500">Lấy đúng URL và mã đang dùng trong công cụ “Đồng bộ DH1 lên Google Sheet”. Không gửi mật khẩu Google vào đây.</p>
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setSettingsOpen(false)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" onClick={saveSettings} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white">Lưu và kiểm tra</button></div>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal></DialogPrimitive.Root>
+
+    <DialogPrimitive.Root open={Boolean(assessmentPreview)} onOpenChange={open => { if (!open && !loading) setAssessmentPreview(null); }}><DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/>
+      <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid max-h-[88vh] w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none">
+        <div><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Nhập đánh giá lịch sử từ Google Sheet</DialogPrimitive.Title><DialogPrimitive.Description className="mt-1 text-sm leading-6 text-slate-600">Tìm thấy {assessmentPreview?.length || 0} ngày có đánh giá. Chỉ hai ghi chú S1/S2 của ngày đã có PPA trên web được cập nhật; mọi số liệu khác giữ nguyên.</DialogPrimitive.Description></div>
+        <div className="overflow-auto rounded-xl border border-slate-200"><table className="w-full min-w-[760px] text-xs"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="w-28 p-2 text-left">Ngày</th><th className="p-2 text-left">Đánh giá S1</th><th className="p-2 text-left">Đánh giá S2</th></tr></thead><tbody>{assessmentPreview?.map(item => <tr key={item.iso} className="border-t align-top text-black"><td className="p-2 font-bold">{item.iso.split("-").reverse().join("/")}</td><td className="whitespace-pre-wrap p-2 leading-5">{item.noteS1 || "—"}</td><td className="whitespace-pre-wrap p-2 leading-5">{item.noteS2 || "—"}</td></tr>)}</tbody></table></div>
+        <div className="flex items-center justify-between gap-3"><p className="text-xs text-slate-500">Đây là thao tác nhập lịch sử một lần. Sau đó web là nguồn chính để đẩy dữ liệu lên Google Sheet.</p><div className="flex shrink-0 gap-2"><button type="button" disabled={loading} onClick={() => setAssessmentPreview(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" disabled={loading} onClick={() => void importHistoricalAssessments()} className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{loading ? "Đang nhập…" : "Xác nhận nhập về web"}</button></div></div>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal></DialogPrimitive.Root>
 

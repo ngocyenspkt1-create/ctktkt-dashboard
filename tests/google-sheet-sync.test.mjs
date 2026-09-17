@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildGoogleSheetDayPayload,
+  parseGoogleSheetAssessmentRows,
   resolveGoogleSheetRow,
   validateGoogleAppsScriptUrl,
 } from "../lib/google-sheet-sync.ts";
@@ -47,4 +48,29 @@ test("xác định đúng hàng theo ngày ISO", () => {
 
 test("không tạo dữ liệu khi chưa có kết quả PPA", () => {
   assert.throws(() => buildGoogleSheetDayPayload("2026-09-13", entries, null), /chưa có kết quả PPA/i);
+});
+
+test("đọc danh sách đánh giá lịch sử và bỏ dòng trống", () => {
+  const rows = parseGoogleSheetAssessmentRows([
+    { row: 4, iso: "2026-09-12", noteS1: "Vượt PPA - UC tro xỉ cao", noteS2: "Đạt PPA" },
+    { row: 5, iso: "2026-09-13", noteS1: "", noteS2: "" },
+  ]);
+  assert.deepEqual(rows, [{ row: 4, iso: "2026-09-12", noteS1: "Vượt PPA - UC tro xỉ cao", noteS2: "Đạt PPA" }]);
+});
+
+test("giữ nguyên đánh giá đầy đủ đã nhập từ Google Sheet khi đẩy trở lại", () => {
+  const payload = buildGoogleSheetDayPayload("2026-09-13", entries, {
+    ppaPlant: 10_500,
+    ppaS1: 10_450,
+    ppaS2: 10_550,
+    noteS1: "Vượt PPA - Nhiệt trị than thấp",
+  });
+  assert.equal(payload.S1.danhGia, "Vượt PPA - Nhiệt trị than thấp");
+  const achieved = buildGoogleSheetDayPayload("2026-09-13", entries, {
+    ppaPlant: 10_500,
+    ppaS1: 10_450,
+    ppaS2: 10_550,
+    noteS2: "Đạt - UC trong tro xỉ thấp hơn tiêu chuẩn",
+  });
+  assert.equal(achieved.S2.danhGia, "Đạt - UC trong tro xỉ thấp hơn tiêu chuẩn");
 });

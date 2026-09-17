@@ -28,6 +28,13 @@ export type GoogleSheetDayPayload = {
   NMND: GoogleSheetUnitPayload;
 };
 
+export type GoogleSheetAssessmentEntry = {
+  row: number;
+  iso: string;
+  noteS1: string;
+  noteS2: string;
+};
+
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
 
 function numeric(value: unknown) {
@@ -56,6 +63,7 @@ function assessment(actual: number | null, ppa: number | null, note?: string | n
   if (actual === null || ppa === null) return "";
   const status = actual <= ppa ? "Đạt PPA" : "Không đạt PPA";
   const cleanNote = String(note || "").trim();
+  if (/^(?:đạt|vượt|không đạt)(?:\s+ppa)?(?:\s|[-–—:]|$)/i.test(cleanNote)) return cleanNote;
   return cleanNote ? `${status} - ${cleanNote}` : status;
 }
 
@@ -135,4 +143,22 @@ export function resolveGoogleSheetRow(operatingDate: string, rows: unknown) {
   }) as Record<string, unknown> | undefined;
   const rowNumber = Number(match?.row);
   return Number.isInteger(rowNumber) && rowNumber > 0 ? rowNumber : null;
+}
+
+export function parseGoogleSheetAssessmentRows(rows: unknown): GoogleSheetAssessmentEntry[] {
+  if (!Array.isArray(rows) || rows.length > 500) throw new Error("Danh sách đánh giá Google Sheet không hợp lệ.");
+  const seen = new Set<string>();
+  return rows.map(item => {
+    if (!item || typeof item !== "object") throw new Error("Một dòng đánh giá Google Sheet không hợp lệ.");
+    const value = item as Record<string, unknown>;
+    const row = Number(value.row), iso = String(value.iso || "");
+    const noteS1 = String(value.noteS1 || "").trim();
+    const noteS2 = String(value.noteS2 || "").trim();
+    if (!Number.isInteger(row) || row < 1 || !/^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(iso) || seen.has(iso)) {
+      throw new Error("Ngày hoặc số hàng đánh giá Google Sheet không hợp lệ.");
+    }
+    if (noteS1.length > 1000 || noteS2.length > 1000) throw new Error(`Đánh giá ngày ${iso} dài quá 1.000 ký tự.`);
+    seen.add(iso);
+    return { row, iso, noteS1, noteS2 };
+  }).filter(item => item.noteS1 || item.noteS2);
 }

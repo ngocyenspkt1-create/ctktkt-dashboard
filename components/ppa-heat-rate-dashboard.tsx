@@ -386,7 +386,7 @@ export function PpaHeatRateDashboard() {
       </div>
       <div className="flex flex-wrap items-end justify-end gap-2">
         <label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐẨY GOOGLE SHEET<DateField value={sheetDate} onChange={setSheetDate} className="w-[180px]"/></label>
-        <GoogleSheetSyncButton operatingDate={sheetDate} disabled={!hasSavedPpaForSheet} disabledReason="Ngày này chưa có kết quả PPA đã lưu."/>
+        <GoogleSheetSyncButton operatingDate={sheetDate} disabled={!hasSavedPpaForSheet} disabledReason="Ngày này chưa có kết quả PPA đã lưu." onImported={() => loadRange(fromDate, toDate, false)}/>
         <button type="button" disabled={exporting || !rows.length} onClick={() => void exportXlsx()} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">{exporting ? "Đang xuất…" : "Xuất kết quả (.xlsx)"}</button>
       </div>
     </div>

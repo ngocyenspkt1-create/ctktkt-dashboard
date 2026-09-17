@@ -340,3 +340,13 @@ Phần này tóm tắt lại toàn bộ trạng thái hiện tại của trang "
 - Nút đẩy bị khóa nếu ngày chọn chưa có kết quả PPA đã lưu; người dùng phải nhập/đồng bộ dữ liệu ngày và lưu kết quả PPA trước.
 - Đã đạt `node --test tests/*.mjs` (27/27), `npx tsc --noEmit` và `npm run build`.
 - Còn thiếu: lượt kiểm tra trực quan cuối bị người dùng dừng giữa chừng; chưa thực hiện ghi thật lên Google Sheet để tránh thay đổi báo cáo khi chưa có xác nhận.
+
+## Đề xuất lấy cột Đánh giá từ Google Sheet về web 17/09/2026
+
+- Đã xác nhận có thể ánh xạ nội dung **Đánh giá suất hao nhiệt, nguyên nhân tăng/giảm** của S1 và S2 vào hai trường `note_s1`, `note_s2` đang có trên web, không cần thay đổi cấu trúc kho dữ liệu.
+- Đã thêm nút **“Nhập đánh giá cũ”** trên tab So sánh trực quan. Nút đọc toàn bộ lịch sử, hiển thị xem trước theo ngày và chỉ cập nhật `note_s1`, `note_s2` sau khi người dùng xác nhận.
+- API `/api/ppa-heat-rate/notes` chỉ chạy lệnh `UPDATE` trên ngày đã có PPA; ngày chưa có PPA bị bỏ qua, không tạo dòng mới và không thay đổi số liệu thực tế/PPA.
+- Đã giữ nguyên nội dung đánh giá đầy đủ khi đẩy trở lại Google Sheet, tránh lặp tiền tố “Đạt/Vượt PPA”.
+- Mã Apps Script cần bổ sung và hướng dẫn triển khai nằm tại `docs/GOOGLE_SHEET_HISTORY_IMPORT.md`; bộ đọc dò cột theo tiêu đề thay vì cố định vị trí cột.
+- Đã kiểm tra: 29/29 test đạt, TypeScript đạt, ESLint các file thay đổi đạt, build đạt và route `/api/ppa-heat-rate/notes` có trong bản dựng.
+- Đã kiểm tra trực quan trên localhost: nút nhập lịch sử hiển thị đúng. Chưa chạy nhập thật vì Apps Script đang dùng chưa được triển khai lại với nhánh `readAssessments`.
