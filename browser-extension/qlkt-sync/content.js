@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.16";
+  const CONTENT_SCRIPT_VERSION = "0.4.17";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   let pendingDateRefresh = null;
   // Ngày cuối cùng ĐÃ THỰC SỰ bấm nút cập nhật cho tab này (không phải ngày đang
@@ -468,7 +468,14 @@
     }
 
     if (oilValues.length === 2) entries.set("X", { fieldCode: "X", value: String(oilValues[0] + oilValues[1]), sourceLabel: "QLKT · Tổng dầu FO S1 + S2" });
-    if (!entries.size) throw new Error("Màn hình này chưa có chỉ tiêu nào trong danh sách đồng bộ.");
+    if (!entries.size) {
+      // Trước đây thông báo này không cho biết trang thực tế tab nền đang đứng
+      // là gì — khiến không chẩn đoán được nguyên nhân thật khi tiện ích mở
+      // nhầm trang (ví dụ URL đã ghi nhớ từ trước không còn hợp lệ, phiên hết
+      // hạn, hoặc QLKT chuyển hướng về trang chủ) thay vì trang báo cáo đúng.
+      const pageDiag = `[Trang hiện tại: "${document.title || ""}" — ${location.href}; nhận diện: ${currentPageKind || "không xác định"}; ${allTables.length} bảng trên trang]`;
+      throw new Error(`Màn hình này chưa có chỉ tiêu nào trong danh sách đồng bộ. ${pageDiag}`);
+    }
     return { version: 1, operatingDate, sourcePage: location.href, entries: [...entries.values()] };
   }
 

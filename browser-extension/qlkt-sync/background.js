@@ -180,14 +180,16 @@ async function readSource(source, url, operatingDate) {
   let tabId;
   let createdTab = false;
   const isMeter = source === "meter";
-  // Màn hình Công tơ PPA chỉ thực sự nạp bảng dữ liệu (ExtSheet) khi tab đang
-  // ở trạng thái hiển thị — QLKT có vẻ trì hoãn dựng bảng nặng này nếu tab
-  // chạy nền (active:false), nên với nguồn "meter" phải mở tab ở chế độ đang
-  // xem, rồi tự quay lại tab làm việc của người dùng sau khi lấy xong dữ liệu.
+  // Các màn hình QLKT (không riêng Công tơ PPA) chỉ thực sự dựng bảng dữ liệu
+  // đầy đủ khi tab đang ở trạng thái hiển thị — QLKT có vẻ trì hoãn/bỏ qua
+  // việc render các bảng nặng nếu tab chạy nền (active:false). Ban đầu chỉ
+  // phát hiện và sửa cho "meter", nhưng lỗi tương tự (0 chỉ tiêu đọc được) cũng
+  // xảy ra ở "production" — nên áp dụng active:true cho TẤT CẢ nguồn, không
+  // chỉ riêng meter, rồi tự quay lại tab làm việc của người dùng sau khi xong.
   let previousActiveTabId;
   let previousActiveWindowId;
   try {
-    if (isMeter) {
+    {
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       previousActiveTabId = currentTab?.id;
       previousActiveWindowId = currentTab?.windowId;
@@ -209,7 +211,7 @@ async function readSource(source, url, operatingDate) {
       }
     }
     if (!tab) {
-      tab = await chrome.tabs.create({ url, active: isMeter });
+      tab = await chrome.tabs.create({ url, active: true });
       createdTab = true;
     }
     tabId = tab.id;
