@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.19";
+  const CONTENT_SCRIPT_VERSION = "0.4.20";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   let pendingDateRefresh = null;
   // Ngày cuối cùng ĐÃ THỰC SỰ bấm nút cập nhật cho tab này (không phải ngày đang
@@ -98,12 +98,23 @@
       input.blur();
     });
     if (!changed && pendingDateRefresh !== displayDate) return { refreshed: false, visibleDate: readValue(dateInputs[0]) };
-    const refreshIcon = document.querySelector(".ui-icon-refresh, [class*='icon-refresh'], [class*='refresh-icon'], [class*='arrowrefresh'], [class*='arrowreturn'], [class*='circle-arrow'], img[src*='refresh' i], img[src*='reload' i]");
+    // QUAN TRỌNG: mọi cách dò nút "cập nhật ngày" bên dưới PHẢI giới hạn theo VỊ
+    // TRÍ gần ô ngày — từng có lúc dò theo NHÃN CHỮ trên toàn trang (không giới
+    // hạn vị trí) và vô tình bấm trúng 1 link MENU ĐIỀU HƯỚNG có chữ "Cập nhật"
+    // (ví dụ "Cập nhật sản lượng bù trừ" — một báo cáo KHÁC), khiến tab bị điều
+    // hướng sang nhầm trang thay vì chỉ làm mới bảng dữ liệu hiện tại.
+    const dateRect = dateInputs[dateInputs.length - 1].getBoundingClientRect();
+    const isExcludedLabel = label => label.includes("calendar") || label.includes("datepicker") || label.includes("cal-btn") || label.includes("calbutton") || label.includes("ghi") || label.includes("save") || label.includes("xuat") || label.includes("export") || label.includes("xoa") || label.includes("delete") || label.includes("trash") || label.includes("bu tru") || label.includes("bu-tru");
+    const isNearDateRow = rect => Math.abs((rect.top + rect.height / 2) - (dateRect.top + dateRect.height / 2)) < 60;
+    const refreshIcon = [...document.querySelectorAll(".ui-icon-refresh, [class*='icon-refresh'], [class*='refresh-icon'], [class*='arrowrefresh'], [class*='arrowreturn'], [class*='circle-arrow'], img[src*='refresh' i], img[src*='reload' i]")]
+      .find(element => { const rect = element.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && isNearDateRow(rect); });
     const labelledControl = [...document.querySelectorAll("button, a, input[type='button'], input[type='image'], input[type='submit'], input[type='reset'], [role='button']")].find(element => {
+      const rect = element.getBoundingClientRect();
+      if (!rect.width || !rect.height || !isNearDateRow(rect)) return false;
       const label = normalized(`${element.textContent} ${element.getAttribute("title") || ""} ${element.getAttribute("aria-label") || ""} ${element.getAttribute("alt") || ""} ${element.getAttribute("src") || ""} ${element.className || ""}`);
+      if (isExcludedLabel(label)) return false;
       return label.includes("lam moi") || label.includes("cap nhat") || label.includes("tai lai") || label.includes("refresh") || label.includes("reload") || label.includes("arrowrefresh") || label.includes("arrowreturn");
     });
-    const dateRect = dateInputs[dateInputs.length - 1].getBoundingClientRect();
     const nearbyControl = [...document.querySelectorAll("button, a, input[type='button'], input[type='image'], input[type='submit'], input[type='reset'], img, [role='button'], [onclick]")]
       .map(element => ({ element, rect: element.getBoundingClientRect() }))
       .filter(({ element, rect }) => {
@@ -111,8 +122,7 @@
         const label = normalized(`${element.textContent} ${element.getAttribute("title") || ""} ${element.getAttribute("aria-label") || ""} ${element.getAttribute("alt") || ""} ${element.getAttribute("src") || ""} ${element.className || ""}`);
         const sameLine = Math.abs((rect.top + rect.height / 2) - (dateRect.top + dateRect.height / 2)) < 24;
         const toTheRight = rect.left >= dateRect.right - 6 && rect.left - dateRect.right < 320;
-        const excluded = label.includes("calendar") || label.includes("datepicker") || label.includes("cal-btn") || label.includes("calbutton") || label.includes("ghi") || label.includes("save") || label.includes("xuat") || label.includes("export") || label.includes("xoa") || label.includes("delete") || label.includes("trash");
-        return sameLine && toTheRight && !excluded;
+        return sameLine && toTheRight && !isExcludedLabel(label);
       })
       .sort((left, right) => left.rect.left - right.rect.left)[0]?.element;
     const refreshControl = refreshIcon?.closest("button, a, input, [role='button'], [onclick]") || refreshIcon || labelledControl || nearbyControl;
@@ -121,7 +131,8 @@
         .filter(element => { const rect = element.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }).length;
       throw new Error(`Không tìm thấy nút cập nhật ngày trên màn hình QLKT (đang chờ giao diện tải xong; đã thấy ${visibleControls} nút).`);
     }
-    const controlInfo = `<${refreshControl.tagName?.toLowerCase() || "?"}${refreshControl.id ? `#${refreshControl.id}` : ""}${refreshControl.className ? `.${String(refreshControl.className).trim().replace(/\s+/g, ".")}` : ""}>`;
+    const controlText = cleanText(refreshControl.textContent).slice(0, 40);
+    const controlInfo = `<${refreshControl.tagName?.toLowerCase() || "?"}${refreshControl.id ? `#${refreshControl.id}` : ""}${refreshControl.className ? `.${String(refreshControl.className).trim().replace(/\s+/g, ".")}` : ""}>${controlText ? ` "${controlText}"` : ""}`;
     try { sessionStorage.setItem(PREPARED_DATE_KEY, operatingDate); } catch { /* giữ kiểm tra ngày qua DOM */ }
     refreshControl.click();
     pendingDateRefresh = null;
