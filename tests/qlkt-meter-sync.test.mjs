@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from '../lib/qlkt-sync.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
 
-test('extension package 0.4.12 retries the delayed QLKT date refresh control', () => {
-  const files = ['background.js', 'content.js', 'manifest.json'];
+test('extension package 0.4.16 aligns production values by screen position and preserves the prepared date', () => {
+  const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
     const published = readFileSync(new URL(`../public/qlkt-sync-extension/${file}`, import.meta.url), 'utf8');
@@ -14,11 +14,23 @@ test('extension package 0.4.12 retries the delayed QLKT date refresh control', (
   const manifest = JSON.parse(readFileSync(new URL('../public/qlkt-sync-extension/manifest.json', import.meta.url), 'utf8'));
   const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.12');
+  const popup = readFileSync(new URL('../public/qlkt-sync-extension/popup.js', import.meta.url), 'utf8');
+  assert.equal(manifest.version, '0.4.16');
+  assert.ok(manifest.host_permissions.includes('https://ctktkt-dashboard.vercel.app/*'));
+  assert.ok(manifest.content_scripts.some(item => item.js.includes('web-bridge.js') && item.matches.includes('https://ctktkt-dashboard.vercel.app/*')));
+  assert.match(popup, /DEFAULT_TARGET_URL = "https:\/\/ctktkt-dashboard\.vercel\.app\/"/);
   assert.match(background, /prepareDateWithRetry/);
   assert.match(background, /readMeterFromPageWorldWithRetry/);
   assert.match(content, /pendingDateRefresh/);
   assert.match(content, /lastPreparedDate/);
+  assert.match(content, /sessionStorage\.setItem\(PREPARED_DATE_KEY, operatingDate\)/);
+  assert.match(content, /preparedDate === expectedOperatingDate/);
+  assert.match(content, /aligned \|\| sameIndex/);
+  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.16"/);
+  assert.match(content, /candidate\.rect\.left > label\.rect\.left/);
+  assert.match(content, /s1\[0\].*SL phát/);
+  assert.match(content, /s1\[2\].*SL điểm bán/);
+  assert.match(background, /READ_QLKT_VALUES", operatingDate/);
   assert.match(content, /retryable: message\.includes\("nút cập nhật ngày"\)/);
 });
 

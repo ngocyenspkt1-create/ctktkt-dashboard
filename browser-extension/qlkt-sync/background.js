@@ -72,10 +72,10 @@ async function sendWithRetry(tabId, message, attempts = 10) {
   throw lastError || new Error("Không kết nối được với màn hình QLKT.");
 }
 
-async function readValuesWithRetry(tabId, attempts = 10, intervalMs = 500) {
+async function readValuesWithRetry(tabId, operatingDate, attempts = 10, intervalMs = 500) {
   let result;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    result = await sendWithRetry(tabId, { type: "READ_QLKT_VALUES" });
+    result = await sendWithRetry(tabId, { type: "READ_QLKT_VALUES", operatingDate });
     if (result?.ok) return result;
     await wait(intervalMs);
   }
@@ -232,14 +232,14 @@ async function readSource(source, url, operatingDate) {
         // Cách đọc dự phòng (dò thẻ <script> tĩnh) hầu như không còn tác dụng
         // trên QLKT hiện tại (dữ liệu ExtSheet luôn nạp bằng AJAX, không nhúng
         // sẵn trong HTML) nên chỉ thử vài lần cho chắc thay vì chờ lâu vô ích.
-        result = await readValuesWithRetry(tabId, 5, 500);
+        result = await readValuesWithRetry(tabId, operatingDate, 5, 500);
         if (!result?.ok) {
           const prepInfo = `Đã bấm nút cập nhật ngày: ${prepared.refreshed ? `có (${prepared.controlInfo || "?"})` : "không (ngày đã đúng sẵn khi kiểm tra)"}.`;
           result = { ...result, error: `${result?.error || "Không đọc được màn hình Công tơ PPA."} [Đọc trực tiếp widget: ${pageWorldError}] [${prepInfo}]` };
         }
       }
-    } else result = await readValuesWithRetry(tabId);
-    if (!result?.ok) throw new Error(result?.error || `Không đọc được màn hình ${SOURCE_LABELS[source]}.`);
+    } else result = await readValuesWithRetry(tabId, operatingDate);
+    if (!result?.ok) throw new Error(`Màn hình ${SOURCE_LABELS[source]}: ${result?.error || "không đọc được dữ liệu."}`);
     if (source === "meter") {
       if (result.payload?.kind !== "ppa-meter" || result.payload?.readings?.length !== 4) {
         throw new Error("Màn hình Công tơ PPA chưa đọc đủ 4 điểm đo bắt buộc.");

@@ -4,6 +4,8 @@ const syncAllButton = document.getElementById("syncAllButton");
 const syncPpaButton = document.getElementById("syncPpaButton");
 const syncPageButton = document.getElementById("syncPageButton");
 const status = document.getElementById("status");
+const DEFAULT_TARGET_URL = "https://ctktkt-dashboard.vercel.app/";
+const LEGACY_LOCAL_TARGET = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::5173)?\/?$/i;
 
 const sourceIds = {
   production: "source-production",
@@ -61,8 +63,8 @@ async function recognizeActivePage() {
   }
 }
 
-chrome.storage.local.get({ targetUrl: "http://localhost:5173/" }, value => {
-  targetInput.value = value.targetUrl;
+chrome.storage.local.get({ targetUrl: DEFAULT_TARGET_URL }, value => {
+  targetInput.value = LEGACY_LOCAL_TARGET.test(value.targetUrl) ? DEFAULT_TARGET_URL : value.targetUrl;
 });
 dateInput.value = localIsoDate();
 refreshSources();
@@ -117,7 +119,7 @@ syncPageButton.addEventListener("click", async () => {
     const prepared = await chrome.tabs.sendMessage(tab.id, { type: "PREPARE_QLKT_DATE", operatingDate: dateInput.value });
     if (!prepared?.ok) throw new Error(prepared?.error || "Không đặt được ngày báo cáo.");
     await new Promise(resolve => setTimeout(resolve, prepared.refreshed ? 2200 : 300));
-    const result = await chrome.tabs.sendMessage(tab.id, { type: "READ_QLKT_VALUES" });
+    const result = await chrome.tabs.sendMessage(tab.id, { type: "READ_QLKT_VALUES", operatingDate: dateInput.value });
     if (!result?.ok) throw new Error(result?.error || "Không tìm thấy chỉ tiêu được cấu hình trên màn hình này.");
     await chrome.storage.local.set({ targetUrl: target.origin + target.pathname });
     await openTarget(target, result.payload);

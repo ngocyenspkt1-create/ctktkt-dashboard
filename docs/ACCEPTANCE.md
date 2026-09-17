@@ -475,3 +475,104 @@ Người dùng làm rõ thêm 4 điểm sau khi thấy bản đầu; đã sửa 
 
 - Chưa thể xác nhận lần đồng bộ thật trên trình duyệt vì cần phiên đăng nhập QLKT của người dùng.
 - Người dùng cần làm mới cả hai phía: bấm `Reload` cho tiện ích ở `chrome://extensions` (xác nhận lên `0.4.12`) VÀ tải lại (F5) trang web Chỉ tiêu KTKT để đồng hồ đếm ngược mới (90 giây) trong mã JavaScript của trang có hiệu lực — nếu chỉ reload tiện ích mà không F5 trang web, đồng hồ 60 giây cũ vẫn còn hiệu lực cho tới khi tải lại trang. Lần đồng bộ kế tiếp có thể mất tới ~45–50 giây, đây là bình thường.
+
+---
+# Bổ sung 17/09/2026 — QLKT v0.4.13 hỗ trợ website Vercel
+
+## Đã làm
+
+- Cho phép `web-bridge.js` chạy trên đúng miền chính thức `https://ctktkt-dashboard.vercel.app/*`, đồng thời vẫn giữ hỗ trợ localhost để phát triển và kiểm tra.
+- Đổi địa chỉ web mặc định trong popup sang `https://ctktkt-dashboard.vercel.app/`. Nếu tiện ích còn giữ đúng địa chỉ localhost mặc định cũ thì popup tự chuyển sang địa chỉ Vercel; địa chỉ tùy chỉnh khác của người dùng vẫn được giữ nguyên.
+- Tăng phiên bản tiện ích lên `0.4.13`, đồng bộ bản nguồn/bản phát hành và cập nhật hướng dẫn sử dụng.
+
+## Kiểm tra đã thực hiện
+
+- `node --check` cho `background.js`, `content.js`, `popup.js` và `web-bridge.js`: đạt.
+- `node --test tests/*.mjs`: đạt 30/30; có kiểm tra quyền Vercel, địa chỉ mặc định và 9/9 file nguồn/phát hành giống nhau.
+- `npx.cmd tsc --noEmit`: đạt.
+- `npm.cmd run build`: đạt.
+- ZIP có đủ 9 file ở thư mục gốc, manifest phiên bản `0.4.13`; SHA-256: `400B2DB7F82290F12575D84F78C293121A72EB5527877D8CD089A81C6BE4C36B`.
+
+## Bước kiểm tra thật còn lại
+
+- Reload tiện ích tại `chrome://extensions`, xác nhận phiên bản `0.4.13`, sau đó F5 trang `https://ctktkt-dashboard.vercel.app/ppa-heat-rate` và kiểm tra trạng thái kết nối trước khi đồng bộ QLKT.
+
+---
+# Bổ sung 17/09/2026 — QLKT v0.4.14 giữ ngày đã chuẩn bị khi bộ lọc biến mất
+
+## Hiện tượng và nguyên nhân
+
+- Khi đồng bộ toàn bộ từ website Vercel, web báo `Không xác định được ngày báo cáo trên trang QLKT.`. Kết nối web–tiện ích đã hoạt động; lỗi phát sinh trong bước đọc một màn hình QLKT sau khi bấm cập nhật ngày.
+- Mã cũ chỉ xác định ngày từ giá trị các thẻ `input`. Một số màn hình QLKT thay toàn bộ vùng bộ lọc sau khi cập nhật, làm ô ngày biến mất dù dữ liệu báo cáo đã nạp, nên bước đọc mất dấu ngày vừa chuẩn bị.
+
+## Đã sửa
+
+- Lưu ngày đã chuẩn bị vào `sessionStorage` riêng của tab QLKT trước khi bấm cập nhật. Khi ô ngày không còn trong DOM, chỉ dùng ngày này nếu nó trùng chính xác ngày mà web đang yêu cầu; không lấy ngày yêu cầu làm mặc định vô điều kiện.
+- Truyền `operatingDate` xuyên suốt đến thông điệp `READ_QLKT_VALUES`, kể cả luồng dự phòng “Chỉ lấy trang đang mở”.
+- Nếu vẫn lỗi, thông báo giờ ghi rõ màn hình `Sản lượng`, `Nhiên liệu` hoặc `Vận hành` để chẩn đoán đúng nguồn.
+- Tăng phiên bản tiện ích lên `0.4.14`.
+
+## Kiểm tra đã thực hiện
+
+- `node --check` cho các file JavaScript tiện ích: đạt.
+- `node --test tests/*.mjs`: đạt 30/30; có kiểm tra hồi quy việc lưu/đối chiếu ngày đã chuẩn bị và truyền ngày vào lệnh đọc.
+- `npx.cmd tsc --noEmit`: đạt.
+- `npm.cmd run build`: đạt.
+- ZIP có đủ 9 file ở thư mục gốc, manifest phiên bản `0.4.14`; SHA-256: `BD09617A56DCDB6F7C88D1CA94CE231713B0F06692870BD23CD15A4672EE7DD5`.
+
+## Bước kiểm tra thật còn lại
+
+- Reload tiện ích, xác nhận phiên bản `0.4.14`, F5 website Vercel và chạy lại Đồng bộ QLKT cho ngày đã chọn.
+
+---
+# Bổ sung 17/09/2026 — QLKT v0.4.15 đọc bảng Sản lượng tách cột cố định
+
+## Hiện tượng và nguyên nhân
+
+- Sau khi v0.4.14 xử lý được ngày báo cáo, tiện ích báo `Màn hình Sản lượng: Màn hình này chưa có chỉ tiêu nào trong danh sách đồng bộ.`
+- Ảnh QLKT thật cho thấy cột `Tổ máy` chứa `DH1_MF1/DH1_MF2` được cố định ở bảng bên trái, còn các ô số `SL phát`, phản kháng, `SL điểm bán` nằm trong bảng cuộn riêng bên phải. Bộ đọc dự phòng cũ chỉ tìm ô số trong cùng hàng DOM với nhãn tổ máy nên nhận hàng rỗng.
+
+## Đã sửa
+
+- Ghép hàng nhãn tổ máy với hàng số liệu bằng vị trí hiển thị theo chiều dọc; dùng chỉ số hàng làm dự phòng khi trình duyệt không trả kích thước phần tử.
+- Giữ ánh xạ đúng theo bảng thật: ô số thứ nhất là `SL phát`, ô số thứ ba là `SL điểm bán`; không lấy nhầm cột điện năng phản kháng nằm giữa.
+- Nếu vẫn không ghép được, thông báo chẩn đoán mới kèm số bảng và số ô số đã thấy.
+- Tăng phiên bản tiện ích lên `0.4.15`.
+
+## Kiểm tra đã thực hiện
+
+- `node --check` cho các file JavaScript tiện ích: đạt.
+- `node --test tests/*.mjs`: đạt 30/30; có kiểm tra hồi quy nhánh bảng Sản lượng tách cột.
+- `npx.cmd tsc --noEmit`: đạt.
+- `npm.cmd run build`: đạt.
+- ZIP có đủ 9 file ở thư mục gốc, manifest phiên bản `0.4.15`; SHA-256: `6C36DC4F56AC0DEF589B5D3DE7D63EAB7EEC87FA61887A5106CF5B34D9E57E6C`.
+
+## Bước kiểm tra thật còn lại
+
+- Reload tiện ích, xác nhận phiên bản `0.4.15`, F5 website Vercel và chạy lại Đồng bộ QLKT cùng ngày.
+
+---
+# Bổ sung 17/09/2026 — QLKT v0.4.16 ghép Sản lượng theo tọa độ hiển thị
+
+## Hiện tượng và nguyên nhân
+
+- v0.4.15 vẫn nhận đúng màn hình Sản lượng nhưng chưa lấy được B/C/H/I, cho thấy vùng ô số bên phải không nằm trong các hàng `<tr>` mà nhánh dự phòng đang quét.
+
+## Đã sửa
+
+- Dò trực tiếp toàn bộ ô số đang hiển thị trên trang, ghép với nhãn `DH1_MF1/DH1_MF2` theo cùng cao độ màn hình và sắp xếp từ trái sang phải; không còn phụ thuộc nhãn và ô số phải nằm trong cùng bảng hoặc cùng hàng DOM.
+- Vẫn giữ hai lớp dự phòng cũ: ghép hàng theo tọa độ giữa các bảng, rồi ghép theo chỉ số hàng.
+- Thông báo thất bại mới có tiền tố `Bộ đọc v0.4.16` cùng số bảng/số ô số để xác nhận chính xác content script đang chạy.
+- Tăng phiên bản tiện ích lên `0.4.16`.
+
+## Kiểm tra đã thực hiện
+
+- `node --check` cho các file JavaScript tiện ích: đạt.
+- `node --test tests/*.mjs`: đạt 30/30; có kiểm tra hồi quy nhánh ghép Sản lượng theo tọa độ.
+- `npx.cmd tsc --noEmit`: đạt.
+- `npm.cmd run build`: đạt.
+- ZIP có đủ 9 file ở thư mục gốc, manifest phiên bản `0.4.16`; SHA-256: `8BBF9F2A44A7E366CECC4690941B68A895EFBA89CF22E558A14F88928F7EEA65`.
+
+## Bước kiểm tra thật còn lại
+
+- Reload tiện ích, F5 cả trang QLKT và website Vercel, rồi đồng bộ lại. Nếu còn lỗi, gửi nguyên thông báo có tiền tố `Bộ đọc v0.4.16`.

@@ -2,6 +2,8 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
+  const CONTENT_SCRIPT_VERSION = "0.4.16";
+  const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   let pendingDateRefresh = null;
   // Ngày cuối cùng ĐÃ THỰC SỰ bấm nút cập nhật cho tab này (không phải ngày đang
   // hiển thị trong ô — ô ngày có thể đã bị chính prepareDate() ghi đè ở lần gọi
@@ -25,11 +27,21 @@
     const number = Number(value);
     return Number.isFinite(number) ? String(number) : null;
   };
-  const parseDate = () => {
+  const parseDate = expectedOperatingDate => {
     const values = [...document.querySelectorAll("input")].map(readValue);
     for (const value of values) {
       const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       if (match) return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+    }
+    // Một số màn hình QLKT thay toàn bộ vùng bộ lọc sau khi bấm cập nhật, làm ô
+    // ngày biến mất dù dữ liệu báo cáo đã nạp xong. Chỉ dùng ngày đã chuẩn bị
+    // trong chính tab này khi nó trùng khớp yêu cầu hiện tại; không lấy ngày yêu
+    // cầu làm mặc định vô điều kiện để tránh che giấu trường hợp mở nhầm trang.
+    try {
+      const preparedDate = sessionStorage.getItem(PREPARED_DATE_KEY);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(expectedOperatingDate || "")) && preparedDate === expectedOperatingDate) return preparedDate;
+    } catch {
+      // sessionStorage có thể bị chặn; khi đó giữ nguyên cơ chế kiểm tra qua DOM.
     }
     return null;
   };
@@ -103,6 +115,7 @@
       throw new Error(`Không tìm thấy nút cập nhật ngày trên màn hình QLKT (đang chờ giao diện tải xong; đã thấy ${visibleControls} nút).`);
     }
     const controlInfo = `<${refreshControl.tagName?.toLowerCase() || "?"}${refreshControl.id ? `#${refreshControl.id}` : ""}${refreshControl.className ? `.${String(refreshControl.className).trim().replace(/\s+/g, ".")}` : ""}>`;
+    try { sessionStorage.setItem(PREPARED_DATE_KEY, operatingDate); } catch { /* giữ kiểm tra ngày qua DOM */ }
     refreshControl.click();
     pendingDateRefresh = null;
     lastPreparedDate = displayDate;
@@ -301,8 +314,8 @@
     throw new Error(`${scriptError || tableError || "Không đọc được dữ liệu bảng công tơ."} ${pageDiag}`);
   }
 
-  function extract() {
-    const operatingDate = parseDate();
+  function extract(expectedOperatingDate) {
+    const operatingDate = parseDate(expectedOperatingDate);
     if (!operatingDate) throw new Error("Không xác định được ngày báo cáo trên trang QLKT.");
     const currentPageKind = pageKind();
     if (currentPageKind === "meter") return extractPpaMeterPayload(operatingDate);
@@ -349,18 +362,55 @@
     });
     if (currentPageKind === "production") {
       const rowInputs = unit => {
-        const rows = [...document.querySelectorAll("tr")].filter(row => normalized(row.textContent).includes(unit));
-        const ranked = rows.map(row => [...row.querySelectorAll("input")]
-          .map(input => ({ value: parseNumber(readValue(input)), input }))
-          .filter(candidate => candidate.value !== null))
-          .sort((left, right) => right.length - left.length);
-        return ranked[0] || [];
+        const tables = [...document.querySelectorAll("table")];
+        const numericInputs = [...document.querySelectorAll("input")]
+          .map(input => ({ input, value: parseNumber(readValue(input)), rect: input.getBoundingClientRect() }))
+          .filter(candidate => candidate.value !== null && candidate.rect.width > 0 && candidate.rect.height > 0);
+        const unitLabels = [...document.querySelectorAll("td, th, div, span")]
+          .map(element => ({ element, label: normalized(element.textContent), rect: element.getBoundingClientRect() }))
+          .filter(candidate => candidate.label === unit && candidate.rect.width > 0 && candidate.rect.height > 0)
+          .sort((left, right) => left.rect.width - right.rect.width);
+        for (const label of unitLabels) {
+          const labelCenterY = label.rect.top + label.rect.height / 2;
+          const aligned = numericInputs
+            .filter(candidate => Math.abs(candidate.rect.top + candidate.rect.height / 2 - labelCenterY) < 12 && candidate.rect.left > label.rect.left)
+            .sort((left, right) => left.rect.left - right.rect.left);
+          if (aligned.length >= 4) return aligned;
+        }
+        const labelRows = tables.flatMap(table => [...table.rows].map((row, rowIndex) => ({ row, rowIndex })))
+          .filter(({ row }) => normalized(row.textContent).includes(unit));
+        const ranked = [];
+        for (const label of labelRows) {
+          const labelRect = label.row.getBoundingClientRect();
+          for (const table of tables) {
+            [...table.rows].forEach((row, rowIndex) => {
+              const inputs = [...row.querySelectorAll("input")]
+                .map(input => ({ value: parseNumber(readValue(input)), input }))
+                .filter(candidate => candidate.value !== null);
+              if (inputs.length < 4) return;
+              if (row === label.row) {
+                ranked.push({ inputs, score: 2000 + inputs.length });
+                return;
+              }
+              const rowRect = row.getBoundingClientRect();
+              const aligned = labelRect.height > 0 && rowRect.height > 0
+                && Math.abs((labelRect.top + labelRect.height / 2) - (rowRect.top + rowRect.height / 2)) < 12;
+              const sameIndex = rowIndex === label.rowIndex;
+              if (aligned || sameIndex) ranked.push({ inputs, score: (aligned ? 1000 : 0) + (sameIndex ? 100 : 0) + inputs.length });
+            });
+          }
+        }
+        return ranked.sort((left, right) => right.score - left.score)[0]?.inputs || [];
       };
       const s1 = rowInputs("dh1_mf1"), s2 = rowInputs("dh1_mf2");
       if (!entries.has("B")) add("B", s1[0], "QLKT · DH1_MF1 · SL phát");
       if (!entries.has("C")) add("C", s1[2], "QLKT · DH1_MF1 · SL điểm bán");
       if (!entries.has("H")) add("H", s2[0], "QLKT · DH1_MF2 · SL phát");
       if (!entries.has("I")) add("I", s2[2], "QLKT · DH1_MF2 · SL điểm bán");
+      if (!entries.size) {
+        const numericInputs = [...document.querySelectorAll("input")].filter(input => parseNumber(readValue(input)) !== null).length;
+        throw new Error(`Bộ đọc v${CONTENT_SCRIPT_VERSION}: không ghép được hai hàng DH1_MF1/DH1_MF2 với vùng số liệu Sản lượng (đã thấy ${allTables.length} bảng, ${numericInputs} ô số).`);
+      }
     }
     if (currentPageKind === "fuel" && ["AJ", "AE", "AF", "AR", "AT"].some(code => !entries.has(code))) {
       const coalRows = [...document.querySelectorAll("tr")]
@@ -442,7 +492,7 @@
     // nhiệt (phải chuyển dropdown Tổ máy và chờ AJAX) — bọc trong Promise.resolve().then() để xử lý
     // đúng cả 2 trường hợp mà không cần biết trước extract() trả về gì.
     Promise.resolve()
-      .then(() => extract())
+      .then(() => extract(message.operatingDate))
       .then(payload => sendResponse({ ok: true, payload, pageKind: pageKind() }))
       .catch(error => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đọc được dữ liệu QLKT." }));
     return true;
