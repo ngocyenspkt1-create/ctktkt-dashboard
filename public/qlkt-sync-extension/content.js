@@ -3,6 +3,16 @@
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
   let pendingDateRefresh = null;
+  // Ngày cuối cùng ĐÃ THỰC SỰ bấm nút cập nhật cho tab này (không phải ngày đang
+  // hiển thị trong ô — ô ngày có thể đã bị chính prepareDate() ghi đè ở lần gọi
+  // trước dù cú bấm nút đó chưa chắc làm QLKT nạp lại dữ liệu kịp). Màn hình
+  // Công tơ PPA thường được tiện ích GIỮ NGUYÊN 1 tab mở xuyên suốt nhiều lần
+  // đồng bộ (xem README), nên nếu so sánh "đã đổi hay chưa" bằng giá trị hiện
+  // có trong ô ngày thì lần đồng bộ SAU sẽ thấy ô đã đúng ngày (do lần TRƯỚC ghi
+  // đè) và tưởng nhầm là không cần bấm lại nút — trong khi dữ liệu bảng thật có
+  // thể vẫn là của ngày cũ. So với biến riêng này để luôn bấm lại khi ngày yêu
+  // cầu khác lần bấm thành công gần nhất, bất kể ô đang hiển thị gì.
+  let lastPreparedDate = null;
   const parseNumber = raw => {
     const original = cleanText(raw);
     if (/[A-Za-zÀ-ỹ]/u.test(original) || /\d{1,2}\/\d{1,2}\/\d{4}/.test(original)) return null;
@@ -59,7 +69,7 @@
     if (!visibleDateInputs.length) throw new Error("Không tìm thấy ô ngày báo cáo trên màn hình QLKT.");
     const firstRowTop = Math.min(...visibleDateInputs.map(({ rect }) => rect.top));
     const dateInputs = visibleDateInputs.filter(({ rect }) => Math.abs(rect.top - firstRowTop) < 24).map(({ input }) => input);
-    const changed = dateInputs.some(input => readValue(input) !== displayDate);
+    const changed = lastPreparedDate !== displayDate;
     if (changed) pendingDateRefresh = displayDate;
     dateInputs.forEach(input => {
       input.focus();
@@ -68,7 +78,7 @@
       input.dispatchEvent(new Event("change", { bubbles: true }));
       input.blur();
     });
-    if (!changed && pendingDateRefresh !== displayDate) return { refreshed: false };
+    if (!changed && pendingDateRefresh !== displayDate) return { refreshed: false, visibleDate: readValue(dateInputs[0]) };
     const refreshIcon = document.querySelector(".ui-icon-refresh, [class*='icon-refresh'], [class*='refresh-icon'], [class*='arrowrefresh'], [class*='arrowreturn'], [class*='circle-arrow'], img[src*='refresh' i], img[src*='reload' i]");
     const labelledControl = [...document.querySelectorAll("button, a, input[type='button'], input[type='image'], input[type='submit'], input[type='reset'], [role='button']")].find(element => {
       const label = normalized(`${element.textContent} ${element.getAttribute("title") || ""} ${element.getAttribute("aria-label") || ""} ${element.getAttribute("alt") || ""} ${element.getAttribute("src") || ""} ${element.className || ""}`);
@@ -92,9 +102,11 @@
         .filter(element => { const rect = element.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }).length;
       throw new Error(`Không tìm thấy nút cập nhật ngày trên màn hình QLKT (đang chờ giao diện tải xong; đã thấy ${visibleControls} nút).`);
     }
+    const controlInfo = `<${refreshControl.tagName?.toLowerCase() || "?"}${refreshControl.id ? `#${refreshControl.id}` : ""}${refreshControl.className ? `.${String(refreshControl.className).trim().replace(/\s+/g, ".")}` : ""}>`;
     refreshControl.click();
     pendingDateRefresh = null;
-    return { refreshed: true };
+    lastPreparedDate = displayDate;
+    return { refreshed: true, controlInfo };
   }
 
   function inputsWithContext(table) {

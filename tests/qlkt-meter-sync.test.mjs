@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from '../lib/qlkt-sync.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
 
-test('extension package 0.4.9 retries the delayed QLKT date refresh control', () => {
+test('extension package 0.4.12 retries the delayed QLKT date refresh control', () => {
   const files = ['background.js', 'content.js', 'manifest.json'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
@@ -14,9 +14,11 @@ test('extension package 0.4.9 retries the delayed QLKT date refresh control', ()
   const manifest = JSON.parse(readFileSync(new URL('../public/qlkt-sync-extension/manifest.json', import.meta.url), 'utf8'));
   const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.9');
+  assert.equal(manifest.version, '0.4.12');
   assert.match(background, /prepareDateWithRetry/);
+  assert.match(background, /readMeterFromPageWorldWithRetry/);
   assert.match(content, /pendingDateRefresh/);
+  assert.match(content, /lastPreparedDate/);
   assert.match(content, /retryable: message\.includes\("nút cập nhật ngày"\)/);
 });
 

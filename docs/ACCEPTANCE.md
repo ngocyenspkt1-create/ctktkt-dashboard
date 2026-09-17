@@ -412,3 +412,66 @@ Người dùng làm rõ thêm 4 điểm sau khi thấy bản đầu; đã sửa 
 
 - Chưa thể xác nhận lần đồng bộ thật ngày 15/09/2026 vì cần phiên đăng nhập QLKT trên trình duyệt của người dùng.
 - Người dùng cần vào trang quản lý tiện ích, bấm `Reload` cho tiện ích, xác nhận phiên bản `0.4.9`, quay lại web và bấm `Đồng bộ QLKT` lần nữa. Nếu vẫn lỗi, gửi nguyên thông báo mới có phần `đã thấy ... nút` để tiếp tục đối chiếu DOM thật.
+
+---
+# Bổ sung 17/09/2026 — QLKT v0.4.10 chờ widget nạp đúng ngày
+
+## Đã làm
+
+- Sau bản 0.4.9, người dùng thử đồng bộ lại và vẫn báo lỗi, nhưng là lỗi KHÁC: `readMeterFromPageWorld` (cách đọc chính, lấy thẳng dữ liệu từ widget PrimeFaces trong bộ nhớ trang) chỉ đọc **một lần** ngay sau khi bấm nút làm mới ngày, trong khi QLKT nạp lại bảng ExtSheet bằng AJAX phía máy chủ và có thể mất vài giây. Kết quả: đọc trúng lúc widget còn giữ dữ liệu CỦA NGÀY CŨ (ví dụ chọn `15/09/2026` nhưng widget vẫn trả `16/09/2026`), báo lỗi "Không tìm thấy DHA_S1/kWhGiao cho ngày đã chọn" rồi rơi xuống cách đọc dự phòng (dò `<script>` tĩnh) vốn luôn thất bại trên QLKT hiện tại vì dữ liệu không còn nhúng sẵn trong HTML nữa (đúng như log nhận được: `0 thẻ có "ExtSheet"`).
+- Thêm `readMeterFromPageWorldWithRetry()`: thử lại việc đọc widget tối đa 30 lần, cách nhau 1 giây (~30 giây), giống hệt cơ chế `readValuesWithRetry()` đã dùng cho các màn hình khác — chỉ dừng khi đọc được đúng 4 điểm đo của đúng ngày đã chọn.
+- Giảm số lần thử của cách đọc dự phòng (`readValuesWithRetry`) từ 40×700ms xuống 5×500ms cho nguồn `meter`, vì cách này gần như chắc chắn không còn tác dụng và chỉ nên giữ lại như một lần thử vét cuối, tránh người dùng phải chờ thêm ~28 giây vô ích trước khi thấy lỗi.
+- Đồng bộ cả ba bản `browser-extension/qlkt-sync`, `public/qlkt-sync-extension`, `dist/client/qlkt-sync-extension`, tăng phiên bản lên `0.4.10`, đóng gói lại hai file `qlkt-sync-extension.zip`.
+
+## Kiểm tra đã thực hiện
+
+- `node --check` cho `background.js` và `content.js`: đạt.
+- `node --test tests/*.mjs`: đạt 30/30, gồm kiểm tra phiên bản `0.4.10`, sự tồn tại của `readMeterFromPageWorldWithRetry` và ba file phát hành giống bản nguồn.
+
+## Còn thiếu / bước tiếp theo
+
+- Chưa thể xác nhận lần đồng bộ thật trên trình duyệt vì cần phiên đăng nhập QLKT của người dùng.
+- Người dùng cần vào trang quản lý tiện ích (`chrome://extensions`), bấm `Reload` cho tiện ích "Đồng bộ QLKT sang Chỉ tiêu KTKT", xác nhận phiên bản đã lên `0.4.10`, rồi quay lại web bấm `Đồng bộ QLKT` lần nữa. Lần đồng bộ này có thể mất tới ~30 giây khi QLKT cần đổi ngày — đây là bình thường, không phải bị treo.
+
+---
+# Bổ sung 17/09/2026 — QLKT v0.4.11 sửa lỗi bỏ qua bấm nút cập nhật khi tái sử dụng tab
+
+## Đã làm
+
+- Người dùng lên `0.4.10`, thử lại, **vẫn báo lỗi giống hệt** (widget vẫn trả `16/09/2026` dù chọn `15/09/2026`) — cho thấy 30 giây thử lại ở bản 0.4.10 không giúp được gì, tức đây không đơn thuần là vấn đề chờ chưa đủ lâu.
+- Tìm ra nguyên nhân thật ở `content.js`: theo README, tiện ích được thiết kế để **giữ nguyên 1 tab Công tơ PPA mở xuyên suốt nhiều lần đồng bộ** (không mở/đóng tab mới mỗi lần). Hàm `prepareDate()` quyết định có cần bấm lại nút "cập nhật ngày" hay không bằng cách so sánh giá trị ĐANG HIỂN THỊ trong ô ngày với ngày cần đặt — nhưng chính hàm này, ở lần gọi TRƯỚC, đã ghi đè ô ngày thành ngày yêu cầu (`input.value = displayDate`) bất kể cú bấm nút có thực sự làm QLKT nạp lại dữ liệu kịp hay không. Hậu quả: lần đồng bộ THỨ HAI trở đi, ô ngày đã "trông có vẻ đúng" từ trước nên `prepareDate()` tưởng nhầm là không cần bấm nút nữa và bỏ qua hoàn toàn bước làm mới — mọi lần đọc sau đó chỉ đọc dữ liệu cũ còn sót lại trong widget, dù chờ bao lâu cũng không đổi.
+- Sửa bằng biến trạng thái riêng `lastPreparedDate` (ngày cuối cùng ĐÃ THỰC SỰ bấm nút cập nhật thành công cho tab này) thay vì dựa vào giá trị hiển thị trong ô ngày để quyết định có cần bấm lại nút hay không. Nút cập nhật giờ luôn được bấm lại mỗi khi ngày yêu cầu khác lần bấm thành công gần nhất, bất kể ô đang hiển thị gì.
+- Bổ sung chẩn đoán vào thông báo lỗi (nếu vẫn thất bại): liệt kê toàn bộ giá trị ô ngày đang hiển thị trên trang lúc đọc dữ liệu, và cho biết lần chuẩn bị ngày gần nhất có thực sự bấm nút hay không (kèm mô tả ngắn nút đã bấm) — để có đủ thông tin đối chiếu ngay trong lần báo lỗi tiếp theo nếu cách sửa này chưa dứt điểm được vấn đề.
+- Đồng bộ cả ba bản thư mục tiện ích, tăng phiên bản lên `0.4.11`, đóng gói lại hai file `qlkt-sync-extension.zip`.
+
+## Kiểm tra đã thực hiện
+
+- `node --check` cho `background.js` và `content.js`: đạt.
+- `node --test tests/*.mjs`: đạt 30/30, gồm kiểm tra phiên bản `0.4.11` và sự tồn tại của `lastPreparedDate`.
+
+## Còn thiếu / bước tiếp theo
+
+- Chưa thể xác nhận lần đồng bộ thật trên trình duyệt vì cần phiên đăng nhập QLKT của người dùng.
+- Người dùng cần bấm `Reload` cho tiện ích ở `chrome://extensions`, xác nhận phiên bản đã lên `0.4.11`, rồi bấm `Đồng bộ QLKT` lại. Nếu vẫn lỗi, thông báo lần này sẽ có thêm phần `Ô ngày trên trang: ...` và `Đã bấm nút cập nhật ngày: ...` — gửi nguyên văn để tiếp tục chẩn đoán chính xác nút/luồng nào trên QLKT chưa hoạt động như mong đợi.
+
+---
+# Bổ sung 17/09/2026 — QLKT v0.4.12 nới thời gian chờ để tránh timeout phía web
+
+## Đã làm
+
+- Người dùng lên `0.4.11`, bấm Đồng bộ QLKT, lần này web báo `"QLKT phản hồi quá lâu. Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại."` — đây KHÔNG phải lỗi QLKT, mà là đồng hồ đếm ngược 60 giây ở `components/ppa-heat-rate-comparison.tsx` tự bắn ra khi web không thấy tiện ích trả lời kịp, che mất kết quả thật (dù thành công hay báo lỗi cụ thể hơn) mà `background.js` có thể đã/đang tính ra.
+- Nguyên nhân: các lần sửa 0.4.10–0.4.11 đã cộng dồn thời gian chờ tối đa của một lượt đồng bộ Công tơ PPA lên tới xấp xỉ chờ nút cập nhật (~10s) + chờ ban đầu (4s) + thử lại đọc widget (30×1s ≈ 30s) + đọc dự phòng (5×0.5s ≈ 2.5s) ≈ 46.5 giây LÝ THUYẾT — chưa kể thời gian thật thi hành mỗi lần đọc (mở tab, `chrome.scripting.executeScript`, `JSON.stringify` bảng dữ liệu lớn để dò trùng lặp) dễ vượt quá 60 giây trên QLKT thật, dù bản thân từng bước đều đúng. Các luồng đồng bộ khác trong cùng web đã có sẵn hạn mức lớn hơn hẳn cho tình huống tương tự (`daily-production-table.tsx`: 90 giây cho 3 màn hình; `pmis-report.tsx`: 120 giây cho màn hình Cân bằng nhiệt) — riêng màn hình Công tơ PPA (được chính code ghi chú là "thường mất nhiều thời gian hơn các màn hình khác") lại đang có hạn mức thấp nhất (60 giây), nên đây là chỗ hụt từ trước, chỉ lộ ra sau khi thêm cơ chế thử lại ở 0.4.10.
+- Tăng đồng hồ đếm ngược ở `ppa-heat-rate-comparison.tsx` từ 60 giây lên **90 giây**, khớp với hạn mức của `daily-production-table.tsx`.
+- Đổi `readMeterFromPageWorldWithRetry()` từ đếm SỐ LẦN thử cố định sang giới hạn theo THỜI GIAN THỰC (`Date.now()` deadline, mặc định 35 giây) — để tổng thời gian không bị vượt dự tính nếu một lần đọc nào đó (chứ không phải khoảng chờ giữa các lần) bất ngờ chạy lâu hơn bình thường.
+- Tăng phiên bản lên `0.4.12`, đồng bộ cả ba bản thư mục tiện ích và đóng gói lại hai file `qlkt-sync-extension.zip`.
+
+## Kiểm tra đã thực hiện
+
+- `node --check` cho `background.js`: đạt.
+- `npx tsc --noEmit`: đạt (không lỗi kiểu sau khi đổi mốc thời gian trong file `.tsx`).
+- `node --test tests/*.mjs`: đạt 30/30, gồm kiểm tra phiên bản `0.4.12`.
+
+## Còn thiếu / bước tiếp theo
+
+- Chưa thể xác nhận lần đồng bộ thật trên trình duyệt vì cần phiên đăng nhập QLKT của người dùng.
+- Người dùng cần làm mới cả hai phía: bấm `Reload` cho tiện ích ở `chrome://extensions` (xác nhận lên `0.4.12`) VÀ tải lại (F5) trang web Chỉ tiêu KTKT để đồng hồ đếm ngược mới (90 giây) trong mã JavaScript của trang có hiệu lực — nếu chỉ reload tiện ích mà không F5 trang web, đồng hồ 60 giây cũ vẫn còn hiệu lực cho tới khi tải lại trang. Lần đồng bộ kế tiếp có thể mất tới ~45–50 giây, đây là bình thường.

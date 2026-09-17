@@ -180,7 +180,7 @@ export function PpaHeatRateComparison() {
       qlktRequestRef.current = null;
       setSyncingQlkt(false);
       setError("QLKT phản hồi quá lâu. Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");
-    }, 60000);
+    }, 90000);
     qlktRequestRef.current = { id: requestId, timer };
     setSyncingQlkt(true);
     window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "SYNC_PPA", requestId, operatingDate }, window.location.origin);

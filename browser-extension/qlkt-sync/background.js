@@ -127,19 +127,53 @@ async function readMeterFromPageWorld(tabId, operatingDate, sourcePage) {
         try { collect(typeof globalThis.PF === "function" ? globalThis.PF(name) : null, 4); } catch { /* widget not found */ }
         try { collect(globalThis[name], 4); } catch { /* global not found */ }
       }
-      return { arrays, widgetNames: Object.keys(widgets), hasPrimeFaces: Boolean(globalThis.PrimeFaces) };
+      // Chẩn đoán thêm: ô ngày đang HIỂN THỊ trên trang lúc đọc — để phân biệt
+      // 2 tình huống khác nhau khi dữ liệu vẫn sai ngày: (a) ô ngày đã đúng
+      // nhưng bảng dữ liệu thật sự chưa nạp kịp (chỉ cần chờ thêm), hay (b) ô
+      // ngày chưa từng đổi/đã bị trả lại giá trị cũ (nút cập nhật bấm sai chỗ,
+      // cần dò lại cách bấm nút).
+      const visibleDates = [...document.querySelectorAll("input")]
+        .map(input => String(input.value || input.getAttribute("value") || "").trim())
+        .filter(value => /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value));
+      return { arrays, widgetNames: Object.keys(widgets), hasPrimeFaces: Boolean(globalThis.PrimeFaces), visibleDates: [...new Set(visibleDates)] };
     },
   });
   const snapshot = executions?.[0]?.result;
+  const dateInfo = `Ô ngày trên trang: ${(snapshot?.visibleDates || []).join(", ") || "không thấy"}.`;
   if (!snapshot?.arrays?.length) {
-    return { ok: false, error: `Không đọc được mảng dữ liệu từ widget QLKT. (PrimeFaces: ${snapshot?.hasPrimeFaces ? "có" : "không"}; widgets: ${(snapshot?.widgetNames || []).join(", ") || "không có"}.)` };
+    return { ok: false, error: `Không đọc được mảng dữ liệu từ widget QLKT. (PrimeFaces: ${snapshot?.hasPrimeFaces ? "có" : "không"}; widgets: ${(snapshot?.widgetNames || []).join(", ") || "không có"}. ${dateInfo})` };
   }
   try {
     const payload = globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays(snapshot.arrays, operatingDate, sourcePage);
     return { ok: true, payload };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Không đọc được dữ liệu widget công tơ QLKT." };
+    const message = error instanceof Error ? error.message : "Không đọc được dữ liệu widget công tơ QLKT.";
+    return { ok: false, error: `${message} (${dateInfo})` };
   }
+}
+
+// Sau khi bấm nút "làm mới" để đổi ngày, QLKT nạp lại dữ liệu ExtSheet bằng
+// AJAX ở phía máy chủ — có thể mất vài giây, và trong lúc đó widget vẫn còn
+// giữ nguyên dữ liệu CỦA NGÀY CŨ trong bộ nhớ (nên đọc thử sẽ ra đúng cấu
+// trúc nhưng sai ngày). Đọc 1 lần rồi bỏ cuộc ngay khi thấy sai ngày là
+// nguyên nhân khiến việc đồng bộ báo lỗi dù chỉ cần chờ thêm; vì vậy phải
+// thử lại nhiều lần giống hệt cách readValuesWithRetry() làm cho các màn
+// hình khác, cho tới khi widget thực sự nạp xong đúng ngày đã chọn.
+// Giới hạn theo THỜI GIAN THỰC (deadline) thay vì đếm số lần thử: mỗi lần đọc
+// tự nó cũng tốn thời gian (executeScript + JSON.stringify để dò trùng lặp
+// trên bảng có thể khá lớn), nên đếm số lần thử cố định có thể khiến tổng
+// thời gian vượt quá dự tính nếu máy chủ QLKT chậm bất thường — trong khi web
+// Chỉ tiêu KTKT chỉ chờ tối đa một khoảng thời gian cố định trước khi tự báo
+// "QLKT phản hồi quá lâu" (xem components/ppa-heat-rate-comparison.tsx).
+async function readMeterFromPageWorldWithRetry(tabId, operatingDate, sourcePage, timeoutMs = 35000, intervalMs = 1000) {
+  const deadline = Date.now() + timeoutMs;
+  let result;
+  do {
+    result = await readMeterFromPageWorld(tabId, operatingDate, sourcePage);
+    if (result?.ok) return result;
+    await wait(intervalMs);
+  } while (Date.now() < deadline);
+  return result;
 }
 
 async function readSource(source, url, operatingDate) {
@@ -192,11 +226,17 @@ async function readSource(source, url, operatingDate) {
     await wait(isMeter ? (prepared.refreshed ? 4000 : 1500) : (prepared.refreshed ? 2500 : 400));
     let result;
     if (isMeter) {
-      result = await readMeterFromPageWorld(tabId, operatingDate, current.url || url);
+      result = await readMeterFromPageWorldWithRetry(tabId, operatingDate, current.url || url);
       if (!result?.ok) {
         const pageWorldError = result?.error || "Không đọc được widget QLKT.";
-        result = await readValuesWithRetry(tabId, 40, 700);
-        if (!result?.ok) result = { ...result, error: `${result?.error || "Không đọc được màn hình Công tơ PPA."} [Đọc trực tiếp widget: ${pageWorldError}]` };
+        // Cách đọc dự phòng (dò thẻ <script> tĩnh) hầu như không còn tác dụng
+        // trên QLKT hiện tại (dữ liệu ExtSheet luôn nạp bằng AJAX, không nhúng
+        // sẵn trong HTML) nên chỉ thử vài lần cho chắc thay vì chờ lâu vô ích.
+        result = await readValuesWithRetry(tabId, 5, 500);
+        if (!result?.ok) {
+          const prepInfo = `Đã bấm nút cập nhật ngày: ${prepared.refreshed ? `có (${prepared.controlInfo || "?"})` : "không (ngày đã đúng sẵn khi kiểm tra)"}.`;
+          result = { ...result, error: `${result?.error || "Không đọc được màn hình Công tơ PPA."} [Đọc trực tiếp widget: ${pageWorldError}] [${prepInfo}]` };
+        }
       }
     } else result = await readValuesWithRetry(tabId);
     if (!result?.ok) throw new Error(result?.error || `Không đọc được màn hình ${SOURCE_LABELS[source]}.`);
