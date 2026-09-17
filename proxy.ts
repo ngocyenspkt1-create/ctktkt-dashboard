@@ -30,5 +30,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon\\.svg|favicon\\.ico).*)"],
+  // Bỏ qua: asset build của Next.js, favicon, và bản tải tiện ích QLKT sync —
+  // file .zip/thư mục này cần công khai để chia sẻ cho người CHƯA có tài
+  // khoản web (họ cần cài tiện ích trước khi có gì để đăng nhập vào).
+  matcher: ["/((?!_next/static|_next/image|favicon\\.svg|favicon\\.ico|qlkt-sync-extension).*)"],
 };
