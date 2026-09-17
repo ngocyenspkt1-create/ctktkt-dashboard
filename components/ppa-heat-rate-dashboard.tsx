@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DateField } from "@/components/ui/date-field";
+import { GoogleSheetSyncButton } from "@/components/google-sheet-sync-button";
 import { CAPACITY_KW, calculateActualHeatRate, calculatePpaHeatRateDetailed, compareHeatRate, ppaCurveForYear, type PpaSourceData, type UnitDetail } from "@/lib/ppa-heat-rate";
 import { loadSheetJs, type SheetJsLib } from "@/lib/sheetjs-loader";
 
@@ -215,6 +216,7 @@ export function PpaHeatRateDashboard() {
   const [restoredCount, setRestoredCount] = useState<number | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [sheetDate, setSheetDate] = useState(today);
 
   async function loadRange(from: string, to: string, clampToData: boolean) {
     setLoading(true); setError("");
@@ -233,6 +235,10 @@ export function PpaHeatRateDashboard() {
       }
       const filteredPpa = allPpa.filter(entry => entry.operatingDate >= from && entry.operatingDate <= to);
       setEntries(filteredPpa);
+      if (filteredPpa.length) {
+        const latestSavedDate = [...filteredPpa].sort((a, b) => b.operatingDate.localeCompare(a.operatingDate))[0].operatingDate;
+        setSheetDate(current => filteredPpa.some(entry => entry.operatingDate === current) ? current : latestSavedDate);
+      }
       setDailyInputs(allDaily.filter(entry => entry.operatingDate >= from && entry.operatingDate <= to));
       setRestoredCount(filteredPpa.length);
     } catch (caught) {
@@ -317,6 +323,7 @@ export function PpaHeatRateDashboard() {
   });
 
   const noteworthy = useMemo(() => rows.filter(row => compareHeatRate(row.actualPlant, row.ppaPlant).status === "Vượt PPA"), [rows]);
+  const hasSavedPpaForSheet = entries.some(entry => entry.operatingDate === sheetDate);
 
   async function exportXlsx() {
     setExporting(true); setError("");
@@ -377,7 +384,11 @@ export function PpaHeatRateDashboard() {
         <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">So sánh trực quan SHN Thực tế và PPA</h1>
         <p className="mt-1 text-sm text-slate-500">Tổng hợp từ kết quả đã lưu theo ngày. Chọn khoảng thời gian để xem biểu đồ và bảng chi tiết.</p>
       </div>
-      <button type="button" disabled={exporting || !rows.length} onClick={() => void exportXlsx()} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">{exporting ? "Đang xuất…" : "Xuất kết quả (.xlsx)"}</button>
+      <div className="flex flex-wrap items-end justify-end gap-2">
+        <label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐẨY GOOGLE SHEET<DateField value={sheetDate} onChange={setSheetDate} className="w-[180px]"/></label>
+        <GoogleSheetSyncButton operatingDate={sheetDate} disabled={!hasSavedPpaForSheet} disabledReason="Ngày này chưa có kết quả PPA đã lưu."/>
+        <button type="button" disabled={exporting || !rows.length} onClick={() => void exportXlsx()} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">{exporting ? "Đang xuất…" : "Xuất kết quả (.xlsx)"}</button>
+      </div>
     </div>
 
     <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">

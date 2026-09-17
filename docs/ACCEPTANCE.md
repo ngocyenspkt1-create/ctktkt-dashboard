@@ -332,3 +332,11 @@ Phần này tóm tắt lại toàn bộ trạng thái hiện tại của trang "
 
 - Làm nổi bật ô chọn ngày bằng khung xanh và đổi nhãn thành **“NGÀY CẦN ĐỒNG BỘ / ĐẨY SHEET”**.
 - Nút Google Sheet hiển thị luôn ngày sẽ ghi, ví dụ **“Đẩy Google Sheet · 13/09/2026”**, để tránh chọn nhầm ngày.
+
+## Điều chỉnh vị trí đồng bộ Google Sheet 17/09/2026
+
+- Đã bỏ nút Google Sheet khỏi trang **Dữ liệu các tháng**; ô ngày tại đây chỉ còn phục vụ **Đồng bộ QLKT**.
+- Đã chuyển ô **Ngày đẩy Google Sheet**, nút đẩy và nút thiết lập sang tab **So sánh trực quan SHN Thực tế và PPA**. Khi mở trang, hệ thống tự chọn ngày có kết quả PPA đã lưu gần nhất trong khoảng đang xem.
+- Nút đẩy bị khóa nếu ngày chọn chưa có kết quả PPA đã lưu; người dùng phải nhập/đồng bộ dữ liệu ngày và lưu kết quả PPA trước.
+- Đã đạt `node --test tests/*.mjs` (27/27), `npx tsc --noEmit` và `npm run build`.
+- Còn thiếu: lượt kiểm tra trực quan cuối bị người dùng dừng giữa chừng; chưa thực hiện ghi thật lên Google Sheet để tránh thay đổi báo cáo khi chưa có xác nhận.
