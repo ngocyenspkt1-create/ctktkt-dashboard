@@ -57,6 +57,21 @@ const fullDate = (iso: string) => iso.split("-").reverse().join("/");
 const localToday = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const monthLabel = (period: string) => `Tháng ${period.slice(5, 7)}/${period.slice(0, 4)}`;
 
+function ExpandableNote({ note }: { note: string }) {
+  if (!note.trim()) return <span className="text-slate-400">—</span>;
+
+  return <details className="group">
+    <summary
+      className="cursor-pointer list-none rounded-md px-1 py-0.5 outline-none transition hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#4c78a8] [&::-webkit-details-marker]:hidden"
+      title="Bấm để xem đầy đủ nội dung"
+    >
+      <span className="block max-h-8 overflow-hidden whitespace-pre-wrap break-words leading-4 group-open:max-h-none">{note}</span>
+      <span className="mt-1 block text-[9px] font-bold text-[#4c78a8] group-open:hidden">Bấm để xem đầy đủ</span>
+      <span className="mt-1 hidden text-[9px] font-bold text-[#4c78a8] group-open:block">Bấm để thu gọn</span>
+    </summary>
+  </details>;
+}
+
 function addDaysIso(iso: string, days: number) {
   const date = new Date(`${iso}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -464,13 +479,13 @@ export function PpaHeatRateDashboard() {
 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2></div>
-      {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="overflow-x-auto">
-        <table className="w-full min-w-[1480px] table-fixed text-[11px]">
+      {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="w-full overflow-hidden">
+        <table className="w-full table-fixed text-[10px] xl:text-[11px]">
           <colgroup>
-            <col style={{ width: 76 }}/>
-            {Array.from({ length: 15 }, (_, index) => <col key={index} style={{ width: index % 5 === 4 ? 44 : 54 }}/>) }
-            <col style={{ width: 280 }}/>
-            <col style={{ width: 280 }}/>
+            <col style={{ width: "7%" }}/>
+            {Array.from({ length: 15 }, (_, index) => <col key={index} style={{ width: [4.2, 4, 4.8, 3.8, 3.2][index % 5] + "%" }}/>) }
+            <col style={{ width: "16.5%" }}/>
+            <col style={{ width: "16.5%" }}/>
           </colgroup>
           <thead>
             <tr className="bg-[#dcebf5] text-[#173b64]">
@@ -478,8 +493,8 @@ export function PpaHeatRateDashboard() {
               <th colSpan={5} className="border-l border-white/60 p-2 text-center text-purple-900">Chung 2 tổ</th>
               <th colSpan={5} className="border-l border-white/60 p-2 text-center text-blue-900">Tổ máy S1</th>
               <th colSpan={5} className="border-l border-white/60 p-2 text-center text-amber-900">Tổ máy S2</th>
-              <th rowSpan={2} className="border-l border-white/60 bg-blue-100 p-2 text-left align-bottom text-blue-950">Nhận xét S1</th>
-              <th rowSpan={2} className="border-l border-white/60 bg-amber-100 p-2 text-left align-bottom text-amber-950">Nhận xét S2</th>
+              <th rowSpan={2} className="border-l border-white/60 bg-blue-100 px-1 py-2 text-left align-bottom text-blue-950">Nhận xét S1</th>
+              <th rowSpan={2} className="border-l border-white/60 bg-amber-100 px-1 py-2 text-left align-bottom text-amber-950">Nhận xét S2</th>
             </tr>
             <tr className="bg-[#eaf3fa] text-[#173b64]">
               {["Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT"].map((label, index) => <th key={index} className="border-l border-white/60 px-0.5 py-1.5 text-center font-semibold leading-tight">{label}</th>)}
@@ -492,12 +507,12 @@ export function PpaHeatRateDashboard() {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
                 const statusBadge = (status: string) => <span className={`rounded-full px-1 py-0.5 text-[9px] font-extrabold ${status === "Đạt" ? "bg-emerald-100 text-emerald-800" : status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-500"}`}>{status === "Chưa đủ dữ liệu" ? "—" : status === "Vượt PPA" ? "Vượt" : "Đạt"}</span>;
                 return <tr key={row.date} className="border-t">
-                  <td className="whitespace-nowrap px-1 py-2 text-center font-bold text-black">{fullDate(row.date)}</td>
+                  <td className="px-0.5 py-2 text-center font-bold text-black"><span className="hidden xl:inline">{fullDate(row.date)}</span><span className="xl:hidden">{shortDate(row.date)}</span></td>
                   <td className="border-l px-0.5 py-1.5 text-center text-black">{format(row.actualPlant)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(row.ppaPlant)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(plant.difference)}</td><td className="px-0.5 py-1.5 text-center text-black">{formatPercent(plant.percent)}</td><td className="px-0.5 py-1.5 text-center">{statusBadge(plant.status)}</td>
                   <td className="border-l px-0.5 py-1.5 text-center text-black">{format(row.actualS1)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(row.ppaS1)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(s1.difference)}</td><td className="px-0.5 py-1.5 text-center text-black">{formatPercent(s1.percent)}</td><td className="px-0.5 py-1.5 text-center">{statusBadge(s1.status)}</td>
                   <td className="border-l px-0.5 py-1.5 text-center text-black">{format(row.actualS2)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(row.ppaS2)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(s2.difference)}</td><td className="px-0.5 py-1.5 text-center text-black">{formatPercent(s2.percent)}</td><td className="px-0.5 py-1.5 text-center">{statusBadge(s2.status)}</td>
-                  <td className="whitespace-pre-wrap break-words border-l bg-blue-50/40 p-2 align-top leading-5 text-slate-700">{row.noteS1 || "—"}</td>
-                  <td className="whitespace-pre-wrap break-words border-l bg-amber-50/40 p-2 align-top leading-5 text-slate-700">{row.noteS2 || "—"}</td>
+                  <td className="border-l bg-blue-50/40 p-1 align-top text-slate-700"><ExpandableNote note={row.noteS1 || ""}/></td>
+                  <td className="border-l bg-amber-50/40 p-1 align-top text-slate-700"><ExpandableNote note={row.noteS2 || ""}/></td>
                 </tr>;
               })}
             </Fragment>)}

@@ -576,3 +576,23 @@ Người dùng làm rõ thêm 4 điểm sau khi thấy bản đầu; đã sửa 
 ## Bước kiểm tra thật còn lại
 
 - Reload tiện ích, F5 cả trang QLKT và website Vercel, rồi đồng bộ lại. Nếu còn lỗi, gửi nguyên thông báo có tiền tố `Bộ đọc v0.4.16`.
+
+---
+# Bổ sung 17/09/2026 — Thu gọn bảng chi tiết PPA theo chiều rộng trang
+
+## Đã làm
+
+- Bỏ chiều rộng tối thiểu 1.480 px của bảng `Bảng chi tiết theo ngày`; phân bổ lại 18 cột theo tỷ lệ phần trăm để bảng vừa chiều rộng khung trang và không cần thanh cuộn ngang.
+- Thu gọn cỡ chữ/khoảng đệm; ở màn hình hẹp, ngày hiển thị dạng `dd/MM`, còn màn hình lớn vẫn hiển thị đủ `dd/MM/yyyy`.
+- Hai cột `Nhận xét S1` và `Nhận xét S2` mặc định chỉ hiện tối đa hai dòng. Bấm vào từng ô để mở toàn bộ nội dung, bấm lại để thu gọn.
+
+## Kiểm tra đã thực hiện
+
+- ESLint riêng `components/ppa-heat-rate-dashboard.tsx`: đạt.
+- `npx.cmd tsc --noEmit`: đạt.
+- `node --test tests/*.mjs`: đạt 30/30.
+- `npm.cmd run build`: đạt.
+
+## Còn thiếu
+
+- Chưa kiểm tra trực quan trong trình duyệt thật ở lượt này vì phiên làm việc không được kết nối Edge/Chrome; cần kiểm tra lại sau khi triển khai hoặc chạy localhost.
