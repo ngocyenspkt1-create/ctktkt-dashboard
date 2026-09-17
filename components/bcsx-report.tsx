@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
 import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
+import { useSessionUser } from "@/components/session-context";
 
 function todayIso() {
   const now = new Date();
@@ -37,6 +38,7 @@ function blankTotals(): TotalsDraft {
 }
 
 export function BcsxReport() {
+  const isViewer = useSessionUser().role === "viewer";
   const [operatingDate, setOperatingDate] = useState(todayIso());
   const [unit, setUnit] = useState<Unit>("S1");
   const [grids, setGrids] = useState<Record<Unit, ReadingsGrid>>({ S1: emptyGrid(), S2: emptyGrid() });
@@ -211,7 +213,7 @@ export function BcsxReport() {
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-extrabold text-[#173b64]">1. Bảng thông số nửa giờ — tổ máy {unit} ({filledCount}/{SHIFT_TIME_SLOTS.length} điểm đã nhập)</h2>
-        <button type="button" disabled={saving} onClick={() => void saveReadings()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu bảng thông số"}</button>
+        <button type="button" disabled={saving || isViewer} title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} onClick={() => void saveReadings()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu bảng thông số"}</button>
       </div>
       <div className="mt-3 max-h-[420px] overflow-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[560px] text-sm">
@@ -236,7 +238,7 @@ export function BcsxReport() {
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-extrabold text-[#173b64]">2. Số liệu tổng ngày — tổ máy {unit}</h2>
-        <button type="button" disabled={saving} onClick={() => void saveTotals()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu số liệu tổng ngày"}</button>
+        <button type="button" disabled={saving || isViewer} title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} onClick={() => void saveTotals()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu số liệu tổng ngày"}</button>
       </div>
       <p className="mt-1 text-sm text-slate-500">Các ô này dùng chung với đồng bộ QLKT ở trang <Link href="/" className="font-semibold text-[#334785] underline">Dữ liệu các tháng</Link> — đồng bộ bên đó hoặc nhập tay ở đây đều được, số sẽ khớp nhau. Đang chờ người dùng chỉ vị trí chính xác trên QLKT để nối đồng bộ trực tiếp ngay tại trang này.</p>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -266,7 +268,7 @@ export function BcsxReport() {
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex justify-end"><button type="button" disabled={saving} onClick={() => void saveEvents()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu nhật ký sự kiện"}</button></div>
+      <div className="mt-3 flex justify-end"><button type="button" disabled={saving || isViewer} title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} onClick={() => void saveEvents()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu nhật ký sự kiện"}</button></div>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

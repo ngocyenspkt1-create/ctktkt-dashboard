@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { parseGoogleSheetAssessmentRows, resolveGoogleSheetRow, validateGoogleAppsScriptUrl, type GoogleSheetAssessmentEntry, type GoogleSheetDayPayload } from "@/lib/google-sheet-sync";
+import { useSessionUser } from "@/components/session-context";
 
 const URL_KEY = "ctktkt-google-script-url";
 const TOKEN_KEY = "ctktkt-google-script-token";
@@ -11,7 +12,10 @@ const format = (value: number | null | undefined) => value === null || value ===
 
 type PreviewResponse = { preview?: GoogleSheetDayPayload; error?: string };
 
-export function GoogleSheetSyncButton({ operatingDate, disabled = false, disabledReason = "", onImported }: { operatingDate: string; disabled?: boolean; disabledReason?: string; onImported?: () => void | Promise<void> }) {
+export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = false, disabledReason: disabledReasonProp = "", onImported }: { operatingDate: string; disabled?: boolean; disabledReason?: string; onImported?: () => void | Promise<void> }) {
+  const isViewer = useSessionUser().role === "viewer";
+  const disabled = disabledProp || isViewer;
+  const disabledReason = isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : disabledReasonProp;
   const [scriptUrl, setScriptUrl] = useState(() => typeof window === "undefined" ? "" : window.localStorage.getItem(URL_KEY) || "");
   const [token, setToken] = useState(() => typeof window === "undefined" ? "" : window.localStorage.getItem(TOKEN_KEY) || "");
   const [settingsOpen, setSettingsOpen] = useState(false), [preview, setPreview] = useState<GoogleSheetDayPayload | null>(null);
@@ -143,7 +147,7 @@ export function GoogleSheetSyncButton({ operatingDate, disabled = false, disable
     <div className="flex flex-col items-end gap-1">
       <div className="flex gap-1">
         <button type="button" disabled={loading || disabled} onClick={start} title={disabled ? disabledReason : `Đẩy dữ liệu ngày ${displayDate} lên Google Sheet`} className="h-10 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80">{loading ? "Đang kiểm tra…" : `Đẩy Google Sheet · ${displayDate}`}</button>
-        <button type="button" disabled={loading} onClick={startHistoricalImport} title="Nhập một lần các đánh giá S1/S2 cũ từ Google Sheet về web" className="h-10 whitespace-nowrap rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-bold text-amber-800 shadow-sm disabled:opacity-60">Nhập đánh giá cũ</button>
+        <button type="button" disabled={loading || disabled} onClick={startHistoricalImport} title={disabled ? disabledReason : "Nhập một lần các đánh giá S1/S2 cũ từ Google Sheet về web"} className="h-10 whitespace-nowrap rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-bold text-amber-800 shadow-sm disabled:opacity-60">Nhập đánh giá cũ</button>
         <button type="button" onClick={() => { setError(""); setSettingsOpen(true); }} aria-label="Cài đặt đồng bộ Google Sheet" title="Cài đặt Google Sheet" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">⚙</button>
       </div>
       {disabled && disabledReason && <p className="max-w-sm text-right text-[11px] font-semibold text-amber-700">{disabledReason}</p>}

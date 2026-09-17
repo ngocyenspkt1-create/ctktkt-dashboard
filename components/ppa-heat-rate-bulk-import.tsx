@@ -3,10 +3,12 @@
 import { useRef, useState } from "react";
 import { calculatePpaHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource } from "@/lib/ppa-heat-rate";
 import { loadSheetJs } from "@/lib/sheetjs-loader";
+import { useSessionUser } from "@/components/session-context";
 
 type RowResult = { sheet: string; status: "saved" | "skipped" | "error"; detail: string; operatingDate?: string };
 
 export function PpaHeatRateBulkImport() {
+  const isViewer = useSessionUser().role === "viewer";
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState<RowResult[]>([]);
   const [error, setError] = useState("");
@@ -73,9 +75,9 @@ export function PpaHeatRateBulkImport() {
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-3">
-        <label className="cursor-pointer rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 py-2.5 text-sm font-bold text-white shadow-sm">
+        <label title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} className={`rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 py-2.5 text-sm font-bold text-white shadow-sm ${isViewer ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
           {importing ? "Đang nhập…" : "Chọn file Excel (.xlsx/.xlsm)"}
-          <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" disabled={importing} className="sr-only" onChange={event => { const file = event.target.files?.[0]; if (file) void importFile(file); }}/>
+          <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" disabled={importing || isViewer} className="sr-only" onChange={event => { const file = event.target.files?.[0]; if (file) void importFile(file); }}/>
         </label>
         <p className="text-xs text-slate-500">Có thể chọn lại nhiều lần; các ngày đã lưu trước đó sẽ được ghi đè bằng số liệu mới nhất trong file.</p>
       </div>
