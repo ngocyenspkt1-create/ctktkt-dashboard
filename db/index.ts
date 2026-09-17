@@ -1,4 +1,4 @@
-import { createClient, type Client, type InValue, type Row } from "@libsql/client";
+import { createClient, type Client, type InValue, type Row } from "@libsql/client/http";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 
@@ -7,7 +7,12 @@ let client: Client | null = null;
 // Vercel không có Cloudflare D1 — dùng Turso (libSQL) làm database thay thế.
 // Turso cũng là SQLite (giống hệt D1 về cú pháp SQL) nên toàn bộ schema và
 // câu lệnh SQL thô trong app/api/**/route.ts giữ nguyên không đổi, chỉ cần
-// đổi phần kết nối này.
+// đổi phần kết nối này. Dùng thẳng "@libsql/client/http" (giao thức Hrana qua
+// HTTPS thuần, không cần WebSocket) thay vì gói gốc "@libsql/client" — gói
+// gốc tự chọn giữa vài bản build (Node/WebSocket, web, workerd...) tuỳ
+// "exports condition" lúc bundler đóng gói route, còn bản "/http" chỉ có
+// đúng một cách build nên chạy giống hệt nhau ở mọi môi trường, không phụ
+// thuộc suy đoán điều kiện của bundler.
 function getClient(): Client {
   if (client) return client;
   const url = process.env.TURSO_DATABASE_URL;
