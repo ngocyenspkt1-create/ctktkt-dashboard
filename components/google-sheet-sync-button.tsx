@@ -84,8 +84,16 @@ export function GoogleSheetSyncButton({ operatingDate, disabled = false, disable
 
   function saveSettings() {
     if (!scriptUrl.trim() || !token) { setError("Hãy nhập đủ URL Apps Script và mã kết nối."); return; }
-    window.localStorage.setItem(URL_KEY, scriptUrl.trim());
+    let validatedUrl: string;
+    try {
+      validatedUrl = validateGoogleAppsScriptUrl(scriptUrl.trim());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "URL Apps Script không hợp lệ.");
+      return;
+    }
+    window.localStorage.setItem(URL_KEY, validatedUrl);
     window.localStorage.setItem(TOKEN_KEY, token);
+    setScriptUrl(validatedUrl);
     setSettingsOpen(false);
     if (pendingAction === "import") void loadHistoricalAssessments();
     else void loadPreview();
@@ -147,9 +155,18 @@ export function GoogleSheetSyncButton({ operatingDate, disabled = false, disable
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/>
       <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none">
         <div><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Thiết lập Google Sheet</DialogPrimitive.Title><DialogPrimitive.Description className="mt-1 text-sm leading-6 text-slate-600">Chỉ thiết lập một lần trên máy này. URL và mã kết nối được giữ trong trình duyệt, không ghi vào GitHub.</DialogPrimitive.Description></div>
-        <label className="grid gap-1 text-sm font-bold text-slate-700">Apps Script URL<input value={scriptUrl} onChange={event => setScriptUrl(event.target.value)} placeholder="https://script.google.com/macros/s/.../exec" className="rounded-xl border border-slate-300 px-3 py-2 font-normal text-black"/></label>
-        <label className="grid gap-1 text-sm font-bold text-slate-700">Mã kết nối<input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="off" className="rounded-xl border border-slate-300 px-3 py-2 font-normal text-black"/></label>
-        <p className="text-xs leading-5 text-slate-500">Lấy đúng URL và mã đang dùng trong công cụ “Đồng bộ DH1 lên Google Sheet”. Không gửi mật khẩu Google vào đây.</p>
+        <label className="grid gap-1 text-sm font-bold text-slate-700">
+          Apps Script URL (phải kết thúc bằng /exec)
+          <input value={scriptUrl} onChange={event => setScriptUrl(event.target.value)} placeholder="https://script.google.com/macros/s/.../exec" className="rounded-xl border border-slate-300 px-3 py-2 font-normal text-black"/>
+          <span className="font-normal text-red-700">Không dán link docs.google.com/spreadsheets/... vào ô này.</span>
+        </label>
+        <label className="grid gap-1 text-sm font-bold text-slate-700">
+          Mã kết nối
+          <input type="password" value={token} onChange={event => setToken(event.target.value)} autoComplete="off" className="rounded-xl border border-slate-300 px-3 py-2 font-normal text-black"/>
+          <span className="font-normal text-slate-500">Đây là Token trong công cụ “Đồng bộ DH1”, không phải mật khẩu Google.</span>
+        </label>
+        {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold leading-5 text-red-700">{error}</p>}
+        <p className="text-xs leading-5 text-slate-500">Hai giá trị chỉ được lưu trong trình duyệt của máy này và không ghi vào GitHub.</p>
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setSettingsOpen(false)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" onClick={saveSettings} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white">Lưu và kiểm tra</button></div>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal></DialogPrimitive.Root>

@@ -465,32 +465,39 @@ export function PpaHeatRateDashboard() {
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2></div>
       {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="overflow-x-auto">
-        <table className="w-full min-w-[1180px] text-xs">
+        <table className="w-full min-w-[1480px] table-fixed text-[11px]">
+          <colgroup>
+            <col style={{ width: 76 }}/>
+            {Array.from({ length: 15 }, (_, index) => <col key={index} style={{ width: index % 5 === 4 ? 44 : 54 }}/>) }
+            <col style={{ width: 280 }}/>
+            <col style={{ width: 280 }}/>
+          </colgroup>
           <thead>
             <tr className="bg-[#dcebf5] text-[#173b64]">
-              <th rowSpan={2} className="p-2 text-left align-bottom">Ngày</th>
+              <th rowSpan={2} className="px-1 py-2 text-center align-bottom">Ngày</th>
               <th colSpan={5} className="border-l border-white/60 p-2 text-center text-purple-900">Chung 2 tổ</th>
               <th colSpan={5} className="border-l border-white/60 p-2 text-center text-blue-900">Tổ máy S1</th>
               <th colSpan={5} className="border-l border-white/60 p-2 text-center text-amber-900">Tổ máy S2</th>
-              <th rowSpan={2} className="p-2 text-left align-bottom">Nhận xét</th>
+              <th rowSpan={2} className="border-l border-white/60 bg-blue-100 p-2 text-left align-bottom text-blue-950">Nhận xét S1</th>
+              <th rowSpan={2} className="border-l border-white/60 bg-amber-100 p-2 text-left align-bottom text-amber-950">Nhận xét S2</th>
             </tr>
             <tr className="bg-[#eaf3fa] text-[#173b64]">
-              {["Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT"].map((label, index) => <th key={index} className="border-l border-white/60 p-1.5 text-center font-semibold">{label}</th>)}
+              {["Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT"].map((label, index) => <th key={index} className="border-l border-white/60 px-0.5 py-1.5 text-center font-semibold leading-tight">{label}</th>)}
             </tr>
           </thead>
           <tbody>
             {rowsByMonth.map(([period, monthRows]) => <Fragment key={period}>
-              <tr className="bg-slate-100"><td colSpan={17} className="px-2 py-1.5 text-left text-[11px] font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
+              <tr className="bg-slate-100"><td colSpan={18} className="px-2 py-1.5 text-left text-[11px] font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
               {monthRows.map(row => {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
-                const statusBadge = (status: string) => <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${status === "Đạt" ? "bg-emerald-100 text-emerald-800" : status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-500"}`}>{status === "Chưa đủ dữ liệu" ? "—" : status === "Vượt PPA" ? "Vượt" : "Đạt"}</span>;
-                const notes = [row.noteS1 && `S1: ${row.noteS1}`, row.noteS2 && `S2: ${row.noteS2}`].filter(Boolean).join(" · ");
+                const statusBadge = (status: string) => <span className={`rounded-full px-1 py-0.5 text-[9px] font-extrabold ${status === "Đạt" ? "bg-emerald-100 text-emerald-800" : status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-500"}`}>{status === "Chưa đủ dữ liệu" ? "—" : status === "Vượt PPA" ? "Vượt" : "Đạt"}</span>;
                 return <tr key={row.date} className="border-t">
-                  <td className="p-2 font-bold text-black">{fullDate(row.date)}</td>
-                  <td className="border-l p-1.5 text-center text-black">{format(row.actualPlant)}</td><td className="p-1.5 text-center text-black">{format(row.ppaPlant)}</td><td className="p-1.5 text-center text-black">{format(plant.difference)}</td><td className="p-1.5 text-center text-black">{formatPercent(plant.percent)}</td><td className="p-1.5 text-center">{statusBadge(plant.status)}</td>
-                  <td className="border-l p-1.5 text-center text-black">{format(row.actualS1)}</td><td className="p-1.5 text-center text-black">{format(row.ppaS1)}</td><td className="p-1.5 text-center text-black">{format(s1.difference)}</td><td className="p-1.5 text-center text-black">{formatPercent(s1.percent)}</td><td className="p-1.5 text-center">{statusBadge(s1.status)}</td>
-                  <td className="border-l p-1.5 text-center text-black">{format(row.actualS2)}</td><td className="p-1.5 text-center text-black">{format(row.ppaS2)}</td><td className="p-1.5 text-center text-black">{format(s2.difference)}</td><td className="p-1.5 text-center text-black">{formatPercent(s2.percent)}</td><td className="p-1.5 text-center">{statusBadge(s2.status)}</td>
-                  <td className="max-w-[220px] p-2 text-[11px] text-slate-600">{notes || "—"}</td>
+                  <td className="whitespace-nowrap px-1 py-2 text-center font-bold text-black">{fullDate(row.date)}</td>
+                  <td className="border-l px-0.5 py-1.5 text-center text-black">{format(row.actualPlant)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(row.ppaPlant)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(plant.difference)}</td><td className="px-0.5 py-1.5 text-center text-black">{formatPercent(plant.percent)}</td><td className="px-0.5 py-1.5 text-center">{statusBadge(plant.status)}</td>
+                  <td className="border-l px-0.5 py-1.5 text-center text-black">{format(row.actualS1)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(row.ppaS1)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(s1.difference)}</td><td className="px-0.5 py-1.5 text-center text-black">{formatPercent(s1.percent)}</td><td className="px-0.5 py-1.5 text-center">{statusBadge(s1.status)}</td>
+                  <td className="border-l px-0.5 py-1.5 text-center text-black">{format(row.actualS2)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(row.ppaS2)}</td><td className="px-0.5 py-1.5 text-center text-black">{format(s2.difference)}</td><td className="px-0.5 py-1.5 text-center text-black">{formatPercent(s2.percent)}</td><td className="px-0.5 py-1.5 text-center">{statusBadge(s2.status)}</td>
+                  <td className="whitespace-pre-wrap break-words border-l bg-blue-50/40 p-2 align-top leading-5 text-slate-700">{row.noteS1 || "—"}</td>
+                  <td className="whitespace-pre-wrap break-words border-l bg-amber-50/40 p-2 align-top leading-5 text-slate-700">{row.noteS2 || "—"}</td>
                 </tr>;
               })}
             </Fragment>)}
