@@ -171,7 +171,19 @@ export function DailyProductionTable() {
   return <section className="space-y-3">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Dữ liệu vận hành hằng ngày</p><h2 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">Chỉ tiêu kinh tế kỹ thuật</h2><p className="mt-1 text-sm text-slate-500">Nhập trực tiếp theo tháng · kết quả được tính tự động</p></div>
-      <div className="flex flex-wrap items-end justify-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">THÁNG<input type="month" value={period} onChange={e=>setPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐỒNG BỘ<DateField value={syncDate} onChange={setSyncDate} className="w-[150px]"/></label><button type="button" disabled={syncingQlkt} onClick={syncFromQlkt} className="h-10 rounded-xl border border-[#b9cae5] bg-[#eef6fc] px-4 text-sm font-bold text-[#274f78] shadow-sm disabled:cursor-wait disabled:opacity-60">{syncingQlkt?"Đang đồng bộ…":"Đồng bộ QLKT"}</button><GoogleSheetSyncButton operatingDate={syncDate}/><button disabled={saving||loading} onClick={save} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 text-sm font-bold text-white shadow-md disabled:opacity-50">{saving?"Đang lưu…":"＋ Lưu thay đổi"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionVersion?"text-emerald-700":"text-amber-700"}`}>{extensionVersion?`Tiện ích v${extensionVersion} đã kết nối`:"Chưa kết nối tiện ích"}</p></div>
+      <div className="flex flex-wrap items-end justify-end gap-2">
+        <label className="grid gap-1 text-xs font-bold text-slate-600">THÁNG<input type="month" value={period} onChange={e=>setPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label>
+        <div className="rounded-xl border-2 border-[#4057b5]/30 bg-[#f4f7ff] p-2 shadow-sm">
+          <label className="grid gap-1 text-xs font-extrabold text-[#263b87]">
+            NGÀY CẦN ĐỒNG BỘ / ĐẨY SHEET
+            <DateField value={syncDate} onChange={setSyncDate} className="w-[180px] border-[#9db0e1]"/>
+          </label>
+        </div>
+        <button type="button" disabled={syncingQlkt} onClick={syncFromQlkt} className="h-10 rounded-xl border border-[#b9cae5] bg-[#eef6fc] px-4 text-sm font-bold text-[#274f78] shadow-sm disabled:cursor-wait disabled:opacity-60">{syncingQlkt?"Đang đồng bộ…":"Đồng bộ QLKT"}</button>
+        <GoogleSheetSyncButton operatingDate={syncDate}/>
+        <button disabled={saving||loading} onClick={save} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 text-sm font-bold text-white shadow-md disabled:opacity-50">{saving?"Đang lưu…":"＋ Lưu thay đổi"}</button>
+        <p className={`w-full text-right text-[11px] font-semibold ${extensionVersion?"text-emerald-700":"text-amber-700"}`}>{extensionVersion?`Tiện ích v${extensionVersion} đã kết nối`:"Chưa kết nối tiện ích"}</p>
+      </div>
     </div>
 
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

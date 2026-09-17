@@ -84,11 +84,12 @@ export function GoogleSheetSyncButton({ operatingDate }: { operatingDate: string
   }
 
   const rows = preview ? [["S1", preview.S1], ["S2", preview.S2], ["NMNĐ", preview.NMND]] as const : [];
+  const displayDate = operatingDate.split("-").reverse().join("/");
 
   return <>
     <div className="flex flex-col items-end gap-1">
       <div className="flex gap-1">
-        <button type="button" disabled={loading} onClick={start} className="h-10 rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-wait disabled:opacity-60">{loading ? "Đang kiểm tra…" : "Đẩy Google Sheet"}</button>
+        <button type="button" disabled={loading} onClick={start} className="h-10 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-wait disabled:opacity-60">{loading ? "Đang kiểm tra…" : `Đẩy Google Sheet · ${displayDate}`}</button>
         <button type="button" onClick={() => { setError(""); setSettingsOpen(true); }} aria-label="Cài đặt đồng bộ Google Sheet" title="Cài đặt Google Sheet" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">⚙</button>
       </div>
       {message && <p role="status" className="max-w-sm text-right text-[11px] font-semibold text-emerald-700">{message}</p>}

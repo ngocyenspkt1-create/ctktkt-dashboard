@@ -327,3 +327,8 @@ Phần này tóm tắt lại toàn bộ trạng thái hiện tại của trang "
 
 - Chưa thực hiện lần ghi thật cuối cùng vì thao tác đó sẽ thay đổi Google Sheet báo cáo. Người dùng cần thiết lập URL/mã kết nối, chọn một ngày, xem trước rồi bấm “Xác nhận đẩy lên Sheet”.
 - Nếu Apps Script báo từ chối, cần kiểm tra lại đúng URL bản triển khai `/exec`, mã kết nối và quyền truy cập của bản triển khai; không cần cung cấp mật khẩu Google cho web.
+
+## Bổ sung giao diện 17/09/2026
+
+- Làm nổi bật ô chọn ngày bằng khung xanh và đổi nhãn thành **“NGÀY CẦN ĐỒNG BỘ / ĐẨY SHEET”**.
+- Nút Google Sheet hiển thị luôn ngày sẽ ghi, ví dụ **“Đẩy Google Sheet · 13/09/2026”**, để tránh chọn nhầm ngày.
