@@ -120,7 +120,12 @@ export function decodeQlktPpaSyncHash(hash: string): QlktPpaSyncPayload | null {
   }
 }
 
-export function roundQlktValue(value: string) {
+export function normalizeQlktValue(value: string) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed.toFixed(2) : "";
+  // Keep the precision reported by QLKT. In particular, daily electricity is
+  // converted from MWh to million kWh before reaching this function, so two
+  // decimal places would discard up to 10,000 kWh and distort heat-rate
+  // calculations. String(Number(...)) only normalizes the numeric text; it
+  // does not intentionally round the source value.
+  return Number.isFinite(parsed) ? String(parsed) : "";
 }

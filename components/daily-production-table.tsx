@@ -6,7 +6,8 @@ import { DateField } from "@/components/ui/date-field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { decodeQlktSyncHash, qlktFieldLabels, roundQlktValue, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
+import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
+import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { useSessionUser } from "@/components/session-context";
 
 type Group = "production" | "environment" | "operation";
@@ -47,23 +48,8 @@ const numericCodes = new Set(Object.values(fields).flat().filter(f => f.input &&
 const currentPeriod = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(new Date());
 const previousOperatingDate = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now()-86400000));
 const numberValue = (value?: string) => { if (!value?.trim()) return null; const n = Number(value.replace(",", ".")); return Number.isFinite(n) ? n : null; };
-const safeDivide = (a: number | null, b: number | null, multiplier = 1) => a === null || b === null || b === 0 ? null : a / b * multiplier;
 const formatResult = (value: number | null) => value === null ? "—" : new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(value);
 const formatInputValue = (value?: string) => { if (!value) return ""; const parsed=numberValue(value); return parsed===null?value:formatResult(parsed); };
-
-function calculate(row: DailyRow) {
-  const n = (code: string) => numberValue(row[code]);
-  const B=n("B"), C=n("C"), F=n("F"), H=n("H"), I=n("I"), L=n("L"), AE=n("AE"), AF=n("AF"), AJ=n("AJ"), BN=n("BN"), BQ=n("BQ"), BR=n("BR");
-  const D = B === null || C === null ? null : (B-C)*1000, J = H === null || I === null ? null : (H-I)*1000;
-  const N = B === null || H === null ? null : (B+H)*1000, O = C === null || I === null ? null : (C+I)*1000;
-  const T = AE === null || AF === null ? null : AE+AF, BS = BQ === null || BR === null ? null : BQ+BR;
-  const shTho = safeDivide(T,N,1000), shTinh = safeDivide(T,O,1000);
-  return { D, E:safeDivide(D,B,0.1), G:safeDivide(B,F,1000), J, K:safeDivide(J,H,0.1), M:safeDivide(H,L,1000), N, O,
-    P:N === null || O === null ? null : N-O, Q:N === null || O === null ? null : safeDivide(N-O,N,100), R:F === null || L === null ? null : F+L, S:N === null || F === null || L === null ? null : safeDivide(N,F+L),
-    T, U:shTho, V:shTho === null || AJ === null ? null : shTho*AJ/1000, W:shTinh === null || AJ === null ? null : shTinh*AJ/1000, Y:safeDivide(AE,B), Z:safeDivide(AF,H), AA:shTinh, AG:safeDivide(AE,C), AH:safeDivide(AF,I), AK:AJ === null ? null : AJ/4.1868,
-    BO:safeDivide(BN,N,1000), BP:safeDivide(BN,O ? O/1000 : O), BS, BT:safeDivide(BQ,B), BU:safeDivide(BQ,C), BV:safeDivide(BR,H), BW:safeDivide(BR,I), BX:safeDivide(BS,B === null || H === null ? null : B+H), BY:safeDivide(BS,C === null || I === null ? null : C+I),
-  } as Record<string, number | null>;
-}
 
 function isWaterAbnormal(rows: DailyRow[], dayIndex: number, code: "CE" | "CF") {
   const current = numberValue(rows[dayIndex]?.[code]), previous = dayIndex > 0 ? numberValue(rows[dayIndex-1]?.[code]) : null;
@@ -126,7 +112,7 @@ export function DailyProductionTable() {
   // đúng nguồn giá trị theo view đang mở (nhập liệu thô hay kết quả tính) nên chart luôn khớp bảng.
   function fieldSeries(field: Field) {
     return Array.from({ length: days }, (_, d) => {
-      const value = field.input ? numberValue(rows[d]?.[field.code]) : (calculate(rows[d] || {})[field.code] ?? null);
+      const value = field.input ? numberValue(rows[d]?.[field.code]) : (calculateDailyProduction(rows[d] || {})[field.code] ?? null);
       return { day: d + 1, value };
     });
   }
@@ -151,7 +137,7 @@ export function DailyProductionTable() {
     const day=Number(pendingSync.operatingDate.slice(8,10))-1;
     if(day<0||day>=days){setError("Ngày từ QLKT không thuộc tháng đang hiển thị.");return;}
     const selected=pendingSync.entries.filter(entry=>selectedSyncCodes.has(entry.fieldCode));
-    setRows(old=>old.map((row,index)=>index===day?{...row,...Object.fromEntries(selected.map(entry=>[entry.fieldCode,roundQlktValue(entry.value)]))}:row));
+    setRows(old=>old.map((row,index)=>index===day?{...row,...Object.fromEntries(selected.map(entry=>[entry.fieldCode,normalizeQlktValue(entry.value)]))}:row));
     selected.forEach(entry=>dirty.current.add(`${day}:${entry.fieldCode}`));
     setPendingSync(null);
     setMessage(`Đã đưa ${selected.length} số liệu QLKT vào ngày ${day+1}. Kiểm tra bảng rồi nhấn “Lưu thay đổi”.`);
@@ -189,7 +175,7 @@ export function DailyProductionTable() {
       <div className="border-b border-slate-100 bg-[#fbfcfd] px-3 py-2"><p className="text-xs text-slate-500">{groups.find(g=>g.key===group)?.description} · Hiển thị đầy đủ {days} ngày trong tháng.</p></div>
       {groups.map(g=><TabsContent key={g.key} value={g.key} className="mt-0">
         {visibleFields.length===0?<div className="grid h-80 place-items-center text-sm text-slate-500">Nhóm này không có cột công thức riêng.</div>:<div>{tableSections.map(section=><div key="main"><Table className="w-full table-fixed text-[11px]"><TableHeader><TableRow className="hover:bg-transparent"><TableHead className="h-16 w-10 border-r bg-[#dcebf5] px-0.5 text-center text-[10px] font-extrabold leading-tight text-[#173b64]">Ngày</TableHead>{section.items.map(f=><TableHead key={f.code} className="h-16 whitespace-normal break-words border-r bg-[#dcebf5] px-0.5 text-center text-[10px] font-extrabold leading-[1.15] text-[#173b64]">{f.code==="CW"?<>{f.label}</>:<button type="button" onClick={()=>setChartField(f)} title={`Xem biểu đồ ${f.label} cả tháng`} className="w-full rounded px-0.5 py-0.5 decoration-dotted underline-offset-2 hover:bg-white/50 hover:underline focus:bg-white/50 focus:underline focus:outline-none">{f.label}{f.unit&&<span className="mt-0.5 block text-[9px] font-semibold text-[#173b64]">{f.unit}</span>}</button>}</TableHead>)}</TableRow></TableHeader>
-          <TableBody>{displayedRows.map((row,d)=>{const result=calculate(row);return <TableRow key={d} className="h-9 hover:bg-[#f5faff]"><TableCell className="border-r bg-white p-0.5 text-center text-[11px] font-normal text-black">{d+1}</TableCell>{section.items.map(f=>{
+          <TableBody>{displayedRows.map((row,d)=>{const result=calculateDailyProduction(row);return <TableRow key={d} className="h-9 hover:bg-[#f5faff]"><TableCell className="border-r bg-white p-0.5 text-center text-[11px] font-normal text-black">{d+1}</TableCell>{section.items.map(f=>{
             const cellKey=`${d}:${f.code}`;
             if(f.input)return <TableCell key={f.code} onClick={()=>selectCell(cellKey)} className={`group relative border-r p-0 ${cellBg(cellKey)}`}>{noteButton(d,f)}<input aria-label={`${f.label}, ngày ${d+1}`} inputMode={f.code==="CW"?"text":"decimal"} value={focusedCell===cellKey?(row[f.code]||""):formatInputValue(row[f.code])} onFocus={()=>setFocusedCell(cellKey)} onBlur={()=>setFocusedCell("")} onChange={e=>update(d,f.code,e.target.value)} className="h-8 w-full bg-transparent px-1 text-center text-[11px] font-normal tabular-nums text-black outline-none focus:ring-2 focus:ring-inset focus:ring-[#4c78a8]"/></TableCell>;
             return <TableCell key={f.code} onClick={()=>selectCell(cellKey)} className={`group relative cursor-pointer border-r px-0.5 text-center text-[11px] font-normal tabular-nums text-black ${cellBg(cellKey)}`}>{noteButton(d,f)}{formatResult(result[f.code]??null)}</TableCell>})}</TableRow>})}</TableBody></Table></div>)}</div>}

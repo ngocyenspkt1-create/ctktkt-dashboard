@@ -48,7 +48,7 @@ const UNIT_META: Record<UnitKey, { label: string; accent: string; border: string
 const BAR_UNDER_PPA = "#4caf7d"; // dưới/đúng PPA — xanh lá
 const BAR_OVER_PPA = "#f2a29b"; // vượt PPA — đỏ nhạt
 
-const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const percentFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const format = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? "—" : numberFormat.format(value);
 const formatPercent = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? "—" : `${percentFormat.format(value)}%`;

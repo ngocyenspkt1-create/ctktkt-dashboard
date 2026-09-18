@@ -35,7 +35,7 @@ export type GoogleSheetAssessmentEntry = {
   noteS2: string;
 };
 
-const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
+const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function numeric(value: unknown) {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;

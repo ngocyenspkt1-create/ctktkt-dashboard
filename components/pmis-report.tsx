@@ -5,7 +5,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { AxisDomainItem } from "recharts/types/util/types";
 import { DateField } from "@/components/ui/date-field";
-import { decodeQlktSyncHash, qlktFieldLabels, roundQlktValue, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
+import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
 import { useSessionUser } from "@/components/session-context";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
@@ -220,7 +220,7 @@ export function PmisReport() {
       if (!payload || !payload.entries.length) { failed.push({ date, error: "Không có chỉ tiêu nào." }); continue; }
       try {
         const period = payload.operatingDate.slice(0, 7);
-        const entries = payload.entries.map(entry => ({ operatingDate: payload.operatingDate, fieldCode: entry.fieldCode, value: roundQlktValue(entry.value), note: "" }));
+        const entries = payload.entries.map(entry => ({ operatingDate: payload.operatingDate, fieldCode: entry.fieldCode, value: normalizeQlktValue(entry.value), note: "" }));
         const response = await fetch("/api/daily-inputs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period, entries }) });
         const body = await response.json() as { error?: string; saved?: number };
         if (!response.ok) throw new Error(body.error || "Chưa lưu được dữ liệu.");
@@ -242,7 +242,7 @@ export function PmisReport() {
     setSavingSync(true); setError("");
     try {
       const period = pendingSync.operatingDate.slice(0, 7);
-      const entries = selected.map(entry => ({ operatingDate: pendingSync.operatingDate, fieldCode: entry.fieldCode, value: roundQlktValue(entry.value), note: "" }));
+      const entries = selected.map(entry => ({ operatingDate: pendingSync.operatingDate, fieldCode: entry.fieldCode, value: normalizeQlktValue(entry.value), note: "" }));
       const response = await fetch("/api/daily-inputs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period, entries }) });
       const body = await response.json() as { error?: string; saved?: number };
       if (!response.ok) throw new Error(body.error || "Chưa lưu được dữ liệu.");

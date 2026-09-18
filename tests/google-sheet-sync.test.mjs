@@ -31,6 +31,21 @@ test("lập đúng dữ liệu Google Sheet cho S1, S2 và toàn nhà máy", () 
   assert.match(payload.S2.chenhLech, /kJ\/kWh/);
 });
 
+test("xuất Google Sheet giữ đủ độ chính xác QLKT ngày 17/09", () => {
+  const preciseEntries = Object.entries({
+    B: "11.05364", C: "10.1665842", F: "24",
+    H: "11.03056", I: "10.1327348", L: "24",
+    AE: "5341.111", AF: "5349.818", AJ: "20021.593",
+  }).map(([fieldCode, value]) => ({ fieldCode, value }));
+  const payload = buildGoogleSheetDayPayload("2026-09-17", preciseEntries, {
+    ppaPlant: 10_500, ppaS1: 10_500, ppaS2: 10_500,
+  });
+  assert.ok(Math.abs(payload.S1.shnThucTe - 10518.53292178734) < 1e-9);
+  assert.ok(Math.abs(payload.S2.shnThucTe - 10570.875556722753) < 1e-9);
+  assert.ok(Math.abs(payload.NMND.shnThucTe - 10544.660598214996) < 1e-9);
+  assert.match(payload.NMND.chenhLech, /\+44,66 kJ\/kWh/);
+});
+
 test("từ chối URL không phải bản triển khai Google Apps Script", () => {
   assert.equal(
     validateGoogleAppsScriptUrl("https://script.google.com/macros/s/example/exec?x=1#part"),

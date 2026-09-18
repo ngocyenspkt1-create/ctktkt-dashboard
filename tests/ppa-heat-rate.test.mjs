@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, parseMeterCsv } from '../lib/ppa-heat-rate.ts';
+import { normalizeQlktValue } from '../lib/qlkt-sync.ts';
+import { calculateDailyProduction } from '../lib/daily-production-calculations.ts';
 
 const source1409 = {
   grossS1: [218280,218120,218240,218200,218240,218280,222360,218240,222560,222560,218480,218400,218520,218480,218520,218280,218360,218560,218320,218440,218440,218400,218400,218480,218360,218680,218360,218280,218400,220320,230520,263400,301920,306840,304440,303560,303560,303440,303560,303560,303440,303560,303440,286880,253360,221160,218200,218240],
@@ -24,6 +26,50 @@ test('actual heat rate matches day 13 in the supplied workbook', () => {
   assert.ok(Math.abs(result.actualPlant - 10614.98434912833) < 0.02);
   assert.ok(Math.abs(result.actualS1 - 10473.544023363267) < 0.02);
   assert.equal(compareHeatRate(result.actualS1, 10524.777350017212).status, 'Đạt');
+});
+
+test('17/09/2026 actual heat rate matches QLKT report 02-PD', () => {
+  const result = calculateActualHeatRate({
+    C: '10.1665842', I: '10.1327348',
+    AE: '5341.111', AF: '5349.818', AJ: '20021.593',
+  });
+  assert.ok(result);
+  assert.ok(Math.abs(result.actualS1 - 10518.53292178734) < 1e-9);
+  assert.ok(Math.abs(result.actualS2 - 10570.875556722753) < 1e-9);
+  assert.ok(Math.abs(result.actualPlant - 10544.6606) < 0.0001);
+});
+
+test('06/08/2026 matches QLKT 02-PD and excludes HFO from its coal heat rate', () => {
+  const values = {
+    B: '6.48144', C: '5.950515', AE: '3143.891',
+    H: '12.7798', I: '11.7849275', AF: '6263.388',
+    AJ: '20192.79', X: '206.3441',
+  };
+  const result = calculateActualHeatRate(values);
+  assert.ok(result);
+  assert.ok(Math.abs(result.actualS1 - 10668.64477207267) < 1e-9);
+  assert.ok(Math.abs(result.actualS2 - 10731.952196780167) < 1e-9);
+  assert.ok(Math.abs(result.actualPlant - 10710.711577588774) < 1e-9);
+  assert.ok(Math.abs(calculateDailyProduction(values).V - 9862.25234296494) < 1e-9);
+  assert.ok(Math.abs(calculateDailyProduction(values).W - 10710.711577588774) < 1e-9);
+});
+
+test('QLKT synchronization preserves source precision used by heat-rate calculations', () => {
+  assert.equal(normalizeQlktValue('10.1665842'), '10.1665842');
+  assert.equal(normalizeQlktValue('5341.111'), '5341.111');
+  assert.equal(normalizeQlktValue('20021.593'), '20021.593');
+});
+
+test('daily web formulas use full QLKT precision and only the UI may round', () => {
+  const result = calculateDailyProduction({
+    B: '11.05364', C: '10.1665842', F: '24',
+    H: '11.03056', I: '10.1327348', L: '24',
+    AE: '5341.111', AF: '5349.818', AJ: '20021.593',
+  });
+  assert.ok(Math.abs(result.AG - 525.3594417680621) < 1e-9);
+  assert.ok(Math.abs(result.AH - 527.9737509758965) < 1e-9);
+  assert.ok(Math.abs(result.W - 10544.660598214996) < 1e-9);
+  assert.equal(new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(result.W), '10.544,66');
 });
 
 test('CSV parser accepts Vietnamese semicolon format and 48 intervals', () => {

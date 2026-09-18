@@ -219,6 +219,11 @@ export function calculateActualHeatRate(values: Record<string, string>) {
   const read = (code: string) => parseLocaleNumber(values[code] || "");
   const netS1 = read("C"), netS2 = read("I"), coalS1 = read("AE"), coalS2 = read("AF"), heatingValue = read("AJ");
   if ([netS1, netS2, coalS1, coalS2, heatingValue].some(value => value === null)) return null;
+  // Reproduce QLKT report 02-PD: its "suất hao nhiệt thô/tinh" is coal heat
+  // input only (coal mass × coal HHV). QLKT does not add HFO/DO heat to this
+  // indicator, including on 06/08/2026 when S1 recorded 206.3441 t HFO.
+  // Oil remains a separately tracked consumption input and must not be mixed
+  // into the QLKT-comparable heat-rate result.
   const s1 = coalS1! * heatingValue! / (netS1! * 1000), s2 = coalS2! * heatingValue! / (netS2! * 1000);
   return { actualPlant: (coalS1! + coalS2!) * heatingValue! / ((netS1! + netS2!) * 1000), actualS1: s1, actualS2: s2 };
 }
