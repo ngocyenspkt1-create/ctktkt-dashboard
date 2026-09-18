@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, verifySessionToken, type SessionUser, type Role } from "./session";
+import { SESSION_COOKIE, verifySessionToken, hasPermission, type SessionUser, type Role, type Permission } from "./session";
 
 export async function getSessionUser(): Promise<SessionUser | null> {
   const store = await cookies();
@@ -10,17 +10,46 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
 type Guard = { ok: true; user: SessionUser } | { ok: false; response: Response };
 
-// Middleware đã chặn mọi request chưa đăng nhập ở tầng ngoài (xem middleware.ts),
-// nên guard này chỉ cần kiểm tra lại (phòng khi gọi route handler theo cách khác
-// bỏ qua middleware) và áp thêm điều kiện về ROLE cho từng route.
 export async function requireRole(...allowed: Role[]): Promise<Guard> {
   const user = await getSessionUser();
   if (!user) return { ok: false, response: Response.json({ error: "Chưa đăng nhập." }, { status: 401 }) };
-  if (!allowed.includes(user.role)) {
+  if (!allowed.includes(user.role) && user.role !== "admin") {
     return { ok: false, response: Response.json({ error: "Tài khoản của bạn không có quyền thực hiện thao tác này." }, { status: 403 }) };
   }
   return { ok: true, user };
 }
 
-export const requireEditor = () => requireRole("admin", "editor");
-export const requireAdmin = () => requireRole("admin");
+export async function requirePermission(permission: Permission): Promise<Guard> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, response: Response.json({ error: "Chưa đăng nhập." }, { status: 401 }) };
+  if (!hasPermission(user, permission)) {
+    return { ok: false, response: Response.json({ error: "Tài khoản của bạn không có quyền thực hiện thao tác này." }, { status: 403 }) };
+  }
+  return { ok: true, user };
+}
+
+export async function requireEditor(): Promise<Guard> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, response: Response.json({ error: "Chưa đăng nhập." }, { status: 401 }) };
+  if (
+    user.role === "admin" ||
+    user.permissions?.includes("manage_users") ||
+    user.permissions?.includes("edit_daily_inputs") ||
+    user.permissions?.includes("edit_monthly_kpi") ||
+    user.permissions?.includes("edit_bcsx") ||
+    user.permissions?.includes("edit_ppa") ||
+    user.permissions?.includes("edit_pmis")
+  ) {
+    return { ok: true, user };
+  }
+  return { ok: false, response: Response.json({ error: "Tài khoản của bạn không có quyền thực hiện thao tác này." }, { status: 403 }) };
+}
+
+export async function requireAdmin(): Promise<Guard> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, response: Response.json({ error: "Chưa đăng nhập." }, { status: 401 }) };
+  if (user.role === "admin" || user.permissions?.includes("manage_users")) {
+    return { ok: true, user };
+  }
+  return { ok: false, response: Response.json({ error: "Chỉ Quản trị viên mới có quyền thực hiện thao tác này." }, { status: 403 }) };
+}

@@ -9,6 +9,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { useSessionUser } from "@/components/session-context";
+import { hasPermission } from "@/lib/auth/session";
 
 type Group = "production" | "environment" | "operation";
 type Field = { code: string; label: string; unit?: string; input?: boolean; noteFor?: string; width?: string };
@@ -57,7 +58,8 @@ function isWaterAbnormal(rows: DailyRow[], dayIndex: number, code: "CE" | "CF") 
 }
 
 export function DailyProductionTable() {
-  const isViewer = useSessionUser().role === "viewer";
+  const user = useSessionUser();
+  const isViewer = !hasPermission(user, "edit_daily_inputs") && !hasPermission(user, "edit_monthly_kpi");
   const [period, setPeriod] = useState(currentPeriod), [group, setGroup] = useState<Group>("production");
   const [showCalculated, setShowCalculated] = useState(false), [rows, setRows] = useState<DailyRow[]>(() => Array.from({ length: 31 }, () => ({})));
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");

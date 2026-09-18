@@ -21,7 +21,8 @@ export async function proxy(request: NextRequest) {
   // Khu vực quản lý tài khoản chỉ dành cho Quản trị — chặn ngay ở middleware
   // (route handler và trang /admin/users vẫn tự kiểm tra lại lần nữa, xem
   // lib/auth/server.ts, để không phụ thuộc duy nhất vào middleware).
-  if ((pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) && user.role !== "admin") {
+  const canManage = user.role === "admin" || user.permissions?.includes("manage_users");
+  if ((pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) && !canManage) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Chỉ Quản trị mới có quyền truy cập." }, { status: 403 });
     return NextResponse.redirect(new URL("/", request.url));
   }

@@ -1,12 +1,39 @@
 import { SignJWT, jwtVerify } from "jose";
 
-export const ROLES = ["admin", "editor", "viewer"] as const;
+export const ROLES = ["admin", "supervisor", "technician", "editor", "viewer"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: "Quản trị",
+  supervisor: "Trưởng ca / Giám sát",
+  technician: "Kỹ thuật viên",
   editor: "Nhập liệu",
   viewer: "Chỉ xem",
+};
+
+export const PERMISSIONS = [
+  "manage_users",
+  "edit_monthly_kpi",
+  "edit_daily_inputs",
+  "edit_ppa",
+  "edit_pmis",
+  "edit_bcsx",
+  "sync_qlkt",
+  "sync_google_sheet",
+  "view_all",
+] as const;
+export type Permission = (typeof PERMISSIONS)[number];
+
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  manage_users: "Quản trị hệ thống & Phân quyền",
+  edit_monthly_kpi: "Nhập chỉ tiêu KTKT tháng (7 chỉ tiêu)",
+  edit_daily_inputs: "Nhập số liệu sản xuất ngày",
+  edit_ppa: "Quản lý Suất hao nhiệt PPA",
+  edit_pmis: "Quản lý Báo cáo PMIS (Tổn thất khói)",
+  edit_bcsx: "Nhập liệu & Xuất báo cáo BCSX (48 điểm)",
+  sync_qlkt: "Đồng bộ tự động từ QLKT",
+  sync_google_sheet: "Đồng bộ dữ liệu Google Sheet",
+  view_all: "Xem toàn bộ báo cáo & dữ liệu",
 };
 
 export type SessionUser = {
@@ -14,14 +41,21 @@ export type SessionUser = {
   username: string;
   displayName: string;
   role: Role;
+  position?: string;
+  employeeCode?: string;
+  permissions: Permission[];
 };
+
+export function hasPermission(user: SessionUser | null | undefined, permission: Permission): boolean {
+  if (!user) return false;
+  if (user.role === "admin" || user.permissions?.includes("manage_users")) return true;
+  if (permission === "view_all") return true;
+  return user.permissions?.includes(permission) ?? false;
+}
 
 export const SESSION_COOKIE = "session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 ngày
 
-// jose dùng Web Crypto API nên chạy được cả trong middleware (Edge runtime)
-// lẫn route handler (Node runtime) — không dùng "jsonwebtoken"/node:crypto
-// cho phần token vì middleware không có sẵn module "crypto" của Node.
 function getSecretKey() {
   const secret = process.env.AUTH_SECRET;
   if (!secret) {
@@ -33,7 +67,14 @@ function getSecretKey() {
 }
 
 export async function createSessionToken(user: SessionUser): Promise<string> {
-  return new SignJWT({ username: user.username, displayName: user.displayName, role: user.role })
+  return new SignJWT({
+    username: user.username,
+    displayName: user.displayName,
+    role: user.role,
+    position: user.position || "",
+    employeeCode: user.employeeCode || "",
+    permissions: user.permissions || [],
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(String(user.id))
     .setIssuedAt()
@@ -45,11 +86,22 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
   try {
     const { payload } = await jwtVerify(token, getSecretKey());
     const id = Number(payload.sub);
-    const role = payload.role;
-    if (!Number.isFinite(id) || typeof payload.username !== "string" || typeof payload.displayName !== "string" || !ROLES.includes(role as Role)) {
+    const role = payload.role as Role;
+    if (!Number.isFinite(id) || typeof payload.username !== "string" || typeof payload.displayName !== "string" || !ROLES.includes(role)) {
       return null;
     }
-    return { id, username: payload.username, displayName: payload.displayName, role: role as Role };
+    const permissions = Array.isArray(payload.permissions)
+      ? (payload.permissions as Permission[]).filter(p => PERMISSIONS.includes(p))
+      : [];
+    return {
+      id,
+      username: payload.username,
+      displayName: payload.displayName,
+      role,
+      position: typeof payload.position === "string" ? payload.position : undefined,
+      employeeCode: typeof payload.employeeCode === "string" ? payload.employeeCode : undefined,
+      permissions,
+    };
   } catch {
     return null;
   }

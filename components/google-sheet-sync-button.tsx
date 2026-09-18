@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { parseGoogleSheetAssessmentRows, resolveGoogleSheetRow, validateGoogleAppsScriptUrl, type GoogleSheetAssessmentEntry, type GoogleSheetDayPayload } from "@/lib/google-sheet-sync";
 import { useSessionUser } from "@/components/session-context";
+import { hasPermission } from "@/lib/auth/session";
 
 const URL_KEY = "ctktkt-google-script-url";
 const TOKEN_KEY = "ctktkt-google-script-token";
@@ -13,9 +14,10 @@ const format = (value: number | null | undefined) => value === null || value ===
 type PreviewResponse = { preview?: GoogleSheetDayPayload; error?: string };
 
 export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = false, disabledReason: disabledReasonProp = "", onImported }: { operatingDate: string; disabled?: boolean; disabledReason?: string; onImported?: () => void | Promise<void> }) {
-  const isViewer = useSessionUser().role === "viewer";
+  const user = useSessionUser();
+  const isViewer = !hasPermission(user, "sync_google_sheet");
   const disabled = disabledProp || isViewer;
-  const disabledReason = isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : disabledReasonProp;
+  const disabledReason = isViewer ? "Tài khoản của bạn không có quyền đồng bộ Google Sheet." : disabledReasonProp;
   const [scriptUrl, setScriptUrl] = useState(() => typeof window === "undefined" ? "" : window.localStorage.getItem(URL_KEY) || "");
   const [token, setToken] = useState(() => typeof window === "undefined" ? "" : window.localStorage.getItem(TOKEN_KEY) || "");
   const [settingsOpen, setSettingsOpen] = useState(false), [preview, setPreview] = useState<GoogleSheetDayPayload | null>(null);

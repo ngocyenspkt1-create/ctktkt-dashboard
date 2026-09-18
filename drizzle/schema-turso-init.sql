@@ -8,9 +8,27 @@ CREATE TABLE `users` (
 	`password_hash` text NOT NULL,
 	`display_name` text NOT NULL,
 	`role` text NOT NULL,
+	`employee_code` text,
+	`position` text,
+	`department` text DEFAULT 'Vận hành 1' NOT NULL,
+	`email_company` text,
+	`email_work` text,
+	`phone` text,
+	`status` text DEFAULT 'active' NOT NULL,
 	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE UNIQUE INDEX `uidx_users_username` ON `users` (`username`);
+CREATE INDEX `idx_users_position` ON `users` (`position`);
+
+CREATE TABLE `position_permissions` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`position` text NOT NULL,
+	`role` text DEFAULT 'viewer' NOT NULL,
+	`permissions` text DEFAULT '[]' NOT NULL,
+	`description` text DEFAULT '' NOT NULL,
+	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE UNIQUE INDEX `uidx_position_permissions_position` ON `position_permissions` (`position`);
 
 CREATE TABLE `measurements` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,

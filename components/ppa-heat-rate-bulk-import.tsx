@@ -4,11 +4,12 @@ import { useRef, useState } from "react";
 import { calculatePpaHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource } from "@/lib/ppa-heat-rate";
 import { loadSheetJs } from "@/lib/sheetjs-loader";
 import { useSessionUser } from "@/components/session-context";
+import { hasPermission } from "@/lib/auth/session";
 
 type RowResult = { sheet: string; status: "saved" | "skipped" | "error"; detail: string; operatingDate?: string };
 
 export function PpaHeatRateBulkImport() {
-  const isViewer = useSessionUser().role === "viewer";
+  const isViewer = !hasPermission(useSessionUser(), "edit_ppa");
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState<RowResult[]>([]);
   const [error, setError] = useState("");

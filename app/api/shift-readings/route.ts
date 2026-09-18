@@ -1,6 +1,6 @@
 import { getRawDb } from "@/db";
 import { SHIFT_METRICS, SHIFT_TIME_SLOTS } from "@/lib/bcsx";
-import { requireEditor } from "@/lib/auth/server";
+import { requirePermission } from "@/lib/auth/server";
 
 const units = new Set(["S1", "S2"]);
 const metrics = new Set(SHIFT_METRICS.map(m => m.key));
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await requireEditor(); if (!guard.ok) return guard.response;
+  const guard = await requirePermission("edit_bcsx"); if (!guard.ok) return guard.response;
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });

@@ -5,6 +5,7 @@ import { DateField } from "@/components/ui/date-field";
 import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource, type MeterReading, type PpaResult } from "@/lib/ppa-heat-rate";
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from "@/lib/qlkt-sync";
 import { useSessionUser } from "@/components/session-context";
+import { hasPermission } from "@/lib/auth/session";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type StoredPpa = PpaResult & { operatingDate: string; sourceFiles: string; noteS1: string; noteS2: string; updatedAt: string };
@@ -30,7 +31,8 @@ async function readCsvFile(file: File) {
 }
 
 export function PpaHeatRateComparison() {
-  const isViewer = useSessionUser().role === "viewer";
+  const user = useSessionUser();
+  const isViewer = !hasPermission(user, "edit_ppa");
   const [operatingDate, setOperatingDate] = useState(localYesterday), [readings, setReadings] = useState<MeterReading[]>([]), [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [pastedText, setPastedText] = useState(""), [noteS1, setNoteS1] = useState(""), [noteS2, setNoteS2] = useState("");
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]), [history, setHistory] = useState<StoredPpa[]>([]);

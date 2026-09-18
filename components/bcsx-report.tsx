@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
 import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
 import { useSessionUser } from "@/components/session-context";
+import { hasPermission } from "@/lib/auth/session";
 
 function todayIso() {
   const now = new Date();
@@ -38,7 +39,8 @@ function blankTotals(): TotalsDraft {
 }
 
 export function BcsxReport() {
-  const isViewer = useSessionUser().role === "viewer";
+  const user = useSessionUser();
+  const isViewer = !hasPermission(user, "edit_bcsx");
   const [operatingDate, setOperatingDate] = useState(todayIso());
   const [unit, setUnit] = useState<Unit>("S1");
   const [grids, setGrids] = useState<Record<Unit, ReadingsGrid>>({ S1: emptyGrid(), S2: emptyGrid() });

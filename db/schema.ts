@@ -7,8 +7,24 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   displayName: text("display_name").notNull(),
   role: text("role").notNull(),
+  employeeCode: text("employee_code"),
+  position: text("position"),
+  department: text("department").notNull().default("Vận hành 1"),
+  emailCompany: text("email_company"),
+  emailWork: text("email_work"),
+  phone: text("phone"),
+  status: text("status").notNull().default("active"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, table => [uniqueIndex("uidx_users_username").on(table.username)]);
+}, table => [uniqueIndex("uidx_users_username").on(table.username), index("idx_users_position").on(table.position)]);
+
+export const positionPermissions = sqliteTable("position_permissions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  position: text("position").notNull(),
+  role: text("role").notNull().default("viewer"),
+  permissions: text("permissions").notNull().default("[]"),
+  description: text("description").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("uidx_position_permissions_position").on(table.position)]);
 
 export const measurements = sqliteTable("measurements", {
   id: integer("id").primaryKey({ autoIncrement: true }),

@@ -7,6 +7,7 @@ import type { AxisDomainItem } from "recharts/types/util/types";
 import { DateField } from "@/components/ui/date-field";
 import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
 import { useSessionUser } from "@/components/session-context";
+import { hasPermission } from "@/lib/auth/session";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type Unit = "s1" | "s2";
@@ -73,7 +74,8 @@ function periodsBetween(from: string, to: string) {
 }
 
 export function PmisReport() {
-  const isViewer = useSessionUser().role === "viewer";
+  const user = useSessionUser();
+  const isViewer = !hasPermission(user, "edit_pmis");
   const today = useMemo(() => localToday(), []);
   const [fromDate, setFromDate] = useState(() => addDaysIso(localToday(), -9));
   const [toDate, setToDate] = useState(today);

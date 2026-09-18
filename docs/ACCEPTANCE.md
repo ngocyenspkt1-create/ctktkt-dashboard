@@ -597,3 +597,65 @@ Người dùng làm rõ thêm 4 điểm sau khi thấy bản đầu; đã sửa 
 ## Còn thiếu
 
 - Chưa kiểm tra trực quan trong trình duyệt thật ở lượt này vì phiên làm việc không được kết nối Edge/Chrome; cần kiểm tra lại sau khi triển khai hoặc chạy localhost.
+
+---
+
+# Bổ sung 18/09/2026 — Phân quyền tài khoản theo Cương vị (Chức vụ) PXVH1
+
+## Bối cảnh & Yêu cầu
+
+Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng Vận hành 1 (Nhà máy nhiệt điện Duyên Hải 1) gồm Mã NV, Họ tên, Email, Cương vị (Chức vụ), Bộ phận, Tên đăng nhập, Mật khẩu và yêu cầu:
+> *"Hãy tạo phân quyền tài khoản theo danh sách này theo cương vị, còn việc cương vị nào có quyền gì thì tôi sẽ phân."*
+
+## Đã làm
+
+1. **Chuyển đổi mô hình phân quyền sang RBAC theo Cương vị (Position-based RBAC)**:
+   - Thay vì chỉ có 3 role cố định (`admin`, `editor`, `viewer`) gắn cứng vào từng user, hệ thống đã chuẩn hóa **25 Cương vị** của phân xưởng (Quản đốc, Phó Quản đốc, Kỹ thuật viên, Trưởng ca, Lò trưởng, Máy trưởng, Trưởng kíp điện, ESP, FGD, Máy nghiền, v.v.).
+   - Mỗi Cương vị có thể được cấp phát độc lập **8 quyền hạn chức năng chi tiết**:
+     - `manage_users`: Quản trị tài khoản & phân quyền
+     - `edit_monthly_kpi`: Nhập & tính 7 chỉ tiêu KTKT tháng (`/`)
+     - `edit_daily_inputs`: Nhập & lưu số liệu sản xuất ngày (`/`)
+     - `edit_ppa`: Quản lý Suất hao nhiệt PPA (`/ppa-heat-rate`)
+     - `edit_pmis`: Quản lý Báo cáo PMIS / Tổn thất khói (`/pmis-report`)
+     - `edit_bcsx`: Nhập 48 điểm nửa giờ & xuất file BCSX (`/bcsx-report`)
+     - `sync_qlkt`: Kích hoạt tiện ích đồng bộ tự động từ QLKT
+     - `sync_google_sheet`: Đẩy số liệu & đồng bộ Google Sheet
+     - `view_all`: Quyền xem dữ liệu và báo cáo (mặc định tất cả các cương vị đều có).
+
+2. **Cập nhật Cơ sở dữ liệu**:
+   - Mở rộng bảng `users` (`db/schema.ts`): thêm các trường `employee_code`, `position`, `department`, `email_company`, `email_work`, `phone`, `status`.
+   - Tạo bảng mới `position_permissions`: lưu trữ ma trận phân quyền cho từng Cương vị (`position`, `role`, `permissions` dạng JSON array, `description`).
+   - Tạo file migration: `drizzle/0005_position_permissions.sql` và script SQL chạy trực tiếp trên Turso: `drizzle/schema-turso-update.sql`.
+
+3. **Cập nhật Logic Xác thực & Phiên (Auth Session & Guards)**:
+   - `lib/auth/session.ts`: Thêm `Permission`, `hasPermission(user, permission)`, mở rộng `SessionUser` chứa `position`, `employeeCode`, `permissions`.
+   - `app/api/auth/login/route.ts`: Khi đăng nhập, tự động truy vấn quyền của Cương vị từ `position_permissions`, nhúng vào JWT cookie. Chặn đăng nhập nếu tài khoản có trạng thái `locked`.
+   - `lib/auth/server.ts`: Thêm `requirePermission(permission)`, cập nhật `requireEditor()` và `requireAdmin()` tự động đối soát theo quyền hạn Cương vị.
+   - `proxy.ts`: Cho phép người dùng có quyền `manage_users` truy cập khu vực Quản trị.
+
+4. **Bộ dữ liệu chuẩn 124 Nhân sự & 25 Cương vị (`lib/auth/initial-users-data.ts`)**:
+   - Chuẩn hóa toàn bộ 124 nhân sự từ danh sách của người dùng: tên đăng nhập sạch, mã NV đúng định dạng, mật khẩu được mã hóa an toàn bằng thuật toán `scrypt` (`hashPassword`).
+   - Viết hàm `seedUsersAndPositions(db)` tự động khởi tạo hoặc cập nhật cấu trúc và dữ liệu.
+   - Viết API `POST /api/admin/seed-users` và script CLI `scripts/seed-pxvh1-users.mjs`.
+
+5. **Giao diện Quản trị (`components/admin-users-panel.tsx`)**:
+   - **Tab 1: Phân quyền theo Cương vị (Ma trận phân quyền)**:
+     - Bảng ma trận 25 Cương vị với checkbox cho từng quyền chức năng.
+     - Bộ lọc nhanh theo khối vận hành (Lò, Máy, Điện, Hóa, Phụ trợ, Lãnh đạo).
+     - Các nút gán mẫu quyền nhanh: "Tất cả (Admin)", "Ca (Vận hành ca)", "KT (Kỹ thuật viên)", "Xem".
+     - Nút "Lưu phân quyền Cương vị" để lưu cấu hình ngay lập tức vào database.
+     - Nút "⚡ Nạp/Đồng bộ 124 Nhân sự PXVH1" cho phép Admin khởi tạo dữ liệu trực tiếp bằng 1 click.
+   - **Tab 2: Danh sách Nhân sự (124 tài khoản)**:
+     - Tìm kiếm tức thì theo Họ tên, Mã NV, Tên đăng nhập.
+     - Lọc theo Cương vị và Trạng thái (Hoạt động / Tạm khóa).
+     - Đổi mật khẩu, khóa/mở khóa tài khoản, xóa tài khoản, thêm tài khoản mới.
+
+6. **Tích hợp kiểm tra quyền ở các trang chức năng**:
+   - `components/bcsx-report.tsx` & `app/api/shift-readings`, `app/api/operating-events`: Kiểm tra quyền `edit_bcsx`.
+   - `components/daily-production-table.tsx`: Kiểm tra quyền `edit_daily_inputs` và `edit_monthly_kpi`.
+   - `components/pmis-report.tsx`: Kiểm tra quyền `edit_pmis`.
+   - `components/ppa-heat-rate-comparison.tsx` & `ppa-heat-rate-bulk-import.tsx`: Kiểm tra quyền `edit_ppa`.
+   - `components/google-sheet-sync-button.tsx`: Kiểm tra quyền `sync_google_sheet`.
+
+7. **Kiểm thử tự động**:
+   - Tạo `tests/position-permissions.test.mjs`: kiểm tra tính toàn vẹn của 25 cương vị, 124 tài khoản nhân sự (không trùng username, đủ mã NV, mật khẩu hợp lệ) và kiểm thử logic hàm `hasPermission`.
