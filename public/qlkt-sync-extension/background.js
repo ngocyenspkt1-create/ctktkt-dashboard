@@ -77,7 +77,7 @@ async function sendWithRetry(tabId, message, attempts = 10) {
   throw lastError || new Error("Không kết nối được với màn hình QLKT.");
 }
 
-async function readValuesWithRetry(tabId, operatingDate, attempts = 10, intervalMs = 500) {
+async function readValuesWithRetry(tabId, operatingDate, attempts = 24, intervalMs = 500) {
   let result;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     result = await sendWithRetry(tabId, { type: "READ_QLKT_VALUES", operatingDate });
@@ -200,20 +200,19 @@ async function readSource(source, url, operatingDate) {
       previousActiveWindowId = currentTab?.windowId;
     }
     let tab;
-    if (isMeter) {
-      const openTabs = await chrome.tabs.query({});
-      const existingMeterTab = openTabs.find(candidate => {
-        try {
-          const parsed = new URL(candidate.url || "");
-          return QLKT_PATTERN.test(candidate.url || "") && parsed.pathname.toLowerCase().endsWith("/sxd/solieucto.jsf");
-        } catch {
-          return false;
-        }
-      });
-      if (existingMeterTab?.id) {
-        tab = await chrome.tabs.update(existingMeterTab.id, { active: true });
-        if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    const targetUrl = new URL(url);
+    const openTabs = await chrome.tabs.query({});
+    const existingSourceTab = openTabs.find(candidate => {
+      try {
+        const parsed = new URL(candidate.url || "");
+        return QLKT_PATTERN.test(candidate.url || "") && parsed.pathname.toLowerCase() === targetUrl.pathname.toLowerCase();
+      } catch {
+        return false;
       }
+    });
+    if (existingSourceTab?.id) {
+        tab = await chrome.tabs.update(existingSourceTab.id, { active: true });
+        if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
     }
     if (!tab) {
       tab = await chrome.tabs.create({ url, active: true });
@@ -230,7 +229,7 @@ async function readSource(source, url, operatingDate) {
     // nhiều thời gian hơn để máy chủ QLKT nạp xong dữ liệu so với các màn
     // hình khác, kể cả sau khi trình duyệt báo trang đã "tải xong". Vì vậy
     // cho nguồn "meter" một khoảng chờ và số lần thử lại nhiều hơn hẳn.
-    await wait(isMeter ? (prepared.refreshed ? 4000 : 1500) : (prepared.refreshed ? 2500 : 400));
+    await wait(isMeter ? 3000 : 1200);
     let result;
     if (isMeter) {
       result = await readMeterFromPageWorldWithRetry(tabId, operatingDate, current.url || url);
@@ -259,7 +258,8 @@ async function readSource(source, url, operatingDate) {
       }
     }
     if (result.payload?.operatingDate !== operatingDate) {
-      throw new Error(`Màn hình ${SOURCE_LABELS[source]} chưa chuyển sang đúng ngày đã chọn.`);
+      const actualDate = result.payload?.operatingDate || "không xác định";
+      throw new Error(`Màn hình ${SOURCE_LABELS[source]} đang ở ngày ${actualDate}, không phải ngày ${operatingDate}.`);
     }
     return result.payload;
   } finally {
@@ -359,6 +359,9 @@ async function syncBcsxEvents(operatingDate) {
       }
     }
     if (!result?.ok) throw new Error(result?.error || "Không đọc được nhật ký sự kiện từ màn hình Vận hành.");
+    if (result.payload?.operatingDate !== operatingDate) {
+      throw new Error(`Màn hình Vận hành đang ở ngày ${result.payload?.operatingDate || "không xác định"}, không phải ngày ${operatingDate}.`);
+    }
     return result.payload;
   } finally {
     if (tabId && createdTab) chrome.tabs.remove(tabId).catch(() => {});
@@ -367,10 +370,40 @@ async function syncBcsxEvents(operatingDate) {
   }
 }
 
+async function syncBcsx(operatingDate) {
+  const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
+  if (!qlktPages.fuel) {
+    throw new Error("Chưa ghi nhớ địa chỉ màn hình Nhiên liệu. Hãy mở màn hình đó trên QLKT một lần rồi thử lại.");
+  }
+  // BCSX chỉ cần 7 số tổng ngày từ Sản lượng + Nhiên liệu và nhật ký từ
+  // Vận hành. Không gọi SYNC_ALL vì luồng đó còn đọc các mã không dùng cho
+  // BCSX và sẽ mở màn hình Vận hành lần thứ hai.
+  const production = await readSource("production", DEFAULT_PRODUCTION_URL, operatingDate);
+  const fuel = await readSource("fuel", qlktPages.fuel, operatingDate);
+  const eventPayload = await syncBcsxEvents(operatingDate);
+  const requiredCodes = ["B", "C", "H", "I", "AE", "AF", "AR"];
+  const allEntries = [...(production.entries || []), ...(fuel.entries || [])];
+  const byCode = new Map(allEntries.map(entry => [entry.fieldCode, entry]));
+  const missingCodes = requiredCodes.filter(code => !byCode.has(code));
+  if (missingCodes.length) {
+    throw new Error(`QLKT còn thiếu ${missingCodes.length} số liệu BCSX (${missingCodes.join(", ")}).`);
+  }
+  return {
+    version: 1,
+    operatingDate,
+    sourcePage: "QLKT · BCSX một lượt",
+    entries: requiredCodes.map(code => byCode.get(code)),
+    s1: eventPayload.s1 || [],
+    s2: eventPayload.s2 || [],
+    totalCount: eventPayload.totalCount || 0,
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const task = message?.type === "SYNC_ALL_QLKT" ? syncAll
     : message?.type === "SYNC_PPA_QLKT" ? syncPpa
     : message?.type === "SYNC_HEATRATE_QLKT" ? syncHeatRate
+    : message?.type === "SYNC_BCSX_QLKT" ? syncBcsx
     : message?.type === "SYNC_BCSX_EVENTS_QLKT" ? syncBcsxEvents
     : null;
   if (!task) return;

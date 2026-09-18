@@ -11,7 +11,7 @@
 - Nội dung commit: `fix(auth): make initial-users-data self-contained for Vercel TypeScript build`
 - Remote bàn giao đúng: `github=https://github.com/ngocyenspkt1-create/ctktkt-dashboard.git`
 - Đã `fetch github` và xác nhận `HEAD == github/main` tại commit trên.
-- Đã deploy thành công lên Vercel production; tiện ích hiện tại là v0.4.22.
+- Đã deploy thành công lên Vercel production; tiện ích hiện tại là v0.4.23.
 
 > Lưu ý: Sau khi tạo file này, `docs/HANDOFF_CURRENT.md` là file mới chưa commit.
 
@@ -23,7 +23,7 @@
 - Triển khai mục tiêu: Vercel.
 - Xác thực: cookie JWT, bí mật lấy từ biến môi trường `AUTH_SECRET`.
 - Các biến môi trường chính: `AUTH_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`.
-- Tiện ích trình duyệt QLKT: Manifest V3, phiên bản `0.4.22`.
+- Tiện ích trình duyệt QLKT: Manifest V3, phiên bản `0.4.23`.
 
 ## 3. Chức năng đã có trong mã nguồn
 
@@ -70,7 +70,7 @@
 - Thêm, sửa, khóa/mở khóa, đổi mật khẩu và xóa tài khoản.
 - Mã nguồn hiện chứa bộ dữ liệu khởi tạo 163 tài khoản.
 
-### 3.6. Tiện ích QLKT v0.4.22
+### 3.6. Tiện ích QLKT v0.4.23
 
 - Kết nối dashboard Vercel/localhost với QLKT.
 - Đọc công tơ PPA, số liệu sản xuất, cân bằng nhiệt và nhật ký sự kiện.
@@ -88,7 +88,7 @@
 - `npm.cmd run build`: **đạt**; build tạo đủ các trang và API hiện có.
 - `git diff --check`: **đạt**.
 - Đã fetch GitHub và xác nhận commit cục bộ trùng `github/main`.
-- Vercel deployment: **đạt**; cần kiểm tra lại `manifest.json` trên live site sau khi phát hành v0.4.22.
+- Vercel deployment: **đạt**; cần kiểm tra lại `manifest.json` trên live site sau khi phát hành v0.4.23.
 
 ### Chưa đạt
 
@@ -130,7 +130,7 @@
 
 ### P1 — Chưa có đủ bằng chứng nghiệm thu vận hành
 
-- Chưa nghiệm thu trọn luồng bằng phiên đăng nhập QLKT thật cho toàn bộ chức năng v0.4.22.
+- Chưa nghiệm thu trọn luồng bằng phiên đăng nhập QLKT thật cho toàn bộ chức năng v0.4.23.
 - Chưa xác nhận đầy đủ trên dữ liệu thật tại Vercel + Turso và nhiều người dùng đồng thời.
 - Chưa có bằng chứng hoàn chỉnh về nhật ký người sửa dữ liệu, sao lưu/khôi phục, rollback và giám sát lỗi.
 - Chưa thực hiện kiểm thử bảo mật độc lập.
@@ -188,3 +188,9 @@ Quy trình sử dụng là: chọn ngày, bấm một nút đồng bộ, sau đ�
 Ảnh kiểm tra thực tế cho thấy luồng BCSX dừng ở bước số liệu tổng ngày với lỗi “QLKT tải trang quá lâu”. Nguyên nhân là tiện ích v0.4.21 chỉ chấp nhận `chrome.tabs` báo trạng thái `complete` trong 20 giây; QLKT có thể đã dựng DOM và dùng được nhưng tab vẫn còn trạng thái `loading`.
 
 Phiên bản v0.4.22 kiểm tra thêm `document.readyState` và tiếp tục ngay khi DOM đạt `interactive` hoặc `complete`; giới hạn dự phòng tăng lên 60 giây. Cơ chế kiểm tra đủ trường, đúng ngày và chỉ lưu sau khi hoàn tất cả số liệu tổng ngày lẫn sự kiện S1/S2 vẫn giữ nguyên. Sau khi cập nhật web, người dùng phải tải/cập nhật gói tiện ích, bấm Reload tại `edge://extensions` hoặc `chrome://extensions`, rồi F5 trang BCSX.
+
+## 11. BCSX một yêu cầu duy nhất và kiểm tra ngày an toàn — Tiện ích v0.4.23
+
+Sau v0.4.22, QLKT mở được nhưng báo màn hình Sản lượng chưa chuyển đúng ngày. Nguyên nhân kỹ thuật là PrimeFaces giữ các bản sao ô ngày ẩn mang giá trị cũ, trong khi bộ đọc ngày trước đây lấy ô ngày đầu tiên trong toàn trang. Bản v0.4.23 chỉ đọc các ô ngày đang hiển thị trong hàng bộ lọc báo cáo, dùng native setter của `HTMLInputElement`, phát đủ sự kiện `input/change`, rồi luôn bấm nút cập nhật đúng vùng ngày trong mỗi lượt.
+
+Luồng BCSX được rút từ hai yêu cầu web (`SYNC_ALL` rồi `SYNC_BCSX_EVENTS`) thành một yêu cầu `SYNC_BCSX`: chỉ đọc Sản lượng, Nhiên liệu và Vận hành; màn hình Vận hành không còn bị đọc hai lần. Tiện ích tái sử dụng tab QLKT đúng URL nếu đang mở, kiểm tra đúng ngày ở từng màn hình, đủ đúng 7 mã `B/C/H/I/AE/AF/AR`, nhận đủ hai danh sách sự kiện rồi mới trả một gói kết quả. Web chỉ cập nhật giao diện và lưu batch sau khi toàn bộ gói qua kiểm tra; bất kỳ nguồn nào sai ngày/thiếu mã đều dừng mà không ghi dữ liệu.

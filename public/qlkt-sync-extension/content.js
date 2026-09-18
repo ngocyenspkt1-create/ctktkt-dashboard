@@ -2,19 +2,8 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.22";
+  const CONTENT_SCRIPT_VERSION = "0.4.23";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
-  let pendingDateRefresh = null;
-  // Ngày cuối cùng ĐÃ THỰC SỰ bấm nút cập nhật cho tab này (không phải ngày đang
-  // hiển thị trong ô — ô ngày có thể đã bị chính prepareDate() ghi đè ở lần gọi
-  // trước dù cú bấm nút đó chưa chắc làm QLKT nạp lại dữ liệu kịp). Màn hình
-  // Công tơ PPA thường được tiện ích GIỮ NGUYÊN 1 tab mở xuyên suốt nhiều lần
-  // đồng bộ (xem README), nên nếu so sánh "đã đổi hay chưa" bằng giá trị hiện
-  // có trong ô ngày thì lần đồng bộ SAU sẽ thấy ô đã đúng ngày (do lần TRƯỚC ghi
-  // đè) và tưởng nhầm là không cần bấm lại nút — trong khi dữ liệu bảng thật có
-  // thể vẫn là của ngày cũ. So với biến riêng này để luôn bấm lại khi ngày yêu
-  // cầu khác lần bấm thành công gần nhất, bất kể ô đang hiển thị gì.
-  let lastPreparedDate = null;
   const parseNumber = raw => {
     const original = cleanText(raw);
     if (/[A-Za-zÀ-ỹ]/u.test(original) || /\d{1,2}\/\d{1,2}\/\d{4}/.test(original)) return null;
@@ -27,19 +16,32 @@
     const number = Number(value);
     return Number.isFinite(number) ? String(number) : null;
   };
+  const visibleReportDateInputs = () => {
+    const candidates = [...document.querySelectorAll("input")]
+      .filter(input => /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(readValue(input)))
+      .map(input => ({ input, rect: input.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.width > 0 && rect.height > 0);
+    if (!candidates.length) return [];
+    const firstRowTop = Math.min(...candidates.map(({ rect }) => rect.top));
+    return candidates.filter(({ rect }) => Math.abs(rect.top - firstRowTop) < 24).map(({ input }) => input);
+  };
   const parseDate = expectedOperatingDate => {
-    const values = [...document.querySelectorAll("input")].map(readValue);
+    const values = visibleReportDateInputs().map(readValue);
+    const expectedMatch = String(expectedOperatingDate || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const expectedDisplay = expectedMatch ? `${expectedMatch[3]}/${expectedMatch[2]}/${expectedMatch[1]}` : "";
+    // PrimeFaces thường giữ các bản sao input ẩn mang ngày cũ. Chỉ đọc ô đang
+    // hiển thị trong hàng bộ lọc và ưu tiên chính ngày được yêu cầu.
+    if (expectedDisplay && values.includes(expectedDisplay)) return expectedOperatingDate;
     for (const value of values) {
       const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       if (match) return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
     }
-    // Một số màn hình QLKT thay toàn bộ vùng bộ lọc sau khi bấm cập nhật, làm ô
-    // ngày biến mất dù dữ liệu báo cáo đã nạp xong. Chỉ dùng ngày đã chuẩn bị
-    // trong chính tab này khi nó trùng khớp yêu cầu hiện tại; không lấy ngày yêu
-    // cầu làm mặc định vô điều kiện để tránh che giấu trường hợp mở nhầm trang.
+    // Riêng màn hình Công tơ có ngày trong chính từng dòng dữ liệu nên bộ đọc
+    // phía sau còn kiểm tra độc lập được ngày. Các màn hình khác tuyệt đối
+    // không dùng ngày yêu cầu làm mặc định vì có thể che giấu bảng dữ liệu cũ.
     try {
       const preparedDate = sessionStorage.getItem(PREPARED_DATE_KEY);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(String(expectedOperatingDate || "")) && preparedDate === expectedOperatingDate) return preparedDate;
+      if (pageKind() === "meter" && /^\d{4}-\d{2}-\d{2}$/.test(String(expectedOperatingDate || "")) && preparedDate === expectedOperatingDate) return preparedDate;
     } catch {
       // sessionStorage có thể bị chặn; khi đó giữ nguyên cơ chế kiểm tra qua DOM.
     }
@@ -82,23 +84,17 @@
     const match = String(operatingDate || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) throw new Error("Ngày báo cáo không hợp lệ.");
     const displayDate = `${match[3]}/${match[2]}/${match[1]}`;
-    const visibleDateInputs = [...document.querySelectorAll("input")]
-      .filter(input => /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(readValue(input)))
-      .map(input => ({ input, rect: input.getBoundingClientRect() }))
-      .filter(({ rect }) => rect.width > 0 && rect.height > 0);
-    if (!visibleDateInputs.length) throw new Error("Không tìm thấy ô ngày báo cáo trên màn hình QLKT.");
-    const firstRowTop = Math.min(...visibleDateInputs.map(({ rect }) => rect.top));
-    const dateInputs = visibleDateInputs.filter(({ rect }) => Math.abs(rect.top - firstRowTop) < 24).map(({ input }) => input);
-    const changed = lastPreparedDate !== displayDate;
-    if (changed) pendingDateRefresh = displayDate;
+    const dateInputs = visibleReportDateInputs();
+    if (!dateInputs.length) throw new Error("Không tìm thấy ô ngày báo cáo trên màn hình QLKT.");
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     dateInputs.forEach(input => {
       input.focus();
-      input.value = displayDate;
+      if (nativeValueSetter) nativeValueSetter.call(input, displayDate);
+      else input.value = displayDate;
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
       input.blur();
     });
-    if (!changed && pendingDateRefresh !== displayDate) return { refreshed: false, visibleDate: readValue(dateInputs[0]) };
     // QUAN TRỌNG: mọi cách dò nút "cập nhật ngày" bên dưới PHẢI giới hạn theo VỊ
     // TRÍ gần ô ngày — từng có lúc dò theo NHÃN CHỮ trên toàn trang (không giới
     // hạn vị trí) và vô tình bấm trúng 1 link MENU ĐIỀU HƯỚNG có chữ "Cập nhật"
@@ -136,8 +132,6 @@
     const controlInfo = `<${refreshControl.tagName?.toLowerCase() || "?"}${refreshControl.id ? `#${refreshControl.id}` : ""}${refreshControl.className ? `.${String(refreshControl.className).trim().replace(/\s+/g, ".")}` : ""}>${controlText ? ` "${controlText}"` : ""}`;
     try { sessionStorage.setItem(PREPARED_DATE_KEY, operatingDate); } catch { /* giữ kiểm tra ngày qua DOM */ }
     refreshControl.click();
-    pendingDateRefresh = null;
-    lastPreparedDate = displayDate;
     return { refreshed: true, controlInfo };
   }
 
@@ -568,7 +562,7 @@
   }
 
   function extractOperatingEvents(expectedOperatingDate) {
-    const operatingDate = parseDate(expectedOperatingDate) || expectedOperatingDate;
+    const operatingDate = parseDate(expectedOperatingDate);
     if (!operatingDate) throw new Error("Không xác định được ngày báo cáo trên trang QLKT.");
 
     const tabHeader = [...document.querySelectorAll("a, button, span, th, td, div")].find(el => {

@@ -82,7 +82,7 @@ export function BcsxReport() {
   const [notice, setNotice] = useState<string | null>(null);
   const [extensionVersion, setExtensionVersion] = useState("");
   const [syncingAll, setSyncingAll] = useState(false);
-  const bcsxRequestRef = useRef<{ id: string; timer: number; phase: "totals" | "events"; operatingDate: string; totals?: Record<Unit, TotalsDraft> } | null>(null);
+  const bcsxRequestRef = useRef<{ id: string; timer: number; operatingDate: string } | null>(null);
 
   useEffect(() => {
     const channel = "ctktkt-qlkt-sync";
@@ -96,7 +96,7 @@ export function BcsxReport() {
         requestId?: string;
         result?: {
           ok?: boolean;
-          payload?: { s1?: OperatingEvent[]; s2?: OperatingEvent[]; totalCount?: number };
+          payload?: unknown;
           error?: string;
         };
       };
@@ -108,98 +108,42 @@ export function BcsxReport() {
       const request = bcsxRequestRef.current;
       if (!request || data.requestId !== request.id) return;
 
-      if (data.type === "SYNC_ALL_RESULT" && request.phase === "totals") {
-        window.clearTimeout(request.timer);
-        if (!data.result?.ok) {
-          bcsxRequestRef.current = null;
-          setSyncingAll(false);
-          setError(data.result?.error || "Không đồng bộ được số liệu tổng ngày từ QLKT.");
-          return;
-        }
-        const payload = validateQlktSyncPayload(data.result.payload);
-        if (!payload || payload.operatingDate !== request.operatingDate) {
-          bcsxRequestRef.current = null;
-          setSyncingAll(false);
-          setError("Dữ liệu tổng ngày QLKT không hợp lệ hoặc không đúng ngày đã chọn.");
-          return;
-        }
-        const byCode = new Map(payload.entries.map(entry => [entry.fieldCode, normalizeQlktValue(entry.value)]));
-        const requiredCodes = ["B", "C", "H", "I", "AE", "AF", "AR"];
-        const missingCodes = requiredCodes.filter(code => !byCode.get(code));
-        if (missingCodes.length) {
-          bcsxRequestRef.current = null;
-          setSyncingAll(false);
-          setError(`QLKT còn thiếu ${missingCodes.length} số liệu BCSX (${missingCodes.join(", ")}). Chưa thay đổi dữ liệu trên trang.`);
-          return;
-        }
-        const syncedTotals: Record<Unit, TotalsDraft> = {
-          S1: {
-            dauCuc: parseAndScaleMwh(byCode.get("B")),
-            thuongPham: parseAndScaleMwh(byCode.get("C")),
-            thanTieuThu: byCode.get("AE") || "",
-            thanTonKho: byCode.get("AR") || "",
-          },
-          S2: {
-            dauCuc: parseAndScaleMwh(byCode.get("H")),
-            thuongPham: parseAndScaleMwh(byCode.get("I")),
-            thanTieuThu: byCode.get("AF") || "",
-            thanTonKho: byCode.get("AR") || "",
-          },
-        };
-        setTotals(syncedTotals);
-
-        const requestId = crypto.randomUUID();
-        const timer = window.setTimeout(() => {
-          if (bcsxRequestRef.current?.id !== requestId) return;
-          bcsxRequestRef.current = null;
-          setSyncingAll(false);
-          setError("Đã lấy số liệu tổng ngày nhưng QLKT phản hồi nhật ký sự kiện quá lâu. Hãy thử đồng bộ lại.");
-        }, 60000);
-        bcsxRequestRef.current = { id: requestId, timer, phase: "events", operatingDate: request.operatingDate, totals: syncedTotals };
-        setNotice("Đã lấy số liệu tổng ngày cho S1 và S2. Đang đồng bộ nhật ký sự kiện…");
-        window.postMessage({
-          channel,
-          sender: "ctktkt-web",
-          type: "SYNC_BCSX_EVENTS",
-          requestId,
-          operatingDate: request.operatingDate,
-        }, window.location.origin);
+      if (data.type !== "SYNC_BCSX_RESULT") return;
+      window.clearTimeout(request.timer);
+      if (!data.result?.ok || !data.result.payload) {
+        bcsxRequestRef.current = null;
+        setSyncingAll(false);
+        setError(data.result?.error || "Không đồng bộ được dữ liệu BCSX từ QLKT.");
         return;
       }
-
-      if (data.type === "SYNC_BCSX_EVENTS_RESULT" && request.phase === "events") {
-        window.clearTimeout(request.timer);
-        if (!data.result?.ok || !data.result.payload) {
-          bcsxRequestRef.current = null;
-          setSyncingAll(false);
-          setError(data.result?.error || "Đã lấy số liệu tổng ngày nhưng không đồng bộ được nhật ký sự kiện từ QLKT.");
-          return;
-        }
-        const s1 = (data.result.payload.s1 || []).map(e => ({
-          startAt: e.startAt,
-          endAt: e.endAt || "",
-          eventType: e.eventType || 1,
-          description: e.description,
-        }));
-        const s2 = (data.result.payload.s2 || []).map(e => ({
-          startAt: e.startAt,
-          endAt: e.endAt || "",
-          eventType: e.eventType || 1,
-          description: e.description,
-        }));
-        setEvents({
-          S1: s1,
-          S2: s2,
-        });
-        if (!request.totals) {
-          bcsxRequestRef.current = null;
-          setSyncingAll(false);
-          setError("Đã lấy nhật ký sự kiện nhưng thiếu số liệu tổng ngày để lưu. Chưa ghi dữ liệu vào hệ thống.");
-          return;
-        }
-
-        setNotice("Đã lấy đủ dữ liệu S1 và S2. Đang lưu số tổng ngày và nhật ký sự kiện…");
-        const syncedTotals = request.totals;
+      const payload = validateQlktSyncPayload(data.result.payload);
+      const rawPayload = data.result.payload as { s1?: unknown; s2?: unknown };
+      if (!payload || payload.operatingDate !== request.operatingDate || !Array.isArray(rawPayload.s1) || !Array.isArray(rawPayload.s2)) {
+        bcsxRequestRef.current = null;
+        setSyncingAll(false);
+        setError("QLKT trả về dữ liệu không hợp lệ hoặc không đúng ngày đã chọn. Chưa ghi dữ liệu vào hệ thống.");
+        return;
+      }
+      const byCode = new Map(payload.entries.map(entry => [entry.fieldCode, normalizeQlktValue(entry.value)]));
+      const requiredCodes = ["B", "C", "H", "I", "AE", "AF", "AR"];
+      const missingCodes = requiredCodes.filter(code => !byCode.get(code));
+      if (missingCodes.length) {
+        bcsxRequestRef.current = null;
+        setSyncingAll(false);
+        setError(`QLKT còn thiếu ${missingCodes.length} số liệu BCSX (${missingCodes.join(", ")}). Chưa ghi dữ liệu vào hệ thống.`);
+        return;
+      }
+      const syncedTotals: Record<Unit, TotalsDraft> = {
+        S1: { dauCuc: parseAndScaleMwh(byCode.get("B")), thuongPham: parseAndScaleMwh(byCode.get("C")), thanTieuThu: byCode.get("AE") || "", thanTonKho: byCode.get("AR") || "" },
+        S2: { dauCuc: parseAndScaleMwh(byCode.get("H")), thuongPham: parseAndScaleMwh(byCode.get("I")), thanTieuThu: byCode.get("AF") || "", thanTonKho: byCode.get("AR") || "" },
+      };
+      const mapEvents = (items: unknown[]): OperatingEvent[] => items.map(item => {
+        const event = item as Partial<OperatingEvent>;
+        return { startAt: String(event.startAt || ""), endAt: String(event.endAt || ""), eventType: Number(event.eventType || 1), description: String(event.description || "") };
+      });
+      const s1 = mapEvents(rawPayload.s1);
+      const s2 = mapEvents(rawPayload.s2);
+      setNotice("Đã đọc đủ 3 màn hình QLKT. Đang lưu đồng thời dữ liệu S1 và S2…");
         const dailyEntries = [
           { operatingDate: request.operatingDate, fieldCode: "B", value: scaleDownToMillionKwh(syncedTotals.S1.dauCuc) },
           { operatingDate: request.operatingDate, fieldCode: "C", value: scaleDownToMillionKwh(syncedTotals.S1.thuongPham) },
@@ -217,6 +161,8 @@ export function BcsxReport() {
           });
           const body = await response.json() as { error?: string };
           if (!response.ok || body.error) throw new Error(body.error || "Không lưu được dữ liệu đồng bộ.");
+          setTotals(syncedTotals);
+          setEvents({ S1: s1, S2: s2 });
           setNotice(`Đã đồng bộ và lưu ngày ${request.operatingDate.split("-").reverse().join("/")} cho cả S1 và S2: 7 số liệu tổng ngày, S1 (${s1.length} sự kiện), S2 (${s2.length} sự kiện). Có thể xuất ba file A0/S1/S2 ngay.`);
         } catch (caught) {
           setError(caught instanceof Error ? caught.message : "Đã lấy dữ liệu nhưng không lưu được vào hệ thống.");
@@ -224,7 +170,6 @@ export function BcsxReport() {
           if (bcsxRequestRef.current?.id === request.id) bcsxRequestRef.current = null;
           setSyncingAll(false);
         }
-      }
     };
     window.addEventListener("message", handleMessage);
     window.postMessage({ channel, sender: "ctktkt-web", type: "PING" }, window.location.origin);
@@ -335,7 +280,7 @@ export function BcsxReport() {
     }
     if (!extensionVersion) {
       window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
-      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.22 rồi nhấn F5 trang này.");
+      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.23 rồi nhấn F5 trang này.");
       return;
     }
     if (bcsxRequestRef.current) window.clearTimeout(bcsxRequestRef.current.timer);
@@ -344,15 +289,15 @@ export function BcsxReport() {
       if (bcsxRequestRef.current?.id !== requestId) return;
       bcsxRequestRef.current = null;
       setSyncingAll(false);
-      setError("QLKT phản hồi số liệu tổng ngày quá lâu. Hãy kiểm tra tab QLKT rồi thử lại.");
-    }, 120000);
-    bcsxRequestRef.current = { id: requestId, timer, phase: "totals", operatingDate };
+      setError("QLKT phản hồi quá lâu. Chưa ghi dữ liệu; hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");
+    }, 180000);
+    bcsxRequestRef.current = { id: requestId, timer, operatingDate };
     setSyncingAll(true);
-    setNotice("Đang đồng bộ số liệu tổng ngày cho S1 và S2…");
+    setNotice("Đang đọc một lượt 3 màn hình QLKT cho S1 và S2…");
     window.postMessage({
       channel: "ctktkt-qlkt-sync",
       sender: "ctktkt-web",
-      type: "SYNC_ALL",
+      type: "SYNC_BCSX",
       requestId,
       operatingDate,
     }, window.location.origin);

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from '../lib/qlkt-sync.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
 
-test('extension package 0.4.22 aligns production values, events and preserves the prepared date', () => {
+test('extension package 0.4.23 aligns production values, events and preserves the prepared date', () => {
   const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
@@ -16,7 +16,7 @@ test('extension package 0.4.22 aligns production values, events and preserves th
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
   const popup = readFileSync(new URL('../public/qlkt-sync-extension/popup.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.22');
+  assert.equal(manifest.version, '0.4.23');
   assert.ok(manifest.host_permissions.includes('https://ctktkt-dashboard.vercel.app/*'));
   assert.ok(manifest.content_scripts.some(item => item.js.includes('web-bridge.js') && item.matches.includes('https://ctktkt-dashboard.vercel.app/*')));
   assert.match(webBridge, /\/bcsx-report/);
@@ -24,15 +24,16 @@ test('extension package 0.4.22 aligns production values, events and preserves th
   assert.match(popup, /DEFAULT_TARGET_URL = "https:\/\/ctktkt-dashboard\.vercel\.app\/"/);
   assert.match(background, /DEFAULT_OPERATION_URL = "http:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\/sxd\/rpt_hour_operation\.jsf"/);
   assert.match(background, /SYNC_BCSX_EVENTS_QLKT/);
-  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.22"/);
+  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.23"/);
   assert.match(content, /extractOperatingEvents/);
   assert.match(content, /classifyEventUnit/);
   assert.match(background, /prepareDateWithRetry/);
   assert.match(background, /readMeterFromPageWorldWithRetry/);
   assert.match(background, /async function waitForTab\(tabId, timeout = 60000\)/);
   assert.match(background, /document\.readyState/);
-  assert.match(content, /pendingDateRefresh/);
-  assert.match(content, /lastPreparedDate/);
+  assert.match(content, /visibleReportDateInputs/);
+  assert.match(content, /HTMLInputElement\.prototype/);
+  assert.doesNotMatch(content, /parseDate\(expectedOperatingDate\) \|\| expectedOperatingDate/);
   assert.match(content, /sessionStorage\.setItem\(PREPARED_DATE_KEY, operatingDate\)/);
   assert.match(content, /preparedDate === expectedOperatingDate/);
   assert.match(content, /aligned \|\| sameIndex/);
@@ -66,10 +67,17 @@ test('extension package 0.4.22 aligns production values, events and preserves th
 test('BCSX uses one QLKT button to load daily totals and events for both units', () => {
   const source = readFileSync(new URL('../components/bcsx-report.tsx', import.meta.url), 'utf8');
   const saveRoute = readFileSync(new URL('../app/api/bcsx-sync/route.ts', import.meta.url), 'utf8');
+  const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
+  const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
   assert.match(source, /Đồng bộ toàn bộ S1 & S2/);
-  assert.match(source, /type: "SYNC_ALL"/);
-  assert.match(source, /type: "SYNC_BCSX_EVENTS"/);
-  assert.match(source, /phase: "totals" \| "events"/);
+  assert.match(source, /type: "SYNC_BCSX"/);
+  assert.doesNotMatch(source, /type: "SYNC_ALL"/);
+  assert.doesNotMatch(source, /type: "SYNC_BCSX_EVENTS"/);
+  assert.match(background, /async function syncBcsx\(operatingDate\)/);
+  assert.match(background, /SYNC_BCSX_QLKT/);
+  assert.match(background, /readSource\("production"[\s\S]*readSource\("fuel"[\s\S]*syncBcsxEvents\(operatingDate\)/);
+  assert.match(background, /requiredCodes = \["B", "C", "H", "I", "AE", "AF", "AR"\]/);
+  assert.match(webBridge, /SYNC_BCSX_RESULT/);
   assert.match(source, /fetch\("\/api\/bcsx-sync"/);
   assert.match(saveRoute, /requirePermission\("edit_bcsx"\)/);
   assert.match(saveRoute, /requiredCodes = \["B", "C", "AE", "H", "I", "AF", "AR"\]/);

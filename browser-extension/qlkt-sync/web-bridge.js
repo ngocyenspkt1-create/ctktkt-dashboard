@@ -13,11 +13,13 @@
     }
     const runtimeType = message.type === "SYNC_PPA" ? "SYNC_PPA_QLKT"
       : message.type === "SYNC_HEATRATE" ? "SYNC_HEATRATE_QLKT"
+      : message.type === "SYNC_BCSX" ? "SYNC_BCSX_QLKT"
       : message.type === "SYNC_BCSX_EVENTS" ? "SYNC_BCSX_EVENTS_QLKT"
       : message.type === "SYNC_ALL" ? "SYNC_ALL_QLKT"
       : "";
     const resultType = message.type === "SYNC_PPA" ? "SYNC_PPA_RESULT"
       : message.type === "SYNC_HEATRATE" ? "SYNC_HEATRATE_RESULT"
+      : message.type === "SYNC_BCSX" ? "SYNC_BCSX_RESULT"
       : message.type === "SYNC_BCSX_EVENTS" ? "SYNC_BCSX_EVENTS_RESULT"
       : "SYNC_ALL_RESULT";
     if (!runtimeType || !/^\d{4}-\d{2}-\d{2}$/.test(String(message.operatingDate || ""))) return;
