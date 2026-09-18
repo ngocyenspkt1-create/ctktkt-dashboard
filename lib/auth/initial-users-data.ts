@@ -1,5 +1,34 @@
-import { hashPassword } from "./password.ts";
-import { PERMISSIONS, type Permission, type Role } from "./session.ts";
+import { randomBytes, scryptSync } from "node:crypto";
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+export type Role = "admin" | "supervisor" | "technician" | "editor" | "viewer";
+export type Permission =
+  | "manage_users"
+  | "edit_monthly_kpi"
+  | "edit_daily_inputs"
+  | "edit_ppa"
+  | "edit_pmis"
+  | "edit_bcsx"
+  | "sync_qlkt"
+  | "sync_google_sheet"
+  | "view_all";
+
+export const PERMISSIONS: Permission[] = [
+  "manage_users",
+  "edit_monthly_kpi",
+  "edit_daily_inputs",
+  "edit_ppa",
+  "edit_pmis",
+  "edit_bcsx",
+  "sync_qlkt",
+  "sync_google_sheet",
+  "view_all",
+];
 
 export type PositionSeed = {
   position: string;
