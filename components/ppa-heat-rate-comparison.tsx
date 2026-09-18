@@ -242,50 +242,128 @@ export function PpaHeatRateComparison() {
     { label: "S2", ppa: calculation.ppaS2, actual: actual?.actualS2 ?? null },
   ] : [];
 
-  return <section className="space-y-4">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Theo dõi hiệu suất vận hành</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">So sánh suất hao nhiệt PPA và thực tế</h1><p className="mt-1 text-sm text-slate-500">Nhận trực tiếp từ QLKT hoặc chọn CSV công tơ. Hệ thống tự tính PPA theo 48 chu kỳ nửa giờ.</p></div><div className="flex flex-wrap items-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY VẬN HÀNH<DateField value={operatingDate} onChange={value => { setOperatingDate(value); clearImport(); }} className="w-[150px]"/></label><button type="button" disabled={syncingQlkt} onClick={syncFromQlkt} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-wait disabled:opacity-60">{syncingQlkt ? "Đang đồng bộ…" : "Đồng bộ QLKT"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionVersion ? "text-emerald-700" : "text-amber-700"}`}>{extensionVersion ? `Tiện ích v${extensionVersion} đã kết nối` : "Chưa kết nối tiện ích"}</p></div></div>
-
-    {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}
-    {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">{message}</p>}
-
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,.85fr)]">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-extrabold text-[#20345f]">1. Đưa dữ liệu PPA vào</h2><p className="mt-1 text-xs text-slate-500">Ưu tiên đồng bộ từ QLKT; chọn hoặc dán CSV được giữ làm phương án dự phòng.</p></div><div className="flex gap-2"><label className="cursor-pointer rounded-xl bg-[#4057b5] px-4 py-2 text-sm font-bold text-white shadow-sm">Chọn CSV<input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" multiple className="sr-only" onChange={event => void addFiles(event.target.files)}/></label><button type="button" onClick={clearImport} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600">Làm lại</button></div></div>
-        <textarea value={pastedText} onChange={event => setPastedText(event.target.value)} rows={6} placeholder="Dán nguyên nội dung CSV tại đây…" className="mt-4 w-full resize-y rounded-xl border border-slate-300 bg-[#fbfcfe] p-3 font-mono text-xs text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"/>
-        <div className="mt-2 flex items-center justify-between gap-3"><p className="text-xs text-slate-500">Đã nhận: {sourceFiles.length ? sourceFiles.join(", ") : "chưa có CSV"}</p><button type="button" onClick={addPastedData} className="rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-4 py-2 text-sm font-bold text-[#354a9f]">Thêm dữ liệu vừa dán</button></div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">{selected.found.map(item => <div key={item.key} className={`rounded-xl border px-3 py-2 ${item.found ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}><div className="flex items-center justify-between gap-2"><p className="text-sm font-bold text-slate-800">{item.label}</p><span className={`text-xs font-extrabold ${item.found ? "text-emerald-700" : "text-amber-800"}`}>{item.found ? "Đã nhận" : "Còn thiếu"}</span></div><p className="mt-0.5 text-xs text-slate-500">{item.meter} · {item.channel}</p></div>)}</div>
+  return <section className="space-y-3">
+    {/* 1. Header Toolbar nhỏ gọn */}
+    <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-base font-extrabold tracking-tight text-[#18233d]">So sánh SHN PPA & Thực tế</h1>
+        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${extensionVersion ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${extensionVersion ? "bg-emerald-500" : "bg-amber-500"}`} />
+          {extensionVersion ? `Tiện ích v${extensionVersion}` : "Chưa kết nối tiện ích"}
+        </span>
       </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="font-extrabold text-[#20345f]">2. Kiểm tra nguồn tính</h2><p className="mt-1 text-xs text-slate-500">PPA lấy từ QLKT hoặc CSV. Thực tế lấy từ số liệu than, nhiệt trị và điểm bán đã lưu trong “Dữ liệu các tháng”.</p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2"><div className={`rounded-xl border p-3 ${calculation ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-slate-50"}`}><p className="text-xs font-bold text-slate-500">DỮ LIỆU PPA</p><p className="mt-1 text-lg font-extrabold text-[#314793]">{calculation ? "Đủ 4 điểm đo" : `${selected.found.filter(item => item.found).length}/4 điểm đo`}</p></div><div className={`rounded-xl border p-3 ${actual ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}><p className="text-xs font-bold text-slate-500">DỮ LIỆU THỰC TẾ</p><p className={`mt-1 text-lg font-extrabold ${actual ? "text-emerald-700" : "text-amber-800"}`}>{actual ? "Đã có trên web" : "Còn thiếu dữ liệu KTKT"}</p></div></div>
-        {calculation && <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs"><div className="rounded-lg border p-2"><p className="text-slate-500">Đầu cực S1</p><p className="font-bold text-black">{format(calculation.grossS1Kwh / 1_000_000)} triệu kWh</p></div><div className="rounded-lg border p-2"><p className="text-slate-500">Điểm bán S1</p><p className="font-bold text-black">{format(calculation.netS1Kwh / 1_000_000)} triệu kWh</p></div><div className="rounded-lg border p-2"><p className="text-slate-500">Đầu cực S2</p><p className="font-bold text-black">{format(calculation.grossS2Kwh / 1_000_000)} triệu kWh</p></div><div className="rounded-lg border p-2"><p className="text-slate-500">Điểm bán S2</p><p className="font-bold text-black">{format(calculation.netS2Kwh / 1_000_000)} triệu kWh</p></div></div>}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold text-slate-600">Ngày:</span>
+        <DateField value={operatingDate} onChange={value => { setOperatingDate(value); clearImport(); }} className="w-[145px]" />
+        <button
+          type="button"
+          disabled={syncingQlkt}
+          onClick={syncFromQlkt}
+          className="h-8 rounded-lg bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3.5 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:cursor-wait disabled:opacity-60"
+        >
+          {syncingQlkt ? "Đang đồng bộ…" : "⚡ Đồng bộ QLKT"}
+        </button>
       </div>
     </div>
 
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">3. Kết quả so sánh</h2></div>{!calculation ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">Kết quả sẽ xuất hiện khi nhận đủ 4 điểm đo.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="p-3 text-left">Phạm vi</th><th className="p-3 text-center">PPA (kJ/kWh)</th><th className="p-3 text-center">Thực tế (kJ/kWh)</th><th className="p-3 text-center">Chênh lệch (kJ/kWh)</th><th className="p-3 text-center">Chênh lệch (%)</th><th className="p-3 text-center">Đánh giá</th></tr></thead><tbody>{comparisonRows.map(row => { const comparison = compareHeatRate(row.actual, row.ppa); return <tr key={row.label} className="border-t"><td className="p-3 font-bold text-black">{row.label}</td><td className="p-3 text-center tabular-nums text-black">{format(row.ppa)}</td><td className="p-3 text-center tabular-nums text-black">{format(row.actual)}</td><td className="p-3 text-center tabular-nums text-black">{format(comparison.difference)}</td><td className="p-3 text-center tabular-nums text-black">{format(comparison.percent)}</td><td className="p-3 text-center"><span className={`rounded-full px-3 py-1 text-xs font-extrabold ${comparison.status === "Đạt" ? "bg-emerald-100 text-emerald-800" : comparison.status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{comparison.status}</span></td></tr>; })}</tbody></table></div>}</div>
+    {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-800">{error}</p>}
+    {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900">{message}</p>}
 
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="font-extrabold text-[#20345f]">4. Nhận xét & nguyên nhân chênh lệch tổ máy S1 & S2</h2>
-            <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">
-              Ngày {operatingDate.split("-").reverse().join("/")}
+    {/* 2. Dải trạng thái nguồn tính tinh gọn */}
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2 text-xs">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium text-slate-500">Nguồn PPA:</span>
+          {calculation ? (
+            <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">✓ Đủ 4 điểm đo (48 chu kỳ)</span>
+          ) : (
+            <span className="rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">
+              {selected.found.filter(item => item.found).length}/4 điểm đo
             </span>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Bạn có thể nhập bổ sung hoặc chỉnh sửa nhận xét cho ngày này bất cứ lúc nào và bấm &ldquo;Lưu nhận xét S1 & S2&rdquo; mà không cần nạp lại file công tơ.
-          </p>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium text-slate-500">Thực tế:</span>
+          {actual ? (
+            <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">✓ Đã có dữ liệu KTKT</span>
+          ) : (
+            <span className="rounded-md bg-slate-200 px-2 py-0.5 font-semibold text-slate-600">Chưa có số liệu KTKT</span>
+          )}
+        </div>
+      </div>
+      {calculation && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600">
+          <span className="rounded border bg-white px-1.5 py-0.5">S1 Đầu cực: <b>{format(calculation.grossS1Kwh / 1_000_000)}M</b></span>
+          <span className="rounded border bg-white px-1.5 py-0.5">S1 Điểm bán: <b>{format(calculation.netS1Kwh / 1_000_000)}M</b></span>
+          <span className="rounded border bg-white px-1.5 py-0.5">S2 Đầu cực: <b>{format(calculation.grossS2Kwh / 1_000_000)}M</b></span>
+          <span className="rounded border bg-white px-1.5 py-0.5">S2 Điểm bán: <b>{format(calculation.netS2Kwh / 1_000_000)}M</b></span>
+        </div>
+      )}
+    </div>
+
+    {/* 3. Kết quả so sánh */}
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b bg-[#f8fafc] px-3 py-2">
+        <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#20345f]">Kết quả so sánh suất hao nhiệt (kJ/kWh)</h2>
+      </div>
+      {!calculation ? (
+        <div className="flex items-center justify-between p-3 text-xs text-slate-500">
+          <span>Chưa có dữ liệu PPA cho ngày {operatingDate.split("-").reverse().join("/")}. Bấm nút <b>⚡ Đồng bộ QLKT</b> phía trên để lấy dữ liệu tự động.</span>
+          <button type="button" onClick={syncFromQlkt} className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-[#354a9f] hover:bg-blue-100">Đồng bộ ngay</button>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-xs">
+            <thead>
+              <tr className="bg-[#dcebf5] text-[#173b64]">
+                <th className="p-2 text-left">Phạm vi</th>
+                <th className="p-2 text-center">PPA (kJ/kWh)</th>
+                <th className="p-2 text-center">Thực tế (kJ/kWh)</th>
+                <th className="p-2 text-center">Chênh lệch (kJ/kWh)</th>
+                <th className="p-2 text-center">Chênh lệch (%)</th>
+                <th className="p-2 text-center">Đánh giá</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparisonRows.map(row => {
+                const comparison = compareHeatRate(row.actual, row.ppa);
+                return <tr key={row.label} className="border-t">
+                  <td className="p-2 font-bold text-black">{row.label}</td>
+                  <td className="p-2 text-center tabular-nums text-black">{format(row.ppa)}</td>
+                  <td className="p-2 text-center tabular-nums text-black">{format(row.actual)}</td>
+                  <td className="p-2 text-center tabular-nums text-black">{format(comparison.difference)}</td>
+                  <td className="p-2 text-center tabular-nums text-black">{format(comparison.percent)}</td>
+                  <td className="p-2 text-center">
+                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${comparison.status === "Đạt" ? "bg-emerald-100 text-emerald-800" : comparison.status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>
+                      {comparison.status}
+                    </span>
+                  </td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+
+    {/* 4. Nhận xét & nguyên nhân chênh lệch S1/S2 */}
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#20345f]">Nhận xét & nguyên nhân chênh lệch tổ máy</h2>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">
+            Ngày {operatingDate.split("-").reverse().join("/")}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
           <button
             type="button"
             disabled={savingNotes || isViewer}
             title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
             onClick={saveNotesOnly}
-            className="rounded-xl border border-[#4057b5] bg-white px-4 py-2 text-sm font-bold text-[#4057b5] shadow-sm hover:bg-blue-50 disabled:opacity-50"
+            className="h-7 rounded-lg border border-[#4057b5] bg-white px-3 text-xs font-bold text-[#4057b5] shadow-sm hover:bg-blue-50 disabled:opacity-50"
           >
-            {savingNotes ? "Đang lưu nhận xét…" : "Lưu nhận xét S1 & S2"}
+            {savingNotes ? "Đang lưu…" : "Lưu nhận xét S1 & S2"}
           </button>
           {calculation && (
             <button
@@ -293,43 +371,144 @@ export function PpaHeatRateComparison() {
               disabled={saving || isViewer}
               title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
               onClick={save}
-              className="rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 py-2 text-sm font-bold text-white shadow-md disabled:opacity-50"
+              className="h-7 rounded-lg bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
             >
               {saving ? "Đang lưu…" : "Lưu toàn bộ kết quả ngày"}
             </button>
           )}
         </div>
       </div>
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <label className="grid gap-1 text-sm font-bold text-slate-700">
+      <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+        <label className="grid gap-1 text-xs font-bold text-slate-700">
           <div className="flex items-center justify-between">
-            <span>Nguyên nhân chênh lệch S1</span>
-            <span className="text-xs font-normal text-slate-500">{noteS1.length}/1000 ký tự</span>
+            <span className="text-blue-900">Nguyên nhân chênh lệch S1</span>
+            <span className="font-normal text-slate-400">{noteS1.length}/1000</span>
           </div>
           <textarea
             value={noteS1}
             onChange={event => setNoteS1(event.target.value)}
-            rows={3}
-            className="resize-y rounded-xl border border-slate-300 p-3 font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"
+            rows={2}
+            className="resize-y rounded-lg border border-slate-300 p-2 text-xs font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-1 focus:ring-[#4c78a8]"
             placeholder="Ghi nhận tình trạng vận hành S1, độ tro/xỉ, máy nghiền, chất lượng than…"
           />
         </label>
-        <label className="grid gap-1 text-sm font-bold text-slate-700">
+        <label className="grid gap-1 text-xs font-bold text-slate-700">
           <div className="flex items-center justify-between">
-            <span>Nguyên nhân chênh lệch S2</span>
-            <span className="text-xs font-normal text-slate-500">{noteS2.length}/1000 ký tự</span>
+            <span className="text-amber-900">Nguyên nhân chênh lệch S2</span>
+            <span className="font-normal text-slate-400">{noteS2.length}/1000</span>
           </div>
           <textarea
             value={noteS2}
             onChange={event => setNoteS2(event.target.value)}
-            rows={3}
-            className="resize-y rounded-xl border border-slate-300 p-3 font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"
+            rows={2}
+            className="resize-y rounded-lg border border-slate-300 p-2 text-xs font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-1 focus:ring-[#4c78a8]"
             placeholder="Ghi nhận tình trạng vận hành S2, độ tro/xỉ, máy nghiền, chất lượng than…"
           />
         </label>
       </div>
     </div>
 
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Lịch sử trong tháng</h2><span className="text-xs font-semibold text-slate-500">{loading ? "Đang tải…" : `${history.length} ngày`}</span></div>{history.length === 0 ? <p className="p-6 text-center text-sm text-slate-500">Chưa lưu kết quả PPA trong tháng này.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-xs"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="p-2 text-left">Ngày</th><th className="p-2 text-center">PPA chung</th><th className="p-2 text-center">Thực tế chung</th><th className="p-2 text-center">Chênh lệch</th><th className="p-2 text-center">Đánh giá</th><th className="p-2 text-center">PPA S1</th><th className="p-2 text-center">PPA S2</th><th className="p-2 text-left">Nhận xét S1</th><th className="p-2 text-left">Nhận xét S2</th></tr></thead><tbody>{history.map(entry => { const rowActual = actualByDate.get(entry.operatingDate), comparison = compareHeatRate(rowActual?.actualPlant ?? null, Number(entry.ppaPlant)); const isSelected = entry.operatingDate === operatingDate; return <tr key={entry.operatingDate} className={`border-t transition ${isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"}`}><td className="p-2 font-bold"><button type="button" onClick={() => setOperatingDate(entry.operatingDate)} className="text-left text-[#354a9f] hover:underline" title="Bấm để chọn và sửa nhận xét ngày này">{entry.operatingDate.split("-").reverse().join("/")}</button></td><td className="p-2 text-center text-black">{format(Number(entry.ppaPlant))}</td><td className="p-2 text-center text-black">{format(rowActual?.actualPlant)}</td><td className="p-2 text-center text-black">{format(comparison.difference)}</td><td className="p-2 text-center font-bold">{comparison.status}</td><td className="p-2 text-center text-black">{format(Number(entry.ppaS1))}</td><td className="p-2 text-center text-black">{format(Number(entry.ppaS2))}</td><td className="max-w-[200px] truncate p-2 text-slate-700" title={entry.noteS1 || undefined}>{entry.noteS1 || "—"}</td><td className="max-w-[200px] truncate p-2 text-slate-700" title={entry.noteS2 || undefined}>{entry.noteS2 || "—"}</td></tr>; })}</tbody></table></div>}</div>
+    {/* 5. Lịch sử trong tháng */}
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b bg-[#f8fafc] px-3 py-2">
+        <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#20345f]">Lịch sử trong tháng</h2>
+        <span className="text-[11px] font-semibold text-slate-500">{loading ? "Đang tải…" : `${history.length} ngày`}</span>
+      </div>
+      {history.length === 0 ? (
+        <p className="p-4 text-center text-xs text-slate-500">Chưa lưu kết quả PPA trong tháng này.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-xs">
+            <thead>
+              <tr className="bg-[#dcebf5] text-[#173b64]">
+                <th className="p-1.5 text-left">Ngày</th>
+                <th className="p-1.5 text-center">PPA chung</th>
+                <th className="p-1.5 text-center">Thực tế</th>
+                <th className="p-1.5 text-center">Chênh lệch</th>
+                <th className="p-1.5 text-center">Đánh giá</th>
+                <th className="p-1.5 text-center">PPA S1</th>
+                <th className="p-1.5 text-center">PPA S2</th>
+                <th className="p-1.5 text-left">Nhận xét S1</th>
+                <th className="p-1.5 text-left">Nhận xét S2</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map(entry => {
+                const rowActual = actualByDate.get(entry.operatingDate);
+                const comparison = compareHeatRate(rowActual?.actualPlant ?? null, Number(entry.ppaPlant));
+                const isSelected = entry.operatingDate === operatingDate;
+                return (
+                  <tr key={entry.operatingDate} className={`border-t transition ${isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"}`}>
+                    <td className="p-1.5 font-bold">
+                      <button type="button" onClick={() => setOperatingDate(entry.operatingDate)} className="text-left text-[#354a9f] hover:underline" title="Bấm để chọn và sửa nhận xét ngày này">
+                        {entry.operatingDate.split("-").reverse().join("/")}
+                      </button>
+                    </td>
+                    <td className="p-1.5 text-center text-black">{format(Number(entry.ppaPlant))}</td>
+                    <td className="p-1.5 text-center text-black">{format(rowActual?.actualPlant)}</td>
+                    <td className="p-1.5 text-center text-black">{format(comparison.difference)}</td>
+                    <td className="p-1.5 text-center font-bold">{comparison.status}</td>
+                    <td className="p-1.5 text-center text-black">{format(Number(entry.ppaS1))}</td>
+                    <td className="p-1.5 text-center text-black">{format(Number(entry.ppaS2))}</td>
+                    <td className="max-w-[180px] truncate p-1.5 text-slate-700 text-[11px]" title={entry.noteS1 || undefined}>{entry.noteS1 || "—"}</td>
+                    <td className="max-w-[180px] truncate p-1.5 text-slate-700 text-[11px]" title={entry.noteS2 || undefined}>{entry.noteS2 || "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+
+    {/* 6. DỰ PHÒNG: Nạp CSV hoặc dán dữ liệu thủ công (Ở DƯỚI CÙNG, dạng Collapsible) */}
+    <details className="group rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-sm">
+      <summary className="flex cursor-pointer items-center justify-between font-bold text-slate-600 outline-none hover:text-slate-900">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>📁 Phương án dự phòng: Nạp CSV hoặc dán số liệu công tơ thủ công</span>
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-500">Chỉ dùng khi tiện ích QLKT không khả dụng</span>
+        </div>
+        <span className="text-[11px] font-medium text-blue-600 group-open:hidden">Mở rộng ▼</span>
+        <span className="text-[11px] font-medium text-blue-600 hidden group-open:inline">Thu gọn ▲</span>
+      </summary>
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-slate-500">Chọn 4 file CSV công tơ hoặc dán nội dung CSV vào ô dưới:</p>
+          <div className="flex gap-2">
+            <label className="cursor-pointer rounded-lg bg-[#4057b5] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#354a9f]">
+              Chọn CSV
+              <input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" multiple className="sr-only" onChange={event => void addFiles(event.target.files)} />
+            </label>
+            <button type="button" onClick={clearImport} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
+              Làm lại
+            </button>
+          </div>
+        </div>
+        <textarea
+          value={pastedText}
+          onChange={event => setPastedText(event.target.value)}
+          rows={3}
+          placeholder="Dán nguyên nội dung CSV tại đây nếu cần…"
+          className="mt-2 w-full resize-y rounded-lg border border-slate-300 bg-[#fbfcfe] p-2 font-mono text-[11px] text-black outline-none focus:border-[#4c78a8]"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-slate-500">Đã nhận: {sourceFiles.length ? sourceFiles.join(", ") : "chưa có CSV"}</p>
+          <button type="button" onClick={addPastedData} className="rounded-lg border border-[#aebfe1] bg-[#eef3ff] px-3 py-1 text-xs font-bold text-[#354a9f] hover:bg-blue-100">
+            Thêm dữ liệu vừa dán
+          </button>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {selected.found.map(item => (
+            <div key={item.key} className={`rounded-lg border p-2 ${item.found ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-xs font-bold text-slate-800">{item.label}</p>
+                <span className={`text-[10px] font-extrabold ${item.found ? "text-emerald-700" : "text-amber-800"}`}>{item.found ? "Đã nhận" : "Thiếu"}</span>
+              </div>
+              <p className="mt-0.5 text-[10px] text-slate-500">{item.meter} · {item.channel}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
   </section>;
 }
