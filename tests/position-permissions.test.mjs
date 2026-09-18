@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_POSITIONS, INITIAL_USERS } from "../lib/auth/initial-users-data.ts";
-import { hasPermission, PERMISSIONS, type SessionUser } from "../lib/auth/session.ts";
+import { hasPermission, PERMISSIONS } from "../lib/auth/session.ts";
 
 test("Danh sách Cương vị mặc định đủ 25 cương vị", () => {
   assert.equal(DEFAULT_POSITIONS.length, 25);
@@ -35,7 +35,7 @@ test("Danh sách Nhân sự đủ 124 nhân sự và thuộc 25 cương vị", (
 });
 
 test("hasPermission: Admin luôn có toàn bộ quyền", () => {
-  const adminUser: SessionUser = {
+  const adminUser = {
     id: 1,
     username: "huantth",
     displayName: "Trương Trần Hoàng Huân",
@@ -50,7 +50,7 @@ test("hasPermission: Admin luôn có toàn bộ quyền", () => {
 });
 
 test("hasPermission: Trưởng ca có quyền edit_bcsx và view_all nhưng không có manage_users", () => {
-  const supervisorUser: SessionUser = {
+  const supervisorUser = {
     id: 142,
     username: "lenn",
     displayName: "Nguyễn Ngọc Lễ",
@@ -68,7 +68,7 @@ test("hasPermission: Trưởng ca có quyền edit_bcsx và view_all nhưng khô
 });
 
 test("hasPermission: Viewer chỉ có quyền view_all", () => {
-  const viewerUser: SessionUser = {
+  const viewerUser = {
     id: 10,
     username: "hieunp",
     displayName: "Nguyễn Phương Hiếu",

@@ -6,6 +6,8 @@ import { DateField } from "@/components/ui/date-field";
 import { GoogleSheetSyncButton } from "@/components/google-sheet-sync-button";
 import { CAPACITY_KW, calculateActualHeatRate, calculatePpaHeatRateDetailed, compareHeatRate, ppaCurveForYear, type PpaSourceData, type UnitDetail } from "@/lib/ppa-heat-rate";
 import { loadSheetJs, type SheetJsLib } from "@/lib/sheetjs-loader";
+import { useSessionUser } from "@/components/session-context";
+import { hasPermission } from "@/lib/auth/session";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type StoredPpa = {
@@ -219,6 +221,8 @@ function buildPlantSheet(XLSX: SheetJsLib, rowsByMonthLocal: [string, Row[]][]) 
 }
 
 export function PpaHeatRateDashboard() {
+  const user = useSessionUser();
+  const canEdit = hasPermission(user, "edit_ppa");
   const today = useMemo(() => localToday(), []);
   const [fromDate, setFromDate] = useState(() => addDaysIso(localToday(), -14));
   const [toDate, setToDate] = useState(today);
@@ -231,6 +235,71 @@ export function PpaHeatRateDashboard() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [sheetDate, setSheetDate] = useState(today);
+  const [editModal, setEditModal] = useState<{
+    isOpen: boolean;
+    date: string;
+    noteS1: string;
+    noteS2: string;
+    saving: boolean;
+    error: string;
+  }>({
+    isOpen: false,
+    date: "",
+    noteS1: "",
+    noteS2: "",
+    saving: false,
+    error: "",
+  });
+
+  function openEditNote(row: Row) {
+    setEditModal({
+      isOpen: true,
+      date: row.date,
+      noteS1: row.noteS1 || "",
+      noteS2: row.noteS2 || "",
+      saving: false,
+      error: "",
+    });
+  }
+
+  async function handleSaveNote() {
+    if (!editModal.date) return;
+    setEditModal(prev => ({ ...prev, saving: true, error: "" }));
+    try {
+      const response = await fetch("/api/ppa-heat-rate/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entries: [{
+            operatingDate: editModal.date,
+            noteS1: editModal.noteS1.trim(),
+            noteS2: editModal.noteS2.trim(),
+          }]
+        })
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Chưa lưu được nhận xét.");
+
+      setEntries(prev => prev.map(entry => {
+        if (entry.operatingDate === editModal.date) {
+          return {
+            ...entry,
+            noteS1: editModal.noteS1.trim(),
+            noteS2: editModal.noteS2.trim(),
+          };
+        }
+        return entry;
+      }));
+
+      setEditModal(prev => ({ ...prev, isOpen: false, saving: false }));
+    } catch (caught) {
+      setEditModal(prev => ({
+        ...prev,
+        saving: false,
+        error: caught instanceof Error ? caught.message : "Chưa lưu được nhận xét."
+      }));
+    }
+  }
 
   async function loadRange(from: string, to: string, clampToData: boolean) {
     setLoading(true); setError("");
@@ -505,13 +574,88 @@ export function PpaHeatRateDashboard() {
               {monthRows.map(row => {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
                 const statusBadge = (status: string) => <span className={`rounded-full px-1 py-0.5 text-[9px] font-extrabold ${status === "Đạt" ? "bg-emerald-100 text-emerald-800" : status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-500"}`}>{status === "Chưa đủ dữ liệu" ? "—" : status === "Vượt PPA" ? "Vượt" : "Đạt"}</span>;
-                return <tr key={row.date} className="border-t border-slate-200">
-                  <td className="whitespace-nowrap px-0.5 py-1 text-center font-bold text-black"><span className="hidden xl:inline">{fullDate(row.date)}</span><span className="xl:hidden">{shortDate(row.date)}</span></td>
+                return <tr key={row.date} className="border-t border-slate-200 hover:bg-slate-50/60">
+                  <td className="whitespace-nowrap px-0.5 py-1 text-center font-bold text-black">
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => openEditNote(row)}
+                        className="text-center font-bold text-[#18233d] hover:text-[#4057b5] hover:underline"
+                        title={`Bấm để xem hoặc chỉnh sửa nhận xét ngày ${fullDate(row.date)}`}
+                      >
+                        <span className="hidden xl:inline">{fullDate(row.date)}</span>
+                        <span className="xl:hidden">{shortDate(row.date)}</span>
+                      </button>
+                    ) : (
+                      <>
+                        <span className="hidden xl:inline">{fullDate(row.date)}</span>
+                        <span className="xl:hidden">{shortDate(row.date)}</span>
+                      </>
+                    )}
+                  </td>
                   <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualPlant)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaPlant)}</td><td className="px-0.5 py-1 text-center text-black">{format(plant.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(plant.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(plant.status)}</td>
                   <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualS1)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaS1)}</td><td className="px-0.5 py-1 text-center text-black">{format(s1.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(s1.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(s1.status)}</td>
                   <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualS2)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaS2)}</td><td className="px-0.5 py-1 text-center text-black">{format(s2.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(s2.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(s2.status)}</td>
-                  <td className="border-l bg-blue-50/40 p-1 align-middle text-slate-700"><ExpandableNote note={row.noteS1 || ""}/></td>
-                  <td className="border-l bg-amber-50/40 p-1 align-middle text-slate-700"><ExpandableNote note={row.noteS2 || ""}/></td>
+                  <td className="border-l bg-blue-50/40 p-1 align-middle text-slate-700">
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="min-w-0 flex-1">
+                        {row.noteS1 ? (
+                          <ExpandableNote note={row.noteS1} />
+                        ) : canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => openEditNote(row)}
+                            className="text-[10px] italic text-blue-600/70 hover:text-blue-900 hover:underline"
+                            title="Bổ sung nhận xét S1"
+                          >
+                            + Nhận xét
+                          </button>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </div>
+                      {canEdit && row.noteS1 && (
+                        <button
+                          type="button"
+                          onClick={() => openEditNote(row)}
+                          className="shrink-0 rounded p-0.5 text-[10px] text-blue-600 opacity-40 transition hover:bg-blue-200 hover:opacity-100"
+                          title={`Chỉnh sửa nhận xét ngày ${fullDate(row.date)}`}
+                        >
+                          ✏️
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="border-l bg-amber-50/40 p-1 align-middle text-slate-700">
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="min-w-0 flex-1">
+                        {row.noteS2 ? (
+                          <ExpandableNote note={row.noteS2} />
+                        ) : canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => openEditNote(row)}
+                            className="text-[10px] italic text-amber-700/70 hover:text-amber-900 hover:underline"
+                            title="Bổ sung nhận xét S2"
+                          >
+                            + Nhận xét
+                          </button>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </div>
+                      {canEdit && row.noteS2 && (
+                        <button
+                          type="button"
+                          onClick={() => openEditNote(row)}
+                          className="shrink-0 rounded p-0.5 text-[10px] text-amber-700 opacity-40 transition hover:bg-amber-200 hover:opacity-100"
+                          title={`Chỉnh sửa nhận xét ngày ${fullDate(row.date)}`}
+                        >
+                          ✏️
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>;
               })}
             </Fragment>)}
@@ -519,5 +663,85 @@ export function PpaHeatRateDashboard() {
         </table>
       </div>}
     </div>
+
+    {editModal.isOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-base font-extrabold text-[#20345f]">
+                Nhận xét tổ máy ngày {fullDate(editModal.date)}
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Ghi nhận tình trạng vận hành và nguyên nhân chênh lệch PPA
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={editModal.saving}
+              onClick={() => setEditModal(prev => ({ ...prev, isOpen: false }))}
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            >
+              ✕
+            </button>
+          </div>
+
+          {editModal.error && (
+            <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800">
+              {editModal.error}
+            </p>
+          )}
+
+          <div className="mt-4 space-y-4">
+            <label className="grid gap-1.5 text-xs font-bold text-slate-700">
+              <div className="flex items-center justify-between">
+                <span className="text-blue-900">Nhận xét / Nguyên nhân chênh lệch Tổ máy S1</span>
+                <span className="font-normal text-slate-400">{editModal.noteS1.length}/1000 ký tự</span>
+              </div>
+              <textarea
+                value={editModal.noteS1}
+                onChange={e => setEditModal(prev => ({ ...prev, noteS1: e.target.value }))}
+                rows={3}
+                className="resize-y rounded-xl border border-slate-300 p-3 text-xs font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"
+                placeholder="Ghi nhận tình trạng vận hành S1, độ tro/xỉ, máy nghiền, chất lượng than…"
+              />
+            </label>
+
+            <label className="grid gap-1.5 text-xs font-bold text-slate-700">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-900">Nhận xét / Nguyên nhân chênh lệch Tổ máy S2</span>
+                <span className="font-normal text-slate-400">{editModal.noteS2.length}/1000 ký tự</span>
+              </div>
+              <textarea
+                value={editModal.noteS2}
+                onChange={e => setEditModal(prev => ({ ...prev, noteS2: e.target.value }))}
+                rows={3}
+                className="resize-y rounded-xl border border-slate-300 p-3 text-xs font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"
+                placeholder="Ghi nhận tình trạng vận hành S2, độ tro/xỉ, máy nghiền, chất lượng than…"
+              />
+            </label>
+          </div>
+
+          <div className="mt-6 flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              disabled={editModal.saving}
+              onClick={() => setEditModal(prev => ({ ...prev, isOpen: false }))}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              disabled={editModal.saving}
+              onClick={handleSaveNote}
+              className="rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 py-2 text-xs font-bold text-white shadow-md hover:opacity-95 disabled:opacity-50"
+            >
+              {editModal.saving ? "Đang lưu…" : "Lưu nhận xét"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </section>;
 }

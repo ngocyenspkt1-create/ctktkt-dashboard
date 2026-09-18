@@ -25,11 +25,20 @@ export async function POST(request: Request) {
       return { operatingDate, noteS1, noteS2 };
     });
     const db = getRawDb();
-    const statements = entries.map(entry => entry.noteS1 && entry.noteS2
-      ? db.prepare("UPDATE ppa_heat_rate_daily SET note_s1 = ?, note_s2 = ?, updated_at = CURRENT_TIMESTAMP WHERE operating_date = ?").bind(entry.noteS1, entry.noteS2, entry.operatingDate)
-      : entry.noteS1
-        ? db.prepare("UPDATE ppa_heat_rate_daily SET note_s1 = ?, updated_at = CURRENT_TIMESTAMP WHERE operating_date = ?").bind(entry.noteS1, entry.operatingDate)
-        : db.prepare("UPDATE ppa_heat_rate_daily SET note_s2 = ?, updated_at = CURRENT_TIMESTAMP WHERE operating_date = ?").bind(entry.noteS2, entry.operatingDate));
+    const statements = entries.map(entry =>
+      db.prepare(`
+        INSERT INTO ppa_heat_rate_daily (
+          operating_date, source_data, source_files,
+          gross_s1_kwh, net_s1_kwh, gross_s2_kwh, net_s2_kwh,
+          ppa_plant, ppa_s1, ppa_s2,
+          note_s1, note_s2, updated_at
+        ) VALUES (?, '{}', '[]', '0', '0', '0', '0', '0', '0', '0', ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(operating_date) DO UPDATE SET
+          note_s1 = excluded.note_s1,
+          note_s2 = excluded.note_s2,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(entry.operatingDate, entry.noteS1, entry.noteS2)
+    );
     const results = statements.length ? await db.batch(statements) : [];
     const updated = results.reduce((sum, result) => sum + Number(result.meta.changes || 0), 0);
     return Response.json({ received: entries.length, updated, skipped: entries.length - updated });

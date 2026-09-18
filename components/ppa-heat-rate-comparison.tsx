@@ -36,7 +36,7 @@ export function PpaHeatRateComparison() {
   const [operatingDate, setOperatingDate] = useState(localYesterday), [readings, setReadings] = useState<MeterReading[]>([]), [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [pastedText, setPastedText] = useState(""), [noteS1, setNoteS1] = useState(""), [noteS2, setNoteS2] = useState("");
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]), [history, setHistory] = useState<StoredPpa[]>([]);
-  const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [savingNotes, setSavingNotes] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const qlktRequestRef = useRef<{ id: string; timer: number } | null>(null);
@@ -55,6 +55,18 @@ export function PpaHeatRateComparison() {
   }
 
   useEffect(() => { void loadPeriod(); }, [period]);
+
+  // Tự động điền nhận xét đã lưu của ngày đang chọn khi đổi ngày hoặc khi history tải xong
+  useEffect(() => {
+    const existing = history.find(entry => entry.operatingDate === operatingDate);
+    if (existing) {
+      setNoteS1(existing.noteS1 || "");
+      setNoteS2(existing.noteS2 || "");
+    } else {
+      setNoteS1("");
+      setNoteS2("");
+    }
+  }, [operatingDate, history]);
 
   useEffect(() => {
     const payload = decodeQlktPpaSyncHash(window.location.hash);
@@ -168,7 +180,7 @@ export function PpaHeatRateComparison() {
     finally { if (fileRef.current) fileRef.current.value = ""; }
   }
 
-  function clearImport() { setReadings([]); setSourceFiles([]); setPastedText(""); setNoteS1(""); setNoteS2(""); setMessage(""); setError(""); }
+  function clearImport() { setReadings([]); setSourceFiles([]); setPastedText(""); setMessage(""); setError(""); }
 
   function syncFromQlkt() {
     setError(""); setMessage("");
@@ -188,6 +200,27 @@ export function PpaHeatRateComparison() {
     qlktRequestRef.current = { id: requestId, timer };
     setSyncingQlkt(true);
     window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "SYNC_PPA", requestId, operatingDate }, window.location.origin);
+  }
+
+  async function saveNotesOnly() {
+    setSavingNotes(true); setError(""); setMessage("");
+    try {
+      const response = await fetch("/api/ppa-heat-rate/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entries: [{ operatingDate, noteS1: noteS1.trim(), noteS2: noteS2.trim() }]
+        })
+      });
+      const body = await response.json() as { error?: string; updated?: number };
+      if (!response.ok) throw new Error(body.error || "Chưa lưu được nhận xét.");
+      setMessage(`Đã lưu nhận xét tổ máy S1 & S2 cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
+      await loadPeriod();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Chưa lưu được nhận xét.");
+    } finally {
+      setSavingNotes(false);
+    }
   }
 
   async function save() {
@@ -231,8 +264,72 @@ export function PpaHeatRateComparison() {
 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">3. Kết quả so sánh</h2></div>{!calculation ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">Kết quả sẽ xuất hiện khi nhận đủ 4 điểm đo.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="p-3 text-left">Phạm vi</th><th className="p-3 text-center">PPA (kJ/kWh)</th><th className="p-3 text-center">Thực tế (kJ/kWh)</th><th className="p-3 text-center">Chênh lệch (kJ/kWh)</th><th className="p-3 text-center">Chênh lệch (%)</th><th className="p-3 text-center">Đánh giá</th></tr></thead><tbody>{comparisonRows.map(row => { const comparison = compareHeatRate(row.actual, row.ppa); return <tr key={row.label} className="border-t"><td className="p-3 font-bold text-black">{row.label}</td><td className="p-3 text-center tabular-nums text-black">{format(row.ppa)}</td><td className="p-3 text-center tabular-nums text-black">{format(row.actual)}</td><td className="p-3 text-center tabular-nums text-black">{format(comparison.difference)}</td><td className="p-3 text-center tabular-nums text-black">{format(comparison.percent)}</td><td className="p-3 text-center"><span className={`rounded-full px-3 py-1 text-xs font-extrabold ${comparison.status === "Đạt" ? "bg-emerald-100 text-emerald-800" : comparison.status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{comparison.status}</span></td></tr>; })}</tbody></table></div>}</div>
 
-    {calculation && <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-2"><label className="grid gap-1 text-sm font-bold text-slate-700">Nguyên nhân chênh lệch S1<textarea value={noteS1} onChange={event => setNoteS1(event.target.value)} rows={3} className="resize-y rounded-xl border border-slate-300 p-3 font-normal text-black outline-none focus:border-[#4c78a8]" placeholder="Ghi nhận tình trạng vận hành, UC tro/xỉ, máy nghiền…"/></label><label className="grid gap-1 text-sm font-bold text-slate-700">Nguyên nhân chênh lệch S2<textarea value={noteS2} onChange={event => setNoteS2(event.target.value)} rows={3} className="resize-y rounded-xl border border-slate-300 p-3 font-normal text-black outline-none focus:border-[#4c78a8]" placeholder="Ghi nhận tình trạng vận hành, UC tro/xỉ, máy nghiền…"/></label><div className="flex justify-end lg:col-span-2"><button type="button" disabled={saving || isViewer} title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} onClick={save} className="rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 py-2.5 text-sm font-bold text-white shadow-md disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu kết quả ngày"}</button></div></div>}
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-extrabold text-[#20345f]">4. Nhận xét & nguyên nhân chênh lệch tổ máy S1 & S2</h2>
+            <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">
+              Ngày {operatingDate.split("-").reverse().join("/")}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Bạn có thể nhập bổ sung hoặc chỉnh sửa nhận xét cho ngày này bất cứ lúc nào và bấm &ldquo;Lưu nhận xét S1 & S2&rdquo; mà không cần nạp lại file công tơ.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={savingNotes || isViewer}
+            title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
+            onClick={saveNotesOnly}
+            className="rounded-xl border border-[#4057b5] bg-white px-4 py-2 text-sm font-bold text-[#4057b5] shadow-sm hover:bg-blue-50 disabled:opacity-50"
+          >
+            {savingNotes ? "Đang lưu nhận xét…" : "Lưu nhận xét S1 & S2"}
+          </button>
+          {calculation && (
+            <button
+              type="button"
+              disabled={saving || isViewer}
+              title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
+              onClick={save}
+              className="rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 py-2 text-sm font-bold text-white shadow-md disabled:opacity-50"
+            >
+              {saving ? "Đang lưu…" : "Lưu toàn bộ kết quả ngày"}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <label className="grid gap-1 text-sm font-bold text-slate-700">
+          <div className="flex items-center justify-between">
+            <span>Nguyên nhân chênh lệch S1</span>
+            <span className="text-xs font-normal text-slate-500">{noteS1.length}/1000 ký tự</span>
+          </div>
+          <textarea
+            value={noteS1}
+            onChange={event => setNoteS1(event.target.value)}
+            rows={3}
+            className="resize-y rounded-xl border border-slate-300 p-3 font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"
+            placeholder="Ghi nhận tình trạng vận hành S1, độ tro/xỉ, máy nghiền, chất lượng than…"
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-bold text-slate-700">
+          <div className="flex items-center justify-between">
+            <span>Nguyên nhân chênh lệch S2</span>
+            <span className="text-xs font-normal text-slate-500">{noteS2.length}/1000 ký tự</span>
+          </div>
+          <textarea
+            value={noteS2}
+            onChange={event => setNoteS2(event.target.value)}
+            rows={3}
+            className="resize-y rounded-xl border border-slate-300 p-3 font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"
+            placeholder="Ghi nhận tình trạng vận hành S2, độ tro/xỉ, máy nghiền, chất lượng than…"
+          />
+        </label>
+      </div>
+    </div>
 
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Lịch sử trong tháng</h2><span className="text-xs font-semibold text-slate-500">{loading ? "Đang tải…" : `${history.length} ngày`}</span></div>{history.length === 0 ? <p className="p-6 text-center text-sm text-slate-500">Chưa lưu kết quả PPA trong tháng này.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[860px] text-xs"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="p-2 text-left">Ngày</th><th className="p-2 text-center">PPA chung</th><th className="p-2 text-center">Thực tế chung</th><th className="p-2 text-center">Chênh lệch</th><th className="p-2 text-center">Đánh giá</th><th className="p-2 text-center">PPA S1</th><th className="p-2 text-center">PPA S2</th></tr></thead><tbody>{history.map(entry => { const rowActual = actualByDate.get(entry.operatingDate), comparison = compareHeatRate(rowActual?.actualPlant ?? null, Number(entry.ppaPlant)); return <tr key={entry.operatingDate} className="border-t"><td className="p-2 font-bold text-black">{entry.operatingDate.split("-").reverse().join("/")}</td><td className="p-2 text-center text-black">{format(Number(entry.ppaPlant))}</td><td className="p-2 text-center text-black">{format(rowActual?.actualPlant)}</td><td className="p-2 text-center text-black">{format(comparison.difference)}</td><td className="p-2 text-center font-bold">{comparison.status}</td><td className="p-2 text-center text-black">{format(Number(entry.ppaS1))}</td><td className="p-2 text-center text-black">{format(Number(entry.ppaS2))}</td></tr>; })}</tbody></table></div>}</div>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Lịch sử trong tháng</h2><span className="text-xs font-semibold text-slate-500">{loading ? "Đang tải…" : `${history.length} ngày`}</span></div>{history.length === 0 ? <p className="p-6 text-center text-sm text-slate-500">Chưa lưu kết quả PPA trong tháng này.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-xs"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="p-2 text-left">Ngày</th><th className="p-2 text-center">PPA chung</th><th className="p-2 text-center">Thực tế chung</th><th className="p-2 text-center">Chênh lệch</th><th className="p-2 text-center">Đánh giá</th><th className="p-2 text-center">PPA S1</th><th className="p-2 text-center">PPA S2</th><th className="p-2 text-left">Nhận xét S1</th><th className="p-2 text-left">Nhận xét S2</th></tr></thead><tbody>{history.map(entry => { const rowActual = actualByDate.get(entry.operatingDate), comparison = compareHeatRate(rowActual?.actualPlant ?? null, Number(entry.ppaPlant)); const isSelected = entry.operatingDate === operatingDate; return <tr key={entry.operatingDate} className={`border-t transition ${isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"}`}><td className="p-2 font-bold"><button type="button" onClick={() => setOperatingDate(entry.operatingDate)} className="text-left text-[#354a9f] hover:underline" title="Bấm để chọn và sửa nhận xét ngày này">{entry.operatingDate.split("-").reverse().join("/")}</button></td><td className="p-2 text-center text-black">{format(Number(entry.ppaPlant))}</td><td className="p-2 text-center text-black">{format(rowActual?.actualPlant)}</td><td className="p-2 text-center text-black">{format(comparison.difference)}</td><td className="p-2 text-center font-bold">{comparison.status}</td><td className="p-2 text-center text-black">{format(Number(entry.ppaS1))}</td><td className="p-2 text-center text-black">{format(Number(entry.ppaS2))}</td><td className="max-w-[200px] truncate p-2 text-slate-700" title={entry.noteS1 || undefined}>{entry.noteS1 || "—"}</td><td className="max-w-[200px] truncate p-2 text-slate-700" title={entry.noteS2 || undefined}>{entry.noteS2 || "—"}</td></tr>; })}</tbody></table></div>}</div>
   </section>;
 }
