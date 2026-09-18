@@ -32,7 +32,8 @@
 export type Unit = "S1" | "S2";
 export type ExportUnit = Unit | "A0";
 
-// 48 half-hour points, 00:30 → 23:30, plus a final "23:59" end-of-day point —
+// 48 points: 47 half-hour points from 00:30 through 23:30, plus the final
+// "23:59" end-of-day point —
 // verified against the real BCSX_NMD_S1_16.09.2026.xlsx column A (rows 11-58).
 export const SHIFT_TIME_SLOTS: string[] = (() => {
   const slots: string[] = [];
@@ -40,7 +41,7 @@ export const SHIFT_TIME_SLOTS: string[] = (() => {
     const h = Math.floor(minutes / 60), m = minutes % 60;
     slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
   }
-  slots[slots.length - 1] = "23:59"; // last point is labeled 23:59, not 24:00
+  slots.push("23:59");
   return slots;
 })();
 
@@ -86,10 +87,14 @@ export function datePartsVN(operatingDate: string) {
 }
 
 export async function buildBcsxWorkbook(input: BcsxExportInput): Promise<ArrayBuffer> {
-  const ExcelJSModule = await import("exceljs");
-  const ExcelJS = (ExcelJSModule.default ?? ExcelJSModule) as typeof ExcelJSModule.default;
   const { BCSX_TEMPLATE_S1_BASE64, BCSX_TEMPLATE_S2_BASE64, BCSX_TEMPLATE_A0_BASE64 } = await import("./bcsx-templates.generated");
   const base64 = input.unit === "S1" ? BCSX_TEMPLATE_S1_BASE64 : input.unit === "S2" ? BCSX_TEMPLATE_S2_BASE64 : BCSX_TEMPLATE_A0_BASE64;
+  return buildBcsxWorkbookFromTemplate(input, base64);
+}
+
+export async function buildBcsxWorkbookFromTemplate(input: BcsxExportInput, base64: string): Promise<ArrayBuffer> {
+  const ExcelJSModule = await import("exceljs");
+  const ExcelJS = (ExcelJSModule.default ?? ExcelJSModule) as typeof ExcelJSModule.default;
   const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 
   const workbook = new ExcelJS.Workbook();

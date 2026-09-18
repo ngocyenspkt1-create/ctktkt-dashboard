@@ -167,3 +167,18 @@ git -c safe.directory=C:/Users/HP/Downloads/CTKTKT/ctktkt-dashboard diff --check
 ```
 
 Không chạy migration, seed dữ liệu, commit hoặc push nếu người dùng chưa yêu cầu rõ. Trước khi sửa phải đọc file này, `docs/ACCEPTANCE.md` và kiểm tra lại working tree vì trạng thái có thể đã thay đổi.
+
+## 9. Bổ sung sau bàn giao — Một nút đồng bộ toàn bộ BCSX
+
+Theo yêu cầu người dùng, trang `/bcsx-report` đã được gom còn một nút **“Đồng bộ toàn bộ S1 & S2”** ở đầu trang:
+
+1. Gọi luồng `SYNC_ALL` để lấy 7 số liệu tổng ngày cần cho BCSX: `B`, `C`, `H`, `I`, `AE`, `AF`, `AR`.
+2. Kiểm tra đủ mã và đúng ngày trước khi thay đổi dữ liệu đang hiển thị.
+3. Điền đồng thời số liệu tổng ngày cho cả S1 và S2.
+4. Tự chuyển sang luồng `SYNC_BCSX_EVENTS` để lấy nhật ký sự kiện cho cả hai tổ máy.
+5. Khi đã đủ cả hai nguồn, gọi một API `/api/bcsx-sync` để lưu cùng lượt 7 số tổng ngày và nhật ký S1/S2 bằng một batch cơ sở dữ liệu.
+6. Bỏ hai nút rời “Lấy từ Dữ liệu các tháng” và “Đồng bộ sự kiện từ QLKT”.
+
+Quy trình sử dụng là: chọn ngày, bấm một nút đồng bộ, sau đó có thể xuất ngay ba file A0/S1/S2. Hệ thống chỉ tự lưu khi đã lấy đủ 7 mã bắt buộc, đúng ngày và nhận được nhật ký của cả hai tổ máy. Phần thông số nửa giờ tiếp tục nhập tay/dán Excel vì chưa có nguồn QLKT đã xác nhận.
+
+Đối chiếu ba template đã phát hiện và sửa lỗi thiếu mốc cuối: danh sách giờ phải có đúng **48 mốc**, gồm `00:30` đến `23:30` và dòng `23:59` tại hàng 58. Bộ kiểm thử xuất file kiểm tra riêng A0/S1/S2: template nhúng phải byte-identical với file template nguồn; toàn bộ merge, khổ in, lề, header/footer, kích thước hàng/cột và style ô phải giữ nguyên; chỉ các ô dữ liệu cho phép mới được thay đổi.

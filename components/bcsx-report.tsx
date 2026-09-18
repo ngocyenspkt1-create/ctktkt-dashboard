@@ -6,6 +6,7 @@ import { DateField } from "@/components/ui/date-field";
 import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
+import { normalizeQlktValue, validateQlktSyncPayload } from "@/lib/qlkt-sync";
 
 function todayIso() {
   const now = new Date();
@@ -67,6 +68,7 @@ function scaleDownToMillionKwh(valStr: string): string {
 export function BcsxReport() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_bcsx");
+  const canSyncQlkt = hasPermission(user, "sync_qlkt");
   const [operatingDate, setOperatingDate] = useState(todayIso());
   const [unit, setUnit] = useState<Unit>("S1");
   const [grids, setGrids] = useState<Record<Unit, ReadingsGrid>>({ S1: emptyGrid(), S2: emptyGrid() });
@@ -79,13 +81,12 @@ export function BcsxReport() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [extensionVersion, setExtensionVersion] = useState("");
-  const [syncingEvents, setSyncingEvents] = useState(false);
-  const [fetchingMonthly, setFetchingMonthly] = useState(false);
-  const bcsxRequestRef = useRef<{ id: string; timer: number } | null>(null);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const bcsxRequestRef = useRef<{ id: string; timer: number; phase: "totals" | "events"; operatingDate: string; totals?: Record<Unit, TotalsDraft> } | null>(null);
 
   useEffect(() => {
     const channel = "ctktkt-qlkt-sync";
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       if (event.source !== window || event.origin !== window.location.origin) return;
       const data = event.data as {
         channel?: string;
@@ -104,13 +105,74 @@ export function BcsxReport() {
         setExtensionVersion(String(data.version || "đã kết nối"));
         return;
       }
-      if (data.type === "SYNC_BCSX_EVENTS_RESULT") {
-        if (!bcsxRequestRef.current || data.requestId !== bcsxRequestRef.current.id) return;
-        window.clearTimeout(bcsxRequestRef.current.timer);
-        bcsxRequestRef.current = null;
-        setSyncingEvents(false);
+      const request = bcsxRequestRef.current;
+      if (!request || data.requestId !== request.id) return;
+
+      if (data.type === "SYNC_ALL_RESULT" && request.phase === "totals") {
+        window.clearTimeout(request.timer);
+        if (!data.result?.ok) {
+          bcsxRequestRef.current = null;
+          setSyncingAll(false);
+          setError(data.result?.error || "Không đồng bộ được số liệu tổng ngày từ QLKT.");
+          return;
+        }
+        const payload = validateQlktSyncPayload(data.result.payload);
+        if (!payload || payload.operatingDate !== request.operatingDate) {
+          bcsxRequestRef.current = null;
+          setSyncingAll(false);
+          setError("Dữ liệu tổng ngày QLKT không hợp lệ hoặc không đúng ngày đã chọn.");
+          return;
+        }
+        const byCode = new Map(payload.entries.map(entry => [entry.fieldCode, normalizeQlktValue(entry.value)]));
+        const requiredCodes = ["B", "C", "H", "I", "AE", "AF", "AR"];
+        const missingCodes = requiredCodes.filter(code => !byCode.get(code));
+        if (missingCodes.length) {
+          bcsxRequestRef.current = null;
+          setSyncingAll(false);
+          setError(`QLKT còn thiếu ${missingCodes.length} số liệu BCSX (${missingCodes.join(", ")}). Chưa thay đổi dữ liệu trên trang.`);
+          return;
+        }
+        const syncedTotals: Record<Unit, TotalsDraft> = {
+          S1: {
+            dauCuc: parseAndScaleMwh(byCode.get("B")),
+            thuongPham: parseAndScaleMwh(byCode.get("C")),
+            thanTieuThu: byCode.get("AE") || "",
+            thanTonKho: byCode.get("AR") || "",
+          },
+          S2: {
+            dauCuc: parseAndScaleMwh(byCode.get("H")),
+            thuongPham: parseAndScaleMwh(byCode.get("I")),
+            thanTieuThu: byCode.get("AF") || "",
+            thanTonKho: byCode.get("AR") || "",
+          },
+        };
+        setTotals(syncedTotals);
+
+        const requestId = crypto.randomUUID();
+        const timer = window.setTimeout(() => {
+          if (bcsxRequestRef.current?.id !== requestId) return;
+          bcsxRequestRef.current = null;
+          setSyncingAll(false);
+          setError("Đã lấy số liệu tổng ngày nhưng QLKT phản hồi nhật ký sự kiện quá lâu. Hãy thử đồng bộ lại.");
+        }, 60000);
+        bcsxRequestRef.current = { id: requestId, timer, phase: "events", operatingDate: request.operatingDate, totals: syncedTotals };
+        setNotice("Đã lấy số liệu tổng ngày cho S1 và S2. Đang đồng bộ nhật ký sự kiện…");
+        window.postMessage({
+          channel,
+          sender: "ctktkt-web",
+          type: "SYNC_BCSX_EVENTS",
+          requestId,
+          operatingDate: request.operatingDate,
+        }, window.location.origin);
+        return;
+      }
+
+      if (data.type === "SYNC_BCSX_EVENTS_RESULT" && request.phase === "events") {
+        window.clearTimeout(request.timer);
         if (!data.result?.ok || !data.result.payload) {
-          setError(data.result?.error || "Không đồng bộ được nhật ký sự kiện từ QLKT.");
+          bcsxRequestRef.current = null;
+          setSyncingAll(false);
+          setError(data.result?.error || "Đã lấy số liệu tổng ngày nhưng không đồng bộ được nhật ký sự kiện từ QLKT.");
           return;
         }
         const s1 = (data.result.payload.s1 || []).map(e => ({
@@ -129,14 +191,49 @@ export function BcsxReport() {
           S1: s1,
           S2: s2,
         });
-        setNotice(`Đã đồng bộ từ QLKT ngày ${operatingDate.split("-").reverse().join("/")}: S1 (${s1.length} sự kiện), S2 (${s2.length} sự kiện). Nhấn "Lưu nhật ký sự kiện" để xác nhận lưu.`);
+        if (!request.totals) {
+          bcsxRequestRef.current = null;
+          setSyncingAll(false);
+          setError("Đã lấy nhật ký sự kiện nhưng thiếu số liệu tổng ngày để lưu. Chưa ghi dữ liệu vào hệ thống.");
+          return;
+        }
+
+        setNotice("Đã lấy đủ dữ liệu S1 và S2. Đang lưu số tổng ngày và nhật ký sự kiện…");
+        const syncedTotals = request.totals;
+        const dailyEntries = [
+          { operatingDate: request.operatingDate, fieldCode: "B", value: scaleDownToMillionKwh(syncedTotals.S1.dauCuc) },
+          { operatingDate: request.operatingDate, fieldCode: "C", value: scaleDownToMillionKwh(syncedTotals.S1.thuongPham) },
+          { operatingDate: request.operatingDate, fieldCode: "AE", value: syncedTotals.S1.thanTieuThu },
+          { operatingDate: request.operatingDate, fieldCode: "H", value: scaleDownToMillionKwh(syncedTotals.S2.dauCuc) },
+          { operatingDate: request.operatingDate, fieldCode: "I", value: scaleDownToMillionKwh(syncedTotals.S2.thuongPham) },
+          { operatingDate: request.operatingDate, fieldCode: "AF", value: syncedTotals.S2.thanTieuThu },
+          { operatingDate: request.operatingDate, fieldCode: "AR", value: syncedTotals.S1.thanTonKho },
+        ];
+        try {
+          const response = await fetch("/api/bcsx-sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date: request.operatingDate, entries: dailyEntries, events: { S1: s1, S2: s2 } }),
+          });
+          const body = await response.json() as { error?: string };
+          if (!response.ok || body.error) throw new Error(body.error || "Không lưu được dữ liệu đồng bộ.");
+          setNotice(`Đã đồng bộ và lưu ngày ${request.operatingDate.split("-").reverse().join("/")} cho cả S1 và S2: 7 số liệu tổng ngày, S1 (${s1.length} sự kiện), S2 (${s2.length} sự kiện). Có thể xuất ba file A0/S1/S2 ngay.`);
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : "Đã lấy dữ liệu nhưng không lưu được vào hệ thống.");
+        } finally {
+          if (bcsxRequestRef.current?.id === request.id) bcsxRequestRef.current = null;
+          setSyncingAll(false);
+        }
       }
     };
     window.addEventListener("message", handleMessage);
     window.postMessage({ channel, sender: "ctktkt-web", type: "PING" }, window.location.origin);
     return () => {
       window.removeEventListener("message", handleMessage);
-      if (bcsxRequestRef.current) window.clearTimeout(bcsxRequestRef.current.timer);
+      if (bcsxRequestRef.current) {
+        window.clearTimeout(bcsxRequestRef.current.timer);
+        bcsxRequestRef.current = null;
+      }
     };
   }, [operatingDate]);
 
@@ -198,6 +295,15 @@ export function BcsxReport() {
   const grid = grids[unit];
   const unitEvents = events[unit];
 
+  function changeOperatingDate(nextDate: string) {
+    if (bcsxRequestRef.current) {
+      window.clearTimeout(bcsxRequestRef.current.timer);
+      bcsxRequestRef.current = null;
+    }
+    setSyncingAll(false);
+    setOperatingDate(nextDate);
+  }
+
   function setCell(metric: ShiftMetric, index: number, value: string) {
     setGrids(old => ({ ...old, [unit]: { ...old[unit], [metric]: old[unit][metric].map((v, i) => i === index ? value : v) } }));
   }
@@ -221,43 +327,12 @@ export function BcsxReport() {
     setTotals(old => ({ ...old, [unit]: { ...old[unit], [field]: value } }));
   }
 
-  async function fetchFromMonthlyInputs() {
-    setFetchingMonthly(true); setError(null); setNotice(null);
-    try {
-      const period = operatingDate.slice(0, 7);
-      const res = await fetch(`/api/daily-inputs?period=${period}`);
-      const json = await res.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[]; error?: string };
-      if (!res.ok || json.error) throw new Error(json.error || "Không lấy được dữ liệu các tháng.");
-      const byCode = new Map((json.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
-      const s1DauCuc = parseAndScaleMwh(byCode.get("B"));
-      const s1ThuongPham = parseAndScaleMwh(byCode.get("C"));
-      const s1Than = byCode.get("AE") || "";
-      const tonKho = byCode.get("AR") || "";
-      const s2DauCuc = parseAndScaleMwh(byCode.get("H"));
-      const s2ThuongPham = parseAndScaleMwh(byCode.get("I"));
-      const s2Than = byCode.get("AF") || "";
-
-      setTotals({
-        S1: { dauCuc: s1DauCuc, thuongPham: s1ThuongPham, thanTieuThu: s1Than, thanTonKho: tonKho },
-        S2: { dauCuc: s2DauCuc, thuongPham: s2ThuongPham, thanTieuThu: s2Than, thanTonKho: tonKho },
-      });
-
-      const currentTotals = unit === "S1" ? [s1DauCuc, s1ThuongPham, s1Than, tonKho] : [s2DauCuc, s2ThuongPham, s2Than, tonKho];
-      const count = currentTotals.filter(Boolean).length;
-      if (count > 0) {
-        setNotice(`Đã nạp ${count}/4 số liệu từ trang "Dữ liệu các tháng" ngày ${operatingDate.split("-").reverse().join("/")}. Bấm "Lưu số liệu tổng ngày" nếu muốn xác nhận.`);
-      } else {
-        setNotice(`Ngày ${operatingDate.split("-").reverse().join("/")} chưa có số liệu bên "Dữ liệu các tháng". Bạn có thể nhập tay hoặc sang trang Dữ liệu các tháng để đồng bộ QLKT.`);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Không lấy được dữ liệu các tháng.");
-    } finally {
-      setFetchingMonthly(false);
-    }
-  }
-
-  function syncEventsFromQlkt() {
+  function syncAllFromQlkt() {
     setError(null); setNotice(null);
+    if (!canSyncQlkt) {
+      setError("Tài khoản chưa được cấp quyền đồng bộ QLKT.");
+      return;
+    }
     if (!extensionVersion) {
       window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
       setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.21 rồi nhấn F5 trang này.");
@@ -268,15 +343,16 @@ export function BcsxReport() {
     const timer = window.setTimeout(() => {
       if (bcsxRequestRef.current?.id !== requestId) return;
       bcsxRequestRef.current = null;
-      setSyncingEvents(false);
-      setError("QLKT phản hồi quá lâu. Hãy kiểm tra tab QLKT rồi thử lại.");
-    }, 45000);
-    bcsxRequestRef.current = { id: requestId, timer };
-    setSyncingEvents(true);
+      setSyncingAll(false);
+      setError("QLKT phản hồi số liệu tổng ngày quá lâu. Hãy kiểm tra tab QLKT rồi thử lại.");
+    }, 120000);
+    bcsxRequestRef.current = { id: requestId, timer, phase: "totals", operatingDate };
+    setSyncingAll(true);
+    setNotice("Đang đồng bộ số liệu tổng ngày cho S1 và S2…");
     window.postMessage({
       channel: "ctktkt-qlkt-sync",
       sender: "ctktkt-web",
-      type: "SYNC_BCSX_EVENTS",
+      type: "SYNC_ALL",
       requestId,
       operatingDate,
     }, window.location.origin);
@@ -357,7 +433,7 @@ export function BcsxReport() {
   const SHIFT_SLICES = useMemo(() => [
     { id: "ca1", label: "Ca 1", hours: "00:30 – 08:00", start: 0, end: 16, headerColor: "bg-[#dcebf5] text-[#173b64] border-blue-200" },
     { id: "ca2", label: "Ca 2", hours: "08:30 – 16:00", start: 16, end: 32, headerColor: "bg-[#dcf5e7] text-[#115e3c] border-emerald-200" },
-    { id: "ca3", label: "Ca 3", hours: "16:30 – 23:59", start: 32, end: 47, headerColor: "bg-[#fef3d6] text-[#854d0e] border-amber-200" },
+    { id: "ca3", label: "Ca 3", hours: "16:30 – 23:59", start: 32, end: 48, headerColor: "bg-[#fef3d6] text-[#854d0e] border-amber-200" },
   ] as const, []);
 
   function applyPastedMatrix(text: string, startSlotIndex: number, startMetricKey: ShiftMetric = "P"): number {
@@ -511,7 +587,16 @@ export function BcsxReport() {
             {extensionVersion ? `Tiện ích v${extensionVersion}` : "Chưa kết nối tiện ích"}
           </span>
           <span className="text-xs font-bold text-slate-600">Ngày:</span>
-          <DateField value={operatingDate} onChange={setOperatingDate} className="w-[145px] h-8 text-xs"/>
+          <DateField value={operatingDate} onChange={changeOperatingDate} className="w-[145px] h-8 text-xs"/>
+          <button
+            type="button"
+            disabled={syncingAll || isViewer || !canSyncQlkt}
+            onClick={syncAllFromQlkt}
+            title={isViewer || !canSyncQlkt ? "Tài khoản chưa được cấp quyền đồng bộ QLKT." : "Lấy và lưu số liệu tổng ngày cùng nhật ký sự kiện cho cả S1 và S2"}
+            className="h-8 rounded-lg bg-gradient-to-r from-[#334785] to-[#438ec1] px-3 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {syncingAll ? "Đang đồng bộ S1 & S2…" : "⚡ Đồng bộ toàn bộ S1 & S2"}
+          </button>
           <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
             {(["S1", "S2"] as const).map(u => (
               <button key={u} type="button" onClick={() => setUnit(u)} className={`rounded-md px-3 py-1 text-xs font-bold transition ${unit === u ? "bg-[#334785] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
@@ -625,7 +710,7 @@ export function BcsxReport() {
           </div>
         ) : viewMode === "ca3" ? (
           <div className="max-w-xl mx-auto">
-            {renderShiftTable(32, 47, "Ca 3", "16:30 – 23:59", "bg-[#fef3d6] text-[#854d0e]")}
+            {renderShiftTable(32, 48, "Ca 3", "16:30 – 23:59", "bg-[#fef3d6] text-[#854d0e]")}
           </div>
         ) : (
           <div className="max-h-[480px] overflow-auto rounded-xl border border-slate-200">
@@ -740,15 +825,6 @@ export function BcsxReport() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            disabled={loading || fetchingMonthly}
-            onClick={() => void fetchFromMonthlyInputs()}
-            className="rounded-lg border border-[#334785] bg-blue-50 px-3 py-1.5 text-xs font-bold text-[#173b64] hover:bg-blue-100 disabled:opacity-50"
-            title="Nạp lại 4 số liệu từ trang Dữ liệu các tháng cho ngày đang chọn"
-          >
-            {fetchingMonthly ? "Đang lấy…" : "🔄 Lấy từ Dữ liệu các tháng"}
-          </button>
-          <button
-            type="button"
             disabled={saving || isViewer}
             title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
             onClick={() => void saveTotals()}
@@ -786,15 +862,6 @@ export function BcsxReport() {
           <p className="mt-0.5 text-xs text-slate-500">Đồng bộ tự động từ màn hình &quot;Thời gian/tình hình vận hành&quot; trên QLKT (được phân loại cho S1 và S2) hoặc nhập tay bổ sung.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={syncingEvents}
-            onClick={syncEventsFromQlkt}
-            className="rounded-lg border border-[#334785] bg-blue-50 px-3 py-1.5 text-xs font-bold text-[#173b64] hover:bg-blue-100 disabled:opacity-50"
-            title="Đồng bộ các dòng ghi nhận liên quan tổ máy S1/S2 từ tag Tình hình vận hành trên QLKT"
-          >
-            {syncingEvents ? "Đang đồng bộ QLKT…" : "⚡ Đồng bộ sự kiện từ QLKT"}
-          </button>
           <button
             type="button"
             disabled={saving || isViewer}
@@ -839,7 +906,7 @@ export function BcsxReport() {
             {unitEvents.length === 0 && (
               <tr>
                 <td colSpan={5} className="p-3 text-center text-slate-400 italic">
-                  Chưa có sự kiện nào cho tổ máy {unit} trong ngày {operatingDate.split("-").reverse().join("/")}. Bấm &quot;⚡ Đồng bộ sự kiện từ QLKT&quot; hoặc thêm dòng thủ công.
+                  Chưa có sự kiện nào cho tổ máy {unit} trong ngày {operatingDate.split("-").reverse().join("/")}. Bấm &quot;⚡ Đồng bộ toàn bộ S1 &amp; S2&quot; ở đầu trang hoặc thêm dòng thủ công.
                 </td>
               </tr>
             )}

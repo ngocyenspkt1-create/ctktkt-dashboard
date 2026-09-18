@@ -61,6 +61,21 @@ test('extension package 0.4.21 aligns production values, events and preserves th
   assert.match(content, /Trang hiện tại: "\$\{document\.title/);
 });
 
+test('BCSX uses one QLKT button to load daily totals and events for both units', () => {
+  const source = readFileSync(new URL('../components/bcsx-report.tsx', import.meta.url), 'utf8');
+  const saveRoute = readFileSync(new URL('../app/api/bcsx-sync/route.ts', import.meta.url), 'utf8');
+  assert.match(source, /Đồng bộ toàn bộ S1 & S2/);
+  assert.match(source, /type: "SYNC_ALL"/);
+  assert.match(source, /type: "SYNC_BCSX_EVENTS"/);
+  assert.match(source, /phase: "totals" \| "events"/);
+  assert.match(source, /fetch\("\/api\/bcsx-sync"/);
+  assert.match(saveRoute, /requirePermission\("edit_bcsx"\)/);
+  assert.match(saveRoute, /requiredCodes = \["B", "C", "AE", "H", "I", "AF", "AR"\]/);
+  assert.match(saveRoute, /await db\.batch\(statements\)/);
+  assert.doesNotMatch(source, /Đồng bộ sự kiện từ QLKT/);
+  assert.doesNotMatch(source, /Lấy từ Dữ liệu các tháng/);
+});
+
 const headers = ['', 'Tên điểm đo', 'Kênh', 'Ngày', 'Nguồn dữ liệu', 'Tổng', ...Array.from({ length: 48 }, (_, index) => `H${index + 1}`)];
 const meterRows = ['DHA_S1', 'DH1_285M', 'DHA_S2', 'DH1_283M'].map((meter, meterIndex) => {
   const intervals = Array.from({ length: 48 }, (_, index) => 200000 + meterIndex * 1000 + index);
