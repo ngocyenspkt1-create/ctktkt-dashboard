@@ -12,6 +12,7 @@ const DEFAULT_METER_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/solieucto.jsf
 // Cố định luôn địa chỉ đúng (đã xác nhận trực tiếp trên hệ thống QLKT thật)
 // thay vì phụ thuộc "ghi nhớ", để lỗi này không thể tái diễn.
 const DEFAULT_PRODUCTION_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/rpt_a_production_day.jsf";
+const DEFAULT_OPERATION_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/rpt_hour_operation.jsf";
 const SOURCE_LABELS = {
   production: "Sản lượng",
   fuel: "Nhiên liệu",
@@ -312,10 +313,68 @@ async function syncHeatRate(operatingDate) {
   return readSource("heatrate", qlktPages.heatrate, operatingDate);
 }
 
+async function syncBcsxEvents(operatingDate) {
+  const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
+  const url = qlktPages.operation || DEFAULT_OPERATION_URL;
+  let tabId;
+  let createdTab = false;
+  let previousActiveTabId;
+  let previousActiveWindowId;
+  try {
+    {
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      previousActiveTabId = currentTab?.id;
+      previousActiveWindowId = currentTab?.windowId;
+    }
+    const openTabs = await chrome.tabs.query({});
+    const existingTab = openTabs.find(candidate => {
+      try {
+        const parsed = new URL(candidate.url || "");
+        return QLKT_PATTERN.test(candidate.url || "") && parsed.pathname.toLowerCase().includes("rpt_hour_operation");
+      } catch {
+        return false;
+      }
+    });
+
+    let tab;
+    if (existingTab?.id) {
+      tab = await chrome.tabs.update(existingTab.id, { active: true });
+      if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    } else {
+      tab = await chrome.tabs.create({ url, active: true });
+      createdTab = true;
+    }
+    tabId = tab.id;
+    if (!tabId) throw new Error("Không mở được màn hình Thời gian/tình hình vận hành.");
+    await waitForTab(tabId);
+    const current = await chrome.tabs.get(tabId);
+    if (!QLKT_PATTERN.test(current.url || "")) throw new Error("Phiên đăng nhập QLKT đã hết hạn. Hãy đăng nhập lại rồi thử lại.");
+
+    const prepared = await prepareDateWithRetry(tabId, operatingDate);
+    if (!prepared?.ok) throw new Error(prepared?.error || "Không đặt được ngày tại màn hình Vận hành.");
+    await wait(prepared.refreshed ? 2500 : 500);
+
+    let result = await sendWithRetry(tabId, { type: "READ_QLKT_EVENTS", operatingDate });
+    if (!result?.ok) {
+      for (let i = 0; i < 5 && !result?.ok; i++) {
+        await wait(600);
+        result = await sendWithRetry(tabId, { type: "READ_QLKT_EVENTS", operatingDate });
+      }
+    }
+    if (!result?.ok) throw new Error(result?.error || "Không đọc được nhật ký sự kiện từ màn hình Vận hành.");
+    return result.payload;
+  } finally {
+    if (tabId && createdTab) chrome.tabs.remove(tabId).catch(() => {});
+    if (previousActiveTabId) chrome.tabs.update(previousActiveTabId, { active: true }).catch(() => {});
+    if (previousActiveWindowId) chrome.windows.update(previousActiveWindowId, { focused: true }).catch(() => {});
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const task = message?.type === "SYNC_ALL_QLKT" ? syncAll
     : message?.type === "SYNC_PPA_QLKT" ? syncPpa
     : message?.type === "SYNC_HEATRATE_QLKT" ? syncHeatRate
+    : message?.type === "SYNC_BCSX_EVENTS_QLKT" ? syncBcsxEvents
     : null;
   if (!task) return;
   task(message.operatingDate)

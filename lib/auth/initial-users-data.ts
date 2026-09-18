@@ -1,5 +1,5 @@
-import { hashPassword } from "./password";
-import { PERMISSIONS, type Permission, type Role } from "./session";
+import { hashPassword } from "./password.ts";
+import { PERMISSIONS, type Permission, type Role } from "./session.ts";
 
 export type PositionSeed = {
   position: string;

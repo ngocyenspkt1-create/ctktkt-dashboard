@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
 import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
 import { useSessionUser } from "@/components/session-context";
@@ -38,6 +38,32 @@ function blankTotals(): TotalsDraft {
   return { dauCuc: "", thuongPham: "", thanTieuThu: "", thanTonKho: "" };
 }
 
+function parseAndScaleMwh(valStr: string | undefined): string {
+  if (!valStr || !valStr.trim()) return "";
+  const clean = valStr.trim().replace(",", ".");
+  const num = Number(clean);
+  if (!Number.isFinite(num)) return valStr;
+  // Trong daily_inputs lưu đơn vị triệu kWh (ví dụ 10.47). Nếu < 100 thì quy đổi sang MWh (* 1000)
+  if (num > 0 && num < 100) {
+    const mwh = num * 1000;
+    return String(Number(mwh.toFixed(2)));
+  }
+  return String(num);
+}
+
+function scaleDownToMillionKwh(valStr: string): string {
+  if (!valStr || !valStr.trim()) return "";
+  const clean = valStr.trim().replace(",", ".");
+  const num = Number(clean);
+  if (!Number.isFinite(num)) return valStr;
+  // Nếu người dùng nhập đơn vị MWh (>= 100, ví dụ 10470), quy đổi về triệu kWh (/ 1000) khi lưu daily_inputs
+  if (num >= 100) {
+    const mil = num / 1000;
+    return String(Number(mil.toFixed(6)));
+  }
+  return String(num);
+}
+
 export function BcsxReport() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_bcsx");
@@ -52,6 +78,67 @@ export function BcsxReport() {
   const [exporting, setExporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [extensionVersion, setExtensionVersion] = useState("");
+  const [syncingEvents, setSyncingEvents] = useState(false);
+  const [fetchingMonthly, setFetchingMonthly] = useState(false);
+  const bcsxRequestRef = useRef<{ id: string; timer: number } | null>(null);
+
+  useEffect(() => {
+    const channel = "ctktkt-qlkt-sync";
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      const data = event.data as {
+        channel?: string;
+        sender?: string;
+        type?: string;
+        version?: string;
+        requestId?: string;
+        result?: {
+          ok?: boolean;
+          payload?: { s1?: OperatingEvent[]; s2?: OperatingEvent[]; totalCount?: number };
+          error?: string;
+        };
+      };
+      if (!data || data.channel !== channel || data.sender !== "ctktkt-extension") return;
+      if (data.type === "READY") {
+        setExtensionVersion(String(data.version || "đã kết nối"));
+        return;
+      }
+      if (data.type === "SYNC_BCSX_EVENTS_RESULT") {
+        if (!bcsxRequestRef.current || data.requestId !== bcsxRequestRef.current.id) return;
+        window.clearTimeout(bcsxRequestRef.current.timer);
+        bcsxRequestRef.current = null;
+        setSyncingEvents(false);
+        if (!data.result?.ok || !data.result.payload) {
+          setError(data.result?.error || "Không đồng bộ được nhật ký sự kiện từ QLKT.");
+          return;
+        }
+        const s1 = (data.result.payload.s1 || []).map(e => ({
+          startAt: e.startAt,
+          endAt: e.endAt || "",
+          eventType: e.eventType || 1,
+          description: e.description,
+        }));
+        const s2 = (data.result.payload.s2 || []).map(e => ({
+          startAt: e.startAt,
+          endAt: e.endAt || "",
+          eventType: e.eventType || 1,
+          description: e.description,
+        }));
+        setEvents({
+          S1: s1,
+          S2: s2,
+        });
+        setNotice(`Đã đồng bộ từ QLKT ngày ${operatingDate.split("-").reverse().join("/")}: S1 (${s1.length} sự kiện), S2 (${s2.length} sự kiện). Nhấn "Lưu nhật ký sự kiện" để xác nhận lưu.`);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    window.postMessage({ channel, sender: "ctktkt-web", type: "PING" }, window.location.origin);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      if (bcsxRequestRef.current) window.clearTimeout(bcsxRequestRef.current.timer);
+    };
+  }, [operatingDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,8 +172,18 @@ export function BcsxReport() {
 
         const byCode = new Map((totalsJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
         setTotals({
-          S1: { dauCuc: byCode.get("B") || "", thuongPham: byCode.get("C") || "", thanTieuThu: byCode.get("AE") || "", thanTonKho: byCode.get("AR") || "" },
-          S2: { dauCuc: byCode.get("H") || "", thuongPham: byCode.get("I") || "", thanTieuThu: byCode.get("AF") || "", thanTonKho: byCode.get("AR") || "" },
+          S1: {
+            dauCuc: parseAndScaleMwh(byCode.get("B")),
+            thuongPham: parseAndScaleMwh(byCode.get("C")),
+            thanTieuThu: byCode.get("AE") || "",
+            thanTonKho: byCode.get("AR") || "",
+          },
+          S2: {
+            dauCuc: parseAndScaleMwh(byCode.get("H")),
+            thuongPham: parseAndScaleMwh(byCode.get("I")),
+            thanTieuThu: byCode.get("AF") || "",
+            thanTonKho: byCode.get("AR") || "",
+          },
         });
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Không tải được dữ liệu.");
@@ -124,21 +221,82 @@ export function BcsxReport() {
     setTotals(old => ({ ...old, [unit]: { ...old[unit], [field]: value } }));
   }
 
+  async function fetchFromMonthlyInputs() {
+    setFetchingMonthly(true); setError(null); setNotice(null);
+    try {
+      const period = operatingDate.slice(0, 7);
+      const res = await fetch(`/api/daily-inputs?period=${period}`);
+      const json = await res.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[]; error?: string };
+      if (!res.ok || json.error) throw new Error(json.error || "Không lấy được dữ liệu các tháng.");
+      const byCode = new Map((json.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
+      const s1DauCuc = parseAndScaleMwh(byCode.get("B"));
+      const s1ThuongPham = parseAndScaleMwh(byCode.get("C"));
+      const s1Than = byCode.get("AE") || "";
+      const tonKho = byCode.get("AR") || "";
+      const s2DauCuc = parseAndScaleMwh(byCode.get("H"));
+      const s2ThuongPham = parseAndScaleMwh(byCode.get("I"));
+      const s2Than = byCode.get("AF") || "";
+
+      setTotals({
+        S1: { dauCuc: s1DauCuc, thuongPham: s1ThuongPham, thanTieuThu: s1Than, thanTonKho: tonKho },
+        S2: { dauCuc: s2DauCuc, thuongPham: s2ThuongPham, thanTieuThu: s2Than, thanTonKho: tonKho },
+      });
+
+      const currentTotals = unit === "S1" ? [s1DauCuc, s1ThuongPham, s1Than, tonKho] : [s2DauCuc, s2ThuongPham, s2Than, tonKho];
+      const count = currentTotals.filter(Boolean).length;
+      if (count > 0) {
+        setNotice(`Đã nạp ${count}/4 số liệu từ trang "Dữ liệu các tháng" ngày ${operatingDate.split("-").reverse().join("/")}. Bấm "Lưu số liệu tổng ngày" nếu muốn xác nhận.`);
+      } else {
+        setNotice(`Ngày ${operatingDate.split("-").reverse().join("/")} chưa có số liệu bên "Dữ liệu các tháng". Bạn có thể nhập tay hoặc sang trang Dữ liệu các tháng để đồng bộ QLKT.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không lấy được dữ liệu các tháng.");
+    } finally {
+      setFetchingMonthly(false);
+    }
+  }
+
+  function syncEventsFromQlkt() {
+    setError(null); setNotice(null);
+    if (!extensionVersion) {
+      window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
+      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.21 rồi nhấn F5 trang này.");
+      return;
+    }
+    if (bcsxRequestRef.current) window.clearTimeout(bcsxRequestRef.current.timer);
+    const requestId = crypto.randomUUID();
+    const timer = window.setTimeout(() => {
+      if (bcsxRequestRef.current?.id !== requestId) return;
+      bcsxRequestRef.current = null;
+      setSyncingEvents(false);
+      setError("QLKT phản hồi quá lâu. Hãy kiểm tra tab QLKT rồi thử lại.");
+    }, 45000);
+    bcsxRequestRef.current = { id: requestId, timer };
+    setSyncingEvents(true);
+    window.postMessage({
+      channel: "ctktkt-qlkt-sync",
+      sender: "ctktkt-web",
+      type: "SYNC_BCSX_EVENTS",
+      requestId,
+      operatingDate,
+    }, window.location.origin);
+  }
+
   async function saveTotals() {
     setSaving(true); setError(null); setNotice(null);
     try {
       const codes = TOTAL_FIELD_CODES[unit];
       const t = totals[unit];
       const entries = [
-        { operatingDate, fieldCode: codes.dauCuc, value: t.dauCuc.trim() },
-        { operatingDate, fieldCode: codes.thuongPham, value: t.thuongPham.trim() },
+        { operatingDate, fieldCode: codes.dauCuc, value: scaleDownToMillionKwh(t.dauCuc.trim()) },
+        { operatingDate, fieldCode: codes.thuongPham, value: scaleDownToMillionKwh(t.thuongPham.trim()) },
         { operatingDate, fieldCode: codes.thanTieuThu, value: t.thanTieuThu.trim() },
         { operatingDate, fieldCode: codes.thanTonKho, value: t.thanTonKho.trim() },
       ];
       const res = await fetch("/api/daily-inputs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period: operatingDate.slice(0, 7), entries }) });
       const json = await res.json() as { saved?: number; error?: string };
       if (!res.ok || json.error) throw new Error(json.error || "Không lưu được số liệu tổng ngày.");
-      setNotice(`Đã lưu số liệu tổng ngày tổ máy ${unit}.`);
+      setNotice(`Đã lưu số liệu tổng ngày tổ máy ${unit} (đồng bộ sang Dữ liệu các tháng).`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không lưu được số liệu tổng ngày.");
     } finally {
@@ -348,6 +506,10 @@ export function BcsxReport() {
           <p className="text-xs text-slate-500">Nhập 1 lần trên web, xuất lại đúng định dạng file BCSX gửi Điều độ NSMO cho cả 3 tổ máy A0/S1/S2.</p>
         </div>
         <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${extensionVersion ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${extensionVersion ? "bg-emerald-500" : "bg-amber-500"}`} />
+            {extensionVersion ? `Tiện ích v${extensionVersion}` : "Chưa kết nối tiện ích"}
+          </span>
           <span className="text-xs font-bold text-slate-600">Ngày:</span>
           <DateField value={operatingDate} onChange={setOperatingDate} className="w-[145px] h-8 text-xs"/>
           <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
@@ -570,35 +732,117 @@ export function BcsxReport() {
     )}
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-extrabold text-[#173b64]">2. Số liệu tổng ngày — tổ máy {unit}</h2>
-        <button type="button" disabled={saving || isViewer} title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} onClick={() => void saveTotals()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu số liệu tổng ngày"}</button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-extrabold text-[#173b64]">2. Số liệu tổng ngày — tổ máy {unit}</h2>
+          <p className="mt-0.5 text-xs text-slate-500">4 số liệu được liên kết với trang <Link href="/" className="font-semibold text-[#334785] underline">Dữ liệu các tháng</Link> (Sản lượng đầu cực &amp; thương phẩm quy đổi MWh, Than tiêu thụ &amp; tồn kho).</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={loading || fetchingMonthly}
+            onClick={() => void fetchFromMonthlyInputs()}
+            className="rounded-lg border border-[#334785] bg-blue-50 px-3 py-1.5 text-xs font-bold text-[#173b64] hover:bg-blue-100 disabled:opacity-50"
+            title="Nạp lại 4 số liệu từ trang Dữ liệu các tháng cho ngày đang chọn"
+          >
+            {fetchingMonthly ? "Đang lấy…" : "🔄 Lấy từ Dữ liệu các tháng"}
+          </button>
+          <button
+            type="button"
+            disabled={saving || isViewer}
+            title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
+            onClick={() => void saveTotals()}
+            className="rounded-lg bg-[#334785] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+          >
+            {saving ? "Đang lưu…" : "Lưu số liệu tổng ngày"}
+          </button>
+        </div>
       </div>
-      <p className="mt-1 text-sm text-slate-500">Các ô này dùng chung với đồng bộ QLKT ở trang <Link href="/" className="font-semibold text-[#334785] underline">Dữ liệu các tháng</Link> — đồng bộ bên đó hoặc nhập tay ở đây đều được, số sẽ khớp nhau. Đang chờ người dùng chỉ vị trí chính xác trên QLKT để nối đồng bộ trực tiếp ngay tại trang này.</p>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <label className="flex flex-col text-xs font-semibold text-slate-500">Sản lượng đầu cực (MWh)<input value={totals[unit].dauCuc} onChange={e => setTotal("dauCuc", e.target.value)} inputMode="decimal" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right text-black"/></label>
-        <label className="flex flex-col text-xs font-semibold text-slate-500">Sản lượng thương phẩm (MWh)<input value={totals[unit].thuongPham} onChange={e => setTotal("thuongPham", e.target.value)} inputMode="decimal" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right text-black"/></label>
-        <label className="flex flex-col text-xs font-semibold text-slate-500">Than tiêu thụ (tấn)<input value={totals[unit].thanTieuThu} onChange={e => setTotal("thanTieuThu", e.target.value)} inputMode="decimal" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right text-black"/></label>
-        <label className="flex flex-col text-xs font-semibold text-slate-500">Than tồn kho (tấn, toàn nhà máy)<input value={totals[unit].thanTonKho} onChange={e => setTotal("thanTonKho", e.target.value)} inputMode="decimal" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right text-black"/></label>
+        <label className="flex flex-col text-xs font-semibold text-slate-500">
+          Sản lượng đầu cực (MWh)
+          <input value={totals[unit].dauCuc} onChange={e => setTotal("dauCuc", e.target.value)} inputMode="decimal" placeholder="—" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right font-mono text-xs text-black outline-none focus:border-[#334785]"/>
+        </label>
+        <label className="flex flex-col text-xs font-semibold text-slate-500">
+          Sản lượng thương phẩm (MWh)
+          <input value={totals[unit].thuongPham} onChange={e => setTotal("thuongPham", e.target.value)} inputMode="decimal" placeholder="—" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right font-mono text-xs text-black outline-none focus:border-[#334785]"/>
+        </label>
+        <label className="flex flex-col text-xs font-semibold text-slate-500">
+          Than tiêu thụ (tấn)
+          <input value={totals[unit].thanTieuThu} onChange={e => setTotal("thanTieuThu", e.target.value)} inputMode="decimal" placeholder="—" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right font-mono text-xs text-black outline-none focus:border-[#334785]"/>
+        </label>
+        <label className="flex flex-col text-xs font-semibold text-slate-500">
+          Than tồn kho (tấn, toàn nhà máy)
+          <input value={totals[unit].thanTonKho} onChange={e => setTotal("thanTonKho", e.target.value)} inputMode="decimal" placeholder="—" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right font-mono text-xs text-black outline-none focus:border-[#334785]"/>
+        </label>
       </div>
-      <p className="mt-2 text-xs text-slate-400">Sản lượng tự dùng = đầu cực − thương phẩm, tự tính khi xuất file, không cần nhập.</p>
+      <p className="mt-2 text-[11px] text-slate-400">Sản lượng tự dùng = đầu cực − thương phẩm, tự tính khi xuất file, không cần nhập.</p>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-extrabold text-[#173b64]">3. Tình hình vận hành (nhật ký sự kiện) — tổ máy {unit}</h2>
-      <p className="mt-1 text-sm text-slate-500">Sẽ đồng bộ trực tiếp từ QLKT khi có vị trí cụ thể — hiện có thể nhập tay tạm thời ở đây.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-extrabold text-[#173b64]">3. Tình hình vận hành (nhật ký sự kiện) — tổ máy {unit}</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Đồng bộ tự động từ màn hình &quot;Thời gian/tình hình vận hành&quot; trên QLKT (được phân loại cho S1 và S2) hoặc nhập tay bổ sung.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={syncingEvents}
+            onClick={syncEventsFromQlkt}
+            className="rounded-lg border border-[#334785] bg-blue-50 px-3 py-1.5 text-xs font-bold text-[#173b64] hover:bg-blue-100 disabled:opacity-50"
+            title="Đồng bộ các dòng ghi nhận liên quan tổ máy S1/S2 từ tag Tình hình vận hành trên QLKT"
+          >
+            {syncingEvents ? "Đang đồng bộ QLKT…" : "⚡ Đồng bộ sự kiện từ QLKT"}
+          </button>
+          <button
+            type="button"
+            disabled={saving || isViewer}
+            title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
+            onClick={() => void saveEvents()}
+            className="rounded-lg bg-[#334785] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+          >
+            {saving ? "Đang lưu…" : "Lưu nhật ký sự kiện"}
+          </button>
+        </div>
+      </div>
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-col text-xs font-semibold text-slate-500">Bắt đầu<input type="time" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">Kết thúc<input type="time" value={draft.endTime} onChange={e => setDraft(d => ({ ...d, endTime: e.target.value }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">Loại sự kiện<select value={draft.eventType} onChange={e => setDraft(d => ({ ...d, eventType: Number(e.target.value) }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black">{EVENT_TYPES.map(t => <option key={t.code} value={t.code}>{t.code} — {t.label}</option>)}</select></label>
         <label className="flex min-w-[220px] flex-1 flex-col text-xs font-semibold text-slate-500">Mô tả<input value={draft.description} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} placeholder="Ví dụ: Tăng tải S1 từ 435.7MW lên 536MW" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
-        <button type="button" onClick={addEvent} className="rounded-lg border border-[#334785] px-3 py-2 text-sm font-bold text-[#334785]">+ Thêm dòng</button>
+        <button type="button" onClick={addEvent} className="rounded-lg border border-[#334785] px-3 py-1.5 text-xs font-bold text-[#334785] hover:bg-slate-50">+ Thêm dòng</button>
       </div>
       <div className="mt-3 overflow-auto rounded-xl border border-slate-200">
-        <table className="w-full min-w-[560px] text-sm">
-          <thead className="bg-[#dcebf5] text-[#173b64]"><tr><th className="p-2 text-left">Bắt đầu</th><th className="p-2 text-left">Kết thúc</th><th className="p-2 text-center">Loại</th><th className="p-2 text-left">Sự kiện</th><th className="p-2"></th></tr></thead>
-          <tbody>{unitEvents.map((e, i) => <tr key={i} className="border-t border-slate-100"><td className="p-2 text-black">{e.startAt.slice(11)}</td><td className="p-2 text-black">{e.endAt.slice(11)}</td><td className="p-2 text-center text-black">{e.eventType}</td><td className="p-2 text-black">{e.description}</td><td className="p-2 text-right"><button type="button" onClick={() => removeEvent(i)} className="text-xs font-bold text-red-500">Xóa</button></td></tr>)}
-          {unitEvents.length === 0 && <tr><td colSpan={5} className="p-3 text-center text-slate-400">Chưa có sự kiện nào trong ngày.</td></tr>}
+        <table className="w-full min-w-[560px] text-xs">
+          <thead className="bg-[#dcebf5] text-[#173b64]">
+            <tr>
+              <th className="p-2 text-left w-[80px]">Bắt đầu</th>
+              <th className="p-2 text-left w-[80px]">Kết thúc</th>
+              <th className="p-2 text-center w-[60px]">Loại</th>
+              <th className="p-2 text-left">Sự kiện</th>
+              <th className="p-2 text-right w-[60px]"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {unitEvents.map((e, i) => (
+              <tr key={i} className="border-t border-slate-100 hover:bg-slate-50/60">
+                <td className="p-2 font-mono text-black font-semibold">{e.startAt.slice(11)}</td>
+                <td className="p-2 font-mono text-black">{e.endAt ? e.endAt.slice(11) : "—"}</td>
+                <td className="p-2 text-center text-black font-bold">{e.eventType}</td>
+                <td className="p-2 text-black">{e.description}</td>
+                <td className="p-2 text-right">
+                  <button type="button" onClick={() => removeEvent(i)} className="text-xs font-bold text-red-500 hover:text-red-700">Xóa</button>
+                </td>
+              </tr>
+            ))}
+            {unitEvents.length === 0 && (
+              <tr>
+                <td colSpan={5} className="p-3 text-center text-slate-400 italic">
+                  Chưa có sự kiện nào cho tổ máy {unit} trong ngày {operatingDate.split("-").reverse().join("/")}. Bấm &quot;⚡ Đồng bộ sự kiện từ QLKT&quot; hoặc thêm dòng thủ công.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

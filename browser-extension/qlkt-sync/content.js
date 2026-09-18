@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.20";
+  const CONTENT_SCRIPT_VERSION = "0.4.21";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   let pendingDateRefresh = null;
   // Ngày cuối cùng ĐÃ THỰC SỰ bấm nút cập nhật cho tab này (không phải ngày đang
@@ -49,6 +49,7 @@
   function pageKind() {
     const path = location.pathname.toLowerCase();
     if (path.includes("rpt_a_production_day")) return "production";
+    if (path.includes("rpt_hour_operation")) return "operation";
     if (path.includes("nhienlieu")) return "fuel";
     if (path.includes("hieusuatlo") || path.includes("suathaonhiet") || path.includes("can_bang_nhiet")) return "heatrate";
     // "rpt_a_bu_tru_day.jsf" (Cập nhật sản lượng bù trừ) là 1 báo cáo KHÁC
@@ -497,6 +498,123 @@
     return { version: 1, operatingDate, sourcePage: location.href, entries: [...entries.values()] };
   }
 
+  function parseOperatingRow(row, defaultDate) {
+    const cells = [...row.cells];
+    if (cells.length < 4) return null;
+
+    const dateTimeRegex = /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/;
+    const timeOnlyRegex = /^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/;
+
+    const dateTimes = [];
+    cells.forEach(cell => {
+      const inputs = [...cell.querySelectorAll("input:not([type='checkbox']):not([type='radio']):not([type='hidden']), textarea")];
+      const values = inputs.length ? inputs.map(i => cleanText(i.value || i.getAttribute("value") || "")) : [cleanText(cell.textContent)];
+      for (const val of values) {
+        const dtMatch = val.match(dateTimeRegex);
+        if (dtMatch) {
+          const formatted = `${dtMatch[3]}-${dtMatch[2].padStart(2, "0")}-${dtMatch[1].padStart(2, "0")} ${dtMatch[4].padStart(2, "0")}:${dtMatch[5].padStart(2, "0")}`;
+          dateTimes.push(formatted);
+        } else {
+          const tMatch = val.match(timeOnlyRegex);
+          if (tMatch && defaultDate) {
+            dateTimes.push(`${defaultDate} ${tMatch[1].padStart(2, "0")}:${tMatch[2].padStart(2, "0")}`);
+          }
+        }
+      }
+    });
+
+    if (dateTimes.length === 0) return null;
+    const startAt = dateTimes[0];
+    const endAt = dateTimes.length > 1 ? dateTimes[1] : "";
+
+    // Event type: 1..5
+    let eventType = 1;
+    for (const cell of cells) {
+      const select = cell.querySelector("select");
+      if (select) {
+        const selectedText = cleanText(select.options?.[select.selectedIndex]?.textContent || select.value || "");
+        const numMatch = selectedText.match(/^([1-5])\b/);
+        if (numMatch) { eventType = Number(numMatch[1]); break; }
+      }
+      const cellText = cleanText(cell.textContent);
+      const textMatch = cellText.match(/^([1-5])\s*[-–]/);
+      if (textMatch) { eventType = Number(textMatch[1]); break; }
+    }
+
+    // Description: text that is not a date/time/button
+    let description = "";
+    for (let i = cells.length - 1; i >= 0; i--) {
+      const cell = cells[i];
+      const input = cell.querySelector("input:not([type='checkbox']):not([type='radio']):not([type='hidden']), textarea");
+      const text = cleanText(input ? (input.value || input.getAttribute("value") || "") : cell.textContent);
+      if (text && !dateTimeRegex.test(text) && !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(text) && !/^[1-5]\s*[-–]/.test(text) && text.length > 2) {
+        description = text;
+        break;
+      }
+    }
+
+    if (!startAt || !description) return null;
+    return { startAt, endAt, eventType, description };
+  }
+
+  function classifyEventUnit(description) {
+    const norm = normalized(description);
+    const isS1 = /\b(s1|mf1)\b/i.test(description) || norm.includes("to may 1") || norm.includes("to may s1") || norm.includes("to 1") || norm.includes("lo 1") || norm.includes("s1");
+    const isS2 = /\b(s2|mf2)\b/i.test(description) || norm.includes("to may 2") || norm.includes("to may s2") || norm.includes("to 2") || norm.includes("lo 2") || norm.includes("s2");
+
+    if (isS1 && !isS2) return ["S1"];
+    if (isS2 && !isS1) return ["S2"];
+    return ["S1", "S2"];
+  }
+
+  function extractOperatingEvents(expectedOperatingDate) {
+    const operatingDate = parseDate(expectedOperatingDate) || expectedOperatingDate;
+    if (!operatingDate) throw new Error("Không xác định được ngày báo cáo trên trang QLKT.");
+
+    const tabHeader = [...document.querySelectorAll("a, button, span, th, td, div")].find(el => {
+      const t = normalized(el.textContent);
+      return t === "tinh hinh van hanh" && el.offsetWidth > 0;
+    });
+    if (tabHeader && tabHeader.getAttribute("aria-expanded") === "false") {
+      try { tabHeader.click(); } catch { /* ignore */ }
+    }
+
+    const allRows = [...document.querySelectorAll("tr")];
+    const s1Events = [];
+    const s2Events = [];
+    const seenS1 = new Set();
+    const seenS2 = new Set();
+
+    for (const row of allRows) {
+      const parsed = parseOperatingRow(row, operatingDate);
+      if (!parsed) continue;
+
+      const units = classifyEventUnit(parsed.description);
+      const key = `${parsed.startAt}|${parsed.endAt}|${parsed.eventType}|${parsed.description}`;
+
+      if (units.includes("S1") && !seenS1.has(key)) {
+        seenS1.add(key);
+        s1Events.push(parsed);
+      }
+      if (units.includes("S2") && !seenS2.has(key)) {
+        seenS2.add(key);
+        s2Events.push(parsed);
+      }
+    }
+
+    return {
+      version: 1,
+      operatingDate,
+      sourcePage: location.href,
+      kind: "operating-events",
+      s1: s1Events.sort((a, b) => a.startAt.localeCompare(b.startAt)),
+      s2: s2Events.sort((a, b) => a.startAt.localeCompare(b.startAt)),
+      totalCount: s1Events.length + s2Events.length,
+    };
+  }
+
+  globalThis.QlktOperatingExtractor = { parseOperatingRow, classifyEventUnit, extractOperatingEvents };
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === "GET_QLKT_PAGE_KIND") {
       const kind = pageKind();
@@ -509,6 +627,15 @@
       catch (error) {
         const message = error instanceof Error ? error.message : "Không đặt được ngày QLKT.";
         sendResponse({ ok: false, retryable: message.includes("nút cập nhật ngày"), error: message });
+      }
+      return;
+    }
+    if (message?.type === "READ_QLKT_EVENTS") {
+      try {
+        const payload = extractOperatingEvents(message.operatingDate);
+        sendResponse({ ok: true, payload });
+      } catch (error) {
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đọc được nhật ký sự kiện." });
       }
       return;
     }

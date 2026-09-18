@@ -16,8 +16,9 @@ test("Danh sách Cương vị mặc định đủ 25 cương vị", () => {
   assert.ok(positionNames.has("Trưởng kíp điện"));
 });
 
-test("Danh sách Nhân sự đủ 124 nhân sự và thuộc 25 cương vị", () => {
-  assert.equal(INITIAL_USERS.length, 124);
+test("Danh sách Nhân sự tích hợp đủ nhân sự PXVH1 (>= 124) và thuộc 25 cương vị", () => {
+  assert.ok(INITIAL_USERS.length >= 124);
+  assert.equal(INITIAL_USERS.length, 163);
   const validPositions = new Set(DEFAULT_POSITIONS.map(p => p.position));
 
   const usernames = new Set();

@@ -23,9 +23,13 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
   }
 
   const byCode = new Map((totalsRes.results as { fieldCode: string; value: string }[]).map(r => [r.fieldCode, Number(r.value)]));
+  const toMwh = (val: number | undefined) => {
+    if (val === undefined || Number.isNaN(val)) return null;
+    return val > 0 && val < 100 ? val * 1000 : val;
+  };
   const totals: UnitTotals = unit === "S1"
-    ? { dauCuc: byCode.get("B") ?? null, thuongPham: byCode.get("C") ?? null, thanTieuThu: byCode.get("AE") ?? null, thanTonKho: byCode.get("AR") ?? null }
-    : { dauCuc: byCode.get("H") ?? null, thuongPham: byCode.get("I") ?? null, thanTieuThu: byCode.get("AF") ?? null, thanTonKho: byCode.get("AR") ?? null };
+    ? { dauCuc: toMwh(byCode.get("B")), thuongPham: toMwh(byCode.get("C")), thanTieuThu: byCode.get("AE") ?? null, thanTonKho: byCode.get("AR") ?? null }
+    : { dauCuc: toMwh(byCode.get("H")), thuongPham: toMwh(byCode.get("I")), thanTieuThu: byCode.get("AF") ?? null, thanTonKho: byCode.get("AR") ?? null };
 
   const events = eventsRes.results as OperatingEvent[];
   return { readings, totals, events };

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from '../lib/qlkt-sync.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
 
-test('extension package 0.4.20 aligns production values by screen position and preserves the prepared date', () => {
+test('extension package 0.4.21 aligns production values, events and preserves the prepared date', () => {
   const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
@@ -15,10 +15,18 @@ test('extension package 0.4.20 aligns production values by screen position and p
   const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
   const popup = readFileSync(new URL('../public/qlkt-sync-extension/popup.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.20');
+  const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
+  assert.equal(manifest.version, '0.4.21');
   assert.ok(manifest.host_permissions.includes('https://ctktkt-dashboard.vercel.app/*'));
   assert.ok(manifest.content_scripts.some(item => item.js.includes('web-bridge.js') && item.matches.includes('https://ctktkt-dashboard.vercel.app/*')));
+  assert.match(webBridge, /\/bcsx-report/);
+  assert.match(webBridge, /SYNC_BCSX_EVENTS/);
   assert.match(popup, /DEFAULT_TARGET_URL = "https:\/\/ctktkt-dashboard\.vercel\.app\/"/);
+  assert.match(background, /DEFAULT_OPERATION_URL = "http:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\/sxd\/rpt_hour_operation\.jsf"/);
+  assert.match(background, /SYNC_BCSX_EVENTS_QLKT/);
+  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.21"/);
+  assert.match(content, /extractOperatingEvents/);
+  assert.match(content, /classifyEventUnit/);
   assert.match(background, /prepareDateWithRetry/);
   assert.match(background, /readMeterFromPageWorldWithRetry/);
   assert.match(content, /pendingDateRefresh/);
@@ -26,7 +34,6 @@ test('extension package 0.4.20 aligns production values by screen position and p
   assert.match(content, /sessionStorage\.setItem\(PREPARED_DATE_KEY, operatingDate\)/);
   assert.match(content, /preparedDate === expectedOperatingDate/);
   assert.match(content, /aligned \|\| sameIndex/);
-  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.20"/);
   // Nút "cập nhật ngày" từng bị dò NHẦM trên toàn trang (không giới hạn vị trí)
   // và bấm trúng menu điều hướng "Cập nhật sản lượng bù trừ" — giờ mọi cách dò
   // đều phải nằm gần ô ngày (isNearDateRow) và loại trừ rõ "bù trừ".
@@ -119,4 +126,42 @@ test('web app decodes a complete PPA payload and rejects missing meters', () => 
   assert.equal(validateQlktPpaSyncPayload(payload)?.readings.length, 4);
   const incomplete = { ...payload, readings: payload.readings.slice(0, 3) };
   assert.equal(decodeQlktPpaSyncHash(`#qlkt-sync=${Buffer.from(JSON.stringify(incomplete)).toString('base64url')}`), null);
+});
+
+test('operating events extractor correctly classifies S1 and S2 events from QLKT format', () => {
+  const contentCode = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
+  // Run in a simulated environment to test classifyEventUnit and parseOperatingRow
+  const mockGlobal = {};
+  class MockMutationObserver { observe() {} disconnect() {} }
+  const fn = new Function('globalThis', 'window', 'document', 'location', 'chrome', 'MutationObserver', contentCode);
+  fn(mockGlobal, { location: { origin: 'http://test' } }, { querySelectorAll: () => [], documentElement: {} }, { pathname: '', search: '', href: '' }, { runtime: { onMessage: { addListener: () => {} } }, storage: { local: { get: () => {} } } }, MockMutationObserver);
+
+  const classify = mockGlobal.QlktOperatingExtractor.classifyEventUnit;
+  assert.deepEqual(classify('Tăng tải S1 từ 435.7MW lên 470MW'), ['S1']);
+  assert.deepEqual(classify('Giảm tải S1 từ 470MW về 435.7MW'), ['S1']);
+  assert.deepEqual(classify('Tăng tải S2 từ 435.7MW lên 470MW'), ['S2']);
+  assert.deepEqual(classify('Giảm tải S2 từ 470MW về 435.7MW'), ['S2']);
+  assert.deepEqual(classify('Khởi động tổ máy S1 hòa lưới'), ['S1']);
+  assert.deepEqual(classify('Tách sửa chữa lò MF2'), ['S2']);
+  assert.deepEqual(classify('Ngừng khẩn cấp tổ máy 1 do bảo vệ tác động'), ['S1']);
+  assert.deepEqual(classify('Cắt điện ĐZ 220kV theo lệnh A0'), ['S1', 'S2']);
+
+  // Test row parsing with mock DOM row
+  const parseRow = mockGlobal.QlktOperatingExtractor.parseOperatingRow;
+  const mockRow = {
+    cells: [
+      { querySelectorAll: () => [], querySelector: () => null, textContent: '' }, // checkbox
+      { querySelectorAll: () => [], querySelector: () => null, textContent: '17/09/2026' },
+      { querySelectorAll: () => [{ value: '17/09/2026 14:33:00' }], querySelector: () => null, textContent: '' },
+      { querySelectorAll: () => [{ value: '17/09/2026 14:44:00' }], querySelector: () => null, textContent: '' },
+      { querySelectorAll: () => [], querySelector: () => ({ value: '1', options: [{ textContent: '1 - Bình thường: tăng giảm công suất theo lệnh điều độ' }], selectedIndex: 0 }), textContent: '' },
+      { querySelectorAll: () => [], querySelector: () => ({ value: 'Tăng tải S1 từ 435.7MW lên 470MW' }), textContent: 'Tăng tải S1 từ 435.7MW lên 470MW' },
+    ]
+  };
+  const parsed = parseRow(mockRow, '2026-09-17');
+  assert.ok(parsed);
+  assert.equal(parsed.startAt, '2026-09-17 14:33');
+  assert.equal(parsed.endAt, '2026-09-17 14:44');
+  assert.equal(parsed.eventType, 1);
+  assert.equal(parsed.description, 'Tăng tải S1 từ 435.7MW lên 470MW');
 });

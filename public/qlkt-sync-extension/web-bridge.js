@@ -1,5 +1,5 @@
 (() => {
-  if (!/^(?:\/|\/ppa-heat-rate\/?|\/pmis-report\/?)$/.test(window.location.pathname)) return;
+  if (!/^(?:\/|\/ppa-heat-rate\/?|\/pmis-report\/?|\/bcsx-report\/?)$/.test(window.location.pathname)) return;
   const channel = "ctktkt-qlkt-sync";
   const post = message => window.postMessage({ channel, sender: "ctktkt-extension", ...message }, window.location.origin);
 
@@ -13,10 +13,12 @@
     }
     const runtimeType = message.type === "SYNC_PPA" ? "SYNC_PPA_QLKT"
       : message.type === "SYNC_HEATRATE" ? "SYNC_HEATRATE_QLKT"
+      : message.type === "SYNC_BCSX_EVENTS" ? "SYNC_BCSX_EVENTS_QLKT"
       : message.type === "SYNC_ALL" ? "SYNC_ALL_QLKT"
       : "";
     const resultType = message.type === "SYNC_PPA" ? "SYNC_PPA_RESULT"
       : message.type === "SYNC_HEATRATE" ? "SYNC_HEATRATE_RESULT"
+      : message.type === "SYNC_BCSX_EVENTS" ? "SYNC_BCSX_EVENTS_RESULT"
       : "SYNC_ALL_RESULT";
     if (!runtimeType || !/^\d{4}-\d{2}-\d{2}$/.test(String(message.operatingDate || ""))) return;
     try {
