@@ -32,32 +32,29 @@ const REQUIRED_FIELDS = {
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
-function waitForTab(tabId, timeout = 20000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      chrome.tabs.onUpdated.removeListener(listener);
-      reject(new Error("QLKT tải trang quá lâu."));
-    }, timeout);
-    const listener = (updatedId, changeInfo) => {
-      if (updatedId === tabId && changeInfo.status === "complete") {
-        clearTimeout(timer);
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }
-    };
-    chrome.tabs.onUpdated.addListener(listener);
-    chrome.tabs.get(tabId).then(tab => {
-      if (tab.status === "complete") {
-        clearTimeout(timer);
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }
-    }).catch(error => {
-      clearTimeout(timer);
-      chrome.tabs.onUpdated.removeListener(listener);
-      reject(error);
-    });
-  });
+async function waitForTab(tabId, timeout = 60000) {
+  const deadline = Date.now() + timeout;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.status === "complete") return;
+      // QLKT đôi khi giữ tab ở trạng thái "loading" rất lâu dù DOM đã hiện
+      // đầy đủ và có thể đọc được. Chờ document.readyState giúp tránh báo sai
+      // "tải trang quá lâu"; sendWithRetry sẽ tự chèn content script nếu
+      // document_idle chưa kịp chạy.
+      const executions = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => document.readyState,
+      });
+      if (["interactive", "complete"].includes(executions?.[0]?.result)) return;
+    } catch (error) {
+      lastError = error;
+    }
+    await wait(750);
+  }
+  const detail = lastError instanceof Error ? ` Chi tiết: ${lastError.message}` : "";
+  throw new Error(`QLKT chưa sẵn sàng sau ${Math.round(timeout / 1000)} giây.${detail}`);
 }
 
 async function sendWithRetry(tabId, message, attempts = 10) {

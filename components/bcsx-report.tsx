@@ -335,7 +335,7 @@ export function BcsxReport() {
     }
     if (!extensionVersion) {
       window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
-      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.21 rồi nhấn F5 trang này.");
+      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.22 rồi nhấn F5 trang này.");
       return;
     }
     if (bcsxRequestRef.current) window.clearTimeout(bcsxRequestRef.current.timer);
