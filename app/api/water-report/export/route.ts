@@ -313,14 +313,11 @@ export async function GET(request: Request) {
         const cell = row.getCell(c);
         cell.font = dataFont;
         cell.border = thinBorder;
+        cell.alignment = { vertical: "middle", horizontal: "center" };
 
-        if (c <= 4 || c === 19 || c === 20) {
-          cell.alignment = { vertical: "middle", horizontal: "center" };
-        } else if (c === 13 || c === 14) {
-          cell.alignment = { vertical: "middle", horizontal: "right" };
+        if (c === 13 || c === 14) {
           cell.numFmt = "0.0000";
-        } else {
-          cell.alignment = { vertical: "middle", horizontal: "right" };
+        } else if (c >= 5 && c <= 18) {
           cell.numFmt = "#,##0.00";
         }
       }
