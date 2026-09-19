@@ -24,7 +24,13 @@
 
 - Thêm mục điều hướng **Báo cáo Chỉ tiêu KTKT**.
 - Chọn ngày vận hành; tải cả ngày D và D−1 để tính chênh lệch công tơ.
-- 332 ô nhập tay được gom thành 7 nhóm, có tìm kiếm theo tên hoặc mã ô Excel.
+- 296 ô còn nhập tay được gom thành 7 nhóm, có tìm kiếm theo tên hoặc mã ô Excel.
+- 42 ô lấy trực tiếp từ mục 1 BCSX tại 6 mốc `06:00`, `10:00`, `14:00`, `18:00`, `22:00`, `23:59` (hiển thị là 24h):
+  - P và Q đầu cực S1/S2: `M3:R6`.
+  - P điểm bán điện/MBT T1, T2: `M7:R8`.
+  - Điện áp thanh cái chung 220 kV: `M20:R20`.
+- Điện áp chỉ tự liên kết khi số S1 và S2 bằng nhau trong sai số 0,01 kV; nếu khác, web báo lỗi và chặn xuất Excel để không tự chọn sai một tổ.
+- Các ô liên kết BCSX hiển thị nền xanh, chỉ đọc; muốn sửa phải quay lại mục 1 BCSX để duy trì một nguồn số liệu duy nhất.
 - Kết quả S1, S2 và toàn nhà máy tự tính, nền xanh và không cho sửa.
 - Dữ liệu lưu vào bảng `daily_inputs` hiện có bằng mã `KTKT:<ô>`; không cần migration mới.
 - Khi đã có dữ liệu ở trang “Dữ liệu các tháng”, API xuất tự dùng các trường B/C/H/I/AE/AF/AJ/CJ/AR làm giá trị dự phòng cho vùng PMIS tương ứng.
@@ -55,7 +61,7 @@ Bộ kiểm thử `tests/ctktkt-export.test.mjs` đã xác nhận qua vòng mở
 ## 5. Kiểm tra kỹ thuật
 
 - `npx.cmd tsc --noEmit`: đạt.
-- `node --test tests/*.mjs`: 52/52 đạt trước khi bổ sung kiểm thử cấu trúc; kiểm thử cấu trúc riêng đạt.
+- `node --test tests/*.mjs`: 55/55 đạt, gồm ánh xạ đủ 42 ô BCSX, kiểm soát lệch điện áp và bảo toàn file xuất.
 - `npm.cmd run build`: đạt, có route `/ctktkt-report`, `/api/ctktkt-report`, `/api/ctktkt-report/export`.
 - Các file mới/sửa của chức năng này chạy ESLint riêng: đạt.
 - Lint toàn dự án vẫn không đạt do 10 lỗi nền React Hooks ở các component cũ; chức năng mới không thêm lỗi lint.

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
+import { deriveCtktktCellsFromBcsx } from "../lib/ctktkt-bcsx-link.ts";
 import { CTKTKT_TEMPLATE_BASE64 } from "../lib/ctktkt-template.generated.ts";
 
 async function loadTemplate() {
@@ -60,6 +61,13 @@ test("CTKTKT export round-trip preserves all sheets, formulas, merges and print 
 
   source.getWorksheet("17").getCell("AB8").value = 123456.789;
   source.getWorksheet("17").getCell("J157").value = 11053.64;
+  const linked = deriveCtktktCellsFromBcsx([
+    { unit: "S1", timeSlot: "06:00", metric: "P", value: "438.25" },
+    { unit: "S1", timeSlot: "06:00", metric: "D", value: "400.5" },
+    { unit: "S1", timeSlot: "06:00", metric: "E", value: "233" },
+    { unit: "S2", timeSlot: "06:00", metric: "E", value: "233" },
+  ]);
+  for (const [cell, value] of Object.entries(linked.entries)) source.getWorksheet("17").getCell(cell).value = Number(value);
   source.calcProperties.fullCalcOnLoad = true;
   const output = await source.xlsx.writeBuffer();
   const archive = await JSZip.loadAsync(output);
@@ -75,5 +83,8 @@ test("CTKTKT export round-trip preserves all sheets, formulas, merges and print 
   }
   assert.equal(reopened.getWorksheet("17").getCell("AB8").value, 123456.789);
   assert.equal(reopened.getWorksheet("17").getCell("J157").value, 11053.64);
+  assert.equal(reopened.getWorksheet("17").getCell("M3").value, 438.25);
+  assert.equal(reopened.getWorksheet("17").getCell("M7").value, 400.5);
+  assert.equal(reopened.getWorksheet("17").getCell("M20").value, 233);
   assert.match(workbookXml, /fullCalcOnLoad="1"/);
 });

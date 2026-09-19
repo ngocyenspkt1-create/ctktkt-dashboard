@@ -1,8 +1,9 @@
 import { getRawDb } from "@/db";
 import { requirePermission } from "@/lib/auth/server";
+import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 
-const fieldCells = new Set<string>(CTKTKT_INPUT_FIELDS.map(field => field.cell));
+const fieldCells = new Set<string>(CTKTKT_INPUT_FIELDS.map(field => field.cell).filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell)));
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
@@ -20,10 +21,29 @@ export async function GET(request: Request) {
   if (!periodPattern.test(period)) return Response.json({ error: "Tháng không hợp lệ." }, { status: 400 });
   const { from, next } = monthBounds(period);
   try {
-    const { results } = await getRawDb().prepare(
+    const db = getRawDb();
+    const { results } = await db.prepare(
       "SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code",
     ).bind(from, next).all();
-    return Response.json({ entries: results }, { headers: { "Cache-Control": "no-store" } });
+    const { results: shiftResults } = await db.prepare(
+      "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
+    ).bind(from, next).all();
+    const readingsByDate = new Map<string, CtktktBcsxReading[]>();
+    for (const reading of shiftResults as CtktktBcsxReading[]) {
+      const date = reading.operatingDate || "";
+      const list = readingsByDate.get(date) || [];
+      list.push(reading);
+      readingsByDate.set(date, list);
+    }
+    const linkedEntries: Array<{ operatingDate: string; cell: string; value: string }> = [];
+    const warnings: Array<{ operatingDate: string; cell: string; message: string }> = [];
+    for (const [operatingDate, readings] of readingsByDate) {
+      const derived = deriveCtktktCellsFromBcsx(readings);
+      for (const [cell, value] of Object.entries(derived.entries)) linkedEntries.push({ operatingDate, cell, value });
+      for (const warning of derived.warnings) warnings.push({ operatingDate, ...warning });
+    }
+    const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry => !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell));
+    return Response.json({ entries: manualEntries, linkedEntries, warnings }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Chưa tải được dữ liệu Chỉ tiêu KTKT." }, { status: 503 });
   }
@@ -56,6 +76,7 @@ export async function POST(request: Request) {
     const statements = clean.map(entry => entry.value === ""
       ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${entry.cell}`)
       : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(body.operatingDate, `KTKT:${entry.cell}`, entry.value));
+    for (const cell of CTKTKT_BCSX_LINKED_CELLS) statements.push(db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${cell}`));
     if (statements.length) await db.batch(statements);
     return Response.json({ saved: clean.filter(entry => entry.value !== "").length });
   } catch (error) {

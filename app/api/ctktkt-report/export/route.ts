@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { getRawDb } from "@/db";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
+import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 
@@ -65,8 +66,12 @@ export async function GET(request: Request) {
   if (!periodPattern.test(period)) return Response.json({ error: "Tháng không hợp lệ." }, { status: 400 });
   try {
     const { year, month, previous, next } = monthBounds(period);
-    const { results } = await getRawDb().prepare(
+    const db = getRawDb();
+    const { results } = await db.prepare(
       "SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, field_code",
+    ).bind(previous, next).all();
+    const { results: shiftResults } = await db.prepare(
+      "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
     ).bind(previous, next).all();
     const byDate = new Map<string, Record<string, string>>();
     for (const item of results as { operatingDate: string; fieldCode: string; value: string }[]) {
@@ -74,6 +79,19 @@ export async function GET(request: Request) {
       row[item.fieldCode] = item.value;
       byDate.set(item.operatingDate, row);
     }
+    const readingsByDate = new Map<string, CtktktBcsxReading[]>();
+    for (const reading of shiftResults as CtktktBcsxReading[]) {
+      const date = reading.operatingDate || "";
+      const list = readingsByDate.get(date) || [];
+      list.push(reading);
+      readingsByDate.set(date, list);
+    }
+
+    const applyBcsxLinks = (sheet: ExcelJS.Worksheet, date: string) => {
+      const linked = deriveCtktktCellsFromBcsx(readingsByDate.get(date) || []);
+      if (linked.warnings.length) throw new Error(`BCSX ngày ${date}: ${linked.warnings.map(item => item.message).join(" ")}`);
+      for (const [cell, value] of Object.entries(linked.entries)) setNumber(sheet, cell, numeric(value));
+    };
 
     const workbook = new ExcelJS.Workbook();
     const templateBytes = Uint8Array.from(atob(CTKTKT_TEMPLATE_BASE64), character => character.charCodeAt(0));
@@ -87,12 +105,13 @@ export async function GET(request: Request) {
 
     const previousSheet = workbook.getWorksheet("d-1");
     const previousRow = byDate.get(previous);
-    if (previousSheet && previousRow) {
-      fillDailyFallbacks(previousSheet, previousRow);
-      for (const [code, value] of Object.entries(previousRow)) if (code.startsWith("KTKT:")) {
+    if (previousSheet) {
+      if (previousRow) fillDailyFallbacks(previousSheet, previousRow);
+      for (const [code, value] of Object.entries(previousRow || {})) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
         previousSheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
+      applyBcsxLinks(previousSheet, previous);
       applyDateLabels(previousSheet, previous);
     }
 
@@ -103,10 +122,11 @@ export async function GET(request: Request) {
       if (!sheet) continue;
       const row = byDate.get(date) || {};
       fillDailyFallbacks(sheet, row);
-      for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:")) {
+      for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
         sheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
+      applyBcsxLinks(sheet, date);
       applyDateLabels(sheet, date);
     }
     const totalSheet = workbook.getWorksheet("Tổng hợp tháng");
