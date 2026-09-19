@@ -132,3 +132,4 @@ test("generateEmailReportHtml applies Times New Roman font styling and HTML tags
   assert.ok(html.includes("<strong>- Tổ máy S2 vận hành:</strong>"));
   assert.ok(html.includes("<strong>2. Báo cáo bao gồm các file:</strong>"));
 });
+
