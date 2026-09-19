@@ -93,11 +93,20 @@ export function recalculateWaterShiftChain(shifts: WaterShiftLog[]): WaterShiftL
       }
 
       // 2. Lượng nước bổ sung sử dụng trong ca (m3) = Nhận ca này - Nhận ca trước
+      // Tự động bù tràn số vòng tua đồng hồ nước (chu kỳ đồng hồ 25.000 m3 tại nhà máy)
       if (curr.waterRecS1 > 0 && prev.waterRecS1 > 0) {
-        curr.waterUsedS1 = roundTo(curr.waterRecS1 - prev.waterRecS1, 2);
+        let diff = curr.waterRecS1 - prev.waterRecS1;
+        if (diff < 0 && diff > -25000) {
+          diff += 25000;
+        }
+        curr.waterUsedS1 = roundTo(diff, 2);
       }
       if (curr.waterRecS2 > 0 && prev.waterRecS2 > 0) {
-        curr.waterUsedS2 = roundTo(curr.waterRecS2 - prev.waterRecS2, 2);
+        let diff = curr.waterRecS2 - prev.waterRecS2;
+        if (diff < 0 && diff > -25000) {
+          diff += 25000;
+        }
+        curr.waterUsedS2 = roundTo(diff, 2);
       }
 
       // 3. Hệ số (Nước / Công suất) m3/MWh = Lượng nước bổ sung / Sản lượng điện phát

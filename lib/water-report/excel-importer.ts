@@ -63,7 +63,7 @@ export function parseSheetShifts(ws: ExcelJS.Worksheet): WaterShiftLog[] {
         shifts.push({
           logDate: d || lastDate || "",
           shiftTime: timeVal as "06h00" | "14h00" | "22h00",
-          shiftTeam: String(row.getCell(3).value || "A").trim().toUpperCase(),
+          shiftTeam: String(row.getCell(3).value || "").trim().toUpperCase(),
           shiftLeader: String(row.getCell(4).value || "").trim(),
           elecRecS1: safeNum(row.getCell(5).value),
           elecRecS2: safeNum(row.getCell(6).value),
