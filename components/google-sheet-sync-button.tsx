@@ -11,7 +11,7 @@ const TOKEN_KEY = "ctktkt-google-script-token";
 const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const format = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? "—" : numberFormat.format(value);
 
-type PreviewResponse = { preview?: GoogleSheetDayPayload; error?: string };
+type PreviewResponse = { configured?: boolean; preview?: GoogleSheetDayPayload; error?: string; results?: Array<{ status?: string }> };
 
 export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = false, disabledReason: disabledReasonProp = "", onImported }: { operatingDate: string; disabled?: boolean; disabledReason?: string; onImported?: () => void | Promise<void> }) {
   const user = useSessionUser();
@@ -24,12 +24,13 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
   const [assessmentPreview, setAssessmentPreview] = useState<GoogleSheetAssessmentEntry[] | null>(null);
   const [pendingAction, setPendingAction] = useState<"push" | "import">("push");
   const [loading, setLoading] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
+  const [serverConfigured, setServerConfigured] = useState(false);
 
   async function requestPreview() {
     const response = await fetch("/api/google-sheet-sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operatingDate }),
+      body: JSON.stringify({ operatingDate, action: "preview" }),
     });
     const body = await response.json() as PreviewResponse;
     if (!response.ok) throw new Error(body.error || "Không đồng bộ được Google Sheet.");
@@ -50,9 +51,13 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
   async function loadPreview() {
     setLoading(true); setError(""); setMessage("");
     try {
-      validateGoogleAppsScriptUrl(scriptUrl.trim());
-      const [body, row] = await Promise.all([requestPreview(), readSheetRow()]);
+      const body = await requestPreview();
       if (!body.preview) throw new Error("Web chưa tạo được dữ liệu xem trước.");
+      setServerConfigured(Boolean(body.configured));
+      if (body.configured) { setPreview(body.preview); return; }
+      if (!scriptUrl.trim() || !token) { setSettingsOpen(true); return; }
+      validateGoogleAppsScriptUrl(scriptUrl.trim());
+      const row = await readSheetRow();
       setPreview({ ...body.preview, row });
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Không kiểm tra được Google Sheet."); }
     finally { setLoading(false); }
@@ -61,7 +66,6 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
   function start() {
     setError(""); setMessage("");
     setPendingAction("push");
-    if (!scriptUrl.trim() || !token) { setSettingsOpen(true); return; }
     void loadPreview();
   }
 
@@ -127,6 +131,18 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
     setLoading(true); setError(""); setMessage("");
     try {
       if (!preview) throw new Error("Chưa có dữ liệu xem trước để gửi.");
+      if (serverConfigured) {
+        const response = await fetch("/api/google-sheet-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operatingDate, action: "sync" }),
+        });
+        const body = await response.json() as PreviewResponse;
+        if (!response.ok || body.error || !body.results?.some(item => item.status === "ok")) throw new Error(body.error || "Google Apps Script chưa xác nhận ghi dữ liệu thành công.");
+        setPreview(null);
+        setMessage(`Đã ghi ngày ${operatingDate.split("-").reverse().join("/")} vào hàng ${preview.row} của trang DH1.`);
+        return;
+      }
       const response = await fetch(validateGoogleAppsScriptUrl(scriptUrl.trim()), {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -150,8 +166,9 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
       <div className="flex gap-1">
         <button type="button" disabled={loading || disabled} onClick={start} title={disabled ? disabledReason : `Đẩy dữ liệu ngày ${displayDate} lên Google Sheet`} className="h-10 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80">{loading ? "Đang kiểm tra…" : `Đẩy Google Sheet · ${displayDate}`}</button>
         <button type="button" disabled={loading || disabled} onClick={startHistoricalImport} title={disabled ? disabledReason : "Nhập một lần các đánh giá S1/S2 cũ từ Google Sheet về web"} className="h-10 whitespace-nowrap rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-bold text-amber-800 shadow-sm disabled:opacity-60">Nhập đánh giá cũ</button>
-        <button type="button" onClick={() => { setError(""); setSettingsOpen(true); }} aria-label="Cài đặt đồng bộ Google Sheet" title="Cài đặt Google Sheet" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">⚙</button>
+        {!serverConfigured && <button type="button" onClick={() => { setError(""); setSettingsOpen(true); }} aria-label="Cài đặt đồng bộ Google Sheet" title="Cài đặt Google Sheet dự phòng" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">⚙</button>}
       </div>
+      {serverConfigured && <p className="max-w-sm text-right text-[11px] font-semibold text-emerald-700">Đã dùng cấu hình Google Sheet của máy chủ.</p>}
       {disabled && disabledReason && <p className="max-w-sm text-right text-[11px] font-semibold text-amber-700">{disabledReason}</p>}
       {message && <p role="status" className="max-w-sm text-right text-[11px] font-semibold text-emerald-700">{message}</p>}
       {error && <p role="alert" className="max-w-sm text-right text-[11px] font-semibold text-red-700">{error}</p>}

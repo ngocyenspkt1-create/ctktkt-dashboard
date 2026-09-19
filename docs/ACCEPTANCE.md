@@ -675,4 +675,11 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Phương án đơn giản hơn cần làm tiếp: chuyển URL/token sang biến môi trường của máy chủ và để `/api/google-sheet-sync` làm trung gian. Khi đó người dùng chỉ chọn ngày, bấm nút, xem trước và xác nhận; không phải nhập URL hoặc mã kết nối trên từng máy.
 - Chưa gửi dữ liệu thật của ngày 18/09/2026 trong lượt chẩn đoán này để tránh thay đổi báo cáo chính thức khi chưa xem được lỗi đầy đủ và dữ liệu xem trước.
 
+## Cập nhật triển khai trung gian máy chủ
+
+- `/api/google-sheet-sync` hiện hỗ trợ hai thao tác `preview` và `sync`, tự đọc ngày từ Apps Script, xác định hàng DH1 và ghi dữ liệu qua máy chủ.
+- API đã yêu cầu quyền `sync_google_sheet`; URL và token không được gửi xuống giao diện hoặc ghi vào GitHub.
+- Giao diện ưu tiên cấu hình máy chủ; phương án nhập URL/token trong trình duyệt chỉ còn là dự phòng khi máy chủ chưa có cấu hình.
+- Cần khai báo một lần trên Vercel: `GOOGLE_SHEET_APPS_SCRIPT_URL` (URL `/exec`) và `GOOGLE_SHEET_SYNC_TOKEN` (token hiện dùng). Chưa thể xác nhận production cho đến khi hai biến này được khai báo và deploy lại.
+
 ---

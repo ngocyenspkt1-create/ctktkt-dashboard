@@ -1,13 +1,37 @@
 import { getRawDb } from "@/db";
 import {
   buildGoogleSheetDayPayload,
+  resolveGoogleSheetRow,
   type DailyInputEntry,
   type StoredPpaEntry,
+  validateGoogleAppsScriptUrl,
 } from "@/lib/google-sheet-sync";
+import { requirePermission } from "@/lib/auth/server";
 
 const datePattern = /^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
+function getServerConfig() {
+  const rawUrl = process.env.GOOGLE_SHEET_APPS_SCRIPT_URL?.trim() || "";
+  const token = process.env.GOOGLE_SHEET_SYNC_TOKEN?.trim() || "";
+  if (!rawUrl || !token) return null;
+  return { url: validateGoogleAppsScriptUrl(rawUrl), token };
+}
+
+async function callAppsScript(config: { url: string; token: string }, init?: RequestInit, query?: string) {
+  const target = new URL(config.url);
+  if (query) target.searchParams.set("action", query);
+  const response = await fetch(target, { ...init, redirect: "follow", cache: "no-store" });
+  const text = await response.text();
+  let body: Record<string, unknown>;
+  try { body = JSON.parse(text) as Record<string, unknown>; }
+  catch { throw new Error("Apps Script trả về phản hồi không phải JSON."); }
+  if (!response.ok || body.ok === false) throw new Error(String(body.error || "Apps Script không phản hồi thành công."));
+  return body;
+}
+
 export async function POST(request: Request) {
+  const guard = await requirePermission("sync_google_sheet");
+  if (!guard.ok) return guard.response;
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
@@ -17,6 +41,8 @@ export async function POST(request: Request) {
     if (raw.length > 10_000) return Response.json({ error: "Yêu cầu quá lớn." }, { status: 413 });
     const body = JSON.parse(raw) as Record<string, unknown>;
     const operatingDate = String(body.operatingDate || "");
+    const action = String(body.action || "preview");
+    if (action !== "preview" && action !== "sync") throw new Error("Thao tác đồng bộ không hợp lệ.");
     if (!datePattern.test(operatingDate)) throw new Error("Ngày đồng bộ không hợp lệ.");
 
     const db = getRawDb();
@@ -29,7 +55,28 @@ export async function POST(request: Request) {
       dailyResult.results as unknown as DailyInputEntry[],
       (ppaResult || null) as StoredPpaEntry | null,
     );
-    return Response.json({ preview }, { headers: { "Cache-Control": "no-store" } });
+    const config = getServerConfig();
+    if (!config) {
+      if (action === "sync") throw new Error("Máy chủ chưa được cấu hình Google Sheet. Hãy thiết lập GOOGLE_SHEET_APPS_SCRIPT_URL và GOOGLE_SHEET_SYNC_TOKEN.");
+      return Response.json({ configured: false, preview }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    const datesBody = await callAppsScript(config, { method: "GET" }, "dates");
+    const row = resolveGoogleSheetRow(operatingDate, datesBody.rows);
+    if (!row) throw new Error(`Không tìm thấy ngày ${operatingDate.split("-").reverse().join("/")} trong cột Ngày của trang DH1.`);
+    const payload = { ...preview, row };
+    if (action === "preview") return Response.json({ configured: true, preview: payload }, { headers: { "Cache-Control": "no-store" } });
+
+    const writeBody = await callAppsScript(config, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: config.token, days: [payload] }),
+    });
+    const results = Array.isArray(writeBody.results) ? writeBody.results : [];
+    if (!results.some(item => item && typeof item === "object" && (item as Record<string, unknown>).status === "ok")) {
+      throw new Error("Google Apps Script chưa xác nhận ghi dữ liệu thành công.");
+    }
+    return Response.json({ configured: true, preview: payload, results }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof SyntaxError
         ? "Dữ liệu JSON không hợp lệ."
