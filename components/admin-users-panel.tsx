@@ -40,6 +40,20 @@ export type PositionRow = {
 
 const CATEGORIES = ["Tất cả", "Lãnh đạo", "Kỹ thuật", "Vận hành ca", "Khối Lò", "Khối Máy", "Khối Điện", "Môi trường", "Hóa nước", "Phụ trợ", "Đo lường"];
 
+async function safeJson<T = Record<string, unknown>>(res: Response): Promise<{ ok: boolean; status: number; data: T; error?: string }> {
+  const text = await res.text();
+  let data: Record<string, unknown> = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    return { ok: false, status: res.status, data: {} as T, error: `Máy chủ phản hồi lỗi (${res.status}): ${text.slice(0, 120) || res.statusText}` };
+  }
+  if (!res.ok) {
+    return { ok: false, status: res.status, data: data as T, error: (data.error as string) || `Yêu cầu thất bại (Mã lỗi ${res.status}).` };
+  }
+  return { ok: true, status: res.status, data: data as T };
+}
+
 export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
   const currentUser = useSessionUser();
   const [activeTab, setActiveTab] = useState<"positions" | "users">("positions");
@@ -79,8 +93,8 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
     try {
       setLoadingPositions(true);
       const res = await fetch("/api/admin/positions");
-      const data = await res.json() as { positions?: PositionRow[]; error?: string };
-      if (!res.ok || !data.positions) throw new Error(data.error || "Không thể tải danh sách cương vị.");
+      const { ok, data, error } = await safeJson<{ positions?: PositionRow[]; error?: string }>(res);
+      if (!ok || !data.positions) throw new Error(error || "Không thể tải danh sách cương vị.");
       setPositions(data.positions);
       setHasUnsavedChanges(false);
     } catch (e) {
@@ -94,8 +108,8 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
   async function refreshUsers() {
     try {
       const res = await fetch("/api/admin/users");
-      const data = await res.json() as { users?: UserRow[] };
-      if (res.ok && data.users) {
+      const { ok, data } = await safeJson<{ users?: UserRow[] }>(res);
+      if (ok && data.users) {
         setUsers(data.users);
       }
     } catch {}
@@ -175,8 +189,8 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ positions }),
       });
-      const data = await res.json() as { ok?: boolean; error?: string };
-      if (!res.ok || !data.ok) throw new Error(data.error || "Không thể lưu phân quyền.");
+      const { ok, data, error } = await safeJson<{ ok?: boolean; error?: string }>(res);
+      if (!ok || !data.ok) throw new Error(error || "Không thể lưu phân quyền.");
       setMessage({ text: "Đã lưu cấu hình phân quyền Cương vị thành công!", type: "success" });
       setHasUnsavedChanges(false);
       refreshUsers();
@@ -196,8 +210,8 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
     setMessage(null);
     try {
       const res = await fetch("/api/admin/seed-users", { method: "POST" });
-      const data = await res.json() as { message?: string; error?: string };
-      if (!res.ok) throw new Error(data.error || "Lỗi đồng bộ nhân sự.");
+      const { ok, data, error } = await safeJson<{ message?: string; error?: string }>(res);
+      if (!ok) throw new Error(error || "Lỗi đồng bộ nhân sự.");
       setMessage({ text: data.message || "Đã đồng bộ 124 tài khoản thành công!", type: "success" });
       await loadPositions();
       await refreshUsers();
@@ -218,9 +232,9 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      const body = await res.json() as { user?: UserRow; error?: string };
-      if (!res.ok || !body.user) throw new Error(body.error || "Không tạo được tài khoản.");
-      setUsers(prev => [body.user as UserRow, ...prev]);
+      const { ok, data, error } = await safeJson<{ user?: UserRow; error?: string }>(res);
+      if (!ok || !data.user) throw new Error(error || "Không tạo được tài khoản.");
+      setUsers(prev => [data.user as UserRow, ...prev]);
       setForm({
         username: "",
         password: "",
@@ -231,7 +245,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
         emailCompany: "",
         role: "supervisor",
       });
-      setMessage({ text: `Đã tạo tài khoản "${body.user.username}" thành công!`, type: "success" });
+      setMessage({ text: `Đã tạo tài khoản "${data.user.username}" thành công!`, type: "success" });
       loadPositions();
     } catch (caught) {
       setMessage({ text: caught instanceof Error ? caught.message : "Không tạo được tài khoản.", type: "error" });
@@ -243,16 +257,21 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
   // Đổi mật khẩu cho người dùng
   async function resetPassword(user: UserRow) {
     const password = window.prompt(`Nhập mật khẩu mới cho "${user.displayName} (${user.username})" (tối thiểu 6 ký tự):`);
-    if (!password) return;
+    if (password === null) return;
+    const trimmed = password.trim();
+    if (trimmed.length < 6) {
+      setMessage({ text: "Mật khẩu mới phải có tối thiểu 6 ký tự.", type: "error" });
+      return;
+    }
     setMessage(null); setBusyId(user.id);
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: trimmed }),
       });
-      const body = await res.json() as { error?: string };
-      if (!res.ok) throw new Error(body.error || "Không đổi được mật khẩu.");
+      const { ok, error } = await safeJson<{ error?: string }>(res);
+      if (!ok) throw new Error(error || "Không đổi được mật khẩu.");
       setMessage({ text: `Đã đổi mật khẩu cho ${user.username} thành công.`, type: "success" });
     } catch (caught) {
       setMessage({ text: caught instanceof Error ? caught.message : "Không đổi được mật khẩu.", type: "error" });
@@ -273,8 +292,8 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
-      const body = await res.json() as { user?: UserRow; error?: string };
-      if (!res.ok || !body.user) throw new Error(body.error || `Không thể ${label} tài khoản.`);
+      const { ok, data, error } = await safeJson<{ user?: UserRow; error?: string }>(res);
+      if (!ok || !data.user) throw new Error(error || `Không thể ${label} tài khoản.`);
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
       setMessage({ text: `Đã ${label} tài khoản "${user.username}".`, type: "success" });
     } catch (e) {
@@ -290,8 +309,8 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
     setMessage(null); setBusyId(user.id);
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
-      const body = await res.json() as { error?: string };
-      if (!res.ok) throw new Error(body.error || "Không xoá được tài khoản.");
+      const { ok, error } = await safeJson<{ error?: string }>(res);
+      if (!ok) throw new Error(error || "Không xoá được tài khoản.");
       setUsers(prev => prev.filter(item => item.id !== user.id));
       setMessage({ text: `Đã xoá tài khoản "${user.username}".`, type: "success" });
       loadPositions();

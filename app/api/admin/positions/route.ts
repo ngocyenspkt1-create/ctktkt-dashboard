@@ -2,6 +2,7 @@ import { getRawDb } from "@/db";
 import { requireAdmin } from "@/lib/auth/server";
 import { DEFAULT_POSITIONS } from "@/lib/auth/initial-users-data";
 import { PERMISSIONS, ROLES, type Permission, type Role } from "@/lib/auth/session";
+import { ensureUserSchema } from "@/lib/auth/user-schema";
 
 export type PositionItem = {
   id?: number;
@@ -18,6 +19,7 @@ export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
   const db = getRawDb();
+  await ensureUserSchema(db);
 
   // Đảm bảo bảng position_permissions tồn tại
   try {
@@ -152,6 +154,7 @@ export async function PUT(request: Request) {
   }
 
   try {
+    await ensureUserSchema(db);
     for (const item of listToUpdate) {
       const posName = item.position.trim();
       if (!posName) continue;

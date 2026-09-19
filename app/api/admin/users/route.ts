@@ -2,6 +2,7 @@ import { getRawDb } from "@/db";
 import { requireAdmin } from "@/lib/auth/server";
 import { hashPassword } from "@/lib/auth/password";
 import { PERMISSIONS, ROLES, type Permission, type Role } from "@/lib/auth/session";
+import { ensureUserSchema } from "@/lib/auth/user-schema";
 
 const usernamePattern = /^[a-z0-9._-]{3,32}$/;
 
@@ -10,7 +11,10 @@ export async function GET() {
   if (!guard.ok) return guard.response;
 
   try {
-    const { results } = await getRawDb()
+    const rawDb = getRawDb();
+    await ensureUserSchema(rawDb);
+
+    const { results } = await rawDb
       .prepare(`
         SELECT 
           u.id, 
@@ -120,8 +124,10 @@ export async function POST(request: Request) {
   if (!displayName) return Response.json({ error: "Nhập tên hiển thị." }, { status: 400 });
 
   try {
+    const rawDb = getRawDb();
+    await ensureUserSchema(rawDb);
     const passwordHash = hashPassword(password);
-    const created = await getRawDb()
+    const created = await rawDb
       .prepare(`
         INSERT INTO users (
           username, password_hash, display_name, role, employee_code, position, department, email_company, email_work, phone, status

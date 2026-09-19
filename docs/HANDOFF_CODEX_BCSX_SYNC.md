@@ -133,3 +133,4 @@
    - `npm run lint` còn 10 lỗi cảnh báo quy tắc React Hook (`set-state-in-effect` và `ref during render`).
    - Rà soát bảo mật mật khẩu khởi tạo tài khoản trong `lib/auth/initial-users-data.ts`.
    - Phân quyền API chi tiết hơn bằng `requirePermission(...)`.
+
