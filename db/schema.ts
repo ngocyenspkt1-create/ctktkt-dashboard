@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -83,3 +83,41 @@ export const ppaHeatRateDaily = sqliteTable("ppa_heat_rate_daily", {
   noteS2: text("note_s2").notNull().default(""),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [uniqueIndex("uidx_ppa_heat_rate_daily_date").on(table.operatingDate), index("idx_ppa_heat_rate_daily_date").on(table.operatingDate)]);
+
+export const waterShiftLeaders = sqliteTable("water_shift_leaders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  isActive: integer("is_active").notNull().default(1),
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("uidx_water_shift_leaders_name").on(table.name)]);
+
+export const waterShiftLogs = sqliteTable("water_shift_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  logDate: text("log_date").notNull(),
+  shiftTime: text("shift_time").notNull(),
+  shiftTeam: text("shift_team").notNull().default(""),
+  shiftLeader: text("shift_leader").notNull().default(""),
+  elecRecS1: real("elec_rec_s1").default(0),
+  elecRecS2: real("elec_rec_s2").default(0),
+  elecGenS1: real("elec_gen_s1").default(0),
+  elecGenS2: real("elec_gen_s2").default(0),
+  waterRecS1: real("water_rec_s1").default(0),
+  waterRecS2: real("water_rec_s2").default(0),
+  waterUsedS1: real("water_used_s1").default(0),
+  waterUsedS2: real("water_used_s2").default(0),
+  waterRatioS1: real("water_ratio_s1").default(0),
+  waterRatioS2: real("water_ratio_s2").default(0),
+  condenserRecS1: real("condenser_rec_s1").default(0),
+  condenserRecS2: real("condenser_rec_s2").default(0),
+  condenserUsedS1: real("condenser_used_s1").default(0),
+  condenserUsedS2: real("condenser_used_s2").default(0),
+  resinWaterS1_24h: real("resin_water_s1_24h").default(0),
+  resinWaterS2_24h: real("resin_water_s2_24h").default(0),
+  note: text("note").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [
+  uniqueIndex("uidx_water_shift_date_time").on(table.logDate, table.shiftTime),
+  index("idx_water_shift_date").on(table.logDate),
+]);
+

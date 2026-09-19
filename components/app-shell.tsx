@@ -14,6 +14,7 @@ const navigation = [
   { icon: "▤", label: "Báo cáo PMIS", href: "/pmis-report", key: "pmis" },
   { icon: "∑", label: "Báo cáo Chỉ tiêu KTKT", href: "/ctktkt-report", key: "ctktkt" },
   { icon: "✎", label: "Nhập liệu BCSX", href: "/bcsx-report", key: "bcsx" },
+  { icon: "💧", label: "Theo dõi lượng nước", href: "/water-report", key: "water" },
 ];
 const adminNavItem = { icon: "⚙", label: "Quản lý tài khoản", href: "/admin/users", key: "admin-users" };
 
