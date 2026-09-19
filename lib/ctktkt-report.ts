@@ -9,6 +9,7 @@ export type CtktktKpis = {
   adjustedCoalTonnes: number | null;
   netCoalRate: number | null;
   netHeatRate: number | null;
+  hhvKjKg?: number | null;
 };
 
 export type CtktktSummary = { s1: CtktktKpis; s2: CtktktKpis; plant: CtktktKpis };
@@ -89,6 +90,7 @@ function unitKpis(
     adjustedCoalTonnes,
     netCoalRate,
     netHeatRate: netCoalRate === null || hhvKjKg === null ? null : netCoalRate * hhvKjKg / 1000,
+    hhvKjKg,
   };
 }
 
@@ -107,6 +109,9 @@ export function calculateCtktktSummary(current: CtktktDayEntries, previous?: Ctk
   const heatNumerator = s1.netHeatRate === null || s1.netMwh === null || s2.netHeatRate === null || s2.netMwh === null
     ? null
     : s1.netHeatRate * s1.netMwh + s2.netHeatRate * s2.netMwh;
+  const plantHhv = (s1.hhvKjKg != null && s1.adjustedCoalTonnes != null && s2.hhvKjKg != null && s2.adjustedCoalTonnes != null && adjustedCoalTonnes)
+    ? (s1.hhvKjKg * s1.adjustedCoalTonnes + s2.hhvKjKg * s2.adjustedCoalTonnes) / adjustedCoalTonnes
+    : (s1.hhvKjKg ?? s2.hhvKjKg ?? null);
   const plant: CtktktKpis = {
     grossMwh,
     netMwh,
@@ -116,6 +121,7 @@ export function calculateCtktktSummary(current: CtktktDayEntries, previous?: Ctk
     adjustedCoalTonnes,
     netCoalRate,
     netHeatRate: divide(heatNumerator, netMwh),
+    hhvKjKg: plantHhv,
   };
   return { s1, s2, plant };
 }

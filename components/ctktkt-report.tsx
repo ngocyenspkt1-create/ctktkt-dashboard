@@ -22,8 +22,10 @@ import {
   UserCheck,
   Database,
   RefreshCw,
+  Mail,
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
+import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
 import { useSessionUser } from "@/components/session-context";
 import {
   canEditAnyCtktktField,
@@ -132,6 +134,7 @@ export function CtktktReport() {
 
   const [isKpiCollapsed, setIsKpiCollapsed] = useState(false);
   const [allViewMode, setAllViewMode] = useState<"dense" | "matrix" | "cards">("dense");
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   const period = date.slice(0, 7);
 
@@ -433,6 +436,16 @@ export function CtktktReport() {
               <Download className="size-3.5" />
               Xuất Excel tháng
             </a>
+
+            <button
+              type="button"
+              onClick={() => setShowEmailModal(true)}
+              className="flex h-9 items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-blue-700 active:scale-95"
+              title="Mở mẫu báo cáo gửi mail hàng ngày font Times New Roman theo file chỉ tiêu"
+            >
+              <Mail className="size-3.5" />
+              Báo cáo gửi mail
+            </button>
           </div>
         </div>
 
@@ -512,11 +525,21 @@ export function CtktktReport() {
               (Công thức khóa tự tính · Nhập I35, I36)
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsKpiCollapsed(prev => !prev)}
-            className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200/60"
-          >
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowEmailModal(true)}
+              className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
+              title="Mở mẫu báo cáo gửi mail hàng ngày font Times New Roman theo file chỉ tiêu"
+            >
+              <Mail className="size-3" />
+              Mẫu gửi mail
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsKpiCollapsed(prev => !prev)}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200/60"
+            >
             {isKpiCollapsed ? (
               <>
                 <span>Mở rộng KPI</span>
@@ -528,7 +551,8 @@ export function CtktktReport() {
                 <ChevronUp className="size-3.5" />
               </>
             )}
-          </button>
+            </button>
+          </div>
         </div>
 
         {!isKpiCollapsed ? (
@@ -2325,6 +2349,17 @@ export function CtktktReport() {
           </span>
         </div>
       </div>
+
+      {showEmailModal && (
+        <CtktktEmailModal
+          isOpen={showEmailModal}
+          onClose={() => setShowEmailModal(false)}
+          operatingDate={date}
+          currentEntries={current}
+          previousEntries={previous}
+          initialShiftName="Tổ C"
+        />
+      )}
     </section>
   );
 }

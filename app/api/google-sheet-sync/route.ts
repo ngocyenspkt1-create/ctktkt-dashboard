@@ -36,12 +36,16 @@ export async function POST(request: Request) {
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
 
+  let diagnosticDate = "";
+  let diagnosticAction = "";
   try {
     const raw = await request.text();
     if (raw.length > 10_000) return Response.json({ error: "Yêu cầu quá lớn." }, { status: 413 });
     const body = JSON.parse(raw) as Record<string, unknown>;
     const operatingDate = String(body.operatingDate || "");
     const action = String(body.action || "preview");
+    diagnosticDate = operatingDate;
+    diagnosticAction = action;
     if (action !== "preview" && action !== "sync") throw new Error("Thao tác đồng bộ không hợp lệ.");
     if (!datePattern.test(operatingDate)) throw new Error("Ngày đồng bộ không hợp lệ.");
 
@@ -81,6 +85,7 @@ export async function POST(request: Request) {
     const message = error instanceof SyntaxError
         ? "Dữ liệu JSON không hợp lệ."
         : error instanceof Error ? error.message : "Không đồng bộ được Google Sheet.";
+    console.error("[google-sheet-sync]", { action: diagnosticAction || "unknown", operatingDate: diagnosticDate || "unknown", message });
     return Response.json({ error: message }, { status: 400 });
   }
 }

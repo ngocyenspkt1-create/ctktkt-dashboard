@@ -690,4 +690,11 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Kiểm tra sau triển khai: `/ppa-heat-rate` trả HTTP 200; `/api/google-sheet-sync` khi chưa đăng nhập trả HTTP 401 đúng cơ chế bảo vệ.
 - Còn một bước nghiệm thu có kiểm soát: người dùng đăng nhập, chọn ngày đã đủ dữ liệu, bấm `Đẩy Google Sheet`, kiểm tra bảng xem trước rồi mới xác nhận ghi thật.
 
+## Chẩn đoán lần ghi thật ngày 18/09/2026
+
+- Log production ghi nhận một yêu cầu xem trước trả HTTP 200, sau đó hai yêu cầu xác nhận ghi đều trả HTTP 400; do đó thao tác bấm nút đã đến máy chủ nhưng thất bại ở bước gọi ghi Apps Script.
+- Bổ sung hiển thị lỗi trực tiếp ngay trong hộp xem trước thay vì để thông báo phía sau lớp phủ.
+- Bổ sung log máy chủ đã loại bỏ token và dữ liệu chi tiết, chỉ ghi thao tác, ngày và thông báo lỗi để chẩn đoán an toàn ở lần thử tiếp theo.
+- Chưa xác định nội dung lỗi Apps Script của hai lần trước vì phiên bản lúc đó chưa ghi thông báo lỗi vào runtime log.
+
 ---
