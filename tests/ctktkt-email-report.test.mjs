@@ -27,8 +27,8 @@ test("extractCtktktEmailMetrics accurately extracts all 22+ metrics from CTKTKT 
   assert.ok(Math.abs(metrics.auxPercentS1 - 8.38) < 0.01);
   assert.ok(Math.abs(metrics.coalTonnesS1 - 5341.111) < 0.01);
   assert.ok(Math.abs(metrics.netCoalRateS1 - 527.903) < 0.01);
-  assert.ok(Math.abs(metrics.hhvKjKgS1 - 19983.66) < 1.0);
-  assert.ok(Math.abs(metrics.netHeatRateS1 - 10549.433) < 0.01);
+  assert.ok(Math.abs(metrics.hhvKjKgS1 - 20021.5934392878) < 0.001);
+  assert.ok(Math.abs(metrics.netHeatRateS1 - 10569.4584381209) < 0.001);
 
   // S1 Steam & Water
   assert.equal(metrics.steamTonnesS1, 35582.55);
@@ -41,10 +41,10 @@ test("extractCtktktEmailMetrics accurately extracts all 22+ metrics from CTKTKT 
   assert.ok(Math.abs(metrics.netMwhS2 - 10094.2) < 0.01);
   assert.ok(Math.abs(metrics.auxMwhS2 - 895.2) < 0.01);
   assert.ok(Math.abs(metrics.auxPercentS2 - 8.4) < 0.01);
-  assert.ok(Math.abs(metrics.coalTonnesS2 - 5511.546) < 0.01);
-  assert.ok(Math.abs(metrics.netCoalRateS2 - 546.011) < 0.01);
-  assert.ok(Math.abs(metrics.hhvKjKgS2 - 19975.87) < 1.0);
-  assert.ok(Math.abs(metrics.netHeatRateS2 - 10907.05) < 0.01);
+  assert.ok(Math.abs(metrics.coalTonnesS2 - 5349.81764480845) < 0.001);
+  assert.ok(Math.abs(metrics.netCoalRateS2 - 529.989) < 0.01);
+  assert.ok(Math.abs(metrics.hhvKjKgS2 - 20021.5934392878) < 0.001);
+  assert.ok(Math.abs(metrics.netHeatRateS2 - 10611.2296030078) < 0.001);
 
   // S2 Steam & Water
   assert.equal(metrics.steamTonnesS2, 34544.72);
@@ -80,8 +80,8 @@ test("generateEmailReportText generates complete text report matching exact temp
   assert.ok(text.includes("+ Phần trăm điện tự dùng S1: 8.38 % (đã bao gồm tổn thất MBA)"));
   assert.ok(text.includes("+ Tổng lượng than tiêu thụ S1: 5341.111 (tấn) - đã quy ẩm về 8.5%"));
   assert.ok(text.includes("+ Suất tiêu hao than tinh S1: 527.903 (g/kWh)"));
-  assert.ok(text.includes("+ Nhiệt trị than quy ẩm: 19983.66 (kJ/kg)"));
-  assert.ok(text.includes("+ Suất hao nhiệt tinh S1: 10549.433 (kJ/kWh)"));
+  assert.ok(text.includes("+ Nhiệt trị than quy ẩm: 20021.59 (kJ/kg)"));
+  assert.ok(text.includes("+ Suất hao nhiệt tinh S1: 10569.458 (kJ/kWh)"));
   assert.ok(text.includes("+ Tổng lượng hơi tiêu thụ S1: 35582.55 (tấn)"));
   assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S1: 3222.18 (g/kWh)"));
   assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S1: 3516.90 (g/kWh)"));
@@ -92,10 +92,10 @@ test("generateEmailReportText generates complete text report matching exact temp
   assert.ok(text.includes("+ Tổng sản lượng tại điểm mua bán điện S2: 10094.20 (MWh)"));
   assert.ok(text.includes("+ Lượng điện tự dùng S2: 895.20 (MWh)"));
   assert.ok(text.includes("+ Phần trăm điện tự dùng S2: 8.40 % (đã bao gồm tổn thất MBA)"));
-  assert.ok(text.includes("+ Tổng lượng than tiêu thụ S2: 5511.546 (tấn) - đã quy ẩm về 8.5%"));
-  assert.ok(text.includes("+ Suất tiêu hao than tinh S2: 546.011 (g/kWh)"));
-  assert.ok(text.includes("+ Nhiệt trị than quy ẩm: 19975.87 (kJ/kg)"));
-  assert.ok(text.includes("+ Suất hao nhiệt tinh S2: 10907.050 (kJ/kWh)"));
+  assert.ok(text.includes("+ Tổng lượng than tiêu thụ S2: 5349.818 (tấn) - đã quy ẩm về 8.5%"));
+  assert.ok(text.includes("+ Suất tiêu hao than tinh S2: 529.989 (g/kWh)"));
+  assert.ok(text.includes("+ Nhiệt trị than quy ẩm: 20021.59 (kJ/kg)"));
+  assert.ok(text.includes("+ Suất hao nhiệt tinh S2: 10611.230 (kJ/kWh)"));
   assert.ok(text.includes("+ Tổng lượng hơi tiêu thụ S2: 34544.72 (tấn)"));
   assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S2: 3134.73 (g/kWh)"));
   assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S2: 3422.23 (g/kWh)"));
@@ -132,4 +132,3 @@ test("generateEmailReportHtml applies Times New Roman font styling and HTML tags
   assert.ok(html.includes("<strong>- Tổ máy S2 vận hành:</strong>"));
   assert.ok(html.includes("<strong>2. Báo cáo bao gồm các file:</strong>"));
 });
-

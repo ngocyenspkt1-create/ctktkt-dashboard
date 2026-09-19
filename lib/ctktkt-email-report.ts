@@ -1,7 +1,7 @@
 // Node's built-in TypeScript test runner requires the explicit extension here.
 import type { CtktktDayEntries } from "./ctktkt-report.ts";
 // @ts-expect-error TS5097: runtime test compatibility; the bundler accepts this source import.
-import { calculateCtktktSummary } from "./ctktkt-report.ts";
+import { calculateCtktktSummary, calculateNh3Summary } from "./ctktkt-report.ts";
 
 export interface CtktktEmailReportMetrics {
   // S1
@@ -131,25 +131,15 @@ export function extractCtktktEmailMetrics(
   // Than nhập kho 24h
   const coalIntake24h = numberOf(current, "I36") ?? numberOf(current, "W87") ?? 0;
 
-  // NH3: P72 (nhập), P73 (tồn 0h), P74 (tồn 24h), P75 (tiêu thụ)
+  // NH3 mirrors P74, P75 and P77:Q77 from the workbook.
   const nh3IntakeDay = numberOf(current, "P72") ?? 0;
-  const nh3Stock0h = numberOf(current, "P73");
-  const nh3Stock24h = numberOf(current, "P74") ?? numberOf(current, "Q74");
-  const nh3UsedTonnes =
-    numberOf(current, "P75") ??
-    (nh3Stock0h != null && nh3Stock24h != null
-      ? nh3Stock0h + nh3IntakeDay - nh3Stock24h
-      : null);
-
   const plantGrossMwh = summary.plant.grossMwh;
   const plantNetMwh = summary.plant.netMwh;
-
-  const nh3RateGross =
-    numberOf(current, "P77") ??
-    (nh3UsedTonnes != null && plantGrossMwh ? (nh3UsedTonnes * 1000) / plantGrossMwh : null);
-  const nh3RateNet =
-    numberOf(current, "Q77") ??
-    (nh3UsedTonnes != null && plantNetMwh ? (nh3UsedTonnes * 1000) / plantNetMwh : null);
+  const nh3 = calculateNh3Summary(current, plantGrossMwh, plantNetMwh);
+  const nh3Stock24h = numberOf(current, "P74") ?? nh3.stock24h;
+  const nh3UsedTonnes = numberOf(current, "P75") ?? nh3.usedTonnes;
+  const nh3RateGross = numberOf(current, "P77") ?? nh3.rateGross;
+  const nh3RateNet = numberOf(current, "Q77") ?? nh3.rateNet;
 
   return {
     grossMwhS1,

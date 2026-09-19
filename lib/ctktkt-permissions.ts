@@ -124,6 +124,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "AG14", "AH14", "AI14", "AJ14", "AK14", "AL14", // F2 về
   ]),
   may_nghien_coal_s1: new Set([
+    "W28", "Y28", "AA28", // hiệu chỉnh 3 ca
     // 12 cân than S1 (cols X, Z, AB; rows 16 to 27)
     "X16", "Z16", "AB16", "X17", "Z17", "AB17",
     "X18", "Z18", "AB18", "X19", "Z19", "AB19",
@@ -133,6 +134,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "X26", "Z26", "AB26", "X27", "Z27", "AB27",
   ]),
   may_nghien_coal_s2: new Set([
+    "AG28", "AI28", "AK28", // hiệu chỉnh 3 ca
     // 12 cân than S2 (cols AH, AJ, AL; rows 16 to 27)
     "AH16", "AJ16", "AL16", "AH17", "AJ17", "AL17",
     "AH18", "AJ18", "AL18", "AH19", "AJ19", "AL19",
@@ -169,6 +171,8 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "AJ87", "AK87", "AL87", "AJ88", "AK88", "AL88", "AJ89", "AK89", "AL89",
     // S2 Ẩm toàn phần & Nhiệt trị khô (3 ca)
     "AJ90", "AK90", "AL90", "AJ91", "AK91", "AL91", "AJ92", "AK92", "AL92",
+    // Độ ẩm than Sub bitum dùng khi tỷ lệ trộn > 0
+    "AO87", "AO88", "AO89", "AO90", "AO91", "AO92",
   ]),
   pmis_reports: new Set([
     "J157", "K157", "J158", "K158",
@@ -408,4 +412,3 @@ export function getEditableCtktktGroups(user: SessionUser | null | undefined): C
   ];
   return allGroups.filter(g => canEditCtktktGroup(user, g));
 }
-

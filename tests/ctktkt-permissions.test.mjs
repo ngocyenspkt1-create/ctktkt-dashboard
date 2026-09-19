@@ -17,6 +17,8 @@ test("Cell group mapping identifies key cells correctly", () => {
   assert.equal(getCtktktFieldGroup("AL11"), "tpd_tcd_power");
   assert.equal(getCtktktFieldGroup("W13"), "lo_pho_oil");
   assert.equal(getCtktktFieldGroup("AL14"), "lo_pho_oil");
+  assert.equal(getCtktktFieldGroup("AK28"), "may_nghien_coal_s2");
+  assert.equal(getCtktktFieldGroup("AO90"), "coal_blend_pmis");
   assert.equal(getCtktktFieldGroup("X16"), "may_nghien_coal_s1");
   assert.equal(getCtktktFieldGroup("AL27"), "may_nghien_coal_s2");
   assert.equal(getCtktktFieldGroup("W54"), "steam_flow");
@@ -102,4 +104,3 @@ test("NH3 - Lò hơi phụ has rights for NH3 tank", () => {
   assert.equal(canEditCtktktField(vhvNh3, "N69"), true);
   assert.equal(canEditCtktktField(vhvNh3, "P72"), true);
 });
-

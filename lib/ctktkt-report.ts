@@ -14,6 +14,14 @@ export type CtktktKpis = {
 
 export type CtktktSummary = { s1: CtktktKpis; s2: CtktktKpis; plant: CtktktKpis };
 
+export type Nh3Summary = {
+  tankAvailable: Array<number | null>;
+  stock24h: number | null;
+  usedTonnes: number | null;
+  rateGross: number | null;
+  rateNet: number | null;
+};
+
 function numberOf(entries: CtktktDayEntries | undefined, cell: string) {
   const raw = entries?.[cell]?.trim().replace(",", ".");
   if (!raw) return null;
@@ -37,49 +45,122 @@ function meterSum(entries: CtktktDayEntries | undefined, column: string) {
   return sum(Array.from({ length: 12 }, (_, index) => numberOf(entries, `${column}${16 + index}`)));
 }
 
-function weightedAverage(values: Array<{ value: number | null; weight: number | null }>) {
-  if (values.some(item => item.value === null || item.weight === null)) return null;
-  const totalWeight = values.reduce((total, item) => total + (item.weight ?? 0), 0);
-  if (!totalWeight) return null;
-  return values.reduce((total, item) => total + (item.value ?? 0) * (item.weight ?? 0), 0) / totalWeight;
+type CoalUnitResult = {
+  rawCoalTonnes: number | null;
+  adjustedCoalTonnes: number | null;
+};
+
+type CoalModelResult = {
+  s1: CoalUnitResult;
+  s2: CoalUnitResult;
+  hhvKjKg: number | null;
+};
+
+function coalRawShifts(
+  unit: "s1" | "s2",
+  current: CtktktDayEntries,
+  previous: CtktktDayEntries | undefined,
+) {
+  const isS1 = unit === "s1";
+  const endColumn = isS1 ? "AB" : "AL";
+  const firstColumn = isS1 ? "X" : "AH";
+  const secondColumn = isS1 ? "Z" : "AJ";
+  const previousCoal = meterSum(previous, endColumn);
+  const adjustmentColumns = isS1 ? ["W", "Y", "AA"] : ["AG", "AI", "AK"];
+  const base = [
+    difference(meterSum(current, firstColumn), previousCoal),
+    difference(meterSum(current, secondColumn), meterSum(current, firstColumn)),
+    difference(meterSum(current, endColumn), meterSum(current, secondColumn)),
+  ];
+  return base.map((value, index) => value === null
+    ? null
+    : value + (numberOf(current, `${adjustmentColumns[index]}28`) ?? 0));
+}
+
+/**
+ * Mirrors the source workbook rows AG:AT 83:92.
+ *
+ * The workbook first converts each shift's coal to the 8.5% moisture basis,
+ * including the optional Sub-bituminous blend (AL/AO). It then derives one
+ * common daily HHV at the corrected-mass basis and uses that same HHV for S1,
+ * S2 and the whole plant.
+ */
+function calculateCoalModel(
+  current: CtktktDayEntries,
+  previous: CtktktDayEntries | undefined,
+): CoalModelResult {
+  const s1Raw = coalRawShifts("s1", current, previous);
+  const s2Raw = coalRawShifts("s2", current, previous);
+  const rows = [87, 88, 89, 90, 91, 92];
+  const rawShifts = [...s1Raw, ...s2Raw];
+
+  const details = rawShifts.map((raw, index) => {
+    const row = rows[index];
+    const moisture = numberOf(current, `AJ${row}`);
+    const dryKcalKg = numberOf(current, `AK${row}`);
+    if (raw === null || moisture === null || dryKcalKg === null) {
+      return { raw, adjusted: null, asReceivedKcalKg: null };
+    }
+
+    // Excel treats an empty blend ratio/moisture cell as zero.
+    const blendRatio = numberOf(current, `AL${row}`) ?? 0;
+    const blendMoisture = numberOf(current, `AO${row}`) ?? 0;
+    const domesticRaw = raw * (1 - blendRatio);
+    const blendRaw = raw * blendRatio;
+    const correctedDomesticMoisture = blendRaw > 0
+      ? (domesticRaw === 0 ? null : (raw * moisture - blendRaw * blendMoisture) / domesticRaw)
+      : moisture;
+    const adjustedDomestic = correctedDomesticMoisture === null
+      ? null
+      : domesticRaw * (1 - correctedDomesticMoisture / 100) / (1 - 0.085);
+
+    return {
+      raw,
+      adjusted: adjustedDomestic === null ? null : adjustedDomestic + blendRaw,
+      asReceivedKcalKg: dryKcalKg * (1 - moisture / 100),
+    };
+  });
+
+  const unitResult = (start: number): CoalUnitResult => ({
+    rawCoalTonnes: sum(details.slice(start, start + 3).map(item => item.raw)),
+    adjustedCoalTonnes: sum(details.slice(start, start + 3).map(item => item.adjusted)),
+  });
+  const s1 = unitResult(0);
+  const s2 = unitResult(3);
+  const plantRaw = sum(details.map(item => item.raw));
+  const plantAdjusted = sum(details.map(item => item.adjusted));
+  const energyNumerator = details.some(item => item.raw === null || item.asReceivedKcalKg === null)
+    ? null
+    : details.reduce((total, item) => total + (item.raw ?? 0) * (item.asReceivedKcalKg ?? 0), 0);
+  const averageAsReceivedKcalKg = divide(energyNumerator, plantRaw);
+  const correctedKcalKg = averageAsReceivedKcalKg === null || plantRaw === null || plantAdjusted === null || plantAdjusted === 0
+    ? null
+    : averageAsReceivedKcalKg * plantRaw / plantAdjusted;
+
+  return {
+    s1,
+    s2,
+    hhvKjKg: correctedKcalKg === null ? null : correctedKcalKg * 4.1868,
+  };
 }
 
 function unitKpis(
   unit: "s1" | "s2",
   current: CtktktDayEntries,
   previous: CtktktDayEntries | undefined,
+  coal: CoalUnitResult,
+  hhvKjKg: number | null,
 ): CtktktKpis {
   const isS1 = unit === "s1";
   const endColumn = isS1 ? "AB" : "AL";
-  const mid1Column = isS1 ? "X" : "AH";
-  const mid2Column = isS1 ? "Z" : "AJ";
-  const moistureRows = isS1 ? [87, 88, 89] : [90, 91, 92];
   const grossMwh = difference(numberOf(current, `${endColumn}8`), numberOf(previous, `${endColumn}8`));
   const netMwh = difference(numberOf(current, `${endColumn}9`), numberOf(previous, `${endColumn}9`));
   const auxiliary1 = difference(numberOf(current, `${endColumn}10`), numberOf(previous, `${endColumn}10`));
   const auxiliary2 = difference(numberOf(current, `${endColumn}11`), numberOf(previous, `${endColumn}11`));
   const auxiliaryMwh = sum([auxiliary1, auxiliary2]);
 
-  const previousCoal = meterSum(previous, endColumn);
-  const firstCoal = difference(meterSum(current, mid1Column), previousCoal);
-  const secondCoal = difference(meterSum(current, mid2Column), meterSum(current, mid1Column));
-  const thirdCoal = difference(meterSum(current, endColumn), meterSum(current, mid2Column));
-  const rawShifts = [firstCoal, secondCoal, thirdCoal];
-  const adjustedShifts = rawShifts.map((raw, index) => {
-    const moisture = numberOf(current, `AJ${moistureRows[index]}`);
-    return raw === null || moisture === null ? null : raw * (1 - moisture / 100) / 0.915;
-  });
-  const rawCoalTonnes = sum(rawShifts);
-  const adjustedCoalTonnes = sum(adjustedShifts);
+  const { rawCoalTonnes, adjustedCoalTonnes } = coal;
   const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
-  const hhvKjKg = weightedAverage(moistureRows.map((row, index) => {
-    const dryKcalKg = numberOf(current, `AK${row}`);
-    const moisture = numberOf(current, `AJ${row}`);
-    return {
-      value: dryKcalKg === null || moisture === null ? null : dryKcalKg * (1 - moisture / 100) * 4.1868,
-      weight: rawShifts[index],
-    };
-  }));
 
   return {
     grossMwh,
@@ -99,8 +180,9 @@ function add(a: number | null, b: number | null) {
 }
 
 export function calculateCtktktSummary(current: CtktktDayEntries, previous?: CtktktDayEntries): CtktktSummary {
-  const s1 = unitKpis("s1", current, previous);
-  const s2 = unitKpis("s2", current, previous);
+  const coal = calculateCoalModel(current, previous);
+  const s1 = unitKpis("s1", current, previous, coal.s1, coal.hhvKjKg);
+  const s2 = unitKpis("s2", current, previous, coal.s2, coal.hhvKjKg);
   const grossMwh = add(s1.grossMwh, s2.grossMwh);
   const netMwh = add(s1.netMwh, s2.netMwh);
   const adjustedCoalTonnes = add(s1.adjustedCoalTonnes, s2.adjustedCoalTonnes);
@@ -109,9 +191,6 @@ export function calculateCtktktSummary(current: CtktktDayEntries, previous?: Ctk
   const heatNumerator = s1.netHeatRate === null || s1.netMwh === null || s2.netHeatRate === null || s2.netMwh === null
     ? null
     : s1.netHeatRate * s1.netMwh + s2.netHeatRate * s2.netMwh;
-  const plantHhv = (s1.hhvKjKg != null && s1.adjustedCoalTonnes != null && s2.hhvKjKg != null && s2.adjustedCoalTonnes != null && adjustedCoalTonnes)
-    ? (s1.hhvKjKg * s1.adjustedCoalTonnes + s2.hhvKjKg * s2.adjustedCoalTonnes) / adjustedCoalTonnes
-    : (s1.hhvKjKg ?? s2.hhvKjKg ?? null);
   const plant: CtktktKpis = {
     grossMwh,
     netMwh,
@@ -121,9 +200,31 @@ export function calculateCtktktSummary(current: CtktktDayEntries, previous?: Ctk
     adjustedCoalTonnes,
     netCoalRate,
     netHeatRate: divide(heatNumerator, netMwh),
-    hhvKjKg: plantHhv,
+    hhvKjKg: coal.hhvKjKg,
   };
   return { s1, s2, plant };
+}
+
+/** Mirrors Q69:Q71, P74, P75 and P77:Q77 in the source workbook. */
+export function calculateNh3Summary(
+  entries: CtktktDayEntries,
+  grossMwh: number | null,
+  netMwh: number | null,
+): Nh3Summary {
+  const tankMasses = [69, 70, 71].map(row => numberOf(entries, `P${row}`));
+  const stock24h = tankMasses.some(value => value === null) ? null : sum(tankMasses);
+  const intake = numberOf(entries, "P72");
+  const stock0h = numberOf(entries, "P73");
+  const usedTonnes = stock0h === null || intake === null || stock24h === null
+    ? null
+    : stock0h + intake - stock24h;
+  return {
+    tankAvailable: tankMasses.map(value => value === null ? null : value * 0.95),
+    stock24h,
+    usedTonnes,
+    rateGross: divide(usedTonnes, grossMwh, 1000),
+    rateNet: divide(usedTonnes, netMwh, 1000),
+  };
 }
 
 export function previousIsoDate(date: string) {
@@ -184,17 +285,30 @@ export const OIL_HOURS = [
   { colS1: "AB", colS2: "AL", label: "24h" },
 ];
 
-export function calculateOilDifferences(entries: CtktktDayEntries, unit: "s1" | "s2") {
+export function calculateOilDifferences(
+  entries: CtktktDayEntries,
+  unit: "s1" | "s2",
+  previous?: CtktktDayEntries,
+) {
   const isS1 = unit === "s1";
-  return OIL_HOURS.map(({ colS1, colS2, label }) => {
+  const previousEndColumn = isS1 ? "AB" : "AL";
+  return OIL_HOURS.map(({ colS1, colS2, label }, index) => {
     const col = isS1 ? colS1 : colS2;
     const f1 = numberOf(entries, `${col}13`);
     const f2 = numberOf(entries, `${col}14`);
+    const priorColumn = index === 0
+      ? previousEndColumn
+      : (isS1 ? OIL_HOURS[index - 1].colS1 : OIL_HOURS[index - 1].colS2);
+    const priorEntries = index === 0 ? previous : entries;
+    const priorF1 = numberOf(priorEntries, `${priorColumn}13`);
+    const priorF2 = numberOf(priorEntries, `${priorColumn}14`);
     return {
       label,
       f1,
       f2,
-      diff: f1 !== null && f2 !== null ? f1 - f2 : null,
+      diff: f1 !== null && f2 !== null && priorF1 !== null && priorF2 !== null
+        ? (f1 - priorF1) - (f2 - priorF2)
+        : null,
     };
   });
 }
@@ -228,4 +342,3 @@ export function calculateSteamDifferences(entries: CtktktDayEntries, unit: "s1" 
   }
   return result;
 }
-

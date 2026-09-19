@@ -3,6 +3,7 @@ import { getRawDb } from "@/db";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
+import { CTKTKT_EXTRA_INPUT_FIELDS } from "@/lib/ctktkt-extra-fields";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { seedCtktktSample2Days } from "../seed-sample/route";
 
@@ -62,6 +63,16 @@ function applyDateLabels(sheet: ExcelJS.Worksheet, date: string) {
   sheet.getCell("O68").value = `Mức bồn 24h00 ${display}`;
 }
 
+function normalizeCoalMeterFormulas(sheet: ExcelJS.Worksheet, previousSheetName: string) {
+  const previous = `'${previousSheetName.replaceAll("'", "''")}'`;
+  sheet.getCell("X28").value = { formula: `SUM(X16:X27)-SUM(${previous}!AB16:AB27)` };
+  sheet.getCell("Z28").value = { formula: "SUM(Z16:Z27)-SUM(X16:X27)" };
+  sheet.getCell("AB28").value = { formula: "SUM(AB16:AB27)-SUM(Z16:Z27)" };
+  sheet.getCell("AH28").value = { formula: `SUM(AH16:AH27)-SUM(${previous}!AL16:AL27)` };
+  sheet.getCell("AJ28").value = { formula: "SUM(AJ16:AJ27)-SUM(AH16:AH27)" };
+  sheet.getCell("AL28").value = { formula: "SUM(AL16:AL27)-SUM(AJ16:AJ27)" };
+}
+
 export async function GET(request: Request) {
   const period = new URL(request.url).searchParams.get("period") || "";
   if (!periodPattern.test(period)) return Response.json({ error: "Tháng không hợp lệ." }, { status: 400 });
@@ -108,7 +119,10 @@ export async function GET(request: Request) {
     const workbook = new ExcelJS.Workbook();
     const templateBytes = Uint8Array.from(atob(CTKTKT_TEMPLATE_BASE64), character => character.charCodeAt(0));
     await workbook.xlsx.load(templateBytes.buffer);
-    const inputCells = CTKTKT_INPUT_FIELDS.map(field => field.cell);
+    const inputCells = [
+      ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
+      ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
+    ];
     for (const sheetName of ["d-1", ...Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, "0"))]) {
       const sheet = workbook.getWorksheet(sheetName);
       if (!sheet) continue;
@@ -132,6 +146,7 @@ export async function GET(request: Request) {
       const date = `${period}-${String(day).padStart(2, "0")}`;
       const sheet = workbook.getWorksheet(String(day).padStart(2, "0"));
       if (!sheet) continue;
+      normalizeCoalMeterFormulas(sheet, day === 1 ? "d-1" : String(day - 1).padStart(2, "0"));
       const row = byDate.get(date) || {};
       fillDailyFallbacks(sheet, row);
       for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5))) {

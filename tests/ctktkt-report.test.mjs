@@ -57,17 +57,49 @@ test("calculateTkdDcsSummary sums auxiliary power and plant totals correctly", a
   assert.equal(summary.M.qSumS1S2, 15);
 });
 
-test("calculateOilDifferences computes F1 - F2 correctly for S1 and S2", async () => {
+test("calculateOilDifferences follows Excel: delta F1 minus delta F2, with D-1 for 06h", async () => {
   const { calculateOilDifferences } = await import("../lib/ctktkt-report.ts");
   const entries = {
-    W13: "100.5", W14: "40.2", // S1 06h
-    AG13: "5000", AG14: "1500", // S2 06h
+    W13: "1010.5", W14: "402.2", // S1 06h
+    X13: "1025.5", X14: "407.2", // S1 08h
+    AG13: "5100", AG14: "1550", // S2 06h
   };
-  const s1 = calculateOilDifferences(entries, "s1");
-  assert.ok(Math.abs(s1[0].diff - 60.3) < 0.0001);
+  const previous = {
+    AB13: "1000", AB14: "400",
+    AL13: "5000", AL14: "1500",
+  };
+  const s1 = calculateOilDifferences(entries, "s1", previous);
+  assert.ok(Math.abs(s1[0].diff - 8.3) < 0.0001);
+  assert.equal(s1[1].diff, 10);
 
-  const s2 = calculateOilDifferences(entries, "s2");
-  assert.equal(s2[0].diff, 3500);
+  const s2 = calculateOilDifferences(entries, "s2", previous);
+  assert.equal(s2[0].diff, 50);
+});
+
+test("CTKTKT mirrors Excel coal blend correction and common daily HHV", () => {
+  const previous = { AB8: "1000", AB9: "900", AB10: "100", AB11: "50", AL8: "2000", AL9: "1800", AL10: "200", AL11: "100" };
+  const current = { AB8: "1100", AB9: "990", AB10: "106", AB11: "54", AL8: "2100", AL9: "1890", AL10: "206", AL11: "104" };
+  coalMeters(previous, ["X", "Z", "AB"], [0, 0, 0]);
+  coalMeters(previous, ["AH", "AJ", "AL"], [0, 0, 0]);
+  coalMeters(current, ["X", "Z", "AB"], [10, 20, 30]);
+  coalMeters(current, ["AH", "AJ", "AL"], [10, 20, 30]);
+  for (const row of [87, 88, 89, 90, 91, 92]) {
+    current[`AJ${row}`] = "10";
+    current[`AK${row}`] = "5000";
+    current[`AL${row}`] = "0.2";
+    current[`AO${row}`] = "20";
+  }
+
+  const result = calculateCtktktSummary(current, previous);
+  const domesticMoisture = (10 * 10 - 2 * 20) / 8;
+  const adjustedPerShift = 8 * (1 - domesticMoisture / 100) / 0.915 + 2;
+  const plantAdjusted = adjustedPerShift * 6;
+  const expectedHhv = (5000 * 0.9 * 60 / plantAdjusted) * 4.1868;
+  assert.ok(Math.abs(result.s1.adjustedCoalTonnes - adjustedPerShift * 3) < 1e-9);
+  assert.ok(Math.abs(result.s2.adjustedCoalTonnes - adjustedPerShift * 3) < 1e-9);
+  assert.ok(Math.abs(result.s1.hhvKjKg - expectedHhv) < 1e-9);
+  assert.equal(result.s1.hhvKjKg, result.s2.hhvKjKg);
+  assert.equal(result.plant.hhvKjKg, result.s1.hhvKjKg);
 });
 
 test("calculateSteamDifferences computes step consumption correctly", async () => {
@@ -82,4 +114,3 @@ test("calculateSteamDifferences computes step consumption correctly", async () =
   assert.equal(s1[1].consumption, 1300); // 2500 - 1200
   assert.equal(s1[2].consumption, 1400); // 3900 - 2500
 });
-

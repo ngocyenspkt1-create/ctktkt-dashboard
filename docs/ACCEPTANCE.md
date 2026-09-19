@@ -49,6 +49,17 @@ Mở địa chỉ localhost mà chương trình in ra. Không thêm `--remote` v
 
 ---
 
+# Bổ sung 20/09/2026 — Đồng bộ công thức CTKTKT với Excel gốc
+
+- Đã sửa dầu tiêu thụ theo đúng Excel: `(F1 hiện tại - F1 mốc trước) - (F2 hiện tại - F2 mốc trước)`; kỳ 06h dùng mốc 24h ngày D-1.
+- Đã thay mô hình than/SHN rút gọn bằng chuỗi công thức Excel: chênh lệch cân + ô hiệu chỉnh, trộn Sub-bitum, quy ẩm 8,5%, nhiệt trị chung nhà máy và SHN S1/S2.
+- Đã đồng bộ công thức NH3 giữa giao diện và báo cáo email; các phép tính hơi, TKĐ DCS và PMIS đã được kiểm tra lại theo ô nguồn.
+- Đối chiếu ngày 17/09/2026 khớp các kết quả khóa của Excel gốc: than quy ẩm S1 `5341.11098688518 t`, S2 `5349.81764480845 t`; nhiệt trị `20021.5934392878 kJ/kg`; SHN S1 `10569.4584381209`, S2 `10611.2296030078 kJ/kWh`; sáu kỳ dầu và hơi khớp tới sai số số thực.
+- Kiểm tra kỹ thuật: 79/79 test, TypeScript, lint, build và kiểm tra whitespace trên các file thuộc phạm vi sửa đều đạt. Không đưa thay đổi một dòng trống có sẵn trong `docs/HANDOFF_CODEX_2026_09_19.md` vào commit.
+- Nghiệm thu còn thiếu: thử một ngày vận hành thật khác 17/09 có than trộn/hiệu chỉnh cân, so sánh màn hình và file Excel xuất lại trước khi phát hành làm báo cáo chính thức.
+
+---
+
 # Bổ sung 15/09/2026 — Suất hao nhiệt PPA và đồng bộ QLKT bằng một nút
 
 Phần này do Codex xây dựng và được Claude tiếp nhận, rà soát lại, chạy kiểm thử để xác nhận trước khi bàn giao tiếp.

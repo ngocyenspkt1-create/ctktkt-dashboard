@@ -206,3 +206,30 @@ Chi tiết bàn giao xem tại `docs/HANDOFF_CODEX_2026_09_19.md`. Các điểm 
 6. **Mục 2 BCSX lấy từ file Chỉ tiêu KTKT**: Bỏ đồng bộ Mục 2 từ QLKT để tránh trùng lặp; Mục 2 liên kết trực tiếp từ CTKTKT và hỗ trợ nạp lại/đồng bộ 2 chiều.
 7. **Kiểm thử & Build**: 78/78 tests vượt qua (100%), `npm run build` hoàn thành với mã 0.
 
+## 13. Cập nhật ngày 20/09/2026 — Đối chiếu công thức file Chỉ tiêu KTKT gốc
+
+Đã đối chiếu các nhóm công thức mà trang `/ctktkt-report` tự tính với file gốc `CHỈ TIÊU KINH TẾ KỸ THUẬT 17.09.2026.xls`, không suy diễn theo tên hiển thị:
+
+1. **Dầu S1/S2**: sửa từ phép trừ sai `F1 - F2` tại cùng thời điểm sang đúng công thức Excel `ΔF1 - ΔF2`. Kỳ 06h lấy chỉ số 24h của ngày D-1; các kỳ sau lấy mốc ngay trước đó trong ngày.
+2. **Than tiêu thụ**: giữ chênh lệch tổng 12 cân theo ba ca, đồng thời cộng đúng các ô hiệu chỉnh `W/Y/AA28` (S1) và `AG/AI/AK28` (S2). Khi xuất Excel, công thức chênh lệch không còn chứa hằng số hiệu chỉnh cứng; số hiệu chỉnh nằm riêng trong các ô nhập để không cộng hai lần.
+3. **Quy ẩm và than trộn**: chuyển đúng tỷ lệ Sub-bitum sang `AL87:AL92`, độ ẩm Sub-bitum sang `AO87:AO92`; áp dụng chuỗi công thức `AM:AR` của Excel và cơ sở ẩm chuẩn 8,5%.
+4. **Nhiệt trị và suất hao nhiệt**: dùng một nhiệt trị ngày chung của nhà máy theo `AS86/AT86/AT87`, sau đó tính SHN S1/S2 như `AV87/AV88`; không còn tính nhiệt trị riêng từng tổ máy theo mô hình rút gọn.
+5. **Hơi, NH3, TKĐ DCS và PMIS**: đã kiểm tra lại cấu trúc công thức. Hơi là lũy kế rồi trừ mốc trước; NH3 là tổng tồn ba bồn, `tồn 0h + nhập - tồn 24h`, rồi chia sản lượng; TKĐ DCS là tổng các nhánh tương ứng; PMIS `L157/L158 = J-K`. NH3 đã được gom về một hàm dùng chung cho giao diện và email.
+
+### Bằng chứng đối chiếu ngày 17/09/2026
+
+- Than quy ẩm S1: `5.341,11098688518 t`; S2: `5.349,81764480845 t`.
+- Nhiệt trị chung: `20.021,5934392878 kJ/kg`.
+- SHN tinh S1: `10.569,4584381209 kJ/kWh`; S2: `10.611,2296030078 kJ/kWh`.
+- Dầu S1 theo 6 kỳ: `-1,10; 0; -1,00; 0; -0,70; 0`; S2: `-183,10; 0; -195,80; 0; -199,12; 0` — đúng các ô `W15:AB15` và `AG15:AL15` của Excel gốc.
+- Hơi S1 theo 6 kỳ: `8.520,17; 5.586,53; 5.556,48; 6.413,03; 6.717,28; 2.789,06 t`; S2: `8.072,46; 5.521,55; 5.411,51; 6.270,16; 6.458,53; 2.810,51 t`.
+- NH3: tồn 24h `129,774 t`; tiêu thụ `14,391 t`; suất hao đầu cực `0,65226850383 g/kWh`; suất hao trên lưới `0,712009816048 g/kWh`.
+
+### Kiểm tra và phần còn lại
+
+- `node --test tests/*.test.mjs`: **79/79 đạt**.
+- `npx.cmd tsc --noEmit`: đạt.
+- `npm.cmd run build`: đạt.
+- `npm.cmd run lint`: đạt.
+- `git diff --check` trên các file thuộc phạm vi sửa: đạt. Working tree vẫn có một dòng trống cuối file trong `docs/HANDOFF_CODEX_2026_09_19.md` từ trước lượt làm việc này nên không đưa file đó vào commit.
+- Cần nghiệm thu thêm trên trình duyệt bằng một ngày vận hành thật khác 17/09, đặc biệt khi có than Sub-bitum và các ô hiệu chỉnh cân than, trước khi coi kết quả là báo cáo chính thức.

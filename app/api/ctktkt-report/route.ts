@@ -3,9 +3,13 @@ import { getSessionUser } from "@/lib/auth/server";
 import { canEditAnyCtktktField, canEditCtktktField } from "@/lib/ctktkt-permissions";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
+import { CTKTKT_EXTRA_INPUT_FIELDS } from "@/lib/ctktkt-extra-fields";
 import { seedCtktktSample2Days } from "./seed-sample/route";
 
-const fieldCells = new Set<string>(CTKTKT_INPUT_FIELDS.map(field => field.cell).filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell)));
+const fieldCells = new Set<string>([
+  ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
+  ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
+].filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell)));
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 

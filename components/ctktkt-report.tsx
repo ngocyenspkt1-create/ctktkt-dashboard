@@ -41,6 +41,7 @@ import {
   calculateTkdDcsSummary,
   calculateOilDifferences,
   calculateSteamDifferences,
+  calculateNh3Summary,
   previousIsoDate,
   TKD_HOURS,
   OIL_HOURS,
@@ -49,6 +50,10 @@ import {
   type CtktktKpis,
 } from "@/lib/ctktkt-report";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
+import {
+  CTKTKT_EXTRA_INPUT_FIELDS,
+  CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS,
+} from "@/lib/ctktkt-extra-fields";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
@@ -71,9 +76,13 @@ const today = () =>
     day: "2-digit",
   }).format(new Date());
 
-const editableFields = CTKTKT_INPUT_FIELDS.filter(
-  field => !CTKTKT_BCSX_LINKED_CELLS.has(field.cell),
-);
+const editableFields = [
+  ...CTKTKT_INPUT_FIELDS.filter(
+    field => !CTKTKT_BCSX_LINKED_CELLS.has(field.cell)
+      && !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(field.cell),
+  ),
+  ...CTKTKT_EXTRA_INPUT_FIELDS,
+];
 
 const displayFields: DisplayField[] = [
   ...editableFields,
@@ -293,13 +302,17 @@ export function CtktktReport() {
   // Tính toán tự động Cụm 2 TKĐ DCS
   const tkdCalc = useMemo(() => calculateTkdDcsSummary(current), [current]);
 
-  // Tính toán dầu F1 - F2 S1 và S2
-  const oilS1 = useMemo(() => calculateOilDifferences(current, "s1"), [current]);
-  const oilS2 = useMemo(() => calculateOilDifferences(current, "s2"), [current]);
+  // Tính dầu theo chênh lệch tăng công tơ F1 và F2; mốc đầu ngày lấy từ D-1.
+  const oilS1 = useMemo(() => calculateOilDifferences(current, "s1", previous), [current, previous]);
+  const oilS2 = useMemo(() => calculateOilDifferences(current, "s2", previous), [current, previous]);
 
   // Tính toán lưu lượng hơi S1 và S2
   const steamS1 = useMemo(() => calculateSteamDifferences(current, "s1"), [current]);
   const steamS2 = useMemo(() => calculateSteamDifferences(current, "s2"), [current]);
+  const nh3 = useMemo(
+    () => calculateNh3Summary(current, summary.plant.grossMwh, summary.plant.netMwh),
+    [current, summary.plant.grossMwh, summary.plant.netMwh],
+  );
 
   const update = (cell: string, value: string) => {
     setByDate(old => ({
@@ -1679,7 +1692,7 @@ export function CtktktReport() {
                           </tr>
                           <tr className="bg-amber-50/50 font-bold">
                             <td className="p-2 text-amber-900 font-sans">
-                              Lượng dầu tiêu thụ = F1 - F2 (t)
+                              Dầu tiêu thụ từng kỳ = ΔF1 - ΔF2 (t), kỳ 06h lấy mốc D-1
                             </td>
                             {oilS1.map(o => (
                               <td key={o.label} className="p-2 text-right text-amber-900">
@@ -1748,6 +1761,16 @@ export function CtktktReport() {
                               </td>
                             </tr>
                           ))}
+                          <tr className="bg-amber-50/50">
+                            <td className="p-2 font-bold text-amber-950 font-sans">
+                              Hiệu chỉnh chênh lệch cân than (tấn, mặc định 0)
+                            </td>
+                            {(["W28", "Y28", "AA28"] as const).map(cell => (
+                              <td key={cell} className="p-1 text-center">
+                                {renderCellInput(cell, { group: "may_nghien_coal_s1" })}
+                              </td>
+                            ))}
+                          </tr>
                           <tr className="bg-slate-100 font-black">
                             <td className="p-2 text-slate-900 font-sans">
                               Lượng than tiêu thụ - tấn (S1)
@@ -1954,7 +1977,7 @@ export function CtktktReport() {
                           </tr>
                           <tr className="bg-amber-50/50 font-bold">
                             <td className="p-2 text-amber-900 font-sans">
-                              Lượng dầu tiêu thụ = F1 - F2 (kg)
+                              Dầu tiêu thụ từng kỳ = ΔF1 - ΔF2 (kg), kỳ 06h lấy mốc D-1
                             </td>
                             {oilS2.map(o => (
                               <td key={o.label} className="p-2 text-right text-amber-900">
@@ -2023,6 +2046,16 @@ export function CtktktReport() {
                               </td>
                             </tr>
                           ))}
+                          <tr className="bg-amber-50/50">
+                            <td className="p-2 font-bold text-amber-950 font-sans">
+                              Hiệu chỉnh chênh lệch cân than (tấn, mặc định 0)
+                            </td>
+                            {(["AG28", "AI28", "AK28"] as const).map(cell => (
+                              <td key={cell} className="p-1 text-center">
+                                {renderCellInput(cell, { group: "may_nghien_coal_s2" })}
+                              </td>
+                            ))}
+                          </tr>
                           <tr className="bg-slate-100 font-black">
                             <td className="p-2 text-slate-900 font-sans">
                               Lượng than tiêu thụ - tấn (S2)
@@ -2199,7 +2232,7 @@ export function CtktktReport() {
                             {renderCellInput("P69", { group: "nh3_tank" })}
                           </td>
                           <td className="p-2 text-right font-bold text-indigo-900">
-                            {format(num(current, "P69") ? num(current, "P69")! * 0.95 : null)}
+                            {format(nh3.tankAvailable[0])}
                           </td>
                         </tr>
                         <tr>
@@ -2214,7 +2247,7 @@ export function CtktktReport() {
                             {renderCellInput("P70", { group: "nh3_tank" })}
                           </td>
                           <td className="p-2 text-right font-bold text-indigo-900">
-                            {format(num(current, "P70") ? num(current, "P70")! * 0.95 : null)}
+                            {format(nh3.tankAvailable[1])}
                           </td>
                         </tr>
                         <tr>
@@ -2229,7 +2262,7 @@ export function CtktktReport() {
                             {renderCellInput("P71", { group: "nh3_tank" })}
                           </td>
                           <td className="p-2 text-right font-bold text-indigo-900">
-                            {format(num(current, "P71") ? num(current, "P71")! * 0.95 : null)}
+                            {format(nh3.tankAvailable[2])}
                           </td>
                         </tr>
                       </tbody>
@@ -2260,11 +2293,7 @@ export function CtktktReport() {
                         Tồn kho 24h00 (tấn):
                       </span>
                       <b className="text-indigo-900">
-                        {format(
-                          (num(current, "P69") || 0) +
-                            (num(current, "P70") || 0) +
-                            (num(current, "P71") || 0) || null,
-                        )}
+                        {format(nh3.stock24h)}
                       </b>
                     </div>
 
@@ -2273,13 +2302,7 @@ export function CtktktReport() {
                         Tổng NH3 đã dùng (tấn):
                       </span>
                       <b className="text-emerald-800">
-                        {format(
-                          (num(current, "P73") || 0) +
-                            (num(current, "P72") || 0) -
-                            ((num(current, "P69") || 0) +
-                              (num(current, "P70") || 0) +
-                              (num(current, "P71") || 0)) || null,
-                        )}
+                        {format(nh3.usedTonnes)}
                       </b>
                     </div>
                   </div>
@@ -2433,19 +2456,60 @@ export function CtktktReport() {
                         </td>
                       </tr>
 
-                      {/* Tỷ lệ trộn */}
                       <tr className="bg-amber-50/40">
                         <td className="p-2 font-bold text-amber-950 font-sans">
-                          Tỷ lệ trộn than Sub bitum
+                          S1: Tỷ lệ trộn Sub bitum (0–1; 20% nhập 0,20)
                         </td>
                         <td className="p-1.5 text-center">
-                          {renderCellInput("AI83", { group: "coal_blend_pmis" })}
+                          {renderCellInput("AL87", { group: "coal_blend_pmis" })}
                         </td>
                         <td className="p-1.5 text-center">
-                          {renderCellInput("AI84", { group: "coal_blend_pmis" })}
+                          {renderCellInput("AL88", { group: "coal_blend_pmis" })}
                         </td>
                         <td className="p-1.5 text-center">
-                          {renderCellInput("AI85", { group: "coal_blend_pmis" })}
+                          {renderCellInput("AL89", { group: "coal_blend_pmis" })}
+                        </td>
+                      </tr>
+                      <tr className="bg-amber-50/40">
+                        <td className="p-2 font-bold text-amber-950 font-sans">
+                          S2: Tỷ lệ trộn Sub bitum (0–1; 20% nhập 0,20)
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("AL90", { group: "coal_blend_pmis" })}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("AL91", { group: "coal_blend_pmis" })}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("AL92", { group: "coal_blend_pmis" })}
+                        </td>
+                      </tr>
+                      <tr className="bg-orange-50/40">
+                        <td className="p-2 font-bold text-orange-950 font-sans">
+                          S1: Độ ẩm than Sub bitum (%)
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("AO87", { group: "coal_blend_pmis" })}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("AO88", { group: "coal_blend_pmis" })}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("AO89", { group: "coal_blend_pmis" })}
+                        </td>
+                      </tr>
+                      <tr className="bg-orange-50/40">
+                        <td className="p-2 font-bold text-orange-950 font-sans">
+                          S2: Độ ẩm than Sub bitum (%)
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("AO90", { group: "coal_blend_pmis" })}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("AO91", { group: "coal_blend_pmis" })}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("AO92", { group: "coal_blend_pmis" })}
                         </td>
                       </tr>
                     </tbody>

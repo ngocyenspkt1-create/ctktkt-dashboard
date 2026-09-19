@@ -2617,6 +2617,10 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "208206.49515191233"
       },
       {
+        "cell": "AK28",
+        "value": "-162.51"
+      },
+      {
         "cell": "AJ87",
         "value": "8.41"
       },

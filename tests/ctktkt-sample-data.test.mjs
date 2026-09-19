@@ -3,7 +3,7 @@ import { test } from "node:test";
 import ExcelJS from "exceljs";
 import { CTKTKT_SAMPLE_2DAYS } from "../lib/ctktkt-sample-data.ts";
 import { deriveCtktktCellsFromBcsx, CTKTKT_BCSX_LINKED_CELLS } from "../lib/ctktkt-bcsx-link.ts";
-import { calculateCtktktSummary, calculateTkdDcsSummary, calculateOilDifferences, calculateSteamDifferences } from "../lib/ctktkt-report.ts";
+import { calculateCtktktSummary, calculateTkdDcsSummary, calculateOilDifferences, calculateSteamDifferences, calculateNh3Summary } from "../lib/ctktkt-report.ts";
 import { CTKTKT_TEMPLATE_BASE64 } from "../lib/ctktkt-template.generated.ts";
 
 test("CTKTKT sample data contains complete readings for 16/09/2026 and 17/09/2026", () => {
@@ -57,11 +57,12 @@ test("Day 17 calculates full KPIs when Day 16 is present as previous day", () =>
   // Auxiliary power % (~8.39%)
   assert.ok(Math.abs(summary.plant.auxiliaryPercent - 8.39) < 0.05);
 
-  // Coal consumption and heat rates
-  assert.ok(summary.plant.rawCoalTonnes > 10000);
-  assert.ok(summary.plant.adjustedCoalTonnes > 10000);
-  assert.ok(summary.plant.netCoalRate > 500 && summary.plant.netCoalRate < 600);
-  assert.ok(summary.plant.netHeatRate > 10000 && summary.plant.netHeatRate < 12000);
+  // Exact source-workbook results (sheet 17, calculation block AR/AT/AV).
+  assert.ok(Math.abs(summary.s1.adjustedCoalTonnes - 5341.11098688518) < 1e-8);
+  assert.ok(Math.abs(summary.s2.adjustedCoalTonnes - 5349.81764480845) < 1e-8);
+  assert.ok(Math.abs(summary.plant.hhvKjKg - 20021.5934392878) < 1e-8);
+  assert.ok(Math.abs(summary.s1.netHeatRate - 10569.4584381209) < 1e-8);
+  assert.ok(Math.abs(summary.s2.netHeatRate - 10611.2296030078) < 1e-8);
 
   // TKD DCS calculation
   const tkd = calculateTkdDcsSummary(entries17);
@@ -70,16 +71,24 @@ test("Day 17 calculates full KPIs when Day 16 is present as previous day", () =>
   assert.ok(tkd.M.pSumTdS2 > 0);
 
   // Oil consumption calculation
-  const oil1 = calculateOilDifferences(entries17, "s1");
-  const oil2 = calculateOilDifferences(entries17, "s2");
-  assert.equal(oil1.length, 6);
-  assert.equal(oil2.length, 6);
+  const oil1 = calculateOilDifferences(entries17, "s1", entries16);
+  const oil2 = calculateOilDifferences(entries17, "s2", entries16);
+  assert.deepEqual(oil1.map(item => Math.round((item.diff ?? 0) * 100) / 100), [-1.1, 0, -1, 0, -0.7, 0]);
+  assert.deepEqual(oil2.map(item => Math.round((item.diff ?? 0) * 100) / 100), [-183.1, 0, -195.8, 0, -199.12, 0]);
 
   // Steam consumption calculation
   const steam1 = calculateSteamDifferences(entries17, "s1");
   const steam2 = calculateSteamDifferences(entries17, "s2");
   assert.equal(steam1.length, 6);
   assert.equal(steam2.length, 6);
+  assert.deepEqual(steam1.map(item => Math.round((item.consumption ?? 0) * 100) / 100), [8520.17, 5586.53, 5556.48, 6413.03, 6717.28, 2789.06]);
+  assert.deepEqual(steam2.map(item => Math.round((item.consumption ?? 0) * 100) / 100), [8072.46, 5521.55, 5411.51, 6270.16, 6458.53, 2810.51]);
+
+  const nh3 = calculateNh3Summary(entries17, summary.plant.grossMwh, summary.plant.netMwh);
+  assert.ok(Math.abs(nh3.stock24h - 129.774) < 1e-9);
+  assert.ok(Math.abs(nh3.usedTonnes - 14.391) < 1e-9);
+  assert.ok(Math.abs(nh3.rateGross - 0.65226850383) < 1e-9);
+  assert.ok(Math.abs(nh3.rateNet - 0.712009816048) < 1e-9);
 });
 
 test("Exporting month workbook with sample data populates sheets 16 and 17 correctly", async () => {
