@@ -194,3 +194,15 @@ Phiên bản v0.4.22 kiểm tra thêm `document.readyState` và tiếp tục nga
 Sau v0.4.22, QLKT mở được nhưng báo màn hình Sản lượng chưa chuyển đúng ngày. Nguyên nhân kỹ thuật là PrimeFaces giữ các bản sao ô ngày ẩn mang giá trị cũ, trong khi bộ đọc ngày trước đây lấy ô ngày đầu tiên trong toàn trang. Bản v0.4.23 chỉ đọc các ô ngày đang hiển thị trong hàng bộ lọc báo cáo, dùng native setter của `HTMLInputElement`, phát đủ sự kiện `input/change`, rồi luôn bấm nút cập nhật đúng vùng ngày trong mỗi lượt.
 
 Luồng BCSX được rút từ hai yêu cầu web (`SYNC_ALL` rồi `SYNC_BCSX_EVENTS`) thành một yêu cầu `SYNC_BCSX`: chỉ đọc Sản lượng, Nhiên liệu và Vận hành; màn hình Vận hành không còn bị đọc hai lần. Tiện ích tái sử dụng tab QLKT đúng URL nếu đang mở, kiểm tra đúng ngày ở từng màn hình, đủ đúng 7 mã `B/C/H/I/AE/AF/AR`, nhận đủ hai danh sách sự kiện rồi mới trả một gói kết quả. Web chỉ cập nhật giao diện và lưu batch sau khi toàn bộ gói qua kiểm tra; bất kỳ nguồn nào sai ngày/thiếu mã đều dừng mà không ghi dữ liệu.
+
+## 12. Cập nhật ngày 19/09/2026: Phân quyền CTKTKT, Email báo cáo, Đồng bộ PMIS 02-PĐ & Tách biệt Mục 2 BCSX
+
+Chi tiết bàn giao xem tại `docs/HANDOFF_CODEX_2026_09_19.md`. Các điểm chính:
+1. **Phân quyền & Tái cấu trúc `/ctktkt-report`**: 7 cương vị vận hành, 6 cụm tab, kiểm tra quyền chặt chẽ ở cả client lẫn server.
+2. **Bỏ hộp thoại confirm**: Bỏ toàn bộ `window.confirm` trên web theo yêu cầu người dùng.
+3. **Báo cáo Email hàng ngày**: Chiết xuất tự động hơn 22 chỉ số từ file chỉ tiêu KTKT, xuất bảng Times New Roman giống ảnh mẫu, nút Copy HTML/Text 1 chạm.
+4. **Multi-cell Copy/Paste & Bàn phím**: Hỗ trợ copy dán nhiều ô dạng ma trận từ Excel và điều hướng bằng phím mũi tên `↑↓←→`, Tab, Enter.
+5. **Đồng bộ PMIS & 02-PĐ Duyên Hải 1 từ QLKT**: Trích xuất 18 chỉ tiêu hàng "Duyên Hải 1" (`C181:T181`) và sản lượng PMIS S1/S2 (`J157, K157, J158, K158`) qua tiện ích mở rộng.
+6. **Mục 2 BCSX lấy từ file Chỉ tiêu KTKT**: Bỏ đồng bộ Mục 2 từ QLKT để tránh trùng lặp; Mục 2 liên kết trực tiếp từ CTKTKT và hỗ trợ nạp lại/đồng bộ 2 chiều.
+7. **Kiểm thử & Build**: 78/78 tests vượt qua (100%), `npm run build` hoàn thành với mã 0.
+
