@@ -253,7 +253,6 @@ export function CtktktReport() {
   };
 
   const handleSeedSample = async () => {
-    if (dirty && !window.confirm("Có thay đổi chưa lưu. Nạp số liệu mẫu và ghi đè?")) return;
     setSeeding(true);
     setError("");
     setMessage("");
@@ -396,11 +395,6 @@ export function CtktktReport() {
               <DateField
                 value={date}
                 onChange={value => {
-                  if (
-                    dirty &&
-                    !window.confirm("Có thay đổi chưa lưu. Chuyển ngày và bỏ thay đổi?")
-                  )
-                    return;
                   if (value.slice(0, 7) !== period) setLoading(true);
                   setDate(value);
                   setDirty(false);
