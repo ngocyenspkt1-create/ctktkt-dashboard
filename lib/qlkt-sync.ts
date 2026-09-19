@@ -21,6 +21,28 @@ export const qlktFieldLabels: Record<string, string> = {
   DF: "Chân không bình ngưng BQ S2",
   DG: "Nhiệt độ nước làm mát tuần hoàn BQ S1",
   DH: "Nhiệt độ nước làm mát tuần hoàn BQ S2",
+  J157: "Điện đầu cực PMIS S1 (MW)",
+  K157: "Điện xuất tuyến PMIS S1 (MW)",
+  J158: "Điện đầu cực PMIS S2 (MW)",
+  K158: "Điện xuất tuyến PMIS S2 (MW)",
+  C181: "02-PĐ Công suất đặt (MW)",
+  D181: "02-PĐ Điện năng tác dụng đầu cực (Tr. kWh)",
+  E181: "02-PĐ Điện năng phản kháng đầu cực (Tr. kVArh)",
+  F181: "02-PĐ Điện năng giao (Tr. kWh)",
+  G181: "02-PĐ Điện năng nhận (Tr. kWh)",
+  H181: "02-PĐ Điện năng nhận chạy bù (Tr. kWh)",
+  I181: "02-PĐ Tổn thất MBA kích từ (Tr. kWh)",
+  J181: "02-PĐ Tổn thất MBA nâng (Tr. kWh)",
+  K181: "02-PĐ Điện năng tự dùng (Tr. kWh)",
+  L181: "02-PĐ Tỷ lệ tự dùng (%)",
+  M181: "02-PĐ Nhiên liệu sử dụng (Tr. Tấn)",
+  N181: "02-PĐ Suất hao nhiên liệu thô (g/kWh)",
+  O181: "02-PĐ Suất hao nhiên liệu tinh (g/kWh)",
+  P181: "02-PĐ Suất hao nhiệt thô (kJ/kWh)",
+  Q181: "02-PĐ Suất hao nhiệt tinh (kJ/kWh)",
+  R181: "02-PĐ Hệ số sử dụng",
+  S181: "02-PĐ Hệ số đáp ứng",
+  T181: "02-PĐ Độ phát thải",
 };
 
 export type QlktSyncEntry = {
@@ -64,7 +86,8 @@ export function validateQlktSyncPayload(value: unknown): QlktSyncPayload | null 
     const entries = raw.entries.flatMap(item => {
       if (!item || typeof item !== "object") return [];
       const fieldCode = String(item.fieldCode || ""), value = String(item.value || "").trim(), sourceLabel = String(item.sourceLabel || "QLKT").slice(0, 160);
-      if (!(fieldCode in qlktFieldLabels) || seen.has(fieldCode) || !numericPattern.test(value)) return [];
+      if (!(fieldCode in qlktFieldLabels) || seen.has(fieldCode)) return [];
+      if (fieldCode !== "T181" && !numericPattern.test(value)) return [];
       seen.add(fieldCode);
       return [{ fieldCode, value, sourceLabel }];
     });
@@ -121,11 +144,13 @@ export function decodeQlktPpaSyncHash(hash: string): QlktPpaSyncPayload | null {
 }
 
 export function normalizeQlktValue(value: string) {
-  const parsed = Number(value);
+  const clean = String(value || "").trim();
+  if (!clean) return "";
+  const parsed = Number(clean);
   // Keep the precision reported by QLKT. In particular, daily electricity is
   // converted from MWh to million kWh before reaching this function, so two
   // decimal places would discard up to 10,000 kWh and distort heat-rate
   // calculations. String(Number(...)) only normalizes the numeric text; it
   // does not intentionally round the source value.
-  return Number.isFinite(parsed) ? String(parsed) : "";
+  return Number.isFinite(parsed) ? String(parsed) : clean;
 }

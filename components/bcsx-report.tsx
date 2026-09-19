@@ -108,68 +108,65 @@ export function BcsxReport() {
       const request = bcsxRequestRef.current;
       if (!request || data.requestId !== request.id) return;
 
-      if (data.type !== "SYNC_BCSX_RESULT") return;
+      if (data.type !== "SYNC_BCSX_EVENTS_RESULT" && data.type !== "SYNC_BCSX_RESULT") return;
       window.clearTimeout(request.timer);
       if (!data.result?.ok || !data.result.payload) {
         bcsxRequestRef.current = null;
         setSyncingAll(false);
-        setError(data.result?.error || "Không đồng bộ được dữ liệu BCSX từ QLKT.");
+        setError(data.result?.error || "Không đồng bộ được nhật ký sự kiện từ QLKT.");
         return;
       }
-      const payload = validateQlktSyncPayload(data.result.payload);
-      const rawPayload = data.result.payload as { s1?: unknown; s2?: unknown };
-      if (!payload || payload.operatingDate !== request.operatingDate || !Array.isArray(rawPayload.s1) || !Array.isArray(rawPayload.s2)) {
-        bcsxRequestRef.current = null;
-        setSyncingAll(false);
-        setError("QLKT trả về dữ liệu không hợp lệ hoặc không đúng ngày đã chọn. Chưa ghi dữ liệu vào hệ thống.");
-        return;
-      }
-      const byCode = new Map(payload.entries.map(entry => [entry.fieldCode, normalizeQlktValue(entry.value)]));
-      const requiredCodes = ["B", "C", "H", "I", "AE", "AF", "AR"];
-      const missingCodes = requiredCodes.filter(code => !byCode.get(code));
-      if (missingCodes.length) {
-        bcsxRequestRef.current = null;
-        setSyncingAll(false);
-        setError(`QLKT còn thiếu ${missingCodes.length} số liệu BCSX (${missingCodes.join(", ")}). Chưa ghi dữ liệu vào hệ thống.`);
-        return;
-      }
-      const syncedTotals: Record<Unit, TotalsDraft> = {
-        S1: { dauCuc: parseAndScaleMwh(byCode.get("B")), thuongPham: parseAndScaleMwh(byCode.get("C")), thanTieuThu: byCode.get("AE") || "", thanTonKho: byCode.get("AR") || "" },
-        S2: { dauCuc: parseAndScaleMwh(byCode.get("H")), thuongPham: parseAndScaleMwh(byCode.get("I")), thanTieuThu: byCode.get("AF") || "", thanTonKho: byCode.get("AR") || "" },
+      const rawPayload = data.result.payload as {
+        operatingDate?: string;
+        s1?: unknown;
+        s2?: unknown;
+        events?: { S1?: unknown[]; S2?: unknown[] };
       };
+      if (rawPayload.operatingDate && rawPayload.operatingDate !== request.operatingDate) {
+        bcsxRequestRef.current = null;
+        setSyncingAll(false);
+        setError("QLKT trả về sự kiện không đúng ngày đã chọn. Chưa ghi dữ liệu vào hệ thống.");
+        return;
+      }
+      const rawEventsS1 = Array.isArray(rawPayload.s1)
+        ? rawPayload.s1
+        : Array.isArray(rawPayload.events?.S1)
+          ? rawPayload.events.S1
+          : [];
+      const rawEventsS2 = Array.isArray(rawPayload.s2)
+        ? rawPayload.s2
+        : Array.isArray(rawPayload.events?.S2)
+          ? rawPayload.events.S2
+          : [];
+
       const mapEvents = (items: unknown[]): OperatingEvent[] => items.map(item => {
         const event = item as Partial<OperatingEvent>;
-        return { startAt: String(event.startAt || ""), endAt: String(event.endAt || ""), eventType: Number(event.eventType || 1), description: String(event.description || "") };
+        return {
+          startAt: String(event.startAt || ""),
+          endAt: String(event.endAt || ""),
+          eventType: Number(event.eventType || 1),
+          description: String(event.description || "")
+        };
       });
-      const s1 = mapEvents(rawPayload.s1);
-      const s2 = mapEvents(rawPayload.s2);
-      setNotice("Đã đọc đủ 3 màn hình QLKT. Đang lưu đồng thời dữ liệu S1 và S2…");
-        const dailyEntries = [
-          { operatingDate: request.operatingDate, fieldCode: "B", value: scaleDownToMillionKwh(syncedTotals.S1.dauCuc) },
-          { operatingDate: request.operatingDate, fieldCode: "C", value: scaleDownToMillionKwh(syncedTotals.S1.thuongPham) },
-          { operatingDate: request.operatingDate, fieldCode: "AE", value: syncedTotals.S1.thanTieuThu },
-          { operatingDate: request.operatingDate, fieldCode: "H", value: scaleDownToMillionKwh(syncedTotals.S2.dauCuc) },
-          { operatingDate: request.operatingDate, fieldCode: "I", value: scaleDownToMillionKwh(syncedTotals.S2.thuongPham) },
-          { operatingDate: request.operatingDate, fieldCode: "AF", value: syncedTotals.S2.thanTieuThu },
-          { operatingDate: request.operatingDate, fieldCode: "AR", value: syncedTotals.S1.thanTonKho },
-        ];
-        try {
-          const response = await fetch("/api/bcsx-sync", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ date: request.operatingDate, entries: dailyEntries, events: { S1: s1, S2: s2 } }),
-          });
-          const body = await response.json() as { error?: string };
-          if (!response.ok || body.error) throw new Error(body.error || "Không lưu được dữ liệu đồng bộ.");
-          setTotals(syncedTotals);
-          setEvents({ S1: s1, S2: s2 });
-          setNotice(`Đã đồng bộ và lưu ngày ${request.operatingDate.split("-").reverse().join("/")} cho cả S1 và S2: 7 số liệu tổng ngày, S1 (${s1.length} sự kiện), S2 (${s2.length} sự kiện). Có thể xuất ba file A0/S1/S2 ngay.`);
-        } catch (caught) {
-          setError(caught instanceof Error ? caught.message : "Đã lấy dữ liệu nhưng không lưu được vào hệ thống.");
-        } finally {
-          if (bcsxRequestRef.current?.id === request.id) bcsxRequestRef.current = null;
-          setSyncingAll(false);
-        }
+      const s1 = mapEvents(rawEventsS1);
+      const s2 = mapEvents(rawEventsS2);
+      setNotice("Đang lưu nhật ký sự kiện S1 và S2 từ QLKT…");
+      try {
+        const response = await fetch("/api/bcsx-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: request.operatingDate, events: { S1: s1, S2: s2 } }),
+        });
+        const body = await response.json() as { error?: string };
+        if (!response.ok || body.error) throw new Error(body.error || "Không lưu được dữ liệu nhật ký sự kiện.");
+        setEvents({ S1: s1, S2: s2 });
+        setNotice(`Đã đồng bộ và lưu nhật ký sự kiện ngày ${request.operatingDate.split("-").reverse().join("/")}: S1 (${s1.length} sự kiện), S2 (${s2.length} sự kiện). Số liệu Mục 2 được liên kết từ Chỉ tiêu KTKT.`);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Đã lấy dữ liệu nhưng không lưu được vào hệ thống.");
+      } finally {
+        if (bcsxRequestRef.current?.id === request.id) bcsxRequestRef.current = null;
+        setSyncingAll(false);
+      }
     };
     window.addEventListener("message", handleMessage);
     window.postMessage({ channel, sender: "ctktkt-web", type: "PING" }, window.location.origin);
@@ -187,15 +184,17 @@ export function BcsxReport() {
     async function load() {
       setLoading(true); setError(null);
       try {
-        const [readingsRes, eventsRes, period] = [
+        const [readingsRes, eventsRes, totalsRes, ctktktRes, period] = [
           await fetch(`/api/shift-readings?date=${operatingDate}`),
           await fetch(`/api/operating-events?date=${operatingDate}`),
+          await fetch(`/api/daily-inputs?period=${operatingDate.slice(0, 7)}`),
+          await fetch(`/api/ctktkt-report?period=${operatingDate.slice(0, 7)}`),
           operatingDate.slice(0, 7),
         ];
         const readingsJson = await readingsRes.json() as { entries?: { unit: Unit; timeSlot: string; metric: ShiftMetric; value: string }[]; error?: string };
         const eventsJson = await eventsRes.json() as { events?: (OperatingEvent & { unit: Unit })[]; error?: string };
-        const totalsRes = await fetch(`/api/daily-inputs?period=${period}`);
         const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[]; error?: string };
+        const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[]; error?: string };
         if (cancelled) return;
         if (readingsJson.error || eventsJson.error) throw new Error(readingsJson.error || eventsJson.error);
 
@@ -213,18 +212,29 @@ export function BcsxReport() {
         setEvents(nextEvents);
 
         const byCode = new Map((totalsJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
+        const ktktByCell = new Map((ctktktJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.cell, e.value]));
+
+        // Mục 2 của BCSX lấy nguồn từ file Chỉ tiêu KTKT (J157/K157 cho S1, J158/K158 cho S2, Than tiêu thụ & Tồn kho)
+        const ktktJ157 = ktktByCell.get("J157");
+        const ktktK157 = ktktByCell.get("K157");
+        const ktktJ158 = ktktByCell.get("J158");
+        const ktktK158 = ktktByCell.get("K158");
+        const ktktN169 = ktktByCell.get("N169");
+        const ktktN171 = ktktByCell.get("N171");
+        const ktktAR = ktktByCell.get("I38") || ktktByCell.get("B38");
+
         setTotals({
           S1: {
-            dauCuc: parseAndScaleMwh(byCode.get("B")),
-            thuongPham: parseAndScaleMwh(byCode.get("C")),
-            thanTieuThu: byCode.get("AE") || "",
-            thanTonKho: byCode.get("AR") || "",
+            dauCuc: ktktJ157 || parseAndScaleMwh(byCode.get("B")),
+            thuongPham: ktktK157 || parseAndScaleMwh(byCode.get("C")),
+            thanTieuThu: ktktN169 || byCode.get("AE") || "",
+            thanTonKho: ktktAR || byCode.get("AR") || "",
           },
           S2: {
-            dauCuc: parseAndScaleMwh(byCode.get("H")),
-            thuongPham: parseAndScaleMwh(byCode.get("I")),
-            thanTieuThu: byCode.get("AF") || "",
-            thanTonKho: byCode.get("AR") || "",
+            dauCuc: ktktJ158 || parseAndScaleMwh(byCode.get("H")),
+            thuongPham: ktktK158 || parseAndScaleMwh(byCode.get("I")),
+            thanTieuThu: ktktN171 || byCode.get("AF") || "",
+            thanTonKho: ktktAR || byCode.get("AR") || "",
           },
         });
       } catch (err) {
@@ -293,14 +303,55 @@ export function BcsxReport() {
     }, 180000);
     bcsxRequestRef.current = { id: requestId, timer, operatingDate };
     setSyncingAll(true);
-    setNotice("Đang đọc một lượt 3 màn hình QLKT cho S1 và S2…");
+    setNotice("Đang đọc nhật ký sự kiện từ QLKT cho S1 và S2…");
     window.postMessage({
       channel: "ctktkt-qlkt-sync",
       sender: "ctktkt-web",
-      type: "SYNC_BCSX",
+      type: "SYNC_BCSX_EVENTS",
       requestId,
       operatingDate,
     }, window.location.origin);
+  }
+
+  async function reloadTotalsFromCtktkt() {
+    setError(null); setNotice(null);
+    try {
+      const period = operatingDate.slice(0, 7);
+      const [totalsRes, ctktktRes] = await Promise.all([
+        fetch(`/api/daily-inputs?period=${period}`),
+        fetch(`/api/ctktkt-report?period=${period}`),
+      ]);
+      const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[] };
+      const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[] };
+      const byCode = new Map((totalsJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
+      const ktktByCell = new Map((ctktktJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.cell, e.value]));
+
+      const ktktJ157 = ktktByCell.get("J157");
+      const ktktK157 = ktktByCell.get("K157");
+      const ktktJ158 = ktktByCell.get("J158");
+      const ktktK158 = ktktByCell.get("K158");
+      const ktktN169 = ktktByCell.get("N169");
+      const ktktN171 = ktktByCell.get("N171");
+      const ktktAR = ktktByCell.get("I38") || ktktByCell.get("B38");
+
+      setTotals({
+        S1: {
+          dauCuc: ktktJ157 || parseAndScaleMwh(byCode.get("B")),
+          thuongPham: ktktK157 || parseAndScaleMwh(byCode.get("C")),
+          thanTieuThu: ktktN169 || byCode.get("AE") || "",
+          thanTonKho: ktktAR || byCode.get("AR") || "",
+        },
+        S2: {
+          dauCuc: ktktJ158 || parseAndScaleMwh(byCode.get("H")),
+          thuongPham: ktktK158 || parseAndScaleMwh(byCode.get("I")),
+          thanTieuThu: ktktN171 || byCode.get("AF") || "",
+          thanTonKho: ktktAR || byCode.get("AR") || "",
+        },
+      });
+      setNotice(`Đã nạp lại 4 số liệu Mục 2 từ Chỉ tiêu KTKT cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không tải lại được số liệu từ Chỉ tiêu KTKT.");
+    }
   }
 
   async function saveTotals() {
@@ -317,7 +368,22 @@ export function BcsxReport() {
       const res = await fetch("/api/daily-inputs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period: operatingDate.slice(0, 7), entries }) });
       const json = await res.json() as { saved?: number; error?: string };
       if (!res.ok || json.error) throw new Error(json.error || "Không lưu được số liệu tổng ngày.");
-      setNotice(`Đã lưu số liệu tổng ngày tổ máy ${unit} (đồng bộ sang Dữ liệu các tháng).`);
+
+      // Đồng bộ đồng thời sang Chỉ tiêu KTKT (J157/K157 cho S1, J158/K158 cho S2)
+      try {
+        const ktktEntries = unit === "S1"
+          ? [{ cell: "J157", value: t.dauCuc.trim() }, { cell: "K157", value: t.thuongPham.trim() }]
+          : [{ cell: "J158", value: t.dauCuc.trim() }, { cell: "K158", value: t.thuongPham.trim() }];
+        await fetch("/api/ctktkt-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operatingDate, entries: ktktEntries }),
+        });
+      } catch {
+        // Bỏ qua nếu người dùng không thuộc nhóm phân quyền chỉ tiêu
+      }
+
+      setNotice(`Đã lưu số liệu tổng ngày tổ máy ${unit} (đồng bộ sang Chỉ tiêu KTKT & Dữ liệu các tháng).`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không lưu được số liệu tổng ngày.");
     } finally {
@@ -537,10 +603,10 @@ export function BcsxReport() {
             type="button"
             disabled={syncingAll || isViewer || !canSyncQlkt}
             onClick={syncAllFromQlkt}
-            title={isViewer || !canSyncQlkt ? "Tài khoản chưa được cấp quyền đồng bộ QLKT." : "Lấy và lưu số liệu tổng ngày cùng nhật ký sự kiện cho cả S1 và S2"}
+            title={isViewer || !canSyncQlkt ? "Tài khoản chưa được cấp quyền đồng bộ QLKT." : "Lấy và lưu nhật ký sự kiện từ QLKT cho cả S1 và S2 (Số liệu Mục 2 được liên kết từ Chỉ tiêu KTKT)"}
             className="h-8 rounded-lg bg-gradient-to-r from-[#334785] to-[#438ec1] px-3 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {syncingAll ? "Đang đồng bộ S1 & S2…" : "⚡ Đồng bộ toàn bộ S1 & S2"}
+            {syncingAll ? "Đang đồng bộ sự kiện S1 & S2…" : "⚡ Đồng bộ nhật ký sự kiện từ QLKT"}
           </button>
           <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
             {(["S1", "S2"] as const).map(u => (
@@ -765,9 +831,17 @@ export function BcsxReport() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-extrabold text-[#173b64]">2. Số liệu tổng ngày — tổ máy {unit}</h2>
-          <p className="mt-0.5 text-xs text-slate-500">4 số liệu được liên kết với trang <Link href="/" className="font-semibold text-[#334785] underline">Dữ liệu các tháng</Link> (Sản lượng đầu cực &amp; thương phẩm quy đổi MWh, Than tiêu thụ &amp; tồn kho).</p>
+          <p className="mt-0.5 text-xs text-slate-500">4 số liệu được liên kết trực tiếp từ trang <Link href="/ctktkt-report" className="font-semibold text-[#334785] underline">Chỉ tiêu KTKT</Link> (Sản lượng đầu cực J157/J158 &amp; thương phẩm K157/K158 PMIS MWh, Than tiêu thụ &amp; tồn kho). Đã bỏ đồng bộ mục 2 này từ QLKT để tránh trùng lặp.</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void reloadTotalsFromCtktkt()}
+            className="rounded-lg border border-[#334785] bg-white px-3 py-1.5 text-xs font-bold text-[#334785] hover:bg-slate-50"
+            title="Nạp lại số liệu Mục 2 mới nhất từ trang Chỉ tiêu KTKT"
+          >
+            🔄 Nạp lại từ Chỉ tiêu KTKT
+          </button>
           <button
             type="button"
             disabled={saving || isViewer}

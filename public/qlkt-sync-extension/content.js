@@ -16,6 +16,18 @@
     const number = Number(value);
     return Number.isFinite(number) ? String(number) : null;
   };
+  const normalizeQlktNumber = raw => {
+    const original = cleanText(raw);
+    if (!original || /[A-Za-zÀ-ỹ]/u.test(original) || /\d{1,2}\/\d{1,2}\/\d{4}/.test(original)) return null;
+    let value = original.replace(/\s/g, "").replace(/[^0-9,.-]/g, "");
+    if (!value) return null;
+    const comma = value.lastIndexOf(","), dot = value.lastIndexOf(".");
+    if (comma >= 0 && comma > dot) value = value.replace(/\./g, "").replace(",", ".");
+    else if (dot >= 0 && dot > comma) value = value.replace(/,/g, "");
+    else if (comma >= 0) value = value.replace(",", ".");
+    const number = Number(value);
+    return Number.isFinite(number) ? value : null;
+  };
   const visibleReportDateInputs = () => {
     const candidates = [...document.querySelectorAll("input")]
       .filter(input => /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(readValue(input)))
@@ -50,6 +62,7 @@
 
   function pageKind() {
     const path = location.pathname.toLowerCase();
+    if (path.includes("rpt_ct_qlkt_02_pd") || path.includes("rpt_ct_qlkt_02")) return "pmis_02pd";
     if (path.includes("rpt_a_production_day")) return "production";
     if (path.includes("rpt_hour_operation")) return "operation";
     if (path.includes("nhienlieu")) return "fuel";
@@ -62,6 +75,7 @@
     // theo nội dung trang.
     if (path.includes("bu_tru")) return null;
     const page = normalized(document.body?.innerText);
+    if (page.includes("02-pd") || page.includes("khoi phat dien 02-pd")) return "pmis_02pd";
     if (page.includes("so lieu do dem cong to") && page.includes("nguon du lieu") && page.includes("kwhgiao")) return "meter";
     if (page.includes("dien nang dau cuc") && page.includes("sl diem ban")) return "production";
     if (page.includes("nhien lieu than") && page.includes("nhien lieu dau fo")) return "fuel";
@@ -327,12 +341,124 @@
     throw new Error(`${scriptError || tableError || "Không đọc được dữ liệu bảng công tơ."} ${pageDiag}`);
   }
 
+  function extractPmis02PdPayload(arg1, arg2, arg3) {
+    const operatingDate = typeof arg1 === "string" ? arg1 : (typeof arg2 === "string" ? arg2 : "");
+    const tablesOrDoc = typeof arg1 !== "string" ? arg1 : arg2;
+    const productionTablesOrDoc = typeof arg1 !== "string" ? arg3 : (arg3 || null);
+
+    let allTables = [];
+    if (Array.isArray(tablesOrDoc)) {
+      allTables = tablesOrDoc;
+    } else if (tablesOrDoc && typeof tablesOrDoc.querySelectorAll === "function") {
+      allTables = [...tablesOrDoc.querySelectorAll("table")];
+    } else if (typeof document !== "undefined") {
+      allTables = [...document.querySelectorAll("table")];
+    }
+
+    let cellValues = null;
+    for (const table of allTables) {
+      const rows = Array.isArray(table) ? table : (table.rows ? [...table.rows] : []);
+      for (const row of rows) {
+        const cells = Array.isArray(row) ? row : (row.cells ? [...row.cells] : []);
+        for (let i = 0; i < cells.length; i++) {
+          const rawText = typeof cells[i] === "string" ? cells[i] : cells[i]?.textContent || "";
+          const t = normalized(rawText);
+          if (t.includes("duyen hai 1") && !t.includes("duyen hai 3") && !t.includes("tong cong")) {
+            cellValues = cells.map(cell => {
+              if (typeof cell === "string") return cleanText(cell);
+              const input = cell?.querySelector ? cell.querySelector("input:not([type='checkbox']):not([type='radio']):not([type='hidden'])") : null;
+              return input ? readValue(input) : cleanText(cell?.textContent || "");
+            });
+            break;
+          }
+        }
+        if (cellValues) break;
+      }
+      if (cellValues) break;
+    }
+
+    if (!cellValues) {
+      throw new Error("Không tìm thấy hàng \"Duyên Hải 1\" trên màn hình Báo cáo chỉ tiêu 02-PĐ.");
+    }
+
+    // 18 cột thứ tự tương ứng từ C181 đến T181 (ảnh media_1789829951895 & media_1789830004294)
+    const CODES = [
+      "C181", "D181", "E181", "F181", "G181", "H181", "I181", "J181", "K181",
+      "L181", "M181", "N181", "O181", "P181", "Q181", "R181", "S181", "T181"
+    ];
+
+    const entries = [];
+    for (let c = 0; c < CODES.length; c++) {
+      const cellIdx = 1 + c; // Sau cột Tên đơn vị (cột 0)
+      if (cellIdx < cellValues.length) {
+        const code = CODES[c];
+        const valStr = cellValues[cellIdx];
+        if (code === "T181") {
+          entries.push({ fieldCode: code, cell: code, value: valStr || "Đạt", sourceLabel: "QLKT · 02-PĐ · Duyên Hải 1 · Độ phát thải" });
+        } else {
+          const num = normalizeQlktNumber(valStr);
+          entries.push({ fieldCode: code, cell: code, value: num !== null ? num : (valStr || "").replace(",", "."), sourceLabel: `QLKT · 02-PĐ · Duyên Hải 1 · Cột ${c + 1}` });
+        }
+      }
+    }
+
+    // Nếu có production tables được truyền kèm hoặc có thể đọc từ DOM, bóc tách thêm J157, K157, J158, K158
+    let prodTables = [];
+    if (Array.isArray(productionTablesOrDoc)) {
+      prodTables = productionTablesOrDoc;
+    } else if (productionTablesOrDoc && typeof productionTablesOrDoc.querySelectorAll === "function") {
+      prodTables = [...productionTablesOrDoc.querySelectorAll("table")];
+    }
+    for (const table of prodTables) {
+      const rows = Array.isArray(table) ? table : (table.rows ? [...table.rows] : []);
+      for (const row of rows) {
+        const cells = Array.isArray(row) ? row : (row.cells ? [...row.cells] : []);
+        const rowText = cells.map(c => typeof c === "string" ? c : c?.textContent || "").join(" ");
+        const t = normalized(rowText);
+        if (t.includes("dh1_mf1") || (t.includes("mf1") && t.includes("sl phat"))) {
+          const vals = cells.map(c => typeof c === "string" ? cleanText(c) : cleanText(c?.textContent || ""));
+          if (vals[1]) {
+            const num = normalizeQlktNumber(vals[1]);
+            entries.push({ fieldCode: "J157", cell: "J157", value: num !== null ? num : vals[1].replace(",", "."), sourceLabel: "QLKT · DH1_MF1 · SL phát" });
+          }
+          if (vals[3]) {
+            const num = normalizeQlktNumber(vals[3]);
+            entries.push({ fieldCode: "K157", cell: "K157", value: num !== null ? num : vals[3].replace(",", "."), sourceLabel: "QLKT · DH1_MF1 · SL điểm bán" });
+          }
+        } else if (t.includes("dh1_mf2") || (t.includes("mf2") && t.includes("sl phat"))) {
+          const vals = cells.map(c => typeof c === "string" ? cleanText(c) : cleanText(c?.textContent || ""));
+          if (vals[1]) {
+            const num = normalizeQlktNumber(vals[1]);
+            entries.push({ fieldCode: "J158", cell: "J158", value: num !== null ? num : vals[1].replace(",", "."), sourceLabel: "QLKT · DH1_MF2 · SL phát" });
+          }
+          if (vals[3]) {
+            const num = normalizeQlktNumber(vals[3]);
+            entries.push({ fieldCode: "K158", cell: "K158", value: num !== null ? num : vals[3].replace(",", "."), sourceLabel: "QLKT · DH1_MF2 · SL điểm bán" });
+          }
+        }
+      }
+    }
+
+    if (!entries.length) {
+      throw new Error("Không đọc được chỉ tiêu nào từ hàng Duyên Hải 1 trên bảng 02-PĐ.");
+    }
+
+    return {
+      version: 1,
+      operatingDate,
+      sourcePage: typeof location !== "undefined" ? location.href : "http://qlkt/pmis_02pd",
+      kind: "pmis_02pd",
+      entries,
+    };
+  }
+
   function extract(expectedOperatingDate) {
     const operatingDate = parseDate(expectedOperatingDate);
     if (!operatingDate) throw new Error("Không xác định được ngày báo cáo trên trang QLKT.");
     const currentPageKind = pageKind();
     if (currentPageKind === "meter") return extractPpaMeterPayload(operatingDate);
     if (currentPageKind === "heatrate") return extractHeatRatePayload(operatingDate);
+    if (currentPageKind === "pmis_02pd") return extractPmis02PdPayload(operatingDate);
     const entries = new Map(), oilValues = [];
     const add = (fieldCode, candidate, sourceLabel) => {
       if (!candidate || candidate.value === null || entries.has(fieldCode)) return;
@@ -420,6 +546,10 @@
       if (!entries.has("C")) add("C", s1[2], "QLKT · DH1_MF1 · SL điểm bán");
       if (!entries.has("H")) add("H", s2[0], "QLKT · DH1_MF2 · SL phát");
       if (!entries.has("I")) add("I", s2[2], "QLKT · DH1_MF2 · SL điểm bán");
+      if (s1[0]?.value) entries.set("J157", { fieldCode: "J157", value: s1[0].value, sourceLabel: "QLKT · DH1_MF1 · SL phát (MWh)" });
+      if (s1[2]?.value) entries.set("K157", { fieldCode: "K157", value: s1[2].value, sourceLabel: "QLKT · DH1_MF1 · SL điểm bán (MWh)" });
+      if (s2[0]?.value) entries.set("J158", { fieldCode: "J158", value: s2[0].value, sourceLabel: "QLKT · DH1_MF2 · SL phát (MWh)" });
+      if (s2[2]?.value) entries.set("K158", { fieldCode: "K158", value: s2[2].value, sourceLabel: "QLKT · DH1_MF2 · SL điểm bán (MWh)" });
       if (!entries.size) {
         const numericInputs = [...document.querySelectorAll("input")].filter(input => parseNumber(readValue(input)) !== null).length;
         throw new Error(`Bộ đọc v${CONTENT_SCRIPT_VERSION}: không ghép được hai hàng DH1_MF1/DH1_MF2 với vùng số liệu Sản lượng (đã thấy ${allTables.length} bảng, ${numericInputs} ô số).`);
@@ -608,48 +738,53 @@
   }
 
   globalThis.QlktOperatingExtractor = { parseOperatingRow, classifyEventUnit, extractOperatingEvents };
+  globalThis.Qlkt02PdExtractor = { extractPmis02PdPayload };
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type === "GET_QLKT_PAGE_KIND") {
-      const kind = pageKind();
-      if (kind) rememberPage();
-      sendResponse({ ok: Boolean(kind), pageKind: kind });
-      return;
-    }
-    if (message?.type === "PREPARE_QLKT_DATE") {
-      try { sendResponse({ ok: true, ...prepareDate(message.operatingDate) }); }
-      catch (error) {
-        const message = error instanceof Error ? error.message : "Không đặt được ngày QLKT.";
-        sendResponse({ ok: false, retryable: message.includes("nút cập nhật ngày"), error: message });
+  if (typeof chrome !== "undefined" && chrome?.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (message?.type === "GET_QLKT_PAGE_KIND") {
+        const kind = pageKind();
+        if (kind) rememberPage();
+        sendResponse({ ok: Boolean(kind), pageKind: kind });
+        return;
       }
-      return;
-    }
-    if (message?.type === "READ_QLKT_EVENTS") {
-      try {
-        const payload = extractOperatingEvents(message.operatingDate);
-        sendResponse({ ok: true, payload });
-      } catch (error) {
-        sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đọc được nhật ký sự kiện." });
+      if (message?.type === "PREPARE_QLKT_DATE") {
+        try { sendResponse({ ok: true, ...prepareDate(message.operatingDate) }); }
+        catch (error) {
+          const message = error instanceof Error ? error.message : "Không đặt được ngày QLKT.";
+          sendResponse({ ok: false, retryable: message.includes("nút cập nhật ngày"), error: message });
+        }
+        return;
       }
-      return;
-    }
-    if (message?.type !== "READ_QLKT_VALUES") return;
-    // extract() đồng bộ với hầu hết màn hình, nhưng bất đồng bộ (Promise) với màn hình Cân bằng
-    // nhiệt (phải chuyển dropdown Tổ máy và chờ AJAX) — bọc trong Promise.resolve().then() để xử lý
-    // đúng cả 2 trường hợp mà không cần biết trước extract() trả về gì.
-    Promise.resolve()
-      .then(() => extract(message.operatingDate))
-      .then(payload => sendResponse({ ok: true, payload, pageKind: pageKind() }))
-      .catch(error => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đọc được dữ liệu QLKT." }));
-    return true;
-  });
+      if (message?.type === "READ_QLKT_EVENTS") {
+        try {
+          const payload = extractOperatingEvents(message.operatingDate);
+          sendResponse({ ok: true, payload });
+        } catch (error) {
+          sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đọc được nhật ký sự kiện." });
+        }
+        return;
+      }
+      if (message?.type !== "READ_QLKT_VALUES") return;
+      // extract() đồng bộ với hầu hết màn hình, nhưng bất đồng bộ (Promise) với màn hình Cân bằng
+      // nhiệt (phải chuyển dropdown Tổ máy và chờ AJAX) — bọc trong Promise.resolve().then() để xử lý
+      // đúng cả 2 trường hợp mà không cần biết trước extract() trả về gì.
+      Promise.resolve()
+        .then(() => extract(message.operatingDate))
+        .then(payload => sendResponse({ ok: true, payload, pageKind: pageKind() }))
+        .catch(error => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đọc được dữ liệu QLKT." }));
+      return true;
+    });
+  }
 
-  rememberPage();
-  const recognitionObserver = new MutationObserver(() => {
-    if (!pageKind()) return;
+  if (typeof MutationObserver !== "undefined" && typeof document !== "undefined" && document.documentElement) {
     rememberPage();
-    recognitionObserver.disconnect();
-  });
-  recognitionObserver.observe(document.documentElement, { childList: true, subtree: true });
-  setTimeout(() => recognitionObserver.disconnect(), 15000);
+    const recognitionObserver = new MutationObserver(() => {
+      if (!pageKind()) return;
+      rememberPage();
+      recognitionObserver.disconnect();
+    });
+    recognitionObserver.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(() => recognitionObserver.disconnect(), 15000);
+  }
 })();

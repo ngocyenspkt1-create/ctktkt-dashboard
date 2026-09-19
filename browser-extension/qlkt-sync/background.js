@@ -13,12 +13,14 @@ const DEFAULT_METER_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/solieucto.jsf
 // thay vì phụ thuộc "ghi nhớ", để lỗi này không thể tái diễn.
 const DEFAULT_PRODUCTION_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/rpt_a_production_day.jsf";
 const DEFAULT_OPERATION_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/rpt_hour_operation.jsf";
+const DEFAULT_PMIS_02PD_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/report/rpt_CT_QLKT_02_PD_New.jsf";
 const SOURCE_LABELS = {
   production: "Sản lượng",
   fuel: "Nhiên liệu",
   operation: "Vận hành",
   meter: "Công tơ PPA",
   heatrate: "Cân bằng nhiệt",
+  pmis_02pd: "Báo cáo 02-PĐ",
 };
 const DAILY_SOURCES = ["production", "fuel", "operation"];
 const REQUIRED_FIELDS = {
@@ -28,6 +30,7 @@ const REQUIRED_FIELDS = {
   // 8 mã của cả 2 tổ máy (S1+S2) — content.js tự đổi "Tổ máy" trên màn hình Cân bằng nhiệt và đọc
   // lần lượt cả 2 trong 1 lần gọi READ_QLKT_VALUES, nên chỉ cần 1 tab, không cần mở 2 lần như trước.
   heatrate: ["DA", "DB", "DC", "DD", "DE", "DF", "DG", "DH"],
+  pmis_02pd: ["C181", "D181", "F181"],
 };
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -399,12 +402,29 @@ async function syncBcsx(operatingDate) {
   };
 }
 
+async function syncPmis02Pd(operatingDate) {
+  const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
+  const url02pd = qlktPages.pmis_02pd || DEFAULT_PMIS_02PD_URL;
+  const production = await readSource("production", DEFAULT_PRODUCTION_URL, operatingDate);
+  const pmis02pd = await readSource("pmis_02pd", url02pd, operatingDate);
+  const entries = new Map();
+  (production.entries || []).forEach(e => entries.set(e.fieldCode, e));
+  (pmis02pd.entries || []).forEach(e => entries.set(e.fieldCode, e));
+  return {
+    version: 1,
+    operatingDate,
+    sourcePage: "QLKT · PMIS 02-PĐ & Sản lượng",
+    entries: [...entries.values()],
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const task = message?.type === "SYNC_ALL_QLKT" ? syncAll
     : message?.type === "SYNC_PPA_QLKT" ? syncPpa
     : message?.type === "SYNC_HEATRATE_QLKT" ? syncHeatRate
     : message?.type === "SYNC_BCSX_QLKT" ? syncBcsx
     : message?.type === "SYNC_BCSX_EVENTS_QLKT" ? syncBcsxEvents
+    : message?.type === "SYNC_PMIS_02PD_QLKT" ? syncPmis02Pd
     : null;
   if (!task) return;
   task(message.operatingDate)

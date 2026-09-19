@@ -64,26 +64,22 @@ test('extension package 0.4.23 aligns production values, events and preserves th
   assert.match(content, /Trang hiện tại: "\$\{document\.title/);
 });
 
-test('BCSX uses one QLKT button to load daily totals and events for both units', () => {
+test('BCSX syncs operating events from QLKT and sources Section 2 totals from CTKTKT', () => {
   const source = readFileSync(new URL('../components/bcsx-report.tsx', import.meta.url), 'utf8');
+  const ctktktSource = readFileSync(new URL('../components/ctktkt-report.tsx', import.meta.url), 'utf8');
   const saveRoute = readFileSync(new URL('../app/api/bcsx-sync/route.ts', import.meta.url), 'utf8');
   const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.match(source, /Đồng bộ toàn bộ S1 & S2/);
-  assert.match(source, /type: "SYNC_BCSX"/);
-  assert.doesNotMatch(source, /type: "SYNC_ALL"/);
-  assert.doesNotMatch(source, /type: "SYNC_BCSX_EVENTS"/);
-  assert.match(background, /async function syncBcsx\(operatingDate\)/);
-  assert.match(background, /SYNC_BCSX_QLKT/);
-  assert.match(background, /readSource\("production"[\s\S]*readSource\("fuel"[\s\S]*syncBcsxEvents\(operatingDate\)/);
-  assert.match(background, /requiredCodes = \["B", "C", "H", "I", "AE", "AF", "AR"\]/);
-  assert.match(webBridge, /SYNC_BCSX_RESULT/);
+  assert.match(source, /Đồng bộ nhật ký sự kiện từ QLKT/);
+  assert.match(source, /type: "SYNC_BCSX_EVENTS"/);
+  assert.match(source, /\/api\/ctktkt-report/);
+  assert.match(source, /ktktByCell\.get\("J157"\)/);
+  assert.match(ctktktSource, /SYNC_PMIS_02PD/);
+  assert.match(background, /async function syncPmis02Pd\(operatingDate\)/);
+  assert.match(background, /SYNC_PMIS_02PD_QLKT/);
+  assert.match(webBridge, /SYNC_PMIS_02PD/);
   assert.match(source, /fetch\("\/api\/bcsx-sync"/);
   assert.match(saveRoute, /requirePermission\("edit_bcsx"\)/);
-  assert.match(saveRoute, /requiredCodes = \["B", "C", "AE", "H", "I", "AF", "AR"\]/);
-  assert.match(saveRoute, /await db\.batch\(statements\)/);
-  assert.doesNotMatch(source, /Đồng bộ sự kiện từ QLKT/);
-  assert.doesNotMatch(source, /Lấy từ Dữ liệu các tháng/);
 });
 
 const headers = ['', 'Tên điểm đo', 'Kênh', 'Ngày', 'Nguồn dữ liệu', 'Tổng', ...Array.from({ length: 48 }, (_, index) => `H${index + 1}`)];

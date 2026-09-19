@@ -27,7 +27,10 @@ function cleanEvents(value: unknown, date: string): OperatingEvent[] {
 }
 
 function cleanEntries(value: unknown, date: string): DailyEntry[] {
-  if (!Array.isArray(value) || value.length !== requiredCodes.length) throw new Error("Số liệu tổng ngày BCSX chưa đủ 7 chỉ tiêu.");
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error("Danh sách số liệu tổng ngày không hợp lệ.");
+  if (value.length === 0) return [];
+  if (value.length !== requiredCodes.length) throw new Error("Số liệu tổng ngày BCSX chưa đủ 7 chỉ tiêu.");
   const seen = new Set<string>();
   const entries = value.map(item => {
     if (!item || typeof item !== "object") throw new Error("Một số liệu tổng ngày không hợp lệ.");

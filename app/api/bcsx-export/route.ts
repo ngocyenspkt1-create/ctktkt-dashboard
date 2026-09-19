@@ -9,7 +9,7 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
   const [readingsRes, eventsRes, totalsRes] = await Promise.all([
     db.prepare("SELECT time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date = ? AND unit = ?").bind(date, unit).all(),
     db.prepare("SELECT start_at AS startAt, end_at AS endAt, event_type AS eventType, description FROM operating_events WHERE operating_date = ? AND unit = ? ORDER BY start_at").bind(date, unit).all(),
-    db.prepare("SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date = ? AND field_code IN ('B','C','AE','H','I','AF','AR')").bind(date).all(),
+    db.prepare("SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date = ? AND field_code IN ('B','C','AE','H','I','AF','AR','KTKT:J157','KTKT:K157','KTKT:J158','KTKT:K158','KTKT:N169','KTKT:N171','KTKT:I38','KTKT:B38')").bind(date).all(),
   ]);
 
   const readings: Partial<Record<ShiftMetric, (number | null)[]>> = {};
@@ -27,9 +27,29 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
     if (val === undefined || Number.isNaN(val)) return null;
     return val > 0 && val < 100 ? val * 1000 : val;
   };
+
+  // Mục 2 BCSX lấy nguồn từ file Chỉ tiêu KTKT (J157, K157 cho S1; J158, K158 cho S2; Than tiêu thụ & tồn kho)
+  const ktktJ157 = byCode.get("KTKT:J157");
+  const ktktK157 = byCode.get("KTKT:K157");
+  const ktktJ158 = byCode.get("KTKT:J158");
+  const ktktK158 = byCode.get("KTKT:K158");
+  const ktktN169 = byCode.get("KTKT:N169");
+  const ktktN171 = byCode.get("KTKT:N171");
+  const ktktAR = byCode.get("KTKT:I38") ?? byCode.get("KTKT:B38");
+
   const totals: UnitTotals = unit === "S1"
-    ? { dauCuc: toMwh(byCode.get("B")), thuongPham: toMwh(byCode.get("C")), thanTieuThu: byCode.get("AE") ?? null, thanTonKho: byCode.get("AR") ?? null }
-    : { dauCuc: toMwh(byCode.get("H")), thuongPham: toMwh(byCode.get("I")), thanTieuThu: byCode.get("AF") ?? null, thanTonKho: byCode.get("AR") ?? null };
+    ? {
+        dauCuc: ktktJ157 !== undefined && !Number.isNaN(ktktJ157) ? ktktJ157 : toMwh(byCode.get("B")),
+        thuongPham: ktktK157 !== undefined && !Number.isNaN(ktktK157) ? ktktK157 : toMwh(byCode.get("C")),
+        thanTieuThu: ktktN169 !== undefined && !Number.isNaN(ktktN169) ? ktktN169 : (byCode.get("AE") ?? null),
+        thanTonKho: ktktAR !== undefined && !Number.isNaN(ktktAR) ? ktktAR : (byCode.get("AR") ?? null),
+      }
+    : {
+        dauCuc: ktktJ158 !== undefined && !Number.isNaN(ktktJ158) ? ktktJ158 : toMwh(byCode.get("H")),
+        thuongPham: ktktK158 !== undefined && !Number.isNaN(ktktK158) ? ktktK158 : toMwh(byCode.get("I")),
+        thanTieuThu: ktktN171 !== undefined && !Number.isNaN(ktktN171) ? ktktN171 : (byCode.get("AF") ?? null),
+        thanTonKho: ktktAR !== undefined && !Number.isNaN(ktktAR) ? ktktAR : (byCode.get("AR") ?? null),
+      };
 
   const events = eventsRes.results as OperatingEvent[];
   return { readings, totals, events };

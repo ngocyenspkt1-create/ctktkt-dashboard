@@ -87,7 +87,7 @@ export const CTKTKT_GROUP_META: Record<
   pmis_reports: {
     label: "Báo cáo PMIS 02-PĐ & Đối chiếu ngày",
     shortLabel: "Báo cáo PMIS",
-    responsible: "Trưởng ca / Kỹ thuật viên / Quản đốc",
+    responsible: "Trưởng kíp điện / Thống kê / Kỹ thuật viên / Trưởng ca",
     description: "Hiển thị tổng hợp số liệu PMIS 02-PĐ và đối chiếu SLĐC/SLXT",
   },
 };
@@ -324,8 +324,11 @@ export function canEditCtktktGroup(
       );
 
     case "pmis_reports":
-      // Chỉ đọc hiển thị kết quả tính toán hoặc Admin/KTV
-      return false;
+      return (
+        pos.includes("trưởng kíp điện") ||
+        pos.includes("thống kê") ||
+        pos.includes("kỹ thuật")
+      );
 
     default:
       return false;
