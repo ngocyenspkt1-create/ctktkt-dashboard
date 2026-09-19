@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSessionUser } from "@/components/session-context";
-import { formatIsoToDmy, parseDateToIso, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/lib/water-report/calculations";
+import { formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/lib/water-report/calculations";
 import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/permissions";
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/lib/water-report/schema";
-import { loadSheetJs } from "@/lib/sheetjs-loader";
 
 function getCurrentMonth(): string {
   const d = new Date();
@@ -57,12 +56,6 @@ export function WaterReportClient() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [savingShift, setSavingShift] = useState(false);
 
-  // Modal import Excel / Dán
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [importLogs, setImportLogs] = useState<WaterShiftLog[]>([]);
-  const [pasteText, setPasteText] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modal quản lý Trưởng ca (Admin)
   const [isLeaderModalOpen, setIsLeaderModalOpen] = useState(false);
@@ -406,119 +399,7 @@ export function WaterReportClient() {
     }
   }
 
-  // Xử lý nạp file Excel từ máy
-  async function handleExcelFileUpload(file: File) {
-    setImporting(true);
-    try {
-      const XLSX = await loadSheetJs();
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array" });
-      if (!wb.SheetNames.length) throw new Error("File Excel không có sheet nào.");
 
-      // Tìm sheet phù hợp (ví dụ T09.2026 GỘP hoặc sheet đầu tiên)
-      const targetSheetName = wb.SheetNames.find(s => s.includes("GỘP")) || wb.SheetNames[0];
-      const sheet = wb.Sheets[targetSheetName];
-      const csv = XLSX.utils.sheet_to_csv(sheet);
-      parseAndSetImportLogs(csv);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Lỗi khi đọc file Excel.");
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  // Phân tích CSV / Dán từ Excel
-  function parseAndSetImportLogs(text: string) {
-    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-    const parsedList: WaterShiftLog[] = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      // Hỗ trợ cả dấu phẩy CSV hoặc tab TSV khi copy từ Excel
-      const delimiter = line.includes("\t") ? "\t" : ",";
-      const parts = line.split(delimiter).map(p => p.trim().replace(/^"|"$/g, ""));
-
-      // Kiểm tra có phải dòng dữ liệu ca không (cần có giờ 06h00 / 14h00 / 22h00)
-      const timeIdx = parts.findIndex(p => ["06h00", "14h00", "22h00"].includes(p));
-      if (timeIdx === -1) continue;
-
-      const rawDate = timeIdx > 0 ? parts[timeIdx - 1] : "";
-      const shiftTime = parts[timeIdx];
-      const shiftTeam = parts[timeIdx + 1] || "A";
-      const shiftLeader = parts[timeIdx + 2] || "";
-
-      // Tìm các chỉ số nhận ca: Col E, F (Điện S1, S2)
-      const elec1 = Number(parts[timeIdx + 3] || 0);
-      const elec2 = Number(parts[timeIdx + 4] || 0);
-      // Col I, J (Nước nhận S1, S2)
-      const water1 = Number(parts[timeIdx + 7] || 0);
-      const water2 = Number(parts[timeIdx + 8] || 0);
-      // Col O, P (Bình ngưng nhận S1, S2)
-      const cond1 = Number(parts[timeIdx + 13] || 0);
-      const cond2 = Number(parts[timeIdx + 14] || 0);
-      // Col S, T (Tái sinh hạt S1, S2)
-      const resin1 = Number(parts[timeIdx + 17] || 0);
-      const resin2 = Number(parts[timeIdx + 18] || 0);
-
-      const isoDate = parseDateToIso(rawDate);
-      if (!isoDate && !rawDate) continue;
-
-      parsedList.push({
-        logDate: isoDate || getTodayIso(),
-        shiftTime: shiftTime as "06h00" | "14h00" | "22h00",
-        shiftTeam: SHIFT_TEAMS.includes(shiftTeam as (typeof SHIFT_TEAMS)[number]) ? shiftTeam : "A",
-        shiftLeader: shiftLeader || "Việt",
-        elecRecS1: isNaN(elec1) ? 0 : elec1,
-        elecRecS2: isNaN(elec2) ? 0 : elec2,
-        elecGenS1: 0,
-        elecGenS2: 0,
-        waterRecS1: isNaN(water1) ? 0 : water1,
-        waterRecS2: isNaN(water2) ? 0 : water2,
-        waterUsedS1: 0,
-        waterUsedS2: 0,
-        waterRatioS1: 0,
-        waterRatioS2: 0,
-        condenserRecS1: isNaN(cond1) ? 0 : cond1,
-        condenserRecS2: isNaN(cond2) ? 0 : cond2,
-        condenserUsedS1: 0,
-        condenserUsedS2: 0,
-        resinWaterS1_24h: isNaN(resin1) ? 0 : resin1,
-        resinWaterS2_24h: isNaN(resin2) ? 0 : resin2,
-      });
-    }
-
-    if (parsedList.length === 0) {
-      alert("Không tìm thấy dòng dữ liệu ca hợp lệ nào. Hãy sao chép từ file Excel chứa cột Giờ (06h00, 14h00, 22h00).");
-      return;
-    }
-
-    setImportLogs(parsedList);
-  }
-
-  // Lưu toàn bộ ca từ Import modal
-  async function handleSaveImportLogs() {
-    if (importLogs.length === 0) return;
-    setImporting(true);
-    try {
-      const res = await fetch("/api/water-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shifts: importLogs }),
-      });
-      const data = (await res.json()) as { error?: string; saved?: number };
-      if (!res.ok) throw new Error(data.error || "Không thể nạp dữ liệu.");
-
-      showSuccess(`Đã nạp thành công ${data.saved || importLogs.length} ca trực vào hệ thống!`);
-      setIsImportModalOpen(false);
-      setImportLogs([]);
-      setPasteText("");
-      await loadData(month);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Lỗi khi nạp dữ liệu.");
-    } finally {
-      setImporting(false);
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -600,19 +481,6 @@ export function WaterReportClient() {
             <span>Up file tháng</span>
           </button>
 
-          {/* Nạp từ Excel / Dán */}
-          <button
-            type="button"
-            disabled={!canEditAny}
-            onClick={() => setIsImportModalOpen(true)}
-            className={`flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 ${
-              !canEditAny ? "cursor-not-allowed opacity-50" : ""
-            }`}
-            title="Nhập hàng loạt từ Excel hoặc dán bảng"
-          >
-            <span>📋</span>
-            <span>Dán dữ liệu</span>
-          </button>
 
           {/* Xuất Excel */}
           <a
@@ -1395,153 +1263,9 @@ export function WaterReportClient() {
         </div>
       )}
 
-      {/* 5. MODAL NẠP TỪ EXCEL / DÁN BẢNG */}
-      {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-800">
-                  Nạp nhanh số liệu từ Excel hoặc Dán bảng (Ctrl+V)
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Hỗ trợ nạp file .xlsx từ máy hoặc sao chép và dán trực tiếp từ file Excel nhật ký vận hành
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsImportModalOpen(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-              >
-                ✕
-              </button>
-            </div>
 
-            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              {/* Chọn file Excel */}
-              <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-6 text-center">
-                <p className="text-sm font-bold text-slate-700">Cách 1: Chọn file Excel từ máy tính</p>
-                <p className="text-xs text-slate-400 mt-1 mb-3">
-                  Chọn file bảng theo dõi nước (.xlsx) chứa các sheet Txx.xxxx hoặc Txx.xxxx GỘP
-                </p>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.xlsm"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) handleExcelFileUpload(file);
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700"
-                >
-                  Chọn file .xlsx
-                </button>
-              </div>
 
-              {/* Dán từ bảng */}
-              <div>
-                <p className="text-sm font-bold text-slate-700 mb-1">
-                  Cách 2: Sao chép từ Excel rồi dán vào khung dưới đây
-                </p>
-                <textarea
-                  rows={4}
-                  value={pasteText}
-                  onChange={e => {
-                    setPasteText(e.target.value);
-                    parseAndSetImportLogs(e.target.value);
-                  }}
-                  placeholder="Chọn các hàng dữ liệu trong Excel, nhấn Ctrl+C và dán (Ctrl+V) vào đây..."
-                  className="w-full rounded-xl border border-slate-200 p-3 font-mono text-xs outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              {/* Bảng xem trước dữ liệu đã phân tích */}
-              {importLogs.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-emerald-800">
-                      ✓ Đã nhận diện được {importLogs.length} ca trực. Xem trước số liệu:
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setImportLogs([])}
-                      className="text-xs font-semibold text-rose-600 hover:underline"
-                    >
-                      Xoá danh sách
-                    </button>
-                  </div>
-
-                  <div className="max-h-48 overflow-auto rounded-xl border border-slate-200">
-                    <table className="w-full border-collapse text-[10px] text-slate-700">
-                      <thead className="sticky top-0 bg-slate-100 font-bold border-b border-slate-200">
-                        <tr>
-                          <th className="px-2 py-1 text-center">Ngày</th>
-                          <th className="px-1.5 py-1 text-center">Giờ</th>
-                          <th className="px-1 py-1 text-center">Kíp</th>
-                          <th className="px-2 py-1 text-center">Trưởng ca</th>
-                          <th className="px-2 py-1 text-right">Điện S1</th>
-                          <th className="px-2 py-1 text-right">Điện S2</th>
-                          <th className="px-2 py-1 text-right">Nước S1</th>
-                          <th className="px-2 py-1 text-right">Nước S2</th>
-                          <th className="px-2 py-1 text-right">B.Ngưng S1</th>
-                          <th className="px-2 py-1 text-right">B.Ngưng S2</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-mono">
-                        {importLogs.slice(0, 50).map((log, i) => (
-                          <tr key={i} className="hover:bg-slate-50">
-                            <td className="px-2 py-0.5 text-center">{formatIsoToDmy(log.logDate)}</td>
-                            <td className="px-1.5 py-0.5 text-center">{log.shiftTime}</td>
-                            <td className="px-1 py-0.5 text-center font-bold">{log.shiftTeam}</td>
-                            <td className="px-2 py-0.5 text-center font-sans">{log.shiftLeader}</td>
-                            <td className="px-2 py-0.5 text-right">{log.elecRecS1}</td>
-                            <td className="px-2 py-0.5 text-right">{log.elecRecS2}</td>
-                            <td className="px-2 py-0.5 text-right">{log.waterRecS1}</td>
-                            <td className="px-2 py-0.5 text-right">{log.waterRecS2}</td>
-                            <td className="px-2 py-0.5 text-right">{log.condenserRecS1}</td>
-                            <td className="px-2 py-0.5 text-right">{log.condenserRecS2}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {importLogs.length > 50 && (
-                    <p className="text-[10px] text-slate-400 italic">
-                      Đang hiển thị 50 ca đầu tiên (tổng số {importLogs.length} ca).
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Modal Actions */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsImportModalOpen(false)}
-                  className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="button"
-                  disabled={importLogs.length === 0 || importing}
-                  onClick={handleSaveImportLogs}
-                  className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
-                >
-                  {importing ? "Đang lưu dữ liệu..." : `Lưu tất cả ${importLogs.length} ca vào hệ thống`}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 6. MODAL QUẢN LÝ TRƯỞNG CA (ADMIN) */}
+      {/* 5. MODAL QUẢN LÝ TRƯỞNG CA (ADMIN) */}
       {isLeaderModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
@@ -1568,20 +1292,20 @@ export function WaterReportClient() {
                   placeholder="Nhập tên Trưởng ca mới..."
                   value={newLeaderName}
                   onChange={e => setNewLeaderName(e.target.value)}
-                  className="flex-1 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold outline-none focus:border-emerald-500"
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-indigo-500"
                 />
                 <button
                   type="submit"
-                  className="rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700"
+                  className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700"
                 >
                   + Thêm
                 </button>
               </form>
 
               {/* Danh sách hiện tại */}
-              <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 max-h-56 overflow-y-auto">
+              <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-200">
                 {leaderList.length === 0 ? (
-                  <p className="p-3 text-center text-xs text-slate-400">Đang tải...</p>
+                  <div className="p-4 text-center text-xs text-slate-400">Đang tải danh sách...</div>
                 ) : (
                   leaderList.map(l => (
                     <div key={l.id} className="flex items-center justify-between px-3 py-2 text-xs">
@@ -1602,7 +1326,7 @@ export function WaterReportClient() {
                 <button
                   type="button"
                   onClick={() => setIsLeaderModalOpen(false)}
-                  className="rounded-xl bg-slate-100 px-4 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200"
+                  className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
                 >
                   Hoàn tất
                 </button>
@@ -1612,7 +1336,7 @@ export function WaterReportClient() {
         </div>
       )}
 
-      {/* 7. MODAL TẢI LÊN FILE THÁNG ĐỂ NHẬN DỮ LIỆU CÁC THÁNG TRƯỚC */}
+      {/* 6. MODAL TẢI LÊN FILE THÁNG ĐỂ NHẬN DỮ LIỆU CÁC THÁNG TRƯỚC */}
       {isMonthUploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
