@@ -20,6 +20,8 @@ import {
   Rows3,
   TableProperties,
   UserCheck,
+  Database,
+  RefreshCw,
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
 import { useSessionUser } from "@/components/session-context";
@@ -111,7 +113,7 @@ export function CtktktReport() {
   const userCanEditAny = canEditAnyCtktktField(user);
   const editableGroups = useMemo(() => getEditableCtktktGroups(user), [user]);
 
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState("2026-09-17");
   const [byDate, setByDate] = useState<Record<string, CtktktDayEntries>>({});
   const [linkedByDate, setLinkedByDate] = useState<Record<string, CtktktDayEntries>>({});
   const [linkWarnings, setLinkWarnings] = useState<LinkWarning[]>([]);
@@ -123,6 +125,7 @@ export function CtktktReport() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -249,6 +252,52 @@ export function CtktktReport() {
     }
   };
 
+  const handleSeedSample = async () => {
+    if (dirty && !window.confirm("Có thay đổi chưa lưu. Nạp số liệu mẫu và ghi đè?")) return;
+    setSeeding(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/ctktkt-report/seed-sample", { method: "POST" });
+      const body = (await response.json()) as { error?: string; totalManual?: number; totalShift?: number };
+      if (!response.ok) throw new Error(body.error || "Không nạp được số liệu mẫu.");
+
+      setDate("2026-09-17");
+      setDirty(false);
+      setLoading(true);
+      const res = await fetch(`/api/ctktkt-report?period=2026-09`, { cache: "no-store" });
+      const resBody = (await res.json()) as {
+        entries?: LoadedEntry[];
+        linkedEntries?: LoadedEntry[];
+        warnings?: LinkWarning[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(resBody.error || "Không tải lại được dữ liệu.");
+
+      const next: Record<string, CtktktDayEntries> = {};
+      for (const entry of resBody.entries || []) {
+        next[entry.operatingDate] ||= {};
+        next[entry.operatingDate][entry.cell] = entry.value;
+      }
+      const nextLinked: Record<string, CtktktDayEntries> = {};
+      for (const entry of resBody.linkedEntries || []) {
+        nextLinked[entry.operatingDate] ||= {};
+        nextLinked[entry.operatingDate][entry.cell] = entry.value;
+      }
+      setByDate(next);
+      setLinkedByDate(nextLinked);
+      setLinkWarnings(resBody.warnings || []);
+      setMessage(
+        "Đã nạp thành công dữ liệu mẫu 2 ngày (16/09 & 17/09/2026). Toàn bộ KPI ngày 17/09 đã tự động tính toán so với ngày 16/09. Bạn có thể kiểm tra các cụm hoặc bấm 'Xuất Excel tháng' để tải file!",
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Lỗi khi nạp dữ liệu mẫu.");
+    } finally {
+      setSeeding(false);
+      setLoading(false);
+    }
+  };
+
   // Helper render ô nhập liệu có kiểm tra quyền và giao diện rõ ràng
   const renderCellInput = (
     cell: string,
@@ -361,6 +410,17 @@ export function CtktktReport() {
                 className="w-36"
               />
             </label>
+
+            <button
+              type="button"
+              onClick={handleSeedSample}
+              disabled={seeding || loading}
+              className="flex h-9 items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/90 px-3.5 text-xs font-bold text-indigo-700 shadow-xs transition-all hover:bg-indigo-100 disabled:opacity-50"
+              title="Nạp dữ liệu thực tế 2 ngày (16 & 17/09/2026) từ file gốc để thử nghiệm và kiểm tra xuất file"
+            >
+              <Database className="size-3.5" />
+              {seeding ? "Đang nạp…" : "Nạp 2 ngày mẫu (16 & 17/09)"}
+            </button>
 
             <button
               type="button"

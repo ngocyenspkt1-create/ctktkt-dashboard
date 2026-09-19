@@ -75,7 +75,12 @@ export function deriveCtktktCellsFromBcsx(readings: CtktktBcsxReading[]) {
   for (const link of voltageLinks) {
     const s1 = validNumber(byKey.get(readingKey("S1", link.timeSlot, "E")));
     const s2 = validNumber(byKey.get(readingKey("S2", link.timeSlot, "E")));
-    if (!s1 && !s2) continue;
+    const common = validNumber(byKey.get(readingKey("S1/S2", link.timeSlot, "E")));
+    if (!s1 && !s2 && !common) continue;
+    if (common) {
+      entries[link.cell] = common.text;
+      continue;
+    }
     if (s1 && s2 && Math.abs(s1.number - s2.number) > 0.01) {
       warnings.push({
         cell: link.cell,
