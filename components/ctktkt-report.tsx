@@ -549,13 +549,13 @@ export function CtktktReport() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b bg-[#eef3f9] text-[#173b64]">
-                        <th className="p-2 text-left font-bold">Chỉ tiêu / Thông số</th>
+                        <th className="p-2 text-left text-[11px] font-bold">Chỉ tiêu / Thông số</th>
                         {table.columns.map(col => (
-                          <th key={col} className="w-24 p-2 text-center font-bold tracking-wider">
+                          <th key={col} className="w-20 p-1.5 text-center text-[11px] font-bold tracking-wider">
                             {col}
                           </th>
                         ))}
-                        <th className="w-20 p-2 text-center font-bold">Nguồn</th>
+                        <th className="w-16 p-1.5 text-center text-[11px] font-bold">Nguồn</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -563,14 +563,14 @@ export function CtktktReport() {
                         const anyLinked = row.items.some(i => CTKTKT_BCSX_LINKED_CELLS.has(i.field.cell));
                         return (
                           <tr key={rIdx} className={`hover:bg-slate-50/70 ${anyLinked ? "bg-blue-50/20" : ""}`}>
-                            <td className="p-2 font-semibold text-slate-800">
-                              <span className="leading-snug">{row.base}</span>
+                            <td className="p-1.5 font-semibold text-slate-800">
+                              <span className="text-[11px] leading-snug">{row.base}</span>
                             </td>
                             {table.columns.map(col => {
                               const item = row.items.find(i => i.col === col);
                               if (!item) {
                                 return (
-                                  <td key={col} className="p-1.5 text-center text-slate-300">
+                                  <td key={col} className="p-1 text-center text-slate-300">
                                     —
                                   </td>
                                 );
@@ -579,7 +579,7 @@ export function CtktktReport() {
                               return (
                                 <td key={col} className="p-1 text-center">
                                   <div className="flex flex-col items-center gap-0.5">
-                                    <code className={`text-[9px] font-bold font-mono ${
+                                    <code className={`text-[8.5px] font-bold font-mono ${
                                       linked ? "text-blue-700" : "text-amber-800"
                                     }`}>
                                       {item.field.cell}
@@ -589,7 +589,7 @@ export function CtktktReport() {
                                       inputMode={item.field.cell === "T181" ? "text" : "decimal"}
                                       value={current[item.field.cell] || ""}
                                       onChange={event => update(item.field.cell, event.target.value)}
-                                      className={`h-7 w-20 rounded border px-1.5 text-right font-mono text-xs font-bold tabular-nums outline-none transition-colors focus:border-[#4057b5] focus:ring-1 focus:ring-[#4057b5] disabled:bg-slate-100/80 disabled:text-slate-500 ${
+                                      className={`h-[25px] w-[62px] rounded border px-1 text-right font-mono text-[10.5px] font-bold tabular-nums outline-none transition-colors focus:border-[#4057b5] focus:ring-1 focus:ring-[#4057b5] disabled:bg-slate-100/80 disabled:text-slate-500 ${
                                         linked ? "border-blue-200 bg-blue-50/60" : "border-slate-200 bg-white"
                                       }`}
                                       placeholder="—"
@@ -623,7 +623,7 @@ export function CtktktReport() {
                   <h3 className="mb-2 text-xs font-black text-slate-500 uppercase tracking-wider">
                     Các thông số đơn lẻ ({matrixSingles.length})
                   </h3>
-                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     {matrixSingles.map(field => {
                       const linked = CTKTKT_BCSX_LINKED_CELLS.has(field.cell);
                       const displayLabel = getFieldDisplayLabel(field);
@@ -637,20 +637,22 @@ export function CtktktReport() {
                           }`}
                           title={`${field.cell}: ${displayLabel}`}
                         >
-                          <div className="flex min-w-0 items-center gap-1 flex-1">
-                            <code className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-bold font-mono ${
+                          <div className="flex min-w-0 items-center gap-1.5 flex-1">
+                            <code className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-bold font-mono ${
                               linked ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"
                             }`}>
                               {field.cell}
                             </code>
-                            <span className="truncate text-[11px] text-slate-700">{displayLabel}</span>
+                            <span className="flex-1 text-[10px] font-medium leading-[1.25] text-slate-800 break-words">
+                              {displayLabel}
+                            </span>
                           </div>
                           <input
                             disabled={linked || !canEdit || loading}
                             inputMode={field.cell === "T181" ? "text" : "decimal"}
                             value={current[field.cell] || ""}
                             onChange={event => update(field.cell, event.target.value)}
-                            className="h-7 w-20 shrink-0 rounded border border-slate-200 bg-white px-1.5 text-right font-mono text-xs font-bold tabular-nums text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                            className="h-[25px] w-[62px] shrink-0 rounded border border-slate-200 bg-white px-1 text-right font-mono text-[10.5px] font-bold tabular-nums text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
                             placeholder="—"
                           />
                         </label>
@@ -664,14 +666,14 @@ export function CtktktReport() {
             /* ========================================================== */
             /* CHẾ ĐỘ 2: LƯỚI Ô SIÊU GỌN (DENSE INLINE GRID) — TỐI ƯU NHẤT */
             /* ========================================================== */
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {fields.map(field => {
                 const linked = CTKTKT_BCSX_LINKED_CELLS.has(field.cell);
                 const displayLabel = getFieldDisplayLabel(field);
                 return (
                   <label
                     key={field.cell}
-                    className={`group flex items-center justify-between gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold transition-all ${
+                    className={`group flex items-center justify-between gap-1.5 rounded-lg border px-2 py-1 transition-all ${
                       linked
                         ? "border-blue-200 bg-blue-50/40 hover:bg-blue-50/70"
                         : "border-slate-200 bg-white hover:border-indigo-300 hover:shadow-2xs"
@@ -679,16 +681,16 @@ export function CtktktReport() {
                     title={`${field.cell}: ${displayLabel}${linked ? " (Liên kết từ BCSX)" : ""}`}
                   >
                     <div className="flex min-w-0 items-center gap-1.5 flex-1">
-                      <code className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-bold font-mono ${
+                      <code className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-bold font-mono ${
                         linked ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700 group-hover:bg-amber-100 group-hover:text-amber-900"
                       }`}>
                         {field.cell}
                       </code>
-                      <span className="truncate text-[11px] text-slate-700">
+                      <span className="flex-1 text-[10px] font-medium leading-[1.25] text-slate-800 break-words">
                         {displayLabel}
                       </span>
                       {linked && (
-                        <span className="shrink-0 rounded bg-blue-100 px-1 py-0.2 text-[9px] font-bold text-blue-700">
+                        <span className="shrink-0 rounded bg-blue-100 px-1 py-0.2 text-[8.5px] font-bold text-blue-700">
                           BCSX
                         </span>
                       )}
@@ -698,7 +700,7 @@ export function CtktktReport() {
                       inputMode={field.cell === "T181" ? "text" : "decimal"}
                       value={current[field.cell] || ""}
                       onChange={event => update(field.cell, event.target.value)}
-                      className={`h-7 w-20 shrink-0 rounded border bg-white px-1.5 text-right font-mono text-xs font-bold tabular-nums text-slate-900 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100/80 disabled:text-slate-500 ${
+                      className={`h-[25px] w-[62px] shrink-0 rounded border bg-white px-1 text-right font-mono text-[10.5px] font-bold tabular-nums text-slate-900 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100/80 disabled:text-slate-500 ${
                         linked ? "border-blue-200" : "border-slate-200"
                       }`}
                       placeholder="—"
@@ -711,24 +713,24 @@ export function CtktktReport() {
             /* ========================================================== */
             /* CHẾ ĐỘ 3: THẺ GỌN (COMPACT CARDS — 2 DÒNG TINH CHỈNH)     */
             /* ========================================================== */
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {fields.map(field => {
                 const linked = CTKTKT_BCSX_LINKED_CELLS.has(field.cell);
                 const displayLabel = getFieldDisplayLabel(field);
                 return (
                   <div
                     key={field.cell}
-                    className={`flex flex-col justify-between gap-1 rounded-lg border p-1.5 text-xs font-semibold ${
+                    className={`flex flex-col justify-between gap-1 rounded-lg border p-1.5 ${
                       linked ? "border-blue-200 bg-blue-50/50" : "border-slate-200 bg-white"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1">
-                      <code className={`rounded px-1 py-0.2 text-[10px] font-bold font-mono ${
+                    <div className="flex items-start justify-between gap-1">
+                      <code className={`shrink-0 rounded px-1 py-0.2 text-[9px] font-bold font-mono ${
                         linked ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"
                       }`}>
                         {field.cell}
                       </code>
-                      <span className="truncate text-[10px] text-slate-600" title={displayLabel}>
+                      <span className="flex-1 text-[10px] font-medium leading-[1.25] text-slate-800 break-words" title={displayLabel}>
                         {displayLabel}
                       </span>
                       {linked && (
@@ -742,7 +744,7 @@ export function CtktktReport() {
                       inputMode={field.cell === "T181" ? "text" : "decimal"}
                       value={current[field.cell] || ""}
                       onChange={event => update(field.cell, event.target.value)}
-                      className="h-7 w-full rounded border border-slate-200 bg-white px-1.5 text-right font-mono text-xs font-bold tabular-nums text-slate-900 outline-none focus:border-[#4057b5] focus:ring-1 focus:ring-[#4057b5] disabled:bg-slate-100 disabled:text-slate-500"
+                      className="h-[25px] w-full rounded border border-slate-200 bg-white px-1 text-right font-mono text-[10.5px] font-bold tabular-nums text-slate-900 outline-none focus:border-[#4057b5] focus:ring-1 focus:ring-[#4057b5] disabled:bg-slate-100 disabled:text-slate-500"
                       placeholder="—"
                     />
                   </div>
