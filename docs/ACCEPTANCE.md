@@ -659,3 +659,20 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 
 7. **Kiểm thử tự động**:
    - Tạo `tests/position-permissions.test.mjs`: kiểm tra tính toàn vẹn của 25 cương vị, 124 tài khoản nhân sự (không trùng username, đủ mã NV, mật khẩu hợp lệ) và kiểm thử logic hàm `hasPermission`.
+
+# Bổ sung 19/09/2026 — Chẩn đoán đồng bộ Google Sheet
+
+## Đã kiểm tra
+
+- Gọi trực tiếp Google Apps Script đang cấu hình với `GET ?action=dates`: phản hồi JSON `ok: true`, đọc được trang `DH1` và xác định ngày `18/09/2026` tại hàng 51.
+- Gửi POST chẩn đoán với token cố ý sai và danh sách ngày rỗng: Apps Script trả đúng lỗi `Sai token`, chứng tỏ nhánh `doPost` và kiểm tra token đang hoạt động.
+- Gửi POST với token đang dùng và danh sách ngày rỗng: Apps Script trả `ok: true`, `results: []`; thao tác không ghi hoặc thay đổi dữ liệu Google Sheet.
+
+## Kết luận và phần còn dở
+
+- URL triển khai Apps Script, mã kết nối và hàng ngày 18/09/2026 đều hợp lệ. Lỗi người dùng gặp không xuất phát từ ba thành phần này.
+- Giao diện hiện gọi Apps Script trực tiếp từ trình duyệt và giữ URL/token trong `localStorage` của từng máy. Cách này dễ phát sinh lỗi theo trình duyệt hoặc phải thiết lập lại khi đổi máy.
+- Phương án đơn giản hơn cần làm tiếp: chuyển URL/token sang biến môi trường của máy chủ và để `/api/google-sheet-sync` làm trung gian. Khi đó người dùng chỉ chọn ngày, bấm nút, xem trước và xác nhận; không phải nhập URL hoặc mã kết nối trên từng máy.
+- Chưa gửi dữ liệu thật của ngày 18/09/2026 trong lượt chẩn đoán này để tránh thay đổi báo cáo chính thức khi chưa xem được lỗi đầy đủ và dữ liệu xem trước.
+
+---
