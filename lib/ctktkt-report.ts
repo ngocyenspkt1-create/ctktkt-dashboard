@@ -125,3 +125,101 @@ export function previousIsoDate(date: string) {
   parsed.setDate(parsed.getDate() - 1);
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(parsed);
 }
+
+export type TkdHourCol = "M" | "N" | "O" | "P" | "Q" | "R";
+export const TKD_HOURS: Array<{ col: TkdHourCol; label: string; hour: number }> = [
+  { col: "M", label: "06h", hour: 6 },
+  { col: "N", label: "10h", hour: 10 },
+  { col: "O", label: "14h", hour: 14 },
+  { col: "P", label: "18h", hour: 18 },
+  { col: "Q", label: "22h", hour: 22 },
+  { col: "R", label: "24h", hour: 24 },
+];
+
+export type TkdCalculatedRow = {
+  pSumTdS1: number | null;
+  pSumTdS2: number | null;
+  pSumS1S2: number | null;
+  pSumT1T2: number | null;
+  qSumS1S2: number | null;
+};
+
+export function calculateTkdDcsSummary(entries: CtktktDayEntries): Record<TkdHourCol, TkdCalculatedRow> {
+  const result = {} as Record<TkdHourCol, TkdCalculatedRow>;
+  for (const { col } of TKD_HOURS) {
+    const pS1 = numberOf(entries, `${col}3`);
+    const qS1 = numberOf(entries, `${col}4`);
+    const pS2 = numberOf(entries, `${col}5`);
+    const qS2 = numberOf(entries, `${col}6`);
+    const pT1 = numberOf(entries, `${col}7`);
+    const pT2 = numberOf(entries, `${col}8`);
+    const p911 = numberOf(entries, `${col}9`);
+    const p912 = numberOf(entries, `${col}10`);
+    const p921 = numberOf(entries, `${col}12`);
+    const p922 = numberOf(entries, `${col}13`);
+
+    result[col] = {
+      pSumTdS1: add(p911, p912),
+      pSumTdS2: add(p921, p922),
+      pSumS1S2: add(pS1, pS2),
+      pSumT1T2: add(pT1, pT2),
+      qSumS1S2: add(qS1, qS2),
+    };
+  }
+  return result;
+}
+
+export const OIL_HOURS = [
+  { colS1: "W", colS2: "AG", label: "06h" },
+  { colS1: "X", colS2: "AH", label: "08h" },
+  { colS1: "Y", colS2: "AI", label: "14h" },
+  { colS1: "Z", colS2: "AJ", label: "16h" },
+  { colS1: "AA", colS2: "AK", label: "22h" },
+  { colS1: "AB", colS2: "AL", label: "24h" },
+];
+
+export function calculateOilDifferences(entries: CtktktDayEntries, unit: "s1" | "s2") {
+  const isS1 = unit === "s1";
+  return OIL_HOURS.map(({ colS1, colS2, label }) => {
+    const col = isS1 ? colS1 : colS2;
+    const f1 = numberOf(entries, `${col}13`);
+    const f2 = numberOf(entries, `${col}14`);
+    return {
+      label,
+      f1,
+      f2,
+      diff: f1 !== null && f2 !== null ? f1 - f2 : null,
+    };
+  });
+}
+
+export const STEAM_HOURS = [
+  { colS1: "W", colS2: "AG", label: "06h" },
+  { colS1: "X", colS2: "AH", label: "10h" },
+  { colS1: "Y", colS2: "AI", label: "14h" },
+  { colS1: "Z", colS2: "AJ", label: "18h" },
+  { colS1: "AA", colS2: "AK", label: "22h" },
+  { colS1: "AB", colS2: "AL", label: "24h" },
+];
+
+export function calculateSteamDifferences(entries: CtktktDayEntries, unit: "s1" | "s2") {
+  const isS1 = unit === "s1";
+  const result: Array<{ label: string; totalFlow: number | null; consumption: number | null }> = [];
+  let prevTotal: number | null = null;
+
+  for (let i = 0; i < STEAM_HOURS.length; i++) {
+    const { colS1, colS2, label } = STEAM_HOURS[i];
+    const col = isS1 ? colS1 : colS2;
+    const totalFlow = numberOf(entries, `${col}54`);
+    let consumption: number | null = null;
+    if (i === 0) {
+      consumption = totalFlow;
+    } else if (totalFlow !== null && prevTotal !== null) {
+      consumption = totalFlow - prevTotal;
+    }
+    prevTotal = totalFlow;
+    result.push({ label, totalFlow, consumption });
+  }
+  return result;
+}
+

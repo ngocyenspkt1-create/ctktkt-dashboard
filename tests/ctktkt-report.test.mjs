@@ -39,3 +39,47 @@ test("previous operating date crosses month and leap-year boundaries", () => {
   assert.equal(previousIsoDate("2026-09-01"), "2026-08-31");
   assert.equal(previousIsoDate("2028-03-01"), "2028-02-29");
 });
+
+test("calculateTkdDcsSummary sums auxiliary power and plant totals correctly", async () => {
+  const { calculateTkdDcsSummary } = await import("../lib/ctktkt-report.ts");
+  const entries = {
+    M3: "438", M5: "438", // P S1, P S2
+    M4: "8", M6: "7",     // Q S1, Q S2
+    M7: "400", M8: "402", // P MBT T1, T2
+    M9: "30.9", M10: "4.8", // P TD 911, 912
+    M12: "31.9", M13: "4.4", // P TD 921, 922
+  };
+  const summary = calculateTkdDcsSummary(entries);
+  assert.ok(Math.abs(summary.M.pSumTdS1 - 35.7) < 0.0001);
+  assert.ok(Math.abs(summary.M.pSumTdS2 - 36.3) < 0.0001);
+  assert.equal(summary.M.pSumS1S2, 876);
+  assert.equal(summary.M.pSumT1T2, 802);
+  assert.equal(summary.M.qSumS1S2, 15);
+});
+
+test("calculateOilDifferences computes F1 - F2 correctly for S1 and S2", async () => {
+  const { calculateOilDifferences } = await import("../lib/ctktkt-report.ts");
+  const entries = {
+    W13: "100.5", W14: "40.2", // S1 06h
+    AG13: "5000", AG14: "1500", // S2 06h
+  };
+  const s1 = calculateOilDifferences(entries, "s1");
+  assert.ok(Math.abs(s1[0].diff - 60.3) < 0.0001);
+
+  const s2 = calculateOilDifferences(entries, "s2");
+  assert.equal(s2[0].diff, 3500);
+});
+
+test("calculateSteamDifferences computes step consumption correctly", async () => {
+  const { calculateSteamDifferences } = await import("../lib/ctktkt-report.ts");
+  const entries = {
+    W54: "1200", // 06h
+    X54: "2500", // 10h
+    Y54: "3900", // 14h
+  };
+  const s1 = calculateSteamDifferences(entries, "s1");
+  assert.equal(s1[0].consumption, 1200);
+  assert.equal(s1[1].consumption, 1300); // 2500 - 1200
+  assert.equal(s1[2].consumption, 1400); // 3900 - 2500
+});
+

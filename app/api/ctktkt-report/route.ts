@@ -1,5 +1,6 @@
 import { getRawDb } from "@/db";
-import { requirePermission } from "@/lib/auth/server";
+import { getSessionUser } from "@/lib/auth/server";
+import { canEditAnyCtktktField, canEditCtktktField } from "@/lib/ctktkt-permissions";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 
@@ -50,8 +51,13 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await requirePermission("edit_daily_inputs");
-  if (!guard.ok) return guard.response;
+  const user = await getSessionUser();
+  if (!user) {
+    return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
+  }
+  if (!canEditAnyCtktktField(user)) {
+    return Response.json({ error: "Tài khoản của bạn không có quyền nhập liệu Chỉ tiêu KTKT." }, { status: 403 });
+  }
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
@@ -72,13 +78,20 @@ export async function POST(request: Request) {
       if (value && cell !== "T181" && !/^-?\d+(?:\.\d+)?$/.test(value)) throw new Error(`Ô ${cell} phải là số.`);
       return { cell, value };
     });
+
+    // Chỉ lưu những ô mà người dùng có thẩm quyền theo cương vị / vai trò
+    const authorizedEntries = clean.filter(entry => canEditCtktktField(user, entry.cell));
+    if (authorizedEntries.length === 0 && clean.length > 0) {
+      return Response.json({ error: "Bạn không có quyền sửa các ô dữ liệu đã gửi." }, { status: 403 });
+    }
+
     const db = getRawDb();
-    const statements = clean.map(entry => entry.value === ""
+    const statements = authorizedEntries.map(entry => entry.value === ""
       ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${entry.cell}`)
       : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(body.operatingDate, `KTKT:${entry.cell}`, entry.value));
     for (const cell of CTKTKT_BCSX_LINKED_CELLS) statements.push(db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${cell}`));
     if (statements.length) await db.batch(statements);
-    return Response.json({ saved: clean.filter(entry => entry.value !== "").length });
+    return Response.json({ saved: authorizedEntries.filter(entry => entry.value !== "").length });
   } catch (error) {
     return Response.json({ error: error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ." }, { status: 400 });
   }
