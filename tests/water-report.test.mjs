@@ -215,3 +215,26 @@ test("Excel export builder generates exact 20-column template with green header 
   assert.ok(ws);
 });
 
+test("scanWorkbookBuffer and extractWorkbookShifts accurately read plant multi-month workbook", async () => {
+  const fs = (await import("node:fs")).default;
+  const filePath = "C:/Users/HP/.gemini/antigravity/brain/098aaba7-9c56-4109-a6aa-470b836a2f13/.user_uploaded/media_1789799794996.xlsx";
+  if (!fs.existsSync(filePath)) return;
+
+  const { scanWorkbookBuffer, extractWorkbookShifts } = await import("../lib/water-report/excel-importer.ts");
+  const buffer = fs.readFileSync(filePath);
+
+  // 1. Quét các sheet
+  const sheets = await scanWorkbookBuffer(buffer);
+  assert.ok(sheets.length >= 19, `Expected at least 19 sheets, got ${sheets.length}`);
+  const sheetNames = sheets.map(s => s.sheetName);
+  assert.ok(sheetNames.includes("T3.2024"));
+  assert.ok(sheetNames.includes("T09.2026 GỘP"));
+
+  // 2. Trích xuất một sheet cụ thể
+  const extracted = await extractWorkbookShifts(buffer, ["T09.2026 GỘP"]);
+  assert.equal(extracted.shifts.length, 52);
+  assert.equal(extracted.months[0], "2026-08"); // Có mốc 31/08/2026 22h00
+  assert.equal(extracted.months[1], "2026-09");
+});
+
+

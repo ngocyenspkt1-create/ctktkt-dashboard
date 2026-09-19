@@ -69,6 +69,16 @@ export function WaterReportClient() {
   const [newLeaderName, setNewLeaderName] = useState("");
   const [leaderList, setLeaderList] = useState<{ id: number; name: string; isActive: number }[]>([]);
 
+  // Modal tải lên file tháng (nhận dữ liệu các tháng trước)
+  const [isMonthUploadModalOpen, setIsMonthUploadModalOpen] = useState(false);
+  const [monthFile, setMonthFile] = useState<File | null>(null);
+  const [scanningMonthFile, setScanningMonthFile] = useState(false);
+  const [uploadingMonthFile, setUploadingMonthFile] = useState(false);
+  const [scannedSheets, setScannedSheets] = useState<{ sheetName: string; month: string; shiftCount: number; firstDate: string; lastDate: string }[]>([]);
+  const [selectedSheetsForImport, setSelectedSheetsForImport] = useState<string[]>([]);
+  const [importAllSheets, setImportAllSheets] = useState(true);
+  const monthFileInputRef = useRef<HTMLInputElement>(null);
+
   // Quyền thao tác
   const canEditAny = canEditAnyWaterField(user);
   const canEditMeta = canEditWaterField(user, "meta");
@@ -318,6 +328,84 @@ export function WaterReportClient() {
     }
   }
 
+  // Quét cấu trúc các tháng trong file Excel tải lên
+  async function handleMonthFileSelected(file: File) {
+    setMonthFile(file);
+    setScanningMonthFile(true);
+    setScannedSheets([]);
+    setSelectedSheetsForImport([]);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("action", "scan");
+
+      const res = await fetch("/api/water-report/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        sheets?: { sheetName: string; month: string; shiftCount: number; firstDate: string; lastDate: string }[];
+      };
+      if (!res.ok) throw new Error(data.error || "Không thể quét cấu trúc file.");
+
+      const sheets = data.sheets || [];
+      setScannedSheets(sheets);
+      setSelectedSheetsForImport(sheets.map(s => s.sheetName));
+      setImportAllSheets(true);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Lỗi khi quét file Excel.");
+    } finally {
+      setScanningMonthFile(false);
+    }
+  }
+
+  // Thực hiện nạp các tháng đã chọn từ file vào hệ thống
+  async function handleExecuteMonthImport() {
+    if (!monthFile) return;
+    setUploadingMonthFile(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", monthFile);
+      formData.append("action", "import");
+
+      if (!importAllSheets && selectedSheetsForImport.length > 0) {
+        formData.append("sheetNames", JSON.stringify(selectedSheetsForImport));
+      }
+
+      const res = await fetch("/api/water-report/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        totalShifts?: number;
+        months?: string[];
+        message?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Không thể nạp dữ liệu.");
+
+      showSuccess(data.message || `Đã nạp thành công ${data.totalShifts || 0} ca trực vào hệ thống!`);
+      setIsMonthUploadModalOpen(false);
+      setMonthFile(null);
+      setScannedSheets([]);
+
+      // Chuyển sang tháng mới nhất vừa nạp nếu có
+      if (data.months && data.months.length > 0) {
+        const latest = data.months[data.months.length - 1];
+        setMonth(latest);
+      } else {
+        await loadData(month);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Lỗi khi nạp dữ liệu các tháng.");
+    } finally {
+      setUploadingMonthFile(false);
+    }
+  }
+
   // Xử lý nạp file Excel từ máy
   async function handleExcelFileUpload(file: File) {
     setImporting(true);
@@ -493,6 +581,25 @@ export function WaterReportClient() {
             <span>Thêm ca trực</span>
           </button>
 
+          {/* Up file tháng (nhận dữ liệu các tháng trước) */}
+          <button
+            type="button"
+            disabled={!canEditAny}
+            onClick={() => {
+              setMonthFile(null);
+              setScannedSheets([]);
+              setSelectedSheetsForImport([]);
+              setIsMonthUploadModalOpen(true);
+            }}
+            className={`flex items-center gap-1.5 rounded-xl border border-sky-300 bg-sky-50 px-3.5 py-2 text-xs font-bold text-sky-800 shadow-sm hover:bg-sky-100 transition ${
+              !canEditAny ? "cursor-not-allowed opacity-50" : ""
+            }`}
+            title="Tải lên file Excel tháng để nhận dữ liệu các tháng trước (2024–2026)"
+          >
+            <span>📤</span>
+            <span>Up file tháng</span>
+          </button>
+
           {/* Nạp từ Excel / Dán */}
           <button
             type="button"
@@ -504,7 +611,7 @@ export function WaterReportClient() {
             title="Nhập hàng loạt từ Excel hoặc dán bảng"
           >
             <span>📋</span>
-            <span>Nạp từ Excel</span>
+            <span>Dán dữ liệu</span>
           </button>
 
           {/* Xuất Excel */}
@@ -1498,6 +1605,173 @@ export function WaterReportClient() {
                   className="rounded-xl bg-slate-100 px-4 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200"
                 >
                   Hoàn tất
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL TẢI LÊN FILE THÁNG ĐỂ NHẬN DỮ LIỆU CÁC THÁNG TRƯỚC */}
+      {isMonthUploadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                  <span>📤</span>
+                  <span>Tải lên file tháng nhận dữ liệu các tháng trước</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Hỗ trợ file Excel chứa một tháng hoặc toàn bộ các tháng lịch sử (2024–2026)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMonthUploadModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Vùng chọn file */}
+              <div
+                onClick={() => monthFileInputRef.current?.click()}
+                className="cursor-pointer rounded-2xl border-2 border-dashed border-sky-300 bg-sky-50/50 p-6 text-center hover:bg-sky-50 transition"
+              >
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.xlsm"
+                  ref={monthFileInputRef}
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) handleMonthFileSelected(f);
+                  }}
+                />
+                <span className="text-3xl">📁</span>
+                <p className="mt-2 text-sm font-bold text-slate-800">
+                  {monthFile ? monthFile.name : "Nhấn vào đây để chọn file Excel (.xlsx) từ máy tính"}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Có thể chọn file nhật ký một tháng bất kỳ hoặc sổ tổng hợp nhiều sheet từ 2024 đến 2026
+                </p>
+              </div>
+
+              {/* Trạng thái đang quét */}
+              {scanningMonthFile && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-center text-xs font-bold text-sky-800 animate-pulse">
+                  ⏳ Đang đọc và phân tích các sheet trong file Excel...
+                </div>
+              )}
+
+              {/* Danh sách các tháng tìm thấy trong file */}
+              {scannedSheets.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">
+                        ✓ Đã tìm thấy {scannedSheets.length} sheet tháng dữ liệu trong file:
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Tổng cộng khoảng {scannedSheets.reduce((acc, s) => acc + s.shiftCount, 0)} ca trực
+                      </p>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={importAllSheets}
+                        onChange={e => {
+                          const checked = e.target.checked;
+                          setImportAllSheets(checked);
+                          if (checked) {
+                            setSelectedSheetsForImport(scannedSheets.map(s => s.sheetName));
+                          }
+                        }}
+                        className="rounded accent-emerald-600"
+                      />
+                      <span>Nạp tất cả {scannedSheets.length} tháng</span>
+                    </label>
+                  </div>
+
+                  {/* Danh sách các sheet */}
+                  <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+                    {scannedSheets.map(item => {
+                      const isSelected = selectedSheetsForImport.includes(item.sheetName);
+                      return (
+                        <div
+                          key={item.sheetName}
+                          onClick={() => {
+                            if (importAllSheets) setImportAllSheets(false);
+                            if (isSelected) {
+                              setSelectedSheetsForImport(prev => prev.filter(n => n !== item.sheetName));
+                            } else {
+                              setSelectedSheetsForImport(prev => [...prev, item.sheetName]);
+                            }
+                          }}
+                          className={`flex items-center justify-between p-3 text-xs cursor-pointer transition ${
+                            isSelected ? "bg-sky-50/50" : "hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}} // handled by div
+                              className="rounded accent-sky-600"
+                            />
+                            <div>
+                              <span className="font-extrabold text-slate-800">{item.sheetName}</span>
+                              <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
+                                Tháng {item.month}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="text-right text-[11px] text-slate-500">
+                            <span className="font-bold text-emerald-700">{item.shiftCount} ca</span>
+                            <span className="block text-[10px] text-slate-400">
+                              {formatIsoToDmy(item.firstDate)} → {formatIsoToDmy(item.lastDate)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Nút hành động */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsMonthUploadModalOpen(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  disabled={scannedSheets.length === 0 || selectedSheetsForImport.length === 0 || uploadingMonthFile}
+                  onClick={handleExecuteMonthImport}
+                  className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {uploadingMonthFile ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      <span>Đang nạp dữ liệu...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🚀</span>
+                      <span>
+                        Tiến hành nạp {selectedSheetsForImport.length} tháng ({scannedSheets.filter(s => selectedSheetsForImport.includes(s.sheetName)).reduce((acc, s) => acc + s.shiftCount, 0)} ca)
+                      </span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
