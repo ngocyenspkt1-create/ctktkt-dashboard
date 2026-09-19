@@ -682,4 +682,12 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Giao diện ưu tiên cấu hình máy chủ; phương án nhập URL/token trong trình duyệt chỉ còn là dự phòng khi máy chủ chưa có cấu hình.
 - Cần khai báo một lần trên Vercel: `GOOGLE_SHEET_APPS_SCRIPT_URL` (URL `/exec`) và `GOOGLE_SHEET_SYNC_TOKEN` (token hiện dùng). Chưa thể xác nhận production cho đến khi hai biến này được khai báo và deploy lại.
 
+## Hoàn tất production 19/09/2026
+
+- Đã khai báo `GOOGLE_SHEET_APPS_SCRIPT_URL` và `GOOGLE_SHEET_SYNC_TOKEN` dưới dạng Secret cho cả Production và Preview trên Vercel; giá trị không được ghi vào GitHub.
+- Kiểm tra toàn bộ mã hiện tại: `node --test tests/*.mjs` đạt 71/71; `npx tsc --noEmit` đạt; build production đạt.
+- Đã triển khai production `dpl_C7GqfRzwVcDPvChMYYSTQC4ua4tg`, trạng thái READY và alias `https://ctktkt-dashboard.vercel.app`.
+- Kiểm tra sau triển khai: `/ppa-heat-rate` trả HTTP 200; `/api/google-sheet-sync` khi chưa đăng nhập trả HTTP 401 đúng cơ chế bảo vệ.
+- Còn một bước nghiệm thu có kiểm soát: người dùng đăng nhập, chọn ngày đã đủ dữ liệu, bấm `Đẩy Google Sheet`, kiểm tra bảng xem trước rồi mới xác nhận ghi thật.
+
 ---
