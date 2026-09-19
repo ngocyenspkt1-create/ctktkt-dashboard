@@ -12,6 +12,7 @@ const navigation = [
   { icon: "≋", label: "So sánh SHN PPA & thực tế", href: "/ppa-heat-rate", key: "ppa" },
   { icon: "!", label: "Cảnh báo bất thường", href: "/", key: "alerts" },
   { icon: "▤", label: "Báo cáo PMIS", href: "/pmis-report", key: "pmis" },
+  { icon: "∑", label: "Báo cáo Chỉ tiêu KTKT", href: "/ctktkt-report", key: "ctktkt" },
   { icon: "✎", label: "Nhập liệu BCSX", href: "/bcsx-report", key: "bcsx" },
 ];
 const adminNavItem = { icon: "⚙", label: "Quản lý tài khoản", href: "/admin/users", key: "admin-users" };
