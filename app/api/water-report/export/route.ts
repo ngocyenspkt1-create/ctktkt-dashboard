@@ -120,7 +120,6 @@ export async function GET(request: Request) {
     const r1 = ws.getRow(1);
     r1.height = 36;
     r1.values = [
-      null,
       "NGÀY",
       "THỜI GIAN",
       "Kíp",
@@ -147,7 +146,6 @@ export async function GET(request: Request) {
     const r2 = ws.getRow(2);
     r2.height = 24;
     r2.values = [
-      null,
       "NGÀY",
       "THỜI GIAN",
       "Kíp",
@@ -162,12 +160,12 @@ export async function GET(request: Request) {
       "S2",
       "S1",
       "S2",
-      "Nước cấp \nvào bình ngưng S1",
-      "Nước cấp \nvào bình ngưng S2",
-      "Lượng nước cấp \nvào bình ngưng S1",
-      "Lượng nước cấp\n vào bình ngưng S2",
-      "Lượng nước tái sinh hạt S1 (24h)",
-      "Lượng Nước tái  sinh hạt S2 (24h)",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
     ];
 
     // Merge Header Cells
@@ -222,6 +220,8 @@ export async function GET(request: Request) {
 
     // Ghi dữ liệu từng dòng
     let currentRowIdx = 3;
+    const dayGroups: { logDate: string; startRow: number; endRow: number }[] = [];
+
     for (let i = 0; i < chained.length; i++) {
       const item = chained[i];
       const isBaseline = i === 0 && baseline !== null;
@@ -242,7 +242,7 @@ export async function GET(request: Request) {
       // Col F: Công tơ điện nhận S2
       row.getCell(6).value = item.elecRecS2;
 
-      if (currentRowIdx === 3) {
+      if (isBaseline) {
         // Dòng đầu tiên (baseline): Ghi giá trị tĩnh nếu có
         row.getCell(7).value = item.elecGenS1 || 0;
         row.getCell(8).value = item.elecGenS2 || 0;
@@ -254,11 +254,19 @@ export async function GET(request: Request) {
         row.getCell(14).value = item.waterRatioS2 || 0;
         row.getCell(15).value = item.condenserRecS1 || 0;
         row.getCell(16).value = item.condenserRecS2 || 0;
-        row.getCell(17).value = item.condenserUsedS1 || 0;
-        row.getCell(18).value = item.condenserUsedS2 || 0;
-        row.getCell(19).value = item.resinWaterS1_24h || 0;
-        row.getCell(20).value = item.resinWaterS2_24h || 0;
+        row.getCell(17).value = null;
+        row.getCell(18).value = null;
+        row.getCell(19).value = null;
+        row.getCell(20).value = null;
       } else {
+        // Gom nhóm theo ngày để gộp ô A (Ngày), S (Tái sinh S1), T (Tái sinh S2)
+        const lastGroup = dayGroups[dayGroups.length - 1];
+        if (!lastGroup || lastGroup.logDate !== item.logDate) {
+          dayGroups.push({ logDate: item.logDate, startRow: currentRowIdx, endRow: currentRowIdx });
+        } else {
+          lastGroup.endRow = currentRowIdx;
+        }
+
         const prevIdx = currentRowIdx - 1;
         // Col G: Sản lượng điện phát S1 = E[r] - E[r-1]
         row.getCell(7).value = { formula: `E${currentRowIdx}-E${prevIdx}`, result: item.elecGenS1 };
@@ -291,8 +299,8 @@ export async function GET(request: Request) {
         row.getCell(18).value = { formula: `P${currentRowIdx}-P${prevIdx}`, result: item.condenserUsedS2 };
 
         // Col S, T: Tái sinh hạt 24h
-        row.getCell(19).value = item.resinWaterS1_24h || 0;
-        row.getCell(20).value = item.resinWaterS2_24h || 0;
+        row.getCell(19).value = item.resinWaterS1_24h ?? 0;
+        row.getCell(20).value = item.resinWaterS2_24h ?? 0;
       }
 
       // Format cells
@@ -306,7 +314,7 @@ export async function GET(request: Request) {
         cell.font = dataFont;
         cell.border = thinBorder;
 
-        if (c <= 4) {
+        if (c <= 4 || c === 19 || c === 20) {
           cell.alignment = { vertical: "middle", horizontal: "center" };
         } else if (c === 13 || c === 14) {
           cell.alignment = { vertical: "middle", horizontal: "right" };
@@ -318,6 +326,36 @@ export async function GET(request: Request) {
       }
 
       currentRowIdx++;
+    }
+
+    // Gộp ô theo ngày cho cột A (Ngày), cột S và T (Lượng nước tái sinh hạt 24h)
+    for (const group of dayGroups) {
+      if (group.endRow > group.startRow) {
+        // Tìm giá trị tái sinh hạt của ngày (nếu có ca nhập > 0 thì lấy giá trị đó để điền vào toàn bộ ô trong nhóm)
+        let dayResin1 = 0;
+        let dayResin2 = 0;
+        for (let r = group.startRow; r <= group.endRow; r++) {
+          const val1 = Number(ws.getCell(`S${r}`).value || 0);
+          const val2 = Number(ws.getCell(`T${r}`).value || 0);
+          if (val1 > 0) dayResin1 = val1;
+          if (val2 > 0) dayResin2 = val2;
+        }
+
+        for (let r = group.startRow; r <= group.endRow; r++) {
+          ws.getCell(`S${r}`).value = dayResin1;
+          ws.getCell(`T${r}`).value = dayResin2;
+        }
+
+        // Gộp 03 hàng cùng 1 ngày thành 1 ô
+        ws.mergeCells(`A${group.startRow}:A${group.endRow}`);
+        ws.mergeCells(`S${group.startRow}:S${group.endRow}`);
+        ws.mergeCells(`T${group.startRow}:T${group.endRow}`);
+
+        // Đảm bảo căn giữa theo cả chiều dọc và ngang
+        ws.getCell(`A${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
+        ws.getCell(`S${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
+        ws.getCell(`T${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
+      }
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
