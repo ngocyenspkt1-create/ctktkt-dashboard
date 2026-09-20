@@ -101,7 +101,8 @@ Mở địa chỉ localhost mà chương trình in ra. Không thêm `--remote` v
 - Thêm nút `Nhập lịch sử Mục 1` trên `/bcsx-report`. Trước khi ghi, web tải bản sao lưu hiện trạng; sau khi ghi, đọc lại toàn bộ 7.296 giá trị; nếu lỗi giữa chừng thì tự hoàn nguyên các ngày đã bắt đầu ghi.
 - Gói nhập nằm ngoài repository tại `C:\Users\HP\Downloads\CTKTKT\BCSX_SECTION1_2026-09_TO_19.json`; không đưa dữ liệu vận hành vào GitHub.
 - Kiểm tra kỹ thuật: 87/87 test đạt, TypeScript đạt, ESLint file trích xuất không lỗi; component còn 3 cảnh báo cũ; build production đạt.
-- Còn thiếu: chưa ghi production vì phiên công cụ không có trình duyệt đăng nhập. Sau triển khai, người dùng đăng nhập, bấm `Nhập lịch sử Mục 1`, chọn gói JSON và chờ thông báo đọc lại thành công. Sau đó có thể tự đồng bộ Mục 2/nhật ký theo yêu cầu.
+- Đã push commit `2427c27` lên `github/main`; GitHub xác nhận trạng thái Vercel `success` và deployment đã hoàn tất.
+- Còn thiếu: chưa ghi dữ liệu production vì phiên công cụ không có trình duyệt đăng nhập. Người dùng đăng nhập, bấm `Nhập lịch sử Mục 1`, chọn gói JSON và chờ thông báo đọc lại thành công. Sau đó có thể tự đồng bộ Mục 2/nhật ký theo yêu cầu.
 
 ---
 
