@@ -830,4 +830,13 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Còn cần nghiệm thu sau triển khai: nhập đủ mốc `22h00` của hai ngày liên tiếp, mở trang Chỉ tiêu cùng ngày và xuất Excel để đối chiếu các ô W72:Z74. Phiên này chưa kiểm thử UI trình duyệt cục bộ do tiến trình Vinext cũ giữ khóa nhưng không phản hồi cổng 5173.
 - Đã push commit `1e24673` lên `github/main`; GitHub/Vercel báo `success`. Hai trang production `/water-report` và `/ctktkt-report` đều phản hồi HTTP 307 và chuyển đúng về đăng nhập, phù hợp cơ chế bảo vệ.
 
+## Bổ sung 20/09/2026 — Ghi lý do hiệu chỉnh cân than
+
+- Đã thêm ô `Lý do hiệu chỉnh (máy cấp / giá trị)` riêng cho S1 và S2 ngay dưới ba ô hiệu chỉnh cân than. Gợi ý nhập nêu rõ máy cấp, dấu cộng/trừ, khối lượng và nguyên nhân.
+- Nội dung được lưu riêng theo ngày bằng `COAL_ADJ_NOTE_S1/S2`, tối đa 500 ký tự, giữ nguyên tiếng Việt và dấu phẩy; không tham gia công thức tính lượng than.
+- Quyền nhập ghi chú đi cùng đúng nhóm `Máy nghiền S1/S2`; người không có quyền chỉ xem.
+- Khi xuất Chỉ tiêu KTKT, lý do được gắn thành ghi chú Excel trên cả ba ô hiệu chỉnh của tổ máy tương ứng: `W/Y/AA28` cho S1 và `AG/AI/AK28` cho S2.
+- Kiểm tra: 98/98 test đạt; TypeScript đạt; ESLint các file API/thư viện/test sạch, component không có lỗi mới (còn 13 cảnh báo unused cũ); build production đạt với chế độ bộ nhớ thấp sau khi dừng tiến trình Vinext cũ.
+- Còn cần nghiệm thu: nhập một lý do thật, lưu, đổi ngày rồi quay lại kiểm tra dữ liệu; xuất Excel và rê chuột vào ô hiệu chỉnh để xem ghi chú.
+
 ---

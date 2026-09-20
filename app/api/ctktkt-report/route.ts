@@ -4,7 +4,7 @@ import { canEditAnyCtktktField, canEditCtktktField } from "@/lib/ctktkt-permissi
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
-import { CTKTKT_EXTRA_INPUT_FIELDS } from "@/lib/ctktkt-extra-fields";
+import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_TEXT_INPUT_CELLS, normalizeCtktktInputValue } from "@/lib/ctktkt-extra-fields";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { seedCtktktSample2Days } from "./seed-sample/route";
 
@@ -99,10 +99,11 @@ export async function POST(request: Request) {
       if (!item || typeof item !== "object") throw new Error("Một ô dữ liệu không hợp lệ.");
       const entry = item as Record<string, unknown>;
       const cell = String(entry.cell || "").toUpperCase();
-      const value = String(entry.value ?? "").trim().replace(",", ".");
+      const isText = CTKTKT_TEXT_INPUT_CELLS.has(cell) || cell === "T181";
+      const value = normalizeCtktktInputValue(cell, entry.value);
       if (!fieldCells.has(cell)) throw new Error(`Ô ${cell || "không rõ"} không nằm trong mẫu được phép nhập.`);
-      if (value.length > 80) throw new Error(`Giá trị ô ${cell} quá dài.`);
-      if (value && cell !== "T181" && !/^-?\d+(?:\.\d+)?$/.test(value)) throw new Error(`Ô ${cell} phải là số.`);
+      if (value.length > (CTKTKT_TEXT_INPUT_CELLS.has(cell) ? 500 : 80)) throw new Error(`Giá trị ô ${cell} quá dài.`);
+      if (value && !isText && !/^-?\d+(?:\.\d+)?$/.test(value)) throw new Error(`Ô ${cell} phải là số.`);
       return { cell, value };
     });
 

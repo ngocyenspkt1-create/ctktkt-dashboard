@@ -301,3 +301,10 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Kiểm tra: 95/95 test đạt; TypeScript đạt; build production đạt. ESLint các file mới sạch; lệnh lint phạm vi còn báo đúng lỗi nền cũ trong hai component đã có trước lượt sửa.
 - Còn cần: sau deploy nhấn `Ctrl+F5`, đối chiếu một ngày có đủ mốc 22h D-1/D trên trang Nước và file Chỉ tiêu xuất ra. Local UI chưa được nghiệm thu do tiến trình Vinext cũ giữ khóa cổng 5173 nhưng không phản hồi.
 - Commit chức năng `1e24673` đã đồng bộ với `github/main`; Vercel báo `success`. `/water-report` và `/ctktkt-report` trên production phản hồi HTTP 307 về trang đăng nhập đúng cơ chế bảo vệ.
+
+## 19. Cập nhật 20/09/2026 — Lý do hiệu chỉnh cân than S1/S2
+
+- Giao diện Chỉ tiêu KTKT có thêm một ô ghi chú dưới dòng hiệu chỉnh cân than cho từng tổ máy. Nội dung cần nêu máy cấp nào, hiệu chỉnh cộng/trừ bao nhiêu và nguyên nhân.
+- Hai trường `COAL_ADJ_NOTE_S1/S2` lưu theo ngày trong `daily_inputs`, là văn bản tối đa 500 ký tự và không làm thay đổi công thức than.
+- Phân quyền theo đúng nhóm Máy nghiền S1/S2. File Excel xuất ra gắn nội dung thành comment tại W/Y/AA28 hoặc AG/AI/AK28 để truy vết ngay tại các ô hiệu chỉnh.
+- Kiểm tra: 98/98 test đạt; TypeScript đạt; lint phạm vi API/thư viện/test sạch; build production đạt. Còn cần nghiệm thu lưu/nạp lại một ghi chú thật và kiểm tra comment trong Excel.

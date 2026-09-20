@@ -3,9 +3,7 @@ import assert from "node:assert/strict";
 import {
   canEditCtktktGroup,
   canEditCtktktField,
-  canEditAnyCtktktField,
   getCtktktFieldGroup,
-  getEditableCtktktGroups,
 } from "../lib/ctktkt-permissions.ts";
 
 test("Cell group mapping identifies key cells correctly", () => {
@@ -20,7 +18,9 @@ test("Cell group mapping identifies key cells correctly", () => {
   assert.equal(getCtktktFieldGroup("AK28"), "may_nghien_coal_s2");
   assert.equal(getCtktktFieldGroup("AO90"), "coal_blend_pmis");
   assert.equal(getCtktktFieldGroup("X16"), "may_nghien_coal_s1");
+  assert.equal(getCtktktFieldGroup("COAL_ADJ_NOTE_S1"), "may_nghien_coal_s1");
   assert.equal(getCtktktFieldGroup("AL27"), "may_nghien_coal_s2");
+  assert.equal(getCtktktFieldGroup("COAL_ADJ_NOTE_S2"), "may_nghien_coal_s2");
   assert.equal(getCtktktFieldGroup("W54"), "steam_flow");
   assert.equal(getCtktktFieldGroup("N69"), "nh3_tank");
   assert.equal(getCtktktFieldGroup("P72"), "nh3_tank");
@@ -92,7 +92,9 @@ test("Máy nghiền has rights for Coal meters S1 & S2", () => {
   assert.equal(canEditCtktktGroup(mayNghien, "lo_pho_oil"), false);
   assert.equal(canEditCtktktGroup(mayNghien, "tpd_tcd_power"), false);
   assert.equal(canEditCtktktField(mayNghien, "X16"), true);
+  assert.equal(canEditCtktktField(mayNghien, "COAL_ADJ_NOTE_S1"), true);
   assert.equal(canEditCtktktField(mayNghien, "AL27"), true);
+  assert.equal(canEditCtktktField(mayNghien, "COAL_ADJ_NOTE_S2"), true);
 });
 
 test("NH3 - Lò hơi phụ has rights for NH3 tank", () => {

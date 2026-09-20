@@ -4,7 +4,7 @@ import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
-import { CTKTKT_EXTRA_INPUT_FIELDS } from "@/lib/ctktkt-extra-fields";
+import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, getCtktktCoalAdjustmentNotes } from "@/lib/ctktkt-extra-fields";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { seedCtktktSample2Days } from "../seed-sample/route";
@@ -28,6 +28,10 @@ function numeric(value: string | undefined) {
 
 function setNumber(sheet: ExcelJS.Worksheet, cell: string, value: number | null) {
   if (value !== null && Number.isFinite(value)) sheet.getCell(cell).value = value;
+}
+
+function applyCoalAdjustmentNotes(sheet: ExcelJS.Worksheet, row: Record<string, string>) {
+  for (const [cell, note] of Object.entries(getCtktktCoalAdjustmentNotes(row))) sheet.getCell(cell).note = note;
 }
 
 function fillDailyFallbacks(sheet: ExcelJS.Worksheet, row: Record<string, string>) {
@@ -132,7 +136,7 @@ export async function GET(request: Request) {
     const inputCells = [
       ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
       ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
-    ];
+    ].filter(cell => !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(cell));
     for (const sheetName of ["d-1", ...Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, "0"))]) {
       const sheet = workbook.getWorksheet(sheetName);
       if (!sheet) continue;
@@ -143,12 +147,13 @@ export async function GET(request: Request) {
     const previousRow = byDate.get(previous);
     if (previousSheet) {
       if (previousRow) fillDailyFallbacks(previousSheet, previousRow);
-      for (const [code, value] of Object.entries(previousRow || {})) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
+      for (const [code, value] of Object.entries(previousRow || {})) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
         previousSheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
       applyBcsxLinks(previousSheet, previous);
       applyWaterLinks(previousSheet, previous);
+      applyCoalAdjustmentNotes(previousSheet, previousRow || {});
       applyDateLabels(previousSheet, previous);
     }
 
@@ -160,12 +165,13 @@ export async function GET(request: Request) {
       normalizeCoalMeterFormulas(sheet, day === 1 ? "d-1" : String(day - 1).padStart(2, "0"));
       const row = byDate.get(date) || {};
       fillDailyFallbacks(sheet, row);
-      for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
+      for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
         sheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
       applyBcsxLinks(sheet, date);
       applyWaterLinks(sheet, date);
+      applyCoalAdjustmentNotes(sheet, row);
       applyDateLabels(sheet, date);
     }
     const totalSheet = workbook.getWorksheet("Tổng hợp tháng");

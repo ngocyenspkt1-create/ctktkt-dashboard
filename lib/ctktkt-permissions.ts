@@ -125,6 +125,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
   ]),
   may_nghien_coal_s1: new Set([
     "W28", "Y28", "AA28", // hiệu chỉnh 3 ca
+    "COAL_ADJ_NOTE_S1", // lý do hiệu chỉnh
     // 12 cân than S1 (cols X, Z, AB; rows 16 to 27)
     "X16", "Z16", "AB16", "X17", "Z17", "AB17",
     "X18", "Z18", "AB18", "X19", "Z19", "AB19",
@@ -135,6 +136,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
   ]),
   may_nghien_coal_s2: new Set([
     "AG28", "AI28", "AK28", // hiệu chỉnh 3 ca
+    "COAL_ADJ_NOTE_S2", // lý do hiệu chỉnh
     // 12 cân than S2 (cols AH, AJ, AL; rows 16 to 27)
     "AH16", "AJ16", "AL16", "AH17", "AJ17", "AL17",
     "AH18", "AJ18", "AL18", "AH19", "AJ19", "AL19",

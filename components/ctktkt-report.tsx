@@ -783,6 +783,7 @@ export function CtktktReport() {
       isNumber?: boolean;
       group?: CtktktFieldGroup;
       compact?: boolean;
+      maxLength?: number;
     },
   ) => {
     const isWaterLinked = CTKTKT_WATER_LINKED_CELLS.has(cell);
@@ -804,6 +805,7 @@ export function CtktktReport() {
           data-editable={canEditThis ? "true" : "false"}
           disabled={!canEditThis || loading}
           inputMode={options?.isNumber === false ? "text" : "decimal"}
+          maxLength={options?.maxLength}
           value={value}
           onChange={e => update(cell, e.target.value)}
           onFocus={e => e.currentTarget.select()}
@@ -1886,6 +1888,20 @@ export function CtktktReport() {
                               </td>
                             ))}
                           </tr>
+                          <tr className="bg-amber-50/30">
+                            <td className="p-2 font-bold text-amber-950 font-sans">
+                              Lý do hiệu chỉnh (máy cấp / giá trị)
+                            </td>
+                            <td colSpan={3} className="p-1">
+                              {renderCellInput("COAL_ADJ_NOTE_S1", {
+                                group: "may_nghien_coal_s1",
+                                isNumber: false,
+                                placeholder: "Ví dụ: Máy cấp 1B1, cộng 12,5 tấn do cân lệch",
+                                maxLength: 500,
+                                className: "!text-left !font-sans !font-medium",
+                              })}
+                            </td>
+                          </tr>
                           <tr className="bg-slate-100 font-black">
                             <td className="p-2 text-slate-900 font-sans">
                               Lượng than tiêu thụ - tấn (S1)
@@ -2170,6 +2186,20 @@ export function CtktktReport() {
                                 {renderCellInput(cell, { group: "may_nghien_coal_s2" })}
                               </td>
                             ))}
+                          </tr>
+                          <tr className="bg-amber-50/30">
+                            <td className="p-2 font-bold text-amber-950 font-sans">
+                              Lý do hiệu chỉnh (máy cấp / giá trị)
+                            </td>
+                            <td colSpan={3} className="p-1">
+                              {renderCellInput("COAL_ADJ_NOTE_S2", {
+                                group: "may_nghien_coal_s2",
+                                isNumber: false,
+                                placeholder: "Ví dụ: Máy cấp 2A2, trừ 8,0 tấn do kiểm tra cân",
+                                maxLength: 500,
+                                className: "!text-left !font-sans !font-medium",
+                              })}
+                            </td>
                           </tr>
                           <tr className="bg-slate-100 font-black">
                             <td className="p-2 text-slate-900 font-sans">
