@@ -77,6 +77,7 @@ Mở địa chỉ localhost mà chương trình in ra. Không thêm `--remote` v
 - `npx tsc --noEmit`: đạt.
 - ESLint các file thay đổi: 0 lỗi; còn 13 cảnh báo tồn tại trước trong `components/ctktkt-report.tsx`.
 - `npm run build`: đạt.
+- Đã push commit chức năng `9edc3b6` lên `github/main` ngày 20/09/2026; gói JSON dữ liệu vận hành vẫn nằm ngoài Git.
 - Chưa ghi production trong lượt này vì không có phiên trình duyệt đăng nhập khả dụng. Bước tiếp theo: triển khai commit, đăng nhập bằng tài khoản có cả quyền nhập CTKTKT và BCSX, bấm nút nhập rồi chọn gói JSON; kiểm tra thông báo đọc lại thành công.
 
 ---
