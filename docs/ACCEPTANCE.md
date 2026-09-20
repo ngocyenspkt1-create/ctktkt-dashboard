@@ -1,5 +1,13 @@
 # Trạng thái bản kiểm thử PXVH1 — 12/09/2026
 
+## Bổ sung 20/09/2026 — Sửa đúng thứ tự ca tại Chỉ tiêu KTKT
+
+- Đã sửa nhãn mốc chốt cho cả S1 và S2 thành `08h (Ca 1)`, `16h (Ca 2)`, `24h (Ca 3)`.
+- Bảng than trộn và nhãn các trường hiệu chỉnh cân than dùng đồng nhất: Ca 1 = 00h–08h, Ca 2 = 08h–16h, Ca 3 = 16h–24h.
+- Chỉ sửa nhãn hiển thị/mô tả trường; địa chỉ ô Excel, dữ liệu đã lưu và công thức tính không thay đổi.
+- Kiểm tra: 99/99 test đạt khi chạy tuần tự; TypeScript đạt; ESLint phạm vi sửa không có lỗi (component còn 13 cảnh báo unused cũ); build production đạt.
+- Còn cần nghiệm thu: sau triển khai nhấn `Ctrl+F5`, kiểm tra ba tiêu đề ca tại cả khối cân than S1, S2 và bảng than trộn.
+
 ## Phạm vi đã triển khai
 
 Nhập trực tiếp số liệu tổng tháng cho 7 chỉ tiêu. Máy chủ tự tính, lưu kết quả, ngưỡng tham khảo, thời gian và dữ liệu đầu vào trong ghi chú có tiền tố phiên bản. Mỗi lần ghi là một phiên bản mới; tổng quan chọn lần mới nhất cho từng chỉ tiêu/kỳ. Không có dữ liệu mẫu tự gán là dữ liệu thực. Chưa có luồng nhập từng ngày, cộng dồn nhiều kỳ, phân quyền nhiều người hay phê duyệt/chốt kỳ.

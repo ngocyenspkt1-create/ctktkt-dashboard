@@ -1,11 +1,32 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  CTKTKT_COAL_ADJUSTMENT_FIELDS,
+  CTKTKT_COAL_BLEND_FIELDS,
   CTKTKT_NON_WORKBOOK_INPUT_CELLS,
   CTKTKT_TEXT_INPUT_CELLS,
   getCtktktCoalAdjustmentNotes,
   normalizeCtktktInputValue,
 } from "../lib/ctktkt-extra-fields.ts";
+
+test("coal input fields use the plant shift order: 08h Ca 1, 16h Ca 2, 24h Ca 3", () => {
+  assert.deepEqual(
+    CTKTKT_COAL_ADJUSTMENT_FIELDS.slice(0, 3).map((field) => field.label),
+    ["S1 Ca 1 (00h-08h)", "S1 Ca 2 (08h-16h)", "S1 Ca 3 (16h-24h)"],
+  );
+  assert.deepEqual(
+    CTKTKT_COAL_ADJUSTMENT_FIELDS.slice(3, 6).map((field) => field.label),
+    ["S2 Ca 1 (00h-08h)", "S2 Ca 2 (08h-16h)", "S2 Ca 3 (16h-24h)"],
+  );
+  assert.deepEqual(
+    CTKTKT_COAL_BLEND_FIELDS.slice(0, 3).map((field) => field.label),
+    [
+      "S1 tỷ lệ trộn Ca 1 (00h-08h)",
+      "S1 tỷ lệ trộn Ca 2 (08h-16h)",
+      "S1 tỷ lệ trộn Ca 3 (16h-24h)",
+    ],
+  );
+});
 
 test("coal adjustment reasons are text-only fields outside worksheet cell addresses", () => {
   for (const field of ["COAL_ADJ_NOTE_S1", "COAL_ADJ_NOTE_S2"]) {

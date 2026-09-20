@@ -1837,9 +1837,9 @@ export function CtktktReport() {
                         <thead>
                           <tr className="bg-[#f5f5f5] text-slate-800">
                             <th className="p-1.5 text-left font-bold">Mã cân than S1</th>
-                            <th className="p-1.5 text-center font-bold">08h (Ca 3)</th>
-                            <th className="p-1.5 text-center font-bold">16h (Ca 1)</th>
-                            <th className="p-1.5 text-center font-bold">24h (Ca 2)</th>
+                            <th className="p-1.5 text-center font-bold">08h (Ca 1)</th>
+                            <th className="p-1.5 text-center font-bold">16h (Ca 2)</th>
+                            <th className="p-1.5 text-center font-bold">24h (Ca 3)</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-mono">
@@ -2136,9 +2136,9 @@ export function CtktktReport() {
                         <thead>
                           <tr className="bg-[#f5f5f5] text-slate-800">
                             <th className="p-1.5 text-left font-bold">Mã cân than S2</th>
-                            <th className="p-1.5 text-center font-bold">08h (Ca 3)</th>
-                            <th className="p-1.5 text-center font-bold">16h (Ca 1)</th>
-                            <th className="p-1.5 text-center font-bold">24h (Ca 2)</th>
+                            <th className="p-1.5 text-center font-bold">08h (Ca 1)</th>
+                            <th className="p-1.5 text-center font-bold">16h (Ca 2)</th>
+                            <th className="p-1.5 text-center font-bold">24h (Ca 3)</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-mono">
@@ -2533,9 +2533,9 @@ export function CtktktReport() {
                     <thead>
                       <tr className="bg-[#f0f4f9] text-[#173b64]">
                         <th className="p-2 text-left font-bold w-48">Tổ máy / Thông số</th>
-                        <th className="p-2 text-center font-bold">Ca 3 (0h - 08h)</th>
-                        <th className="p-2 text-center font-bold">Ca 1 (08h - 16h)</th>
-                        <th className="p-2 text-center font-bold">Ca 2 (16h - 24h)</th>
+                        <th className="p-2 text-center font-bold">Ca 1 (0h - 08h)</th>
+                        <th className="p-2 text-center font-bold">Ca 2 (08h - 16h)</th>
+                        <th className="p-2 text-center font-bold">Ca 3 (16h - 24h)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono">

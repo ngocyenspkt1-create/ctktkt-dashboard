@@ -1,5 +1,19 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 20/09/2026 — Chuẩn hóa nhãn ca 08h/16h/24h
+
+### Đã làm
+
+- Sửa đồng nhất trên `/ctktkt-report`: 08h thuộc Ca 1, 16h thuộc Ca 2, 24h thuộc Ca 3 cho cả S1 và S2.
+- Sửa nhãn bảng than trộn và metadata các ô hiệu chỉnh cân than/than trộn theo cùng thứ tự Ca 1 → Ca 2 → Ca 3.
+- Thêm kiểm thử hồi quy cho thứ tự ca. Không đổi mapping ô, giá trị lưu hoặc công thức Excel.
+
+### Kiểm tra và bước tiếp theo
+
+- 99/99 test đạt khi chạy tuần tự với giới hạn bộ nhớ 1 GB; TypeScript và build production đạt.
+- ESLint phạm vi sửa không có lỗi; `ctktkt-report.tsx` còn 13 cảnh báo unused tồn tại từ trước.
+- Sau deploy: nhấn `Ctrl+F5`, mở Chỉ tiêu KTKT và đối chiếu tiêu đề `08h (Ca 1)`, `16h (Ca 2)`, `24h (Ca 3)` tại S1, S2 và bảng than trộn.
+
 **Ngày rà soát:** 18/09/2026  
 **Phạm vi:** Đọc trạng thái Git, mã nguồn, tài liệu nghiệm thu và chạy lại các kiểm tra kỹ thuật. Không sửa chức năng, không thay đổi cơ sở dữ liệu, không commit/push.
 
