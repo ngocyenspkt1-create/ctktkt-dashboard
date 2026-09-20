@@ -15,6 +15,16 @@ function todayIso() {
 
 type Unit = "S1" | "S2";
 type ReadingsGrid = Record<ShiftMetric, string[]>;
+type Section1ImportEntry = { unit: Unit; timeSlot: string; metric: ShiftMetric; value: string };
+type Section1ImportDay = { date: string; entries: Section1ImportEntry[] };
+type Section1ImportPackage = {
+  kind: "BCSX_SECTION_1_HISTORY";
+  version: 1;
+  month: string;
+  throughDay: number;
+  totals: { days: number; entries: number; checks: number; passed: number; failed: number };
+  days: Section1ImportDay[];
+};
 
 function emptyGrid(): ReadingsGrid {
   return { P: SHIFT_TIME_SLOTS.map(() => ""), Q: SHIFT_TIME_SLOTS.map(() => ""), D: SHIFT_TIME_SLOTS.map(() => ""), E: SHIFT_TIME_SLOTS.map(() => "") };
@@ -82,7 +92,9 @@ export function BcsxReport() {
   const [notice, setNotice] = useState<string | null>(null);
   const [extensionVersion, setExtensionVersion] = useState("");
   const [syncingAll, setSyncingAll] = useState(false);
+  const [importingSection1, setImportingSection1] = useState(false);
   const bcsxRequestRef = useRef<{ id: string; timer: number; operatingDate: string } | null>(null);
+  const section1ImportRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const channel = "ctktkt-qlkt-sync";
@@ -275,6 +287,116 @@ export function BcsxReport() {
       setError(err instanceof Error ? err.message : "Không lưu được số liệu.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function importSection1History(file: File | undefined) {
+    if (!file || isViewer) return;
+    setImportingSection1(true); setError(null); setNotice(null);
+    const completed: Section1ImportDay[] = [];
+    let backup: Record<string, Section1ImportEntry[]> | null = null;
+
+    const postDay = async (day: Section1ImportDay) => {
+      const response = await fetch("/api/shift-readings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: day.date, entries: day.entries }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok || body.error) throw new Error(body.error || `Không ghi được Mục 1 ngày ${day.date}.`);
+    };
+
+    try {
+      const parsed = JSON.parse(await file.text()) as Partial<Section1ImportPackage>;
+      if (parsed.kind !== "BCSX_SECTION_1_HISTORY" || parsed.version !== 1 || !/^\d{4}-\d{2}$/.test(parsed.month || "") || !Number.isInteger(parsed.throughDay) || Number(parsed.throughDay) < 1 || Number(parsed.throughDay) > 31 || !Array.isArray(parsed.days) || parsed.days.length !== parsed.throughDay) {
+        throw new Error("Gói nhập Mục 1 BCSX không đúng cấu trúc.");
+      }
+      if (!parsed.totals || parsed.totals.failed !== 0 || parsed.totals.checks !== parsed.totals.passed) {
+        throw new Error("Gói nhập chưa đạt kiểm tra đầy đủ; chưa ghi dữ liệu.");
+      }
+      const importPackage = parsed as Section1ImportPackage;
+      const expectedKeys = new Set((['S1', 'S2'] as const).flatMap(importUnit => SHIFT_TIME_SLOTS.flatMap(timeSlot => SHIFT_METRICS.map(metric => `${importUnit}|${timeSlot}|${metric.key}`))));
+      const seenDates = new Set<string>();
+      for (const [dayIndex, day] of importPackage.days.entries()) {
+        const expectedDate = `${importPackage.month}-${String(dayIndex + 1).padStart(2, "0")}`;
+        if (day.date !== expectedDate || seenDates.has(day.date) || !Array.isArray(day.entries) || day.entries.length !== expectedKeys.size) {
+          throw new Error(`Dữ liệu ngày ${day.date || "không rõ"} không hợp lệ.`);
+        }
+        seenDates.add(day.date);
+        const keys = new Set<string>();
+        for (const entry of day.entries) {
+          const key = `${entry.unit}|${entry.timeSlot}|${entry.metric}`;
+          if (!expectedKeys.has(key) || keys.has(key) || !String(entry.value).trim() || !Number.isFinite(Number(entry.value))) {
+            throw new Error(`Mục 1 ngày ${day.date} có ô thiếu, trùng hoặc không phải số.`);
+          }
+          keys.add(key);
+        }
+      }
+      if (importPackage.totals.days !== importPackage.days.length || importPackage.totals.entries !== importPackage.days.length * expectedKeys.size || importPackage.totals.checks !== importPackage.totals.entries || importPackage.totals.passed !== importPackage.totals.entries) {
+        throw new Error("Tổng kiểm tra trong gói nhập không khớp dữ liệu chi tiết.");
+      }
+
+      backup = {};
+      for (const day of importPackage.days) {
+        const response = await fetch(`/api/shift-readings?date=${encodeURIComponent(day.date)}`, { cache: "no-store" });
+        const body = await response.json() as { entries?: Section1ImportEntry[]; error?: string };
+        if (!response.ok || body.error) throw new Error(body.error || `Không sao lưu được ngày ${day.date}.`);
+        backup[day.date] = body.entries || [];
+      }
+      const backupBlob = new Blob([JSON.stringify({ kind: "BCSX_SECTION_1_BACKUP", createdAt: new Date().toISOString(), entriesByDate: backup }, null, 2)], { type: "application/json" });
+      const backupUrl = URL.createObjectURL(backupBlob);
+      const backupLink = document.createElement("a");
+      backupLink.href = backupUrl;
+      backupLink.download = `BCSX_SECTION1_BACKUP_${importPackage.month}.json`;
+      backupLink.click();
+      URL.revokeObjectURL(backupUrl);
+
+      for (const day of importPackage.days) {
+        completed.push(day);
+        await postDay(day);
+      }
+
+      for (const day of importPackage.days) {
+        const response = await fetch(`/api/shift-readings?date=${encodeURIComponent(day.date)}`, { cache: "no-store" });
+        const body = await response.json() as { entries?: Section1ImportEntry[]; error?: string };
+        if (!response.ok || body.error) throw new Error(body.error || `Không đọc lại được ngày ${day.date}.`);
+        const actual = new Map((body.entries || []).map(entry => [`${entry.unit}|${entry.timeSlot}|${entry.metric}`, entry.value]));
+        for (const entry of day.entries) {
+          const saved = actual.get(`${entry.unit}|${entry.timeSlot}|${entry.metric}`);
+          if (saved === undefined || Math.abs(Number(saved) - Number(entry.value)) > 1e-9) throw new Error(`Đọc lại không khớp ${entry.unit} ${entry.timeSlot} ${entry.metric}, ngày ${day.date}.`);
+        }
+      }
+
+      const lastDay = importPackage.days[importPackage.days.length - 1];
+      const nextGrids: Record<Unit, ReadingsGrid> = { S1: emptyGrid(), S2: emptyGrid() };
+      const slotIndex = new Map(SHIFT_TIME_SLOTS.map((slot, index) => [slot, index]));
+      for (const entry of lastDay.entries) {
+        const index = slotIndex.get(entry.timeSlot);
+        if (index !== undefined) nextGrids[entry.unit][entry.metric][index] = entry.value;
+      }
+      setGrids(nextGrids);
+      setOperatingDate(lastDay.date);
+      setNotice(`Đã nhập và đọc lại xác nhận ${importPackage.totals.entries.toLocaleString("vi-VN")} giá trị Mục 1 cho ${importPackage.days.length} ngày. Mục 2 và nhật ký sự kiện không thay đổi.`);
+    } catch (caught) {
+      let rollbackMessage = "";
+      if (backup && completed.length) {
+        try {
+          for (const day of [...completed].reverse()) {
+            const previous = new Map((backup[day.date] || []).map(entry => [`${entry.unit}|${entry.timeSlot}|${entry.metric}`, entry.value]));
+            await postDay({
+              date: day.date,
+              entries: day.entries.map(entry => ({ ...entry, value: previous.get(`${entry.unit}|${entry.timeSlot}|${entry.metric}`) || "" })),
+            });
+          }
+          rollbackMessage = " Đã hoàn nguyên các ngày đã bắt đầu ghi.";
+        } catch {
+          rollbackMessage = " Hoàn nguyên tự động không trọn vẹn; dùng file BCSX_SECTION1_BACKUP vừa tải để phục hồi.";
+        }
+      }
+      setError(`${caught instanceof Error ? caught.message : "Không nhập được lịch sử Mục 1."}${rollbackMessage}`);
+    } finally {
+      setImportingSection1(false);
+      if (section1ImportRef.current) section1ImportRef.current.value = "";
     }
   }
 
@@ -683,6 +805,23 @@ export function BcsxReport() {
             title="Dán nhanh hàng loạt từ bảng tính Excel"
           >
             📋 Dán từ Excel
+          </button>
+
+          <input
+            ref={section1ImportRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={event => void importSection1History(event.target.files?.[0])}
+          />
+          <button
+            type="button"
+            onClick={() => section1ImportRef.current?.click()}
+            disabled={importingSection1 || saving || isViewer}
+            className="h-7 rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-bold text-amber-800 shadow-sm hover:bg-amber-100 disabled:opacity-50"
+            title="Nhập lịch sử Mục 1 đã kiểm tra; tự sao lưu và đọc lại sau khi ghi"
+          >
+            {importingSection1 ? "Đang nhập lịch sử…" : "Nhập lịch sử Mục 1"}
           </button>
 
           <button
