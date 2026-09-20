@@ -724,5 +724,6 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Đã đưa đúng hai giá trị vào `S1.csKhaDung/S2.csKhaDung` khi đẩy Google Sheet; thiếu một giá trị thì nút bị khóa và API tiếp tục chặn ở phía máy chủ.
 - Đã kiểm tra giới hạn `0–1.000 MW`, dấu phẩy thập phân, trường hợp thiếu dữ liệu và giữ `NMND.csKhaDung = null` theo đúng cấu trúc trang DH1.
 - Kiểm tra kỹ thuật: 85/85 test đạt, TypeScript đạt, build đạt. Còn nghiệm thu ghi thật một ngày đã chọn lên Google Sheet.
+- Đã triển khai commit `b0158ea` lên `github/main`; Vercel báo `success` và trang production `/ppa-heat-rate` trả HTTP 200. Người dùng cần `Ctrl+F5` trước khi nghiệm thu paste nhiều ô và đẩy Sheet.
 
 ---

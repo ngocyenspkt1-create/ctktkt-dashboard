@@ -268,3 +268,10 @@ Chi tiết bàn giao xem tại `docs/HANDOFF_CODEX_2026_09_19.md`. Các điểm 
 6. Kiểm tra: **85/85 test đạt**, TypeScript đạt, build đạt, eslint các file sửa không có lỗi (còn một cảnh báo cũ về eslint-disable trong dashboard).
 
 Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một lần `Đẩy Google Sheet`, rồi đối chiếu hai ô Công suất khả dụng trên trang `DH1`. Chưa tự ghi dữ liệu thật trong lượt phát triển để tránh thay đổi báo cáo chính thức.
+
+### Trạng thái triển khai
+
+- Commit tính năng: `b0158ea` (`feat(ppa): bo sung cong suat kha dung khi day Sheet`).
+- Đã push lên `github/main`; SHA local và remote cùng là `b0158eae82b7c27403de781ddc4451ea3aead07f`.
+- GitHub commit status `Vercel: success`; `https://ctktkt-dashboard.vercel.app/ppa-heat-rate` trả HTTP 200.
+- Sau khi mở web, cần nhấn `Ctrl+F5` một lần để trình duyệt bỏ gói JavaScript cũ trước khi thử dán nhiều ô.
