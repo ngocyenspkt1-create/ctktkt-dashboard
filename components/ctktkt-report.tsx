@@ -105,7 +105,7 @@ const displayFields: DisplayField[] = [
     row: Number(link.cell.match(/\d+$/)?.[0] || 0),
     column: link.cell.charCodeAt(0) - 64,
   })),
-  ...CTKTKT_WATER_LINKS.map(link => ({
+  ...CTKTKT_WATER_LINKS.filter(link => !editableFields.some(f => f.cell === link.cell)).map(link => ({
     cell: link.cell,
     label: link.label,
     row: Number(link.cell.match(/\d+$/)?.[0] || 0),
@@ -129,6 +129,47 @@ const metricRows: Array<{ key: keyof CtktktKpis; label: string; unit: string }> 
 function format(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   return numberFormat.format(value);
+}
+
+function parseDeminNum(val: string | undefined): number | null {
+  if (!val || val.trim() === "") return null;
+  const cleaned = val.trim().replace(/\s/g, "").replace(",", ".");
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatDeminDiff(xVal: string | undefined, wVal: string | undefined): string {
+  const x = parseDeminNum(xVal);
+  const w = parseDeminNum(wVal);
+  if (x === null || w === null) return "—";
+  return numberFormat.format(x - w);
+}
+
+function formatDeminTotal(
+  x1: string | undefined,
+  w1: string | undefined,
+  x2: string | undefined,
+  w2: string | undefined,
+): string {
+  const nx1 = parseDeminNum(x1);
+  const nw1 = parseDeminNum(w1);
+  const nx2 = parseDeminNum(x2);
+  const nw2 = parseDeminNum(w2);
+
+  const diff1 = nx1 !== null && nw1 !== null ? nx1 - nw1 : null;
+  const diff2 = nx2 !== null && nw2 !== null ? nx2 - nw2 : null;
+
+  if (diff1 === null && diff2 === null) return "—";
+  const total = (diff1 ?? 0) + (diff2 ?? 0);
+  return numberFormat.format(total);
+}
+
+function formatResinTotal(z1: string | undefined, z2: string | undefined): string {
+  const nz1 = parseDeminNum(z1);
+  const nz2 = parseDeminNum(z2);
+  if (nz1 === null && nz2 === null) return "—";
+  const total = (nz1 ?? 0) + (nz2 ?? 0);
+  return numberFormat.format(total);
 }
 
 function num(entries: CtktktDayEntries, cell: string): number | null {
@@ -1154,7 +1195,7 @@ export function CtktktReport() {
             }`}
           >
             <Zap className="size-3.5" />
-            <span>Cụm 2: TKĐ Trend DCS</span>
+            <span>Cụm 2: TKĐ DCS (P/Q &amp; Nước 24h)</span>
             <span
               className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
                 activeTab === "tkd_dcs" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
@@ -1596,6 +1637,154 @@ export function CtktktReport() {
                     </tr>
                   </tbody>
                 </table>
+              </div>
+
+              {/* BẢNG CÔNG TƠ NƯỚC DEMIN TẠI DCS (MỐC 24H) — HÀNG 72–74 */}
+              <div className="mt-6 space-y-3 pt-4 border-t-2 border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-black text-[#0f5132] flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#00b050]" />
+                      Bảng công tơ nước demin tại DCS (Mốc 24h) — Hàng 72 đến 74
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Trưởng kíp điện nhập chỉ số công tơ 24h ngày D và lượng nước tái sinh hạt. Cột 24h ngày D-1 tự động kế thừa từ ngày trước (hoặc có thể chỉnh sửa). Lượng tiêu thụ ngày D tự động tính (X − W).
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">
+                      Mốc 24h DCS
+                    </span>
+                    <span className="rounded-md bg-amber-100 px-2 py-0.5 font-bold text-amber-900">
+                      TKĐ: Nhập tay
+                    </span>
+                    <span className="rounded-md bg-sky-100 px-2 py-0.5 font-bold text-sky-900">
+                      Tự động tính
+                    </span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-emerald-300 bg-white shadow-xs">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b bg-[#d1e7dd] text-[#0f5132]">
+                        <th className="p-2.5 text-left font-bold min-w-[260px]">Thông số công tơ nước</th>
+                        <th className="p-2.5 text-center font-bold w-36">
+                          24h ngày D-1
+                          <div className="text-[10px] font-normal text-emerald-700">(Cột W)</div>
+                        </th>
+                        <th className="p-2.5 text-center font-bold w-36">
+                          24h ngày D
+                          <div className="text-[10px] font-normal text-emerald-700">(Cột X)</div>
+                        </th>
+                        <th className="p-2.5 text-center font-bold w-40 bg-[#c3e6cb] text-[#0a3622]">
+                          Lượng nước SD ngày D (m³)
+                          <div className="text-[10px] font-normal text-emerald-800">(Cột Y = X − W)</div>
+                        </th>
+                        <th className="p-2.5 text-center font-bold w-36">
+                          Nước tái sinh hạt (m³)
+                          <div className="text-[10px] font-normal text-emerald-700">(Cột Z)</div>
+                        </th>
+                        <th className="p-2.5 text-center font-bold min-w-[160px]">Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-mono">
+                      {/* Hàng 72: Tổ máy 1 */}
+                      <tr className="hover:bg-emerald-50/30">
+                        <td className="p-2.5 font-semibold text-slate-800 font-sans">
+                          Công tơ nước demin tại DCS tổ máy 1
+                          <span className="ml-1 text-[10px] text-slate-400 font-mono">(Hàng 72)</span>
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("W72", {
+                            placeholder: previous?.["X72"] || "—",
+                            group: "tkd_trend",
+                            isNumber: true,
+                          })}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("X72", {
+                            placeholder: "Nhập 24h",
+                            group: "tkd_trend",
+                            isNumber: true,
+                          })}
+                        </td>
+                        <td className="p-2 text-right font-black font-mono text-emerald-900 bg-emerald-50/60 tabular-nums">
+                          {formatDeminDiff(current["X72"], current["W72"] || previous?.["X72"])}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("Z72", {
+                            placeholder: "0",
+                            group: "tkd_trend",
+                            isNumber: true,
+                          })}
+                        </td>
+                        <td className="p-2 text-center text-[11px] text-slate-600 font-sans">
+                          TKD trend DCS nhập
+                        </td>
+                      </tr>
+
+                      {/* Hàng 73: Tổ máy 2 */}
+                      <tr className="hover:bg-emerald-50/30">
+                        <td className="p-2.5 font-semibold text-slate-800 font-sans">
+                          Công tơ nước demin tại DCS tổ máy 2
+                          <span className="ml-1 text-[10px] text-slate-400 font-mono">(Hàng 73)</span>
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("W73", {
+                            placeholder: previous?.["X73"] || "—",
+                            group: "tkd_trend",
+                            isNumber: true,
+                          })}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("X73", {
+                            placeholder: "Nhập 24h",
+                            group: "tkd_trend",
+                            isNumber: true,
+                          })}
+                        </td>
+                        <td className="p-2 text-right font-black font-mono text-emerald-900 bg-emerald-50/60 tabular-nums">
+                          {formatDeminDiff(current["X73"], current["W73"] || previous?.["X73"])}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {renderCellInput("Z73", {
+                            placeholder: "0",
+                            group: "tkd_trend",
+                            isNumber: true,
+                          })}
+                        </td>
+                        <td className="p-2 text-center text-[11px] text-slate-600 font-sans">
+                          TKD trend DCS nhập
+                        </td>
+                      </tr>
+
+                      {/* Hàng 74: Tổng cả ngày của 2 tổ máy */}
+                      <tr className="bg-[#e8f5e9] font-bold border-t-2 border-emerald-300">
+                        <td className="p-2.5 text-emerald-950 font-sans font-bold">
+                          Tổng lượng nước demin sử dụng của cả ngày D của 2 tổ máy
+                          <span className="ml-1 text-[10px] text-emerald-700 font-mono">(Hàng 74)</span>
+                        </td>
+                        <td className="p-2 text-center text-slate-400 font-sans">—</td>
+                        <td className="p-2 text-center text-slate-400 font-sans">—</td>
+                        <td className="p-2 text-right font-black font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-sm">
+                          {formatDeminTotal(
+                            current["X72"],
+                            current["W72"] || previous?.["X72"],
+                            current["X73"],
+                            current["W73"] || previous?.["X73"],
+                          )}
+                        </td>
+                        <td className="p-2 text-right font-black font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-sm">
+                          {formatResinTotal(current["Z72"], current["Z73"])}
+                        </td>
+                        <td className="p-2 text-center text-[11px] text-emerald-800 font-sans">
+                          Tự động (Y72+Y73, Z72+Z73)
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

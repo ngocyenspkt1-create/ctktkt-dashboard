@@ -234,6 +234,58 @@ export async function GET(request: Request) {
     const dayGroups: { logDate: string; startRow: number; endRow: number }[] = [];
     const dailyWaterByDate = calculateDailyWaterUsages(chained);
 
+    const prevDay = new Date(`${month}-01T12:00:00+07:00`);
+    prevDay.setDate(prevDay.getDate() - 1);
+    const fromDate = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(prevDay);
+
+    const ctktkt24hRes = await rawDb
+      .prepare(
+        `SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value 
+         FROM daily_inputs 
+         WHERE operating_date >= ? AND operating_date < ? 
+           AND (field_code LIKE 'KTKT:W72%' OR field_code LIKE 'KTKT:X72%' OR field_code LIKE 'KTKT:W73%' OR field_code LIKE 'KTKT:X73%')`
+      )
+      .bind(fromDate, `${nextMonth}-01`)
+      .all();
+
+    const ctktkt24hByDate = new Map<string, { s1Usage: number | null; s2Usage: number | null; totalUsage: number | null }>();
+    const ctktktMap = new Map<string, Record<string, string>>();
+    for (const r of (ctktkt24hRes.results || []) as Array<{ operatingDate: string; cell: string; value: string }>) {
+      const d = r.operatingDate;
+      const rec = ctktktMap.get(d) || {};
+      rec[r.cell] = r.value;
+      ctktktMap.set(d, rec);
+    }
+
+    for (const [d, cells] of ctktktMap.entries()) {
+      if (d < `${month}-01`) continue;
+      const prevD = new Date(`${d}T12:00:00+07:00`);
+      prevD.setDate(prevD.getDate() - 1);
+      const prevDateStr = new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(prevD);
+      const prevCells = ctktktMap.get(prevDateStr) || {};
+
+      const x72 = parseFloat((cells["X72"] || "").replace(",", "."));
+      const w72 = parseFloat((cells["W72"] || prevCells["X72"] || "").replace(",", "."));
+      const x73 = parseFloat((cells["X73"] || "").replace(",", "."));
+      const w73 = parseFloat((cells["W73"] || prevCells["X73"] || "").replace(",", "."));
+
+      const s1Usage = Number.isFinite(x72) && Number.isFinite(w72) ? x72 - w72 : null;
+      const s2Usage = Number.isFinite(x73) && Number.isFinite(w73) ? x73 - w73 : null;
+      const totalUsage = (s1Usage !== null || s2Usage !== null) ? (s1Usage || 0) + (s2Usage || 0) : null;
+
+      ctktkt24hByDate.set(d, { s1Usage, s2Usage, totalUsage });
+    }
+
     for (let i = 0; i < chained.length; i++) {
       const item = chained[i];
       const isBaseline = i === 0 && baseline !== null;
@@ -316,10 +368,11 @@ export async function GET(request: Request) {
         // Col S, T: Tái sinh hạt 24h
         row.getCell(19).value = item.resinWaterS1_24h ?? 0;
         row.getCell(20).value = item.resinWaterS2_24h ?? 0;
+        const ct24 = ctktkt24hByDate.get(item.logDate);
         const daily = dailyWaterByDate.get(item.logDate);
-        row.getCell(21).value = daily?.totalWaterUsedS1 ?? null;
-        row.getCell(22).value = daily?.totalWaterUsedS2 ?? null;
-        row.getCell(23).value = daily?.totalWaterUsedPlant ?? null;
+        row.getCell(21).value = ct24?.s1Usage ?? daily?.totalWaterUsedS1 ?? null;
+        row.getCell(22).value = ct24?.s2Usage ?? daily?.totalWaterUsedS2 ?? null;
+        row.getCell(23).value = ct24?.totalUsage ?? daily?.totalWaterUsedPlant ?? null;
       }
 
       // Format cells

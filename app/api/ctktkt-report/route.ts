@@ -66,11 +66,16 @@ export async function GET(request: Request) {
       for (const [cell, value] of Object.entries(derived.entries)) linkedEntries.push({ operatingDate, cell, value });
       for (const warning of derived.warnings) warnings.push({ operatingDate, ...warning });
     }
+    const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry => !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell));
+    const manualKeys = new Set(manualEntries.map(e => `${e.operatingDate}|${e.cell}`));
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
     for (const operatingDate of new Set(waterLogs.map(log => log.logDate))) {
-      for (const [cell, value] of Object.entries(deriveCtktktCellsFromWater(waterLogs, operatingDate))) linkedEntries.push({ operatingDate, cell, value });
+      for (const [cell, value] of Object.entries(deriveCtktktCellsFromWater(waterLogs, operatingDate))) {
+        if (!manualKeys.has(`${operatingDate}|${cell}`)) {
+          linkedEntries.push({ operatingDate, cell, value });
+        }
+      }
     }
-    const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry => !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell) && !CTKTKT_WATER_LINKED_CELLS.has(entry.cell));
     return Response.json({ entries: manualEntries, linkedEntries, warnings }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Chưa tải được dữ liệu Chỉ tiêu KTKT." }, { status: 503 });

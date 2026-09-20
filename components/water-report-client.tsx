@@ -47,6 +47,7 @@ export function WaterReportClient() {
   const [baseline, setBaseline] = useState<WaterShiftLog | null>(null);
   const [leaders, setLeaders] = useState<string[]>(DEFAULT_SHIFT_LEADERS);
   const [summary, setSummary] = useState<MonthlyWaterSummary | null>(null);
+  const [daily24hWaterByDate, setDaily24hWaterByDate] = useState<Record<string, { s1Usage: number | null; s2Usage: number | null; totalUsage: number | null }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [successMsg, setSuccessMsg] = useState<string>("");
@@ -97,6 +98,7 @@ export function WaterReportClient() {
         baseline?: WaterShiftLog | null;
         leaders?: string[];
         summary?: MonthlyWaterSummary | null;
+        daily24hWaterByDate?: Record<string, { s1Usage: number | null; s2Usage: number | null; totalUsage: number | null }>;
       };
       if (!res.ok) throw new Error(data.error || "Không thể tải dữ liệu.");
       setShifts(data.shifts || []);
@@ -105,6 +107,7 @@ export function WaterReportClient() {
         setLeaders(data.leaders);
       }
       setSummary(data.summary || null);
+      setDaily24hWaterByDate(data.daily24hWaterByDate || {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lỗi kết nối.");
     } finally {
@@ -592,6 +595,27 @@ export function WaterReportClient() {
         </div>
       )}
 
+      {/* Thông báo liên kết công tơ nước 24h DCS với Báo cáo Chỉ tiêu KTKT */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-50/80 p-3 text-xs text-emerald-900 shadow-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-base">💧</span>
+          <div>
+            <strong className="font-bold">Công tơ nước demin mốc 24h (S1, S2, Tái sinh hạt):</strong> Nhập tại{" "}
+            <a href="/ctktkt-report" className="font-bold underline decoration-emerald-600 hover:text-emerald-950">
+              Báo cáo Chỉ tiêu KTKT (nhóm TKĐ DCS, Hàng 72–74)
+            </a>
+            . 3 cột Tổng ngày bên dưới tự động phản ánh lượng tiêu thụ 24h (X − W).
+          </div>
+        </div>
+        <a
+          href="/ctktkt-report"
+          className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 font-bold text-white text-[11px] shadow-xs hover:bg-emerald-800 transition-colors"
+        >
+          <span>Mở Chỉ tiêu KTKT</span>
+          <span>↗</span>
+        </a>
+      </div>
+
       {/* 3. Bảng dữ liệu theo dõi lượng nước (20 cột gốc + 3 cột tổng ngày tự tính) */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         {/* Thanh ghi chú phân quyền */}
@@ -677,8 +701,8 @@ export function WaterReportClient() {
                   TÁI SINH HẠT (24h)
                 </th>
 
-                <th colSpan={3} className="px-2 py-1 text-center whitespace-nowrap min-w-[210px] bg-[#009744]">
-                  TỔNG NGÀY (24h D − 24h D-1)
+                <th colSpan={3} className="px-2 py-1 text-center whitespace-nowrap min-w-[210px] bg-[#009744]" title="Lượng nước tiêu thụ 24h DCS (S1, S2, Tổng) liên kết từ Báo cáo Chỉ tiêu KTKT (Hàng 72-74)">
+                  TỔNG NGÀY (24h DCS · CHỈ TIÊU KTKT)
                 </th>
 
                 <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap min-w-[65px]">
@@ -800,6 +824,7 @@ export function WaterReportClient() {
                     const isHighRatioS1 = shift.waterRatioS1 > 0.08;
                     const isHighRatioS2 = shift.waterRatioS2 > 0.08;
                     const daily = shift.shiftTime === "22h00" ? dailyWaterByDate.get(shift.logDate) : undefined;
+                    const ctktkt24h = shift.shiftTime === "22h00" ? daily24hWaterByDate[shift.logDate] : undefined;
 
                     return (
                       <tr
@@ -930,15 +955,36 @@ export function WaterReportClient() {
                           {formatNum(shift.resinWaterS2_24h, 0)}
                         </td>
 
-                        {/* Tổng ngày chỉ hiển thị tại dòng chốt 22h00 */}
-                        <td className="px-1.5 py-1.5 text-right font-mono bg-sky-50/50 font-bold text-sky-900">
-                          {daily ? formatNum(daily.totalWaterUsedS1, 2) : "—"}
+                        {/* Tổng ngày từ 24h DCS CTKTKT (ưu tiên) hoặc mốc chốt ngày */}
+                        <td
+                          className="px-1.5 py-1.5 text-right font-mono bg-sky-50/50 font-bold text-sky-900"
+                          title={ctktkt24h?.s1Usage != null ? "Chỉ số 24h từ Báo cáo Chỉ tiêu KTKT (Hàng 72)" : undefined}
+                        >
+                          {ctktkt24h?.s1Usage != null
+                            ? formatNum(ctktkt24h.s1Usage, 2)
+                            : daily
+                            ? formatNum(daily.totalWaterUsedS1, 2)
+                            : "—"}
                         </td>
-                        <td className="px-1.5 py-1.5 text-right font-mono bg-sky-50/50 font-bold text-sky-900">
-                          {daily ? formatNum(daily.totalWaterUsedS2, 2) : "—"}
+                        <td
+                          className="px-1.5 py-1.5 text-right font-mono bg-sky-50/50 font-bold text-sky-900"
+                          title={ctktkt24h?.s2Usage != null ? "Chỉ số 24h từ Báo cáo Chỉ tiêu KTKT (Hàng 73)" : undefined}
+                        >
+                          {ctktkt24h?.s2Usage != null
+                            ? formatNum(ctktkt24h.s2Usage, 2)
+                            : daily
+                            ? formatNum(daily.totalWaterUsedS2, 2)
+                            : "—"}
                         </td>
-                        <td className="px-1.5 py-1.5 text-right font-mono bg-emerald-50 font-extrabold text-emerald-900">
-                          {daily ? formatNum(daily.totalWaterUsedPlant, 2) : "—"}
+                        <td
+                          className="px-1.5 py-1.5 text-right font-mono bg-emerald-50 font-extrabold text-emerald-900"
+                          title={ctktkt24h?.totalUsage != null ? "Tổng 24h từ Báo cáo Chỉ tiêu KTKT (Hàng 74)" : undefined}
+                        >
+                          {ctktkt24h?.totalUsage != null
+                            ? formatNum(ctktkt24h.totalUsage, 2)
+                            : daily
+                            ? formatNum(daily.totalWaterUsedPlant, 2)
+                            : "—"}
                         </td>
 
                         {/* Thao tác (Sửa / Xóa) */}

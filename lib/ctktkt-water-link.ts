@@ -9,7 +9,9 @@ export const CTKTKT_WATER_LINKS = [
   { cell: "Z73", label: "Nước tái sinh hạt S2" },
 ] as const;
 
-export const CTKTKT_WATER_LINKED_CELLS = new Set<string>(CTKTKT_WATER_LINKS.map(link => link.cell));
+// Các ô công tơ nước demin 24h (W72, X72, Z72, W73, X73, Z73) nay do Trưởng kíp điện nhập tay
+// tại mốc 24h mỗi ngày trong Báo cáo Chỉ tiêu KTKT (nhóm tkd_trend), không còn bị khóa tự động từ mốc 22h.
+export const CTKTKT_WATER_LINKED_CELLS = new Set<string>();
 
 export function ctktktWaterLogFromRow(row: Record<string, unknown>): WaterShiftLog {
   return {

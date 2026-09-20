@@ -28,7 +28,7 @@ export const CTKTKT_GROUP_META: Record<
     label: "Bảng TKĐ trend DCS",
     shortLabel: "TKĐ DCS",
     responsible: "Trưởng kíp điện",
-    description: "Nhập công suất P/Q tự dùng 911, 912, 921, 922, TD 21 tại 6 mốc giờ",
+    description: "Nhập P/Q tự dùng 911, 912, 921, 922, TD 21 (6 mốc giờ) và công tơ nước demin 24h S1, S2, tái sinh hạt",
   },
   tpd_tcd_power: {
     label: "Công tơ điện Tổ máy (S1 & S2)",
@@ -102,6 +102,8 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "M13", "N13", "O13", "P13", "Q13", "R13", // P TD 922
     "M15", "N15", "O15", "P15", "Q15", "R15", // P TD 21
     "M16", "N16", "O16", "P16", "Q16", "R16", // Q TD 21
+    "W72", "X72", "Z72",                     // Nước demin DCS S1 (24h D-1, 24h D, Tái sinh hạt)
+    "W73", "X73", "Z73",                     // Nước demin DCS S2 (24h D-1, 24h D, Tái sinh hạt)
   ]),
   tpd_tcd_power: new Set([
     // S1

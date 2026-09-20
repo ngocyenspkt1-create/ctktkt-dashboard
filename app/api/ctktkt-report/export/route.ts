@@ -127,7 +127,11 @@ export async function GET(request: Request) {
       for (const [cell, value] of Object.entries(linked.entries)) setNumber(sheet, cell, numeric(value));
     };
     const applyWaterLinks = (sheet: ExcelJS.Worksheet, date: string) => {
-      for (const [cell, value] of Object.entries(deriveCtktktCellsFromWater(waterLogs, date))) setNumber(sheet, cell, numeric(value));
+      for (const [cell, value] of Object.entries(deriveCtktktCellsFromWater(waterLogs, date))) {
+        if (sheet.getCell(cell).value === null || sheet.getCell(cell).value === undefined) {
+          setNumber(sheet, cell, numeric(value));
+        }
+      }
     };
 
     const workbook = new ExcelJS.Workbook();
