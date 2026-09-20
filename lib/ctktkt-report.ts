@@ -212,18 +212,32 @@ export function calculateNh3Summary(
   netMwh: number | null,
 ): Nh3Summary {
   const tankMasses = [69, 70, 71].map(row => numberOf(entries, `P${row}`));
-  const stock24h = tankMasses.some(value => value === null) ? null : sum(tankMasses);
+  // P74 is a separately entered 24h total in the source workbook. P75 uses
+  // that cell directly; it does not recalculate P74 from the three tank rows.
+  const stock24h = numberOf(entries, "P74")
+    ?? (tankMasses.some(value => value === null) ? null : sum(tankMasses));
   const intake = numberOf(entries, "P72");
   const stock0h = numberOf(entries, "P73");
   const usedTonnes = stock0h === null || intake === null || stock24h === null
     ? null
     : stock0h + intake - stock24h;
+  // The source workbook calculates P77/Q77 from the PMIS totals in G157/G158.
+  // On the web those totals are represented by the two unit rows J/K 157:158.
+  // Fall back to the meter-derived totals only when PMIS has not been entered.
+  const pmisGrossRaw = sum([numberOf(entries, "J157"), numberOf(entries, "J158")]);
+  const pmisNetRaw = sum([numberOf(entries, "K157"), numberOf(entries, "K158")]);
+  // G157/G158 in Excel are reported in million kWh with four decimals, so the
+  // denominator used by P77/Q77 is rounded to 0.1 MWh before division.
+  const pmisGross = pmisGrossRaw === null ? null : Math.round(pmisGrossRaw * 10) / 10;
+  const pmisNet = pmisNetRaw === null ? null : Math.round(pmisNetRaw * 10) / 10;
+  const rateGrossMwh = pmisGross ?? grossMwh;
+  const rateNetMwh = pmisNet ?? netMwh;
   return {
     tankAvailable: tankMasses.map(value => value === null ? null : value * 0.95),
     stock24h,
     usedTonnes,
-    rateGross: divide(usedTonnes, grossMwh, 1000),
-    rateNet: divide(usedTonnes, netMwh, 1000),
+    rateGross: divide(usedTonnes, rateGrossMwh, 1000),
+    rateNet: divide(usedTonnes, rateNetMwh, 1000),
   };
 }
 

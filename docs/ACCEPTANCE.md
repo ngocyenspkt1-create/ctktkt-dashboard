@@ -49,6 +49,38 @@ Mở địa chỉ localhost mà chương trình in ra. Không thêm `--remote` v
 
 ---
 
+## Bổ sung 20/09/2026 — Nhập lịch sử Excel và đối chiếu công thức đến ngày 19/09
+
+### Phạm vi nguồn và dữ liệu nhập
+
+- Nguồn đối chiếu: `CHỈ TIÊU KINH TẾ KỸ THUẬT 19.09.2026.xls`, SHA-256 `3DA3931F09D18C4BE4ED077125609A5F7D6854922146A7D48EBD6061BA2388F7`.
+- Phạm vi có dữ liệu hoàn thành: sheet `d-1` (31/08/2026) và các sheet `01`–`19` (01–19/09/2026). Không nhập sheet `20`–`31` vì là ngày tương lai/chưa hoàn thành tại thời điểm kiểm tra.
+- Gói nhập đã chuẩn bị 6.400 ô nhập tay (5.839 ô có giá trị) và 960 giá trị BCSX liên kết cho 20 mốc ngày. Ô trống vẫn được đưa vào gói để xóa giá trị cũ nếu có, tránh giữ dữ liệu tồn.
+- Hai ô `D87` ngày 08/09 và `AO42` ngày 18/09 là công thức ngay trong file nguồn dù thuộc danh mục ô nhập; công cụ bỏ qua hai ô này để không biến công thức thành dữ liệu nhập tay.
+
+### Đối chiếu công thức
+
+- Đã đối chiếu tự động 1.672/1.672 kết quả (100%), sai lệch 0, trên 19 ngày vận hành. Phạm vi gồm sản lượng/điện tự dùng, than và suất hao, TKĐ-DCS, dầu, hơi và NH3 — tương ứng toàn bộ các nhóm kết quả đang được web tự tính.
+- Sửa công thức NH3 theo đúng Excel: `P75 = P73 + P72 - P74`; dùng trực tiếp tổng tồn 24h nhập tại `P74`, không tự cộng lại ba bồn khi `P74` đã có.
+- Sửa mẫu số suất hao NH3 theo tổng PMIS `J157:J158` và `K157:K158`, làm tròn 0,1 MWh như ô trung gian của Excel; chỉ dùng sản lượng công tơ làm dự phòng khi chưa có PMIS.
+- Công thức dầu đã được kiểm tra theo chuỗi ngày: chênh lệch tăng của F1 trừ chênh lệch tăng của F2; mốc 06h dùng chỉ số 24h của ngày D-1, không phải lấy trực tiếp F1 trừ F2.
+
+### Cơ chế nhập an toàn
+
+- Thêm nút `Nhập dữ liệu Excel đã kiểm tra` trên `/ctktkt-report`. Nút chỉ nhận gói có kết quả đối chiếu 100%.
+- Trước khi ghi, trình duyệt tự tải bản sao lưu dữ liệu CTKTKT và BCSX hiện có. Sau khi ghi, hệ thống đọc lại từng ô để xác nhận; nếu có lỗi giữa chừng, hệ thống tự hoàn nguyên các ngày đã bắt đầu ghi.
+- Gói vận hành được tạo ngoài repository tại `C:\Users\HP\Downloads\CTKTKT\CTKTKT_IMPORT_2026-09_TO_19.json`; không đưa dữ liệu vận hành vào GitHub.
+
+### Kiểm tra kỹ thuật và phần còn lại
+
+- `node --test tests/*.test.mjs`: đạt 86/86.
+- `npx tsc --noEmit`: đạt.
+- ESLint các file thay đổi: 0 lỗi; còn 13 cảnh báo tồn tại trước trong `components/ctktkt-report.tsx`.
+- `npm run build`: đạt.
+- Chưa ghi production trong lượt này vì không có phiên trình duyệt đăng nhập khả dụng. Bước tiếp theo: triển khai commit, đăng nhập bằng tài khoản có cả quyền nhập CTKTKT và BCSX, bấm nút nhập rồi chọn gói JSON; kiểm tra thông báo đọc lại thành công.
+
+---
+
 # Bổ sung 20/09/2026 — Đồng bộ công thức CTKTKT với Excel gốc
 
 - Đã sửa dầu tiêu thụ theo đúng Excel: `(F1 hiện tại - F1 mốc trước) - (F2 hiện tại - F2 mốc trước)`; kỳ 06h dùng mốc 24h ngày D-1.

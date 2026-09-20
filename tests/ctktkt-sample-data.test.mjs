@@ -87,8 +87,8 @@ test("Day 17 calculates full KPIs when Day 16 is present as previous day", () =>
   const nh3 = calculateNh3Summary(entries17, summary.plant.grossMwh, summary.plant.netMwh);
   assert.ok(Math.abs(nh3.stock24h - 129.774) < 1e-9);
   assert.ok(Math.abs(nh3.usedTonnes - 14.391) < 1e-9);
-  assert.ok(Math.abs(nh3.rateGross - 0.65226850383) < 1e-9);
-  assert.ok(Math.abs(nh3.rateNet - 0.712009816048) < 1e-9);
+  assert.ok(Math.abs(nh3.rateGross - 0.65164235064) < 1e-9);
+  assert.ok(Math.abs(nh3.rateNet - 0.708940702389) < 1e-9);
 });
 
 test("Exporting month workbook with sample data populates sheets 16 and 17 correctly", async () => {

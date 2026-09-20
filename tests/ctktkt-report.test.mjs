@@ -114,3 +114,16 @@ test("calculateSteamDifferences computes step consumption correctly", async () =
   assert.equal(s1[1].consumption, 1300); // 2500 - 1200
   assert.equal(s1[2].consumption, 1400); // 3900 - 2500
 });
+
+test("NH3 consumption follows Excel P75 and uses the manually entered P74 total", async () => {
+  const { calculateNh3Summary } = await import("../lib/ctktkt-report.ts");
+  const result = calculateNh3Summary({
+    P69: "46123", P70: "47.377", P71: "48.095",
+    P72: "42.21", P73: "117.891", P74: "141.595",
+    J157: "12107", J158: "12117.5", K157: "11120", K158: "11210.9",
+  }, null, null);
+  assert.equal(result.stock24h, 141.595);
+  assert.equal(result.usedTonnes, 18.506);
+  assert.ok(Math.abs(result.rateGross - 0.763937336168) < 1e-12);
+  assert.ok(Math.abs(result.rateNet - 0.828717158735) < 1e-12);
+});
