@@ -14,6 +14,7 @@ export type Permission =
   | "edit_ppa"
   | "edit_pmis"
   | "edit_bcsx"
+  | "edit_water"
   | "sync_qlkt"
   | "sync_google_sheet"
   | "view_all";
@@ -25,6 +26,7 @@ export const PERMISSIONS: Permission[] = [
   "edit_ppa",
   "edit_pmis",
   "edit_bcsx",
+  "edit_water",
   "sync_qlkt",
   "sync_google_sheet",
   "view_all",
@@ -78,6 +80,7 @@ export const DEFAULT_POSITIONS: PositionSeed[] = [
       "edit_daily_inputs",
       "edit_ppa",
       "edit_pmis",
+      "edit_water",
       "sync_qlkt",
       "sync_google_sheet",
     ],
@@ -91,6 +94,7 @@ export const DEFAULT_POSITIONS: PositionSeed[] = [
       "view_all",
       "edit_monthly_kpi",
       "edit_daily_inputs",
+      "edit_water",
       "sync_qlkt",
     ],
     description: "Thống kê chỉ tiêu và số liệu sản xuất",
@@ -105,6 +109,7 @@ export const DEFAULT_POSITIONS: PositionSeed[] = [
       "view_all",
       "edit_bcsx",
       "edit_daily_inputs",
+      "edit_water",
       "sync_qlkt",
     ],
     description: "Giám sát vận hành ca, nhập 48 điểm nửa giờ và xuất báo cáo BCSX",
@@ -2472,4 +2477,3 @@ export async function seedUsersAndPositions(rawDb: ReturnType<typeof import("@/d
 
   return { positionsSeeded, usersSeeded, totalUsers: INITIAL_USERS.length, totalPositions: DEFAULT_POSITIONS.length };
 }
-

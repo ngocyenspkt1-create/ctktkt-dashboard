@@ -679,13 +679,14 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 
 1. **Chuyển đổi mô hình phân quyền sang RBAC theo Cương vị (Position-based RBAC)**:
    - Thay vì chỉ có 3 role cố định (`admin`, `editor`, `viewer`) gắn cứng vào từng user, hệ thống đã chuẩn hóa **25 Cương vị** của phân xưởng (Quản đốc, Phó Quản đốc, Kỹ thuật viên, Trưởng ca, Lò trưởng, Máy trưởng, Trưởng kíp điện, ESP, FGD, Máy nghiền, v.v.).
-   - Mỗi Cương vị có thể được cấp phát độc lập **8 quyền hạn chức năng chi tiết**:
+   - Mỗi Cương vị có thể được cấp phát độc lập **9 quyền hạn chức năng chi tiết** (sau khi bổ sung quyền Nước ngày 20/09/2026):
      - `manage_users`: Quản trị tài khoản & phân quyền
      - `edit_monthly_kpi`: Nhập & tính 7 chỉ tiêu KTKT tháng (`/`)
      - `edit_daily_inputs`: Nhập & lưu số liệu sản xuất ngày (`/`)
      - `edit_ppa`: Quản lý Suất hao nhiệt PPA (`/ppa-heat-rate`)
      - `edit_pmis`: Quản lý Báo cáo PMIS / Tổn thất khói (`/pmis-report`)
      - `edit_bcsx`: Nhập 48 điểm nửa giờ & xuất file BCSX (`/bcsx-report`)
+     - `edit_water`: Quản lý theo dõi lượng nước theo ca (`/water-report`)
      - `sync_qlkt`: Kích hoạt tiện ích đồng bộ tự động từ QLKT
      - `sync_google_sheet`: Đẩy số liệu & đồng bộ Google Sheet
      - `view_all`: Quyền xem dữ liệu và báo cáo (mặc định tất cả các cương vị đều có).
@@ -782,5 +783,28 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Đã kiểm tra giới hạn `0–1.000 MW`, dấu phẩy thập phân, trường hợp thiếu dữ liệu và giữ `NMND.csKhaDung = null` theo đúng cấu trúc trang DH1.
 - Kiểm tra kỹ thuật: 85/85 test đạt, TypeScript đạt, build đạt. Còn nghiệm thu ghi thật một ngày đã chọn lên Google Sheet.
 - Đã triển khai commit `b0158ea` lên `github/main`; Vercel báo `success` và trang production `/ppa-heat-rate` trả HTTP 200. Người dùng cần `Ctrl+F5` trước khi nghiệm thu paste nhiều ô và đẩy Sheet.
+
+## Bổ sung 20/09/2026 — Nhập trực tiếp hai file BCSX S1/S2 và quyền Nước
+
+### Đã làm
+
+1. Nút nạp lịch sử Mục 1 tại `/bcsx-report` nhận trực tiếp đồng thời đúng hai file `.xlsx`: một file S1 và một file S2. Không còn yêu cầu người dùng tự chuyển file Excel thành JSON.
+2. API `/api/bcsx-section1-import` chỉ phân tích và kiểm tra file, yêu cầu quyền `edit_bcsx`, giới hạn loại/kích thước file, nhận diện tổ máy và ngày từ tên file, kiểm tra đủ sheet `01` đến ngày báo cáo, đúng 48 mốc giờ và đủ bốn cột B:E.
+3. Chỉ sau khi cả hai file đạt kiểm tra, giao diện mới sao lưu dữ liệu hiện có, ghi từng ngày qua API đã bảo vệ, đọc lại đủ từng ô và tự hoàn nguyên nếu một ngày thất bại.
+4. Hai file nguồn ngày 19/09/2026 đã được đọc bằng chính bộ phân tích mới: 19 ngày, 7.296/7.296 giá trị hợp lệ, 0 lỗi. Mục 2 và nhật ký sự kiện không bị thay đổi.
+5. Rà soát các trang trên thanh bên với ma trận quyền chức năng: `Theo dõi lượng nước` là trang tác vụ còn thiếu quyền riêng. Đã bổ sung `edit_water`, nhãn/cột `Nước` trong trang Quản lý tài khoản, preset Ca/KT và fallback đăng nhập. Khi được cấp, quyền này cho phép quản lý toàn bộ trang Nước; các quyền nhập theo từng nhóm cột/cương vị trước đây vẫn được giữ để không làm gián đoạn vận hành.
+
+### Kiểm tra
+
+- `node --test tests/*.test.mjs`: 90/90 đạt.
+- `npx.cmd tsc --noEmit`: đạt.
+- ESLint toàn bộ file sửa trong phạm vi: đạt, không có lỗi/cảnh báo; đồng thời đã dọn các cảnh báo cũ trong hai file BCSX và kiểm thử Nước được chạm tới.
+- `npm.cmd run build`: đạt; route `/api/bcsx-section1-import` có trong bản build.
+
+### Còn cần nghiệm thu
+
+- Sau khi deploy, nhấn `Ctrl+F5`, tại trang BCSX bấm `Chọn 2 file S1 & S2`, giữ `Ctrl` để chọn đồng thời hai file gốc rồi chờ thông báo đã ghi và đọc lại đủ 7.296 giá trị.
+- Dữ liệu production chưa được tự ghi trong lượt phát triển này vì không có phiên đăng nhập của người dùng; thao tác chọn hai file trên web là bước ghi thật có chủ đích.
+- Quyền `edit_water` mới sẽ có hiệu lực với cương vị sau khi Quản trị viên tích cột `Nước`, bấm lưu và người dùng đăng nhập lại. Quyền theo cương vị cũ trên trang Nước vẫn hoạt động trong thời gian chuyển tiếp.
 
 ---

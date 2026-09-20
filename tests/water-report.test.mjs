@@ -4,8 +4,6 @@ import {
   calculateMonthlyWaterSummary,
   getShiftSortKey,
   recalculateWaterShiftChain,
-  roundTo,
-  sortWaterShifts,
 } from "../lib/water-report/calculations.ts";
 import { canEditWaterField } from "../lib/water-report/permissions.ts";
 
@@ -174,6 +172,7 @@ test("canEditWaterField strictly enforces position permissions", () => {
   const tpDien = { id: 4, role: "viewer", displayName: "Trực phụ điện", position: "Trực phụ điện", permissions: ["view_all"] };
   const troThu = { id: 5, role: "viewer", displayName: "VHV Trợ thủ", position: "Trợ thủ", permissions: ["view_all"] };
   const loTruong = { id: 6, role: "viewer", displayName: "Lò trưởng", position: "Lò trưởng", permissions: ["view_all"] };
+  const delegated = { id: 7, role: "viewer", displayName: "Người được cấp quyền", position: "Lò trưởng", permissions: ["view_all", "edit_water"] };
 
   // Admin có toàn quyền
   assert.equal(canEditWaterField(admin, "electricity"), true);
@@ -203,6 +202,8 @@ test("canEditWaterField strictly enforces position permissions", () => {
   assert.equal(canEditWaterField(loTruong, "electricity"), false);
   assert.equal(canEditWaterField(loTruong, "water_intake"), false);
   assert.equal(canEditWaterField(loTruong, "resin_water"), false);
+  assert.equal(canEditWaterField(delegated, "water_intake"), true);
+  assert.equal(canEditWaterField(delegated, "resin_water"), true);
 });
 
 test("Excel export builder generates exact 20-column template with green header and formulas", async () => {
@@ -236,5 +237,3 @@ test("scanWorkbookBuffer and extractWorkbookShifts accurately read plant multi-m
   assert.equal(extracted.months[0], "2026-08"); // Có mốc 31/08/2026 22h00
   assert.equal(extracted.months[1], "2026-09");
 });
-
-

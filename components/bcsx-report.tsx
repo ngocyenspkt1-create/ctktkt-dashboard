@@ -6,7 +6,6 @@ import { DateField } from "@/components/ui/date-field";
 import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
-import { normalizeQlktValue, validateQlktSyncPayload } from "@/lib/qlkt-sync";
 
 function todayIso() {
   const now = new Date();
@@ -196,12 +195,11 @@ export function BcsxReport() {
     async function load() {
       setLoading(true); setError(null);
       try {
-        const [readingsRes, eventsRes, totalsRes, ctktktRes, period] = [
+        const [readingsRes, eventsRes, totalsRes, ctktktRes] = [
           await fetch(`/api/shift-readings?date=${operatingDate}`),
           await fetch(`/api/operating-events?date=${operatingDate}`),
           await fetch(`/api/daily-inputs?period=${operatingDate.slice(0, 7)}`),
           await fetch(`/api/ctktkt-report?period=${operatingDate.slice(0, 7)}`),
-          operatingDate.slice(0, 7),
         ];
         const readingsJson = await readingsRes.json() as { entries?: { unit: Unit; timeSlot: string; metric: ShiftMetric; value: string }[]; error?: string };
         const eventsJson = await eventsRes.json() as { events?: (OperatingEvent & { unit: Unit })[]; error?: string };
@@ -290,8 +288,8 @@ export function BcsxReport() {
     }
   }
 
-  async function importSection1History(file: File | undefined) {
-    if (!file || isViewer) return;
+  async function importSection1History(files: FileList | null) {
+    if (!files || isViewer) return;
     setImportingSection1(true); setError(null); setNotice(null);
     const completed: Section1ImportDay[] = [];
     let backup: Record<string, Section1ImportEntry[]> | null = null;
@@ -307,7 +305,18 @@ export function BcsxReport() {
     };
 
     try {
-      const parsed = JSON.parse(await file.text()) as Partial<Section1ImportPackage>;
+      if (files.length !== 2) throw new Error("Hãy chọn đồng thời đúng 2 file Excel BCSX: một file S1 và một file S2.");
+      const formData = new FormData();
+      Array.from(files).forEach(file => formData.append("files", file));
+      const parseResponse = await fetch("/api/bcsx-section1-import", { method: "POST", body: formData });
+      const rawParseResponse = await parseResponse.text();
+      let parsed: Partial<Section1ImportPackage> & { error?: string };
+      try {
+        parsed = JSON.parse(rawParseResponse) as Partial<Section1ImportPackage> & { error?: string };
+      } catch {
+        throw new Error("Máy chủ không trả dữ liệu JSON hợp lệ khi đọc hai file Excel S1/S2.");
+      }
+      if (!parseResponse.ok || parsed.error) throw new Error(parsed.error || "Không đọc được hai file Excel S1/S2.");
       if (parsed.kind !== "BCSX_SECTION_1_HISTORY" || parsed.version !== 1 || !/^\d{4}-\d{2}$/.test(parsed.month || "") || !Number.isInteger(parsed.throughDay) || Number(parsed.throughDay) < 1 || Number(parsed.throughDay) > 31 || !Array.isArray(parsed.days) || parsed.days.length !== parsed.throughDay) {
         throw new Error("Gói nhập Mục 1 BCSX không đúng cấu trúc.");
       }
@@ -810,18 +819,19 @@ export function BcsxReport() {
           <input
             ref={section1ImportRef}
             type="file"
-            accept="application/json,.json"
+            accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx"
+            multiple
             className="hidden"
-            onChange={event => void importSection1History(event.target.files?.[0])}
+            onChange={event => void importSection1History(event.target.files)}
           />
           <button
             type="button"
             onClick={() => section1ImportRef.current?.click()}
             disabled={importingSection1 || saving || isViewer}
             className="h-7 rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-bold text-amber-800 shadow-sm hover:bg-amber-100 disabled:opacity-50"
-            title="Nhập lịch sử Mục 1 đã kiểm tra; tự sao lưu và đọc lại sau khi ghi"
+            title="Chọn đồng thời đúng 2 file Excel BCSX S1 và S2; hệ thống tự kiểm tra, sao lưu và đọc lại sau khi ghi"
           >
-            {importingSection1 ? "Đang nhập lịch sử…" : "Nhập lịch sử Mục 1"}
+            {importingSection1 ? "Đang nhập 2 file…" : "Chọn 2 file S1 & S2"}
           </button>
 
           <button

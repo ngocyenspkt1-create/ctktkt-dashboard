@@ -14,6 +14,8 @@ test("Danh sách Cương vị mặc định đủ 25 cương vị", () => {
   assert.ok(positionNames.has("Lò trưởng"));
   assert.ok(positionNames.has("Máy trưởng"));
   assert.ok(positionNames.has("Trưởng kíp điện"));
+  assert.ok(PERMISSIONS.includes("edit_water"));
+  assert.ok(DEFAULT_POSITIONS.find(p => p.position === "Trưởng ca")?.permissions.includes("edit_water"));
 });
 
 test("Danh sách Nhân sự tích hợp đủ nhân sự PXVH1 (>= 124) và thuộc 25 cương vị", () => {
@@ -50,20 +52,21 @@ test("hasPermission: Admin luôn có toàn bộ quyền", () => {
   }
 });
 
-test("hasPermission: Trưởng ca có quyền edit_bcsx và view_all nhưng không có manage_users", () => {
+test("hasPermission: Trưởng ca có quyền BCSX, nước và xem nhưng không có manage_users", () => {
   const supervisorUser = {
     id: 142,
     username: "lenn",
     displayName: "Nguyễn Ngọc Lễ",
     role: "supervisor",
     position: "Trưởng ca",
-    permissions: ["view_all", "edit_bcsx", "edit_daily_inputs", "sync_qlkt"],
+    permissions: ["view_all", "edit_bcsx", "edit_daily_inputs", "edit_water", "sync_qlkt"],
   };
 
   assert.equal(hasPermission(supervisorUser, "view_all"), true);
   assert.equal(hasPermission(supervisorUser, "edit_bcsx"), true);
   assert.equal(hasPermission(supervisorUser, "edit_daily_inputs"), true);
   assert.equal(hasPermission(supervisorUser, "sync_qlkt"), true);
+  assert.equal(hasPermission(supervisorUser, "edit_water"), true);
   assert.equal(hasPermission(supervisorUser, "manage_users"), false);
   assert.equal(hasPermission(supervisorUser, "edit_monthly_kpi"), false);
 });
@@ -80,7 +83,7 @@ test("hasPermission: Viewer chỉ có quyền view_all", () => {
 
   assert.equal(hasPermission(viewerUser, "view_all"), true);
   assert.equal(hasPermission(viewerUser, "edit_bcsx"), false);
+  assert.equal(hasPermission(viewerUser, "edit_water"), false);
   assert.equal(hasPermission(viewerUser, "edit_monthly_kpi"), false);
   assert.equal(hasPermission(viewerUser, "manage_users"), false);
 });
-

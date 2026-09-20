@@ -64,9 +64,9 @@ export async function POST(request: Request) {
     if (row.role === "admin") {
       permissions = [...PERMISSIONS];
     } else if (row.role === "supervisor") {
-      permissions = ["view_all", "edit_bcsx", "edit_daily_inputs", "sync_qlkt"];
+      permissions = ["view_all", "edit_bcsx", "edit_daily_inputs", "edit_water", "sync_qlkt"];
     } else if (row.role === "technician") {
-      permissions = ["view_all", "edit_monthly_kpi", "edit_daily_inputs", "edit_ppa", "edit_pmis", "sync_qlkt", "sync_google_sheet"];
+      permissions = ["view_all", "edit_monthly_kpi", "edit_daily_inputs", "edit_ppa", "edit_pmis", "edit_water", "sync_qlkt", "sync_google_sheet"];
     } else if (row.role === "editor") {
       permissions = ["view_all", "edit_monthly_kpi", "edit_daily_inputs", "edit_ppa", "edit_pmis", "edit_bcsx", "sync_qlkt"];
     } else {

@@ -22,6 +22,10 @@ export function canEditWaterField(user: SessionUser | null | undefined, group: W
     return true;
   }
 
+  // Quyền chức năng do Quản trị viên cấp cho phép quản lý toàn bộ trang Nước.
+  // Các vị trí vận hành cũ bên dưới vẫn giữ đúng phạm vi từng nhóm cột.
+  if (user.permissions?.includes("edit_water")) return true;
+
   const pos = (user.position || "").trim().toLowerCase();
   const isLeader = pos.includes("trưởng ca") || user.role === "supervisor";
 
@@ -64,4 +68,3 @@ export function canEditAnyWaterField(user: SessionUser | null | undefined): bool
     canEditWaterField(user, "resin_water")
   );
 }
-

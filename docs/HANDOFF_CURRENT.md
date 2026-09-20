@@ -65,7 +65,7 @@
 ### 3.5. Tài khoản và phân quyền
 
 - Trang `/admin/users`.
-- Có 25 Cương vị và 9 quyền chức năng chi tiết.
+- Có 25 Cương vị và 10 quyền trong danh mục (9 quyền chức năng cùng quyền xem `view_all`).
 - Ma trận phân quyền theo Cương vị; có tìm kiếm/lọc người dùng.
 - Thêm, sửa, khóa/mở khóa, đổi mật khẩu và xóa tài khoản.
 - Mã nguồn hiện chứa bộ dữ liệu khởi tạo 163 tài khoản.
@@ -275,3 +275,11 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Đã push lên `github/main`; SHA local và remote cùng là `b0158eae82b7c27403de781ddc4451ea3aead07f`.
 - GitHub commit status `Vercel: success`; `https://ctktkt-dashboard.vercel.app/ppa-heat-rate` trả HTTP 200.
 - Sau khi mở web, cần nhấn `Ctrl+F5` một lần để trình duyệt bỏ gói JavaScript cũ trước khi thử dán nhiều ô.
+
+## 16. Cập nhật 20/09/2026 — Nạp trực tiếp BCSX S1/S2 và bổ sung quyền Nước
+
+- Lỗi `Unexpected token 'P', "PK..." is not valid JSON` do nút cũ đọc file `.xlsx` bằng `JSON.parse`. Luồng mới nhận đồng thời đúng hai file Excel S1 và S2 qua `/api/bcsx-section1-import`, kiểm tra toàn bộ trước khi ghi.
+- Hai file ngày 19/09/2026 đã qua bộ đọc mới với 19 ngày và 7.296/7.296 giá trị Mục 1 hợp lệ. Giao diện vẫn sao lưu, ghi từng ngày, đọc lại từng ô và hoàn nguyên khi lỗi; Mục 2 và Mục 3 không đổi.
+- Ma trận phân quyền có thêm quyền `edit_water` và cột `Nước`. Đây là tác vụ có trang riêng trên thanh bên nhưng trước đó chưa có quyền chức năng tương ứng. Cơ chế quyền chi tiết theo cương vị tại trang Nước được giữ nguyên; quyền mới là quyền quản lý toàn trang khi Quản trị viên chủ động cấp.
+- Kiểm tra: 90/90 test đạt; TypeScript, ESLint các file thay đổi và build đều đạt.
+- Còn dở: chưa thực hiện lần ghi thật 7.296 giá trị trên production vì không có phiên đăng nhập người dùng. Sau deploy, người dùng chọn đồng thời hai file S1/S2 và chờ thông báo đọc lại thành công; quản trị viên lưu cột quyền `Nước`, người dùng cần đăng nhập lại để JWT nhận quyền mới.

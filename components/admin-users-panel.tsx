@@ -116,7 +116,8 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
   }
 
   useEffect(() => {
-    loadPositions();
+    const timer = window.setTimeout(() => { void loadPositions(); }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Thay đổi quyền cho 1 Cương vị
@@ -157,7 +158,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
         target.permissions = [...PERMISSIONS];
       } else if (preset === "shift") {
         target.role = "supervisor";
-        target.permissions = ["view_all", "edit_bcsx", "edit_daily_inputs", "sync_qlkt"];
+        target.permissions = ["view_all", "edit_bcsx", "edit_daily_inputs", "edit_water", "sync_qlkt"];
       } else if (preset === "tech") {
         target.role = "technician";
         target.permissions = [
@@ -166,6 +167,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
           "edit_daily_inputs",
           "edit_ppa",
           "edit_pmis",
+          "edit_water",
           "sync_qlkt",
           "sync_google_sheet",
         ];
@@ -478,7 +480,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
 
           {/* Bảng Ma trận Phân quyền */}
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full min-w-[1050px] text-xs">
+            <table className="w-full min-w-[1120px] text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-[#f4f6fb] text-left text-slate-700">
                   <th className="p-3 font-bold">Cương vị</th>
@@ -491,6 +493,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
                   <th className="p-2 text-center font-bold text-teal-900" title="Quản lý Suất hao nhiệt PPA">SHN PPA</th>
                   <th className="p-2 text-center font-bold text-purple-900" title="Quản lý Báo cáo PMIS">PMIS</th>
                   <th className="p-2 text-center font-bold text-emerald-900" title="Nhập 48 điểm nửa giờ & xuất BCSX">BCSX</th>
+                  <th className="p-2 text-center font-bold text-cyan-900" title="Quản lý theo dõi lượng nước theo ca">Nước</th>
                   <th className="p-2 text-center font-bold text-amber-900" title="Kích hoạt đồng bộ tự động từ QLKT">ĐB QLKT</th>
                   <th className="p-2 text-center font-bold text-green-900" title="Đồng bộ Google Sheet">G-Sheet</th>
                   <th className="p-3 text-right font-bold">Gán nhanh</th>
@@ -499,13 +502,13 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
               <tbody className="divide-y divide-slate-100">
                 {loadingPositions ? (
                   <tr>
-                    <td colSpan={13} className="p-8 text-center text-slate-400">
+                    <td colSpan={14} className="p-8 text-center text-slate-400">
                       Đang tải danh sách cương vị…
                     </td>
                   </tr>
                 ) : filteredPositions.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="p-8 text-center text-slate-400">
+                    <td colSpan={14} className="p-8 text-center text-slate-400">
                       Không tìm thấy cương vị nào phù hợp bộ lọc.
                     </td>
                   </tr>
@@ -610,6 +613,16 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
                             onChange={() => togglePermission(originalIndex, "edit_bcsx")}
                             className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
                             title="Nhập 48 điểm nửa giờ & xuất BCSX"
+                          />
+                        </td>
+                        <td className="p-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={pos.role === "admin" || perms.has("edit_water")}
+                            disabled={pos.role === "admin"}
+                            onChange={() => togglePermission(originalIndex, "edit_water")}
+                            className="h-4 w-4 rounded text-cyan-600 focus:ring-cyan-500"
+                            title="Quản lý theo dõi lượng nước theo ca"
                           />
                         </td>
                         <td className="p-2 text-center">

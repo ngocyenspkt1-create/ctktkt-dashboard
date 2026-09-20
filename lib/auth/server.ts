@@ -37,6 +37,7 @@ export async function requireEditor(): Promise<Guard> {
     user.permissions?.includes("edit_daily_inputs") ||
     user.permissions?.includes("edit_monthly_kpi") ||
     user.permissions?.includes("edit_bcsx") ||
+    user.permissions?.includes("edit_water") ||
     user.permissions?.includes("edit_ppa") ||
     user.permissions?.includes("edit_pmis")
   ) {
