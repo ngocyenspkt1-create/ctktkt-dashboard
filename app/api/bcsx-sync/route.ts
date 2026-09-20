@@ -1,5 +1,5 @@
 import { getRawDb } from "@/db";
-import { EVENT_TYPES, type OperatingEvent } from "@/lib/bcsx";
+import { EVENT_TYPES, validateOperatingEventDateRange, type OperatingEvent } from "@/lib/bcsx";
 import { requirePermission } from "@/lib/auth/server";
 
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -18,8 +18,12 @@ function cleanEvents(value: unknown, date: string): OperatingEvent[] {
     const raw = item as Record<string, unknown>;
     const startAt = String(raw.startAt || ""), endAt = String(raw.endAt || "");
     const eventType = Number(raw.eventType), description = String(raw.description || "").trim();
-    if (!timestampPattern.test(startAt) || !startAt.startsWith(`${date} `)) throw new Error("Thời gian bắt đầu sự kiện không đúng ngày đồng bộ.");
-    if (endAt && (!timestampPattern.test(endAt) || !endAt.startsWith(`${date} `))) throw new Error("Thời gian kết thúc sự kiện không đúng ngày đồng bộ.");
+    if (!timestampPattern.test(startAt)) throw new Error("Thời gian bắt đầu sự kiện không hợp lệ.");
+    if (endAt && !timestampPattern.test(endAt)) throw new Error("Thời gian kết thúc sự kiện không hợp lệ.");
+    const dateIssue = validateOperatingEventDateRange(date, startAt, endAt);
+    if (dateIssue === "start-date") throw new Error("Thời gian bắt đầu sự kiện không đúng ngày đồng bộ.");
+    if (dateIssue === "end-date") throw new Error("Thời gian kết thúc sự kiện phải thuộc ngày đồng bộ hoặc ngày kế tiếp.");
+    if (dateIssue === "end-before-start") throw new Error("Thời gian kết thúc sự kiện phải sau thời gian bắt đầu.");
     if (!eventTypeSet.has(eventType)) throw new Error("Loại sự kiện không hợp lệ.");
     if (description.length > 500) throw new Error("Mô tả sự kiện dài quá 500 ký tự.");
     return { startAt, endAt, eventType, description };

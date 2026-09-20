@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ExcelJS from "exceljs";
-import { buildBcsxWorkbookFromTemplate, SHIFT_METRICS, SHIFT_TIME_SLOTS } from "../lib/bcsx.ts";
+import {
+  buildBcsxWorkbookFromTemplate,
+  nextOperatingDate,
+  SHIFT_METRICS,
+  SHIFT_TIME_SLOTS,
+  validateOperatingEventDateRange,
+} from "../lib/bcsx.ts";
 import { BCSX_TEMPLATE_A0_BASE64, BCSX_TEMPLATE_S1_BASE64, BCSX_TEMPLATE_S2_BASE64 } from "../lib/bcsx-templates.generated.ts";
 
 const templates = {
@@ -45,6 +51,16 @@ test("BCSX has all 48 source-template time points including 23:30 and 23:59", ()
   assert.equal(SHIFT_TIME_SLOTS[0], "00:30");
   assert.equal(SHIFT_TIME_SLOTS[46], "23:30");
   assert.equal(SHIFT_TIME_SLOTS[47], "23:59");
+});
+
+test("BCSX accepts an event ending after midnight on the next calendar day", () => {
+  assert.equal(nextOperatingDate("2026-09-03"), "2026-09-04");
+  assert.equal(nextOperatingDate("2026-12-31"), "2027-01-01");
+  assert.equal(validateOperatingEventDateRange("2026-09-03", "2026-09-03 23:55", "2026-09-04 00:05"), null);
+  assert.equal(validateOperatingEventDateRange("2026-09-03", "2026-09-03 22:00", "2026-09-03 23:00"), null);
+  assert.equal(validateOperatingEventDateRange("2026-09-03", "2026-09-02 23:55", "2026-09-03 00:05"), "start-date");
+  assert.equal(validateOperatingEventDateRange("2026-09-03", "2026-09-03 23:55", "2026-09-05 00:05"), "end-date");
+  assert.equal(validateOperatingEventDateRange("2026-09-03", "2026-09-03 23:55", "2026-09-03 23:50"), "end-before-start");
 });
 
 for (const unit of ["S1", "S2", "A0"]) {

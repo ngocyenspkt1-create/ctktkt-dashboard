@@ -82,6 +82,16 @@ Mở địa chỉ localhost mà chương trình in ra. Không thêm `--remote` v
 
 ---
 
+## Bổ sung 20/09/2026 — Sự kiện BCSX kết thúc qua nửa đêm
+
+- Nguyên nhân lỗi `Thời gian kết thúc sự kiện không đúng ngày đồng bộ`: API bắt buộc thời điểm kết thúc phải cùng ngày vận hành, nên từ chối sự kiện bắt đầu cuối ngày và kết thúc sau 00:00 ngày kế tiếp.
+- Đã cho phép thời điểm kết thúc thuộc ngày vận hành hoặc đúng ngày kế tiếp; vẫn chặn thời điểm bắt đầu sai ngày, kết thúc trước lúc bắt đầu hoặc kết thúc từ hai ngày sau trở đi.
+- Không thay đổi bộ trích xuất hoặc phiên bản tiện ích QLKT vì dữ liệu thời gian đầy đủ đã được gửi về web; lỗi nằm ở quy tắc xác thực phía máy chủ.
+- Kiểm tra: 87/87 test đạt, TypeScript đạt, ESLint các file sửa đạt và build production đạt.
+- Còn cần nghiệm thu sau triển khai: đồng bộ lại ngày 03/09/2026 và xác nhận số sự kiện S1/S2 được lưu đúng, đặc biệt sự kiện đi qua 00:00.
+
+---
+
 # Bổ sung 20/09/2026 — Đồng bộ công thức CTKTKT với Excel gốc
 
 - Đã sửa dầu tiêu thụ theo đúng Excel: `(F1 hiện tại - F1 mốc trước) - (F2 hiện tại - F2 mốc trước)`; kỳ 06h dùng mốc 24h ngày D-1.

@@ -71,6 +71,25 @@ export type OperatingEvent = {
   description: string;
 };
 
+export function nextOperatingDate(operatingDate: string) {
+  const [year, month, day] = operatingDate.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  return next.toISOString().slice(0, 10);
+}
+
+export function validateOperatingEventDateRange(
+  operatingDate: string,
+  startAt: string,
+  endAt: string,
+): "start-date" | "end-date" | "end-before-start" | null {
+  if (!startAt.startsWith(`${operatingDate} `)) return "start-date";
+  if (!endAt) return null;
+  const endDate = endAt.slice(0, 10);
+  if (endDate !== operatingDate && endDate !== nextOperatingDate(operatingDate)) return "end-date";
+  if (endAt < startAt) return "end-before-start";
+  return null;
+}
+
 export type UnitTotals = { dauCuc: number | null; thuongPham: number | null; thanTieuThu: number | null; thanTonKho: number | null };
 
 export type BcsxExportInput = {
