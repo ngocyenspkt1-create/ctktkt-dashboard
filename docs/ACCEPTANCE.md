@@ -717,4 +717,12 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Kiểm tra kỹ thuật: 83/83 test đạt, TypeScript đạt, build đạt. Lint toàn dự án còn lỗi cũ ngoài phạm vi sửa.
 - Còn dở: chưa ghi thử Google Sheet thật và chưa kiểm thử UI bằng trình duyệt trong phiên này; bước tiếp theo là nghiệm thu có kiểm soát trên một ngày đã lưu đủ PPA và đối chiếu trực tiếp hàng `DH1`.
 
+## Bổ sung 20/09/2026 — Cột Công suất khả dụng
+
+- Đã thêm Công suất khả dụng S1/S2 vào bảng chi tiết và hộp nhập theo ngày trên màn hình so sánh PPA.
+- Đã lưu hai trường bằng `PPA_CSKD_S1/PPA_CSKD_S2` trong `daily_inputs`, không phát sinh migration.
+- Đã đưa đúng hai giá trị vào `S1.csKhaDung/S2.csKhaDung` khi đẩy Google Sheet; thiếu một giá trị thì nút bị khóa và API tiếp tục chặn ở phía máy chủ.
+- Đã kiểm tra giới hạn `0–1.000 MW`, dấu phẩy thập phân, trường hợp thiếu dữ liệu và giữ `NMND.csKhaDung = null` theo đúng cấu trúc trang DH1.
+- Kiểm tra kỹ thuật: 85/85 test đạt, TypeScript đạt, build đạt. Còn nghiệm thu ghi thật một ngày đã chọn lên Google Sheet.
+
 ---

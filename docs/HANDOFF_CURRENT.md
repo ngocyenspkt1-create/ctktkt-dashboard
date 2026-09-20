@@ -257,3 +257,14 @@ Chi tiết bàn giao xem tại `docs/HANDOFF_CODEX_2026_09_19.md`. Các điểm 
 
 1. Đăng nhập bằng tài khoản có quyền nhập CTKTKT, copy một vùng Excel mẫu rồi dán vào nhóm tương ứng; kiểm tra ô tự tính/ô khóa không bị thay đổi và lưu lại đúng ngày.
 2. Tại `So sánh trực quan SHN Thực tế và PPA`, chọn một ngày đã lưu đủ dữ liệu rồi bấm `Đẩy Google Sheet` đúng một lần; đối chiếu đúng hàng/trang `DH1`. Đây là thao tác ghi báo cáo thật nên chưa tự động thực hiện trong lượt phát triển này.
+
+## 15. Bổ sung ngày 20/09/2026 — Công suất khả dụng S1/S2
+
+1. Bảng chi tiết của tab `So sánh trực quan SHN Thực tế và PPA` đã có thêm cột **CS khả dụng** riêng cho S1 và S2.
+2. Bấm vào ngày để mở hộp `Thông số bổ sung`, nhập Công suất khả dụng S1/S2 (MW) cùng nhận xét rồi lưu một lần.
+3. Hai giá trị được lưu theo ngày trong `daily_inputs` bằng mã nội bộ `PPA_CSKD_S1` và `PPA_CSKD_S2`; không cần thay đổi cấu trúc cơ sở dữ liệu hoặc chạy migration.
+4. Payload Google Sheet điền `S1.csKhaDung` và `S2.csKhaDung`; NMNĐ giữ `null` vì mẫu Google Sheet không có cột công suất khả dụng chung.
+5. Nút `Đẩy Google Sheet` chỉ bật khi ngày đã có kết quả PPA và đủ cả hai công suất khả dụng. API cũng kiểm tra lại và từ chối dữ liệu thiếu hoặc giá trị ngoài khoảng `0–1.000 MW`.
+6. Kiểm tra: **85/85 test đạt**, TypeScript đạt, build đạt, eslint các file sửa không có lỗi (còn một cảnh báo cũ về eslint-disable trong dashboard).
+
+Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một lần `Đẩy Google Sheet`, rồi đối chiếu hai ô Công suất khả dụng trên trang `DH1`. Chưa tự ghi dữ liệu thật trong lượt phát triển để tránh thay đổi báo cáo chính thức.

@@ -3,6 +3,9 @@ import test from "node:test";
 import {
   buildGoogleSheetDayPayload,
   parseGoogleSheetAssessmentRows,
+  parseAvailableCapacity,
+  PPA_AVAILABLE_CAPACITY_S1_CODE,
+  PPA_AVAILABLE_CAPACITY_S2_CODE,
   resolveGoogleSheetRow,
   validateGoogleAppsScriptUrl,
 } from "../lib/google-sheet-sync.ts";
@@ -10,6 +13,7 @@ import {
 const entries = Object.entries({
   B: "10,70", C: "9,82", F: "24", H: "10,69", I: "9,83", L: "24",
   AE: "5.107,33", AF: "5.248,58", AJ: "20.142,99",
+  [PPA_AVAILABLE_CAPACITY_S1_CODE]: "622,5", [PPA_AVAILABLE_CAPACITY_S2_CODE]: "615,2",
 }).map(([fieldCode, value]) => ({ fieldCode, value }));
 
 test("lập đúng dữ liệu Google Sheet cho S1, S2 và toàn nhà máy", () => {
@@ -24,7 +28,9 @@ test("lập đúng dữ liệu Google Sheet cho S1, S2 và toàn nhà máy", () 
   assert.equal(payload.S1.sanLuong, 10.7);
   assert.equal(payload.S2.sanLuong, 10.69);
   assert.equal(payload.NMND.sanLuong, 21_390);
-  assert.equal(payload.S1.csKhaDung, null);
+  assert.equal(payload.S1.csKhaDung, 622.5);
+  assert.equal(payload.S2.csKhaDung, 615.2);
+  assert.equal(payload.NMND.csKhaDung, null);
   assert.ok(Math.abs(payload.S1.csBinhQuan - 445.833333) < 0.001);
   assert.ok(Math.abs(payload.S1.shnThucTe - 10_476.262) < 0.01);
   assert.match(payload.S1.danhGia, /Theo công suất thực tế/);
@@ -36,6 +42,7 @@ test("xuất Google Sheet giữ đủ độ chính xác QLKT ngày 17/09", () =>
     B: "11.05364", C: "10.1665842", F: "24",
     H: "11.03056", I: "10.1327348", L: "24",
     AE: "5341.111", AF: "5349.818", AJ: "20021.593",
+    [PPA_AVAILABLE_CAPACITY_S1_CODE]: "622.5", [PPA_AVAILABLE_CAPACITY_S2_CODE]: "622.5",
   }).map(([fieldCode, value]) => ({ fieldCode, value }));
   const payload = buildGoogleSheetDayPayload("2026-09-17", preciseEntries, {
     ppaPlant: 10_500, ppaS1: 10_500, ppaS2: 10_500,
@@ -63,6 +70,20 @@ test("xác định đúng hàng theo ngày ISO", () => {
 
 test("không tạo dữ liệu khi chưa có kết quả PPA", () => {
   assert.throws(() => buildGoogleSheetDayPayload("2026-09-13", entries, null), /chưa có kết quả PPA/i);
+});
+
+test("không đẩy Google Sheet khi thiếu công suất khả dụng S1 hoặc S2", () => {
+  const incomplete = entries.filter(entry => entry.fieldCode !== PPA_AVAILABLE_CAPACITY_S2_CODE);
+  assert.throws(() => buildGoogleSheetDayPayload("2026-09-13", incomplete, {
+    ppaPlant: 10_500, ppaS1: 10_450, ppaS2: 10_550,
+  }), /Công suất khả dụng S2/);
+});
+
+test("công suất khả dụng nhận dấu phẩy thập phân và chặn giá trị ngoài giới hạn", () => {
+  assert.equal(parseAvailableCapacity("622,5", "CSKD S1"), 622.5);
+  assert.equal(parseAvailableCapacity("", "CSKD S1"), null);
+  assert.throws(() => parseAvailableCapacity("1001", "CSKD S1"), /0 đến 1.000 MW/);
+  assert.throws(() => parseAvailableCapacity("abc", "CSKD S1"), /0 đến 1.000 MW/);
 });
 
 test("đọc danh sách đánh giá lịch sử và bỏ dòng trống", () => {

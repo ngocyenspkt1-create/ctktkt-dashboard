@@ -1,5 +1,6 @@
 import { getRawDb } from "@/db";
 import { requireEditor } from "@/lib/auth/server";
+import { parseAvailableCapacity, PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE } from "@/lib/google-sheet-sync";
 
 const datePattern = /^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
@@ -19,10 +20,14 @@ export async function POST(request: Request) {
       const value = item as Record<string, unknown>;
       const operatingDate = String(value.operatingDate || "");
       const noteS1 = String(value.noteS1 || "").trim(), noteS2 = String(value.noteS2 || "").trim();
+      const hasAvailableCapacityS1 = Object.hasOwn(value, "availableCapacityS1Mw");
+      const hasAvailableCapacityS2 = Object.hasOwn(value, "availableCapacityS2Mw");
+      const availableCapacityS1Mw = hasAvailableCapacityS1 ? parseAvailableCapacity(value.availableCapacityS1Mw, "Công suất khả dụng S1") : null;
+      const availableCapacityS2Mw = hasAvailableCapacityS2 ? parseAvailableCapacity(value.availableCapacityS2Mw, "Công suất khả dụng S2") : null;
       if (!datePattern.test(operatingDate) || seen.has(operatingDate)) throw new Error("Ngày đánh giá không hợp lệ hoặc bị trùng.");
       if (noteS1.length > 1000 || noteS2.length > 1000) throw new Error(`Đánh giá ngày ${operatingDate} dài quá 1.000 ký tự.`);
       seen.add(operatingDate);
-      return { operatingDate, noteS1, noteS2 };
+      return { operatingDate, noteS1, noteS2, hasAvailableCapacityS1, hasAvailableCapacityS2, availableCapacityS1Mw, availableCapacityS2Mw };
     });
     const db = getRawDb();
     const statements = entries.map(entry =>
@@ -39,8 +44,21 @@ export async function POST(request: Request) {
           updated_at = CURRENT_TIMESTAMP
       `).bind(entry.operatingDate, entry.noteS1, entry.noteS2)
     );
+    const noteStatementCount = statements.length;
+    for (const entry of entries) {
+      const capacities = [
+        [entry.hasAvailableCapacityS1, PPA_AVAILABLE_CAPACITY_S1_CODE, entry.availableCapacityS1Mw],
+        [entry.hasAvailableCapacityS2, PPA_AVAILABLE_CAPACITY_S2_CODE, entry.availableCapacityS2Mw],
+      ] as const;
+      for (const [present, fieldCode, value] of capacities) {
+        if (!present) continue;
+        statements.push(value === null
+          ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(entry.operatingDate, fieldCode)
+          : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(entry.operatingDate, fieldCode, String(value)));
+      }
+    }
     const results = statements.length ? await db.batch(statements) : [];
-    const updated = results.reduce((sum, result) => sum + Number(result.meta.changes || 0), 0);
+    const updated = results.slice(0, noteStatementCount).reduce((sum, result) => sum + Number(result.meta.changes || 0), 0);
     return Response.json({ received: entries.length, updated, skipped: entries.length - updated });
   } catch (error) {
     return Response.json({ error: error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ." }, { status: 400 });

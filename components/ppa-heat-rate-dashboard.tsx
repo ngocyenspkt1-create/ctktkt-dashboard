@@ -8,6 +8,7 @@ import { CAPACITY_KW, calculateActualHeatRate, calculatePpaHeatRateDetailed, com
 import { loadSheetJs, type SheetJsLib } from "@/lib/sheetjs-loader";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
+import { PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE } from "@/lib/google-sheet-sync";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type StoredPpa = {
@@ -34,6 +35,7 @@ type Row = {
   ppaS1: number | null; actualS1: number | null;
   ppaS2: number | null; actualS2: number | null;
   netS1Kwh: number | null; netS2Kwh: number | null;
+  availableCapacityS1Mw: number | null; availableCapacityS2Mw: number | null;
   noteS1: string; noteS2: string;
 };
 
@@ -240,6 +242,8 @@ export function PpaHeatRateDashboard() {
     date: string;
     noteS1: string;
     noteS2: string;
+    availableCapacityS1Mw: string;
+    availableCapacityS2Mw: string;
     saving: boolean;
     error: string;
   }>({
@@ -247,6 +251,8 @@ export function PpaHeatRateDashboard() {
     date: "",
     noteS1: "",
     noteS2: "",
+    availableCapacityS1Mw: "",
+    availableCapacityS2Mw: "",
     saving: false,
     error: "",
   });
@@ -257,6 +263,8 @@ export function PpaHeatRateDashboard() {
       date: row.date,
       noteS1: row.noteS1 || "",
       noteS2: row.noteS2 || "",
+      availableCapacityS1Mw: row.availableCapacityS1Mw === null ? "" : String(row.availableCapacityS1Mw),
+      availableCapacityS2Mw: row.availableCapacityS2Mw === null ? "" : String(row.availableCapacityS2Mw),
       saving: false,
       error: "",
     });
@@ -274,6 +282,8 @@ export function PpaHeatRateDashboard() {
             operatingDate: editModal.date,
             noteS1: editModal.noteS1.trim(),
             noteS2: editModal.noteS2.trim(),
+            availableCapacityS1Mw: editModal.availableCapacityS1Mw.trim(),
+            availableCapacityS2Mw: editModal.availableCapacityS2Mw.trim(),
           }]
         })
       });
@@ -290,6 +300,12 @@ export function PpaHeatRateDashboard() {
         }
         return entry;
       }));
+      setDailyInputs(prev => {
+        const next = prev.filter(entry => !(entry.operatingDate === editModal.date && (entry.fieldCode === PPA_AVAILABLE_CAPACITY_S1_CODE || entry.fieldCode === PPA_AVAILABLE_CAPACITY_S2_CODE)));
+        if (editModal.availableCapacityS1Mw.trim()) next.push({ operatingDate: editModal.date, fieldCode: PPA_AVAILABLE_CAPACITY_S1_CODE, value: editModal.availableCapacityS1Mw.trim().replace(",", ".") });
+        if (editModal.availableCapacityS2Mw.trim()) next.push({ operatingDate: editModal.date, fieldCode: PPA_AVAILABLE_CAPACITY_S2_CODE, value: editModal.availableCapacityS2Mw.trim().replace(",", ".") });
+        return next;
+      });
 
       setEditModal(prev => ({ ...prev, isOpen: false, saving: false }));
     } catch (caught) {
@@ -349,17 +365,22 @@ export function PpaHeatRateDashboard() {
     void loadRange(fromDate, toDate, false);
   }
 
-  const actualByDate = useMemo(() => {
+  const dailyValuesByDate = useMemo(() => {
     const grouped = new Map<string, Record<string, string>>();
     for (const entry of dailyInputs) grouped.set(entry.operatingDate, { ...(grouped.get(entry.operatingDate) || {}), [entry.fieldCode]: entry.value });
-    return new Map([...grouped].map(([date, values]) => [date, calculateActualHeatRate(values)]));
+    return grouped;
   }, [dailyInputs]);
+
+  const actualByDate = useMemo(() => new Map([...dailyValuesByDate].map(([date, values]) => [date, calculateActualHeatRate(values)])), [dailyValuesByDate]);
 
   const rows: Row[] = useMemo(() => {
     return [...entries]
       .sort((a, b) => a.operatingDate.localeCompare(b.operatingDate))
       .map(entry => {
         const actual = actualByDate.get(entry.operatingDate) || null;
+        const daily = dailyValuesByDate.get(entry.operatingDate) || {};
+        const capacityS1 = Number(daily[PPA_AVAILABLE_CAPACITY_S1_CODE]);
+        const capacityS2 = Number(daily[PPA_AVAILABLE_CAPACITY_S2_CODE]);
         return {
           date: entry.operatingDate,
           ppaPlant: Number(entry.ppaPlant), actualPlant: actual?.actualPlant ?? null,
@@ -367,10 +388,12 @@ export function PpaHeatRateDashboard() {
           ppaS2: Number(entry.ppaS2), actualS2: actual?.actualS2 ?? null,
           netS1Kwh: entry.netS1Kwh !== undefined && entry.netS1Kwh !== null ? Number(entry.netS1Kwh) : null,
           netS2Kwh: entry.netS2Kwh !== undefined && entry.netS2Kwh !== null ? Number(entry.netS2Kwh) : null,
+          availableCapacityS1Mw: daily[PPA_AVAILABLE_CAPACITY_S1_CODE]?.trim() !== "" && Number.isFinite(capacityS1) ? capacityS1 : null,
+          availableCapacityS2Mw: daily[PPA_AVAILABLE_CAPACITY_S2_CODE]?.trim() !== "" && Number.isFinite(capacityS2) ? capacityS2 : null,
           noteS1: entry.noteS1 || "", noteS2: entry.noteS2 || "",
         };
       });
-  }, [entries, actualByDate]);
+  }, [entries, actualByDate, dailyValuesByDate]);
 
   const rowsByMonth = useMemo(() => {
     const groups = new Map<string, Row[]>();
@@ -407,6 +430,13 @@ export function PpaHeatRateDashboard() {
 
   const noteworthy = useMemo(() => rows.filter(row => compareHeatRate(row.actualPlant, row.ppaPlant).status === "Vượt PPA"), [rows]);
   const hasSavedPpaForSheet = entries.some(entry => entry.operatingDate === sheetDate);
+  const sheetRow = rows.find(row => row.date === sheetDate);
+  const hasAvailableCapacityForSheet = Boolean(sheetRow && sheetRow.availableCapacityS1Mw !== null && sheetRow.availableCapacityS2Mw !== null);
+  const sheetDisabledReason = !hasSavedPpaForSheet
+    ? "Ngày này chưa có kết quả PPA đã lưu."
+    : !hasAvailableCapacityForSheet
+      ? "Ngày này chưa nhập đủ Công suất khả dụng S1 và S2. Bấm vào ngày trong bảng chi tiết để bổ sung."
+      : "";
 
   async function exportXlsx() {
     setExporting(true); setError("");
@@ -469,7 +499,7 @@ export function PpaHeatRateDashboard() {
       </div>
       <div className="flex flex-wrap items-end justify-end gap-2">
         <label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐẨY GOOGLE SHEET<DateField value={sheetDate} onChange={setSheetDate} className="w-[180px]"/></label>
-        <GoogleSheetSyncButton operatingDate={sheetDate} disabled={!hasSavedPpaForSheet} disabledReason="Ngày này chưa có kết quả PPA đã lưu." onImported={() => loadRange(fromDate, toDate, false)}/>
+        <GoogleSheetSyncButton operatingDate={sheetDate} disabled={!hasSavedPpaForSheet || !hasAvailableCapacityForSheet} disabledReason={sheetDisabledReason} onImported={() => loadRange(fromDate, toDate, false)}/>
         <button type="button" disabled={exporting || !rows.length} onClick={() => void exportXlsx()} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">{exporting ? "Đang xuất…" : "Xuất kết quả (.xlsx)"}</button>
       </div>
     </div>
@@ -550,27 +580,27 @@ export function PpaHeatRateDashboard() {
       {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="w-full overflow-hidden">
         <table className="w-full table-fixed border-collapse text-[10px] [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-slate-200 xl:text-[11px]">
           <colgroup>
-            <col style={{ width: "7%" }}/>
-            {Array.from({ length: 15 }, (_, index) => <col key={index} style={{ width: [4.2, 4, 4.8, 3.8, 3.2][index % 5] + "%" }}/>) }
-            <col style={{ width: "16.5%" }}/>
-            <col style={{ width: "16.5%" }}/>
+            <col style={{ width: "5%" }}/>
+            {Array.from({ length: 17 }, (_, index) => <col key={index} style={{ width: "3.94%" }}/>) }
+            <col style={{ width: "14%" }}/>
+            <col style={{ width: "14%" }}/>
           </colgroup>
           <thead>
             <tr className="bg-[#dcebf5] text-[#173b64]">
               <th rowSpan={2} className="px-1 py-2 text-center align-bottom">Ngày</th>
               <th colSpan={5} className="border-l border-white/60 p-2 text-center text-purple-900">Chung 2 tổ</th>
-              <th colSpan={5} className="border-l border-white/60 p-2 text-center text-blue-900">Tổ máy S1</th>
-              <th colSpan={5} className="border-l border-white/60 p-2 text-center text-amber-900">Tổ máy S2</th>
+              <th colSpan={6} className="border-l border-white/60 p-2 text-center text-blue-900">Tổ máy S1</th>
+              <th colSpan={6} className="border-l border-white/60 p-2 text-center text-amber-900">Tổ máy S2</th>
               <th rowSpan={2} className="border-l border-white/60 bg-blue-100 px-1 py-2 text-left align-bottom text-blue-950">Nhận xét S1</th>
               <th rowSpan={2} className="border-l border-white/60 bg-amber-100 px-1 py-2 text-left align-bottom text-amber-950">Nhận xét S2</th>
             </tr>
             <tr className="bg-[#eaf3fa] text-[#173b64]">
-              {["Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT"].map((label, index) => <th key={index} className="border-l border-white/60 px-0.5 py-1.5 text-center font-semibold leading-tight">{label}</th>)}
+              {["Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CS khả dụng", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CS khả dụng", "CL kJ/kWh", "CL %", "TT"].map((label, index) => <th key={index} className="border-l border-white/60 px-0.5 py-1.5 text-center font-semibold leading-tight">{label}</th>)}
             </tr>
           </thead>
           <tbody>
             {rowsByMonth.map(([period, monthRows]) => <Fragment key={period}>
-              <tr className="bg-slate-100"><td colSpan={18} className="px-2 py-1.5 text-left text-[11px] font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
+              <tr className="bg-slate-100"><td colSpan={20} className="px-2 py-1.5 text-left text-[11px] font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
               {monthRows.map(row => {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
                 const statusBadge = (status: string) => <span className={`rounded-full px-1 py-0.5 text-[9px] font-extrabold ${status === "Đạt" ? "bg-emerald-100 text-emerald-800" : status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-500"}`}>{status === "Chưa đủ dữ liệu" ? "—" : status === "Vượt PPA" ? "Vượt" : "Đạt"}</span>;
@@ -594,8 +624,8 @@ export function PpaHeatRateDashboard() {
                     )}
                   </td>
                   <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualPlant)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaPlant)}</td><td className="px-0.5 py-1 text-center text-black">{format(plant.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(plant.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(plant.status)}</td>
-                  <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualS1)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaS1)}</td><td className="px-0.5 py-1 text-center text-black">{format(s1.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(s1.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(s1.status)}</td>
-                  <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualS2)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaS2)}</td><td className="px-0.5 py-1 text-center text-black">{format(s2.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(s2.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(s2.status)}</td>
+                  <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualS1)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaS1)}</td><td className="bg-blue-50/50 px-0.5 py-1 text-center font-semibold text-blue-900">{format(row.availableCapacityS1Mw)}</td><td className="px-0.5 py-1 text-center text-black">{format(s1.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(s1.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(s1.status)}</td>
+                  <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualS2)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaS2)}</td><td className="bg-amber-50/50 px-0.5 py-1 text-center font-semibold text-amber-900">{format(row.availableCapacityS2Mw)}</td><td className="px-0.5 py-1 text-center text-black">{format(s2.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(s2.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(s2.status)}</td>
                   <td className="border-l bg-blue-50/40 p-1 align-middle text-slate-700">
                     <div className="flex items-center justify-between gap-1">
                       <div className="min-w-0 flex-1">
@@ -670,10 +700,10 @@ export function PpaHeatRateDashboard() {
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
               <h3 className="text-base font-extrabold text-[#20345f]">
-                Nhận xét tổ máy ngày {fullDate(editModal.date)}
+                Thông số bổ sung ngày {fullDate(editModal.date)}
               </h3>
               <p className="mt-0.5 text-xs text-slate-500">
-                Ghi nhận tình trạng vận hành và nguyên nhân chênh lệch PPA
+                Nhập công suất khả dụng và nguyên nhân chênh lệch PPA
               </p>
             </div>
             <button
@@ -693,6 +723,28 @@ export function PpaHeatRateDashboard() {
           )}
 
           <div className="mt-4 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-xs font-bold text-blue-900">
+                Công suất khả dụng S1 (MW)
+                <input
+                  value={editModal.availableCapacityS1Mw}
+                  onChange={e => setEditModal(prev => ({ ...prev, availableCapacityS1Mw: e.target.value }))}
+                  inputMode="decimal"
+                  className="rounded-xl border border-blue-200 bg-blue-50/50 px-3 py-2.5 text-sm font-semibold text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"
+                  placeholder="Ví dụ: 622,5"
+                />
+              </label>
+              <label className="grid gap-1.5 text-xs font-bold text-amber-900">
+                Công suất khả dụng S2 (MW)
+                <input
+                  value={editModal.availableCapacityS2Mw}
+                  onChange={e => setEditModal(prev => ({ ...prev, availableCapacityS2Mw: e.target.value }))}
+                  inputMode="decimal"
+                  className="rounded-xl border border-amber-200 bg-amber-50/50 px-3 py-2.5 text-sm font-semibold text-black outline-none focus:border-[#4c78a8] focus:ring-2 focus:ring-[#4c78a8]/20"
+                  placeholder="Ví dụ: 622,5"
+                />
+              </label>
+            </div>
             <label className="grid gap-1.5 text-xs font-bold text-slate-700">
               <div className="flex items-center justify-between">
                 <span className="text-blue-900">Nhận xét / Nguyên nhân chênh lệch Tổ máy S1</span>
@@ -737,7 +789,7 @@ export function PpaHeatRateDashboard() {
               onClick={handleSaveNote}
               className="rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 py-2 text-xs font-bold text-white shadow-md hover:opacity-95 disabled:opacity-50"
             >
-              {editModal.saving ? "Đang lưu…" : "Lưu nhận xét"}
+              {editModal.saving ? "Đang lưu…" : "Lưu thông tin"}
             </button>
           </div>
         </div>

@@ -35,6 +35,16 @@ export type GoogleSheetAssessmentEntry = {
   noteS2: string;
 };
 
+export const PPA_AVAILABLE_CAPACITY_S1_CODE = "PPA_CSKD_S1";
+export const PPA_AVAILABLE_CAPACITY_S2_CODE = "PPA_CSKD_S2";
+
+export function parseAvailableCapacity(value: unknown, label: string) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const parsed = Number(String(value).trim().replace(",", "."));
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1000) throw new Error(`${label} phải là số từ 0 đến 1.000 MW.`);
+  return parsed;
+}
+
 const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function numeric(value: unknown) {
@@ -85,6 +95,8 @@ export function buildGoogleSheetDayPayload(
   const grossS1 = read("B", "Đầu cực S1"), netS1 = read("C", "Điểm bán S1"), hoursS1 = read("F", "Giờ phát S1");
   const grossS2 = read("H", "Đầu cực S2"), netS2 = read("I", "Điểm bán S2"), hoursS2 = read("L", "Giờ phát S2");
   const coalS1 = read("AE", "Than tiêu thụ S1"), coalS2 = read("AF", "Than tiêu thụ S2"), heatingValue = read("AJ", "Nhiệt trị");
+  const availableCapacityS1 = required(parseAvailableCapacity(values.get(PPA_AVAILABLE_CAPACITY_S1_CODE), "Công suất khả dụng S1"), "Công suất khả dụng S1");
+  const availableCapacityS2 = required(parseAvailableCapacity(values.get(PPA_AVAILABLE_CAPACITY_S2_CODE), "Công suất khả dụng S2"), "Công suất khả dụng S2");
   const ppaS1 = required(numeric(ppa.ppaS1), "SHN PPA S1"), ppaS2 = required(numeric(ppa.ppaS2), "SHN PPA S2"), ppaPlant = required(numeric(ppa.ppaPlant), "SHN PPA NMNĐ");
 
   const actualS1 = divide(coalS1 * heatingValue, netS1, 1 / 1000);
@@ -100,9 +112,10 @@ export function buildGoogleSheetDayPayload(
     actual: number | null,
     ppaValue: number,
     note?: string | null,
+    availableCapacity?: number | null,
   ): GoogleSheetUnitPayload => ({
     sanLuong,
-    csKhaDung: null,
+    csKhaDung: availableCapacity ?? null,
     csBinhQuan,
     suatHaoThan,
     nhietTri: heatingValue,
@@ -116,8 +129,8 @@ export function buildGoogleSheetDayPayload(
   return {
     date: `${Number(month)}/${Number(day)}/${year}`,
     row: null,
-    S1: unit(grossS1, divide(grossS1, hoursS1, 1000), divide(coalS1, netS1), actualS1, ppaS1, ppa.noteS1),
-    S2: unit(grossS2, divide(grossS2, hoursS2, 1000), divide(coalS2, netS2), actualS2, ppaS2, ppa.noteS2),
+    S1: unit(grossS1, divide(grossS1, hoursS1, 1000), divide(coalS1, netS1), actualS1, ppaS1, ppa.noteS1, availableCapacityS1),
+    S2: unit(grossS2, divide(grossS2, hoursS2, 1000), divide(coalS2, netS2), actualS2, ppaS2, ppa.noteS2, availableCapacityS2),
     NMND: unit(grossPlantMwh, divide(grossPlantMwh, hoursS1 + hoursS2), divide(coalS1 + coalS2, netPlant), actualPlant, ppaPlant),
   };
 }
