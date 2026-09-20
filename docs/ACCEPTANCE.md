@@ -817,6 +817,7 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Dòng `Utc 220 kV` của Chỉ tiêu KTKT (`M20:R20`) luôn lấy sáu mốc cột E của BCSX S1; bỏ qua hoàn toàn giá trị S2 và không lấy S2 thay thế khi S1 thiếu.
 - Khi xuất BCSX A0, các cột P/Q/P điểm bán vẫn cộng S1 + S2; riêng cột E (Utc 220 kV) sao chép nguyên giá trị S1. Mục 2 và nhật ký sự kiện A0 không thay đổi.
 - Đã cập nhật dữ liệu mẫu về đúng nguồn S1. Kiểm tra: 91/91 test đạt; TypeScript, ESLint các file thay đổi và build production đều đạt.
-- Còn cần sau triển khai: nhấn `Ctrl+F5`, mở lại Chỉ tiêu KTKT để kiểm tra `Utc 220 kV`, sau đó xuất một file A0 và đối chiếu cột E với file S1 cùng ngày.
+- Commit chức năng `29d7b69` đã được push lên `github/main`; Vercel báo `success` và `/bcsx-report` phản hồi chuyển hướng đăng nhập HTTP 307 đúng cơ chế bảo vệ.
+- Còn cần nghiệm thu: nhấn `Ctrl+F5`, mở lại Chỉ tiêu KTKT để kiểm tra `Utc 220 kV`, sau đó xuất một file A0 và đối chiếu cột E với file S1 cùng ngày.
 
 ---

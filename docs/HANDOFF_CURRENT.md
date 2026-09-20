@@ -290,4 +290,5 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Đã đổi liên kết Chỉ tiêu KTKT `M20:R20`: chỉ đọc metric E của S1, bỏ qua S2 và không còn cảnh báo chênh điện áp S1/S2.
 - Đã đổi phép tạo dữ liệu BCSX A0: P/Q/P điểm bán tiếp tục cộng S1 + S2; riêng Utc 220 kV sao chép S1. Các quy tắc tổng ngày, than tồn kho và thứ tự sự kiện giữ nguyên.
 - Dữ liệu mẫu và test đã cập nhật theo nguồn S1. Kết quả: 91/91 test đạt; TypeScript, ESLint phạm vi sửa và build production đều đạt.
-- Còn cần: sau deploy, người dùng `Ctrl+F5`, kiểm tra sáu ô Utc 220 kV trên Chỉ tiêu KTKT và xuất A0 để đối chiếu cột E với S1.
+- Commit chức năng `29d7b69` đã được push lên `github/main`; Vercel báo `success` và `/bcsx-report` phản hồi chuyển hướng đăng nhập HTTP 307 đúng cơ chế bảo vệ.
+- Còn cần: người dùng `Ctrl+F5`, kiểm tra sáu ô Utc 220 kV trên Chỉ tiêu KTKT và xuất A0 để đối chiếu cột E với S1.
