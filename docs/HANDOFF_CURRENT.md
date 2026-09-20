@@ -308,3 +308,4 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Hai trường `COAL_ADJ_NOTE_S1/S2` lưu theo ngày trong `daily_inputs`, là văn bản tối đa 500 ký tự và không làm thay đổi công thức than.
 - Phân quyền theo đúng nhóm Máy nghiền S1/S2. File Excel xuất ra gắn nội dung thành comment tại W/Y/AA28 hoặc AG/AI/AK28 để truy vết ngay tại các ô hiệu chỉnh.
 - Kiểm tra: 98/98 test đạt; TypeScript đạt; lint phạm vi API/thư viện/test sạch; build production đạt. Còn cần nghiệm thu lưu/nạp lại một ghi chú thật và kiểm tra comment trong Excel.
+- Commit chức năng `d97e77e` đã push lên `github/main`; Vercel báo `success`, trang production phản hồi đúng cơ chế đăng nhập.

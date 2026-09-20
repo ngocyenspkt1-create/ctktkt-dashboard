@@ -838,5 +838,6 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Khi xuất Chỉ tiêu KTKT, lý do được gắn thành ghi chú Excel trên cả ba ô hiệu chỉnh của tổ máy tương ứng: `W/Y/AA28` cho S1 và `AG/AI/AK28` cho S2.
 - Kiểm tra: 98/98 test đạt; TypeScript đạt; ESLint các file API/thư viện/test sạch, component không có lỗi mới (còn 13 cảnh báo unused cũ); build production đạt với chế độ bộ nhớ thấp sau khi dừng tiến trình Vinext cũ.
 - Còn cần nghiệm thu: nhập một lý do thật, lưu, đổi ngày rồi quay lại kiểm tra dữ liệu; xuất Excel và rê chuột vào ô hiệu chỉnh để xem ghi chú.
+- Đã push commit `d97e77e` lên `github/main`; Vercel báo `success` và `/ctktkt-report` production phản hồi HTTP 307 về đăng nhập đúng cơ chế bảo vệ.
 
 ---
