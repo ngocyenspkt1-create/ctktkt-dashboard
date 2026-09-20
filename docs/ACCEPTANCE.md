@@ -708,4 +708,13 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Bổ sung log máy chủ đã loại bỏ token và dữ liệu chi tiết, chỉ ghi thao tác, ngày và thông báo lỗi để chẩn đoán an toàn ở lần thử tiếp theo.
 - Chưa xác định nội dung lỗi Apps Script của hai lần trước vì phiên bản lúc đó chưa ghi thông báo lỗi vào runtime log.
 
+## Cập nhật 20/09/2026 — Nhập liệu kiểu Excel và Google Sheet một nút
+
+- Đã sửa dán nhiều ô trên `/ctktkt-report`: hỗ trợ ma trận tab/xuống dòng, số định dạng Việt Nam, cột nhãn và các bảng có xen ô khóa/tự tính.
+- Đã sửa điều hướng giữa ô nhập bằng `← → ↑ ↓`, Tab và Enter; chỉ đi qua ô người dùng có quyền sửa.
+- Đã rút thao tác gửi Google Sheet còn một lần bấm và bỏ hộp xác nhận lần hai.
+- Đã kiểm tra phản hồi Apps Script phải xác nhận `status: ok` đúng số hàng của ngày cần ghi mới hiển thị thành công.
+- Kiểm tra kỹ thuật: 83/83 test đạt, TypeScript đạt, build đạt. Lint toàn dự án còn lỗi cũ ngoài phạm vi sửa.
+- Còn dở: chưa ghi thử Google Sheet thật và chưa kiểm thử UI bằng trình duyệt trong phiên này; bước tiếp theo là nghiệm thu có kiểm soát trên một ngày đã lưu đủ PPA và đối chiếu trực tiếp hàng `DH1`.
+
 ---

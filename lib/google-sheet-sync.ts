@@ -145,6 +145,15 @@ export function resolveGoogleSheetRow(operatingDate: string, rows: unknown) {
   return Number.isInteger(rowNumber) && rowNumber > 0 ? rowNumber : null;
 }
 
+export function confirmsGoogleSheetWrite(results: unknown, expectedRow: number) {
+  if (!Array.isArray(results) || !Number.isInteger(expectedRow) || expectedRow < 1) return false;
+  return results.some(item => {
+    if (!item || typeof item !== "object") return false;
+    const result = item as Record<string, unknown>;
+    return result.status === "ok" && Number(result.row) === expectedRow;
+  });
+}
+
 export function parseGoogleSheetAssessmentRows(rows: unknown): GoogleSheetAssessmentEntry[] {
   if (!Array.isArray(rows) || rows.length > 500) throw new Error("Danh sách đánh giá Google Sheet không hợp lệ.");
   const seen = new Set<string>();

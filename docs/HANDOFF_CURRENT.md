@@ -233,3 +233,27 @@ Chi tiết bàn giao xem tại `docs/HANDOFF_CODEX_2026_09_19.md`. Các điểm 
 - `npm.cmd run lint`: đạt.
 - `git diff --check` trên các file thuộc phạm vi sửa: đạt. Working tree vẫn có một dòng trống cuối file trong `docs/HANDOFF_CODEX_2026_09_19.md` từ trước lượt làm việc này nên không đưa file đó vào commit.
 - Cần nghiệm thu thêm trên trình duyệt bằng một ngày vận hành thật khác 17/09, đặc biệt khi có than Sub-bitum và các ô hiệu chỉnh cân than, trước khi coi kết quả là báo cáo chính thức.
+
+## 14. Cập nhật ngày 20/09/2026 — Nhập liệu như Excel và đẩy Google Sheet một nút
+
+### Đã làm
+
+1. Trang `/ctktkt-report` cho phép dán một vùng nhiều hàng/nhiều cột từ Excel hoặc Google Sheets vào ô đang chọn. Dữ liệu được điền theo ma trận, tự bỏ cột tên chỉ tiêu nếu người dùng copy kèm nhãn, và hiểu cả số Việt Nam như `1.617.408,5` lẫn số kiểu `1,617,408.5`.
+2. Khi bảng có xen cột tự tính hoặc ô khóa, luồng dán phân biệt hai trường hợp: vùng chỉ chứa các ô nhập tay sẽ đi qua các ô nhập được; vùng copy đủ cột hiển thị sẽ giữ đúng vị trí cột và bỏ qua ô khóa mà không làm lệch dữ liệu.
+3. Các phím `←`, `→`, `↑`, `↓`, `Tab`, `Shift+Tab`, `Enter`, `Shift+Enter` chuyển giữa các ô được phép nhập; ô đích được chọn toàn bộ để có thể gõ đè ngay.
+4. Nút `Đẩy Google Sheet · dd/mm/yyyy` thực hiện toàn bộ quá trình bằng một lần nhấn. Hộp xem trước và nút xác nhận lần hai đã được bỏ. Nếu máy chủ chưa có cấu hình, lần đầu người dùng nhập URL Apps Script và mã kết nối rồi bấm `Lưu và đẩy`; các lần sau chỉ cần một nút.
+5. Cả API máy chủ và luồng dự phòng trên trình duyệt chỉ báo thành công khi Apps Script trả `status: ok` đúng chính số hàng đã xác định cho ngày vận hành; phản hồi `ok` của hàng khác không còn được chấp nhận.
+
+### Kiểm tra
+
+- `node --test tests/*.test.mjs`: **83/83 đạt**.
+- `npx.cmd tsc --noEmit`: đạt.
+- `npm.cmd run build`: đạt.
+- `git diff --check`: các file thuộc phạm vi sửa đạt; file `docs/HANDOFF_CODEX_2026_09_19.md` vẫn có một dòng trống cuối file từ trước và không thuộc commit này.
+- `npm.cmd run lint`: chưa đạt do 18 lỗi tồn tại sẵn ở các màn hình khác (`admin-users-panel`, `daily-production-table`, `water-report-client`, ...); các file sửa trong lượt này không phát sinh lỗi lint mới.
+- Localhost `/login` trả HTTP 200. Công cụ kiểm thử UI không có trình duyệt khả dụng trong phiên này nên chưa tái hiện thao tác paste/arrow bằng chuột và bàn phím thật.
+
+### Còn cần nghiệm thu có kiểm soát
+
+1. Đăng nhập bằng tài khoản có quyền nhập CTKTKT, copy một vùng Excel mẫu rồi dán vào nhóm tương ứng; kiểm tra ô tự tính/ô khóa không bị thay đổi và lưu lại đúng ngày.
+2. Tại `So sánh trực quan SHN Thực tế và PPA`, chọn một ngày đã lưu đủ dữ liệu rồi bấm `Đẩy Google Sheet` đúng một lần; đối chiếu đúng hàng/trang `DH1`. Đây là thao tác ghi báo cáo thật nên chưa tự động thực hiện trong lượt phát triển này.

@@ -1,6 +1,7 @@
 import { getRawDb } from "@/db";
 import {
   buildGoogleSheetDayPayload,
+  confirmsGoogleSheetWrite,
   resolveGoogleSheetRow,
   type DailyInputEntry,
   type StoredPpaEntry,
@@ -61,7 +62,6 @@ export async function POST(request: Request) {
     );
     const config = getServerConfig();
     if (!config) {
-      if (action === "sync") throw new Error("Máy chủ chưa được cấu hình Google Sheet. Hãy thiết lập GOOGLE_SHEET_APPS_SCRIPT_URL và GOOGLE_SHEET_SYNC_TOKEN.");
       return Response.json({ configured: false, preview }, { headers: { "Cache-Control": "no-store" } });
     }
 
@@ -77,8 +77,8 @@ export async function POST(request: Request) {
       body: JSON.stringify({ token: config.token, days: [payload] }),
     });
     const results = Array.isArray(writeBody.results) ? writeBody.results : [];
-    if (!results.some(item => item && typeof item === "object" && (item as Record<string, unknown>).status === "ok")) {
-      throw new Error("Google Apps Script chưa xác nhận ghi dữ liệu thành công.");
+    if (!confirmsGoogleSheetWrite(results, row)) {
+      throw new Error(`Google Apps Script chưa xác nhận đã ghi đúng hàng ${row}.`);
     }
     return Response.json({ configured: true, preview: payload, results }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

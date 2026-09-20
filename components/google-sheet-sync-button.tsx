@@ -2,16 +2,13 @@
 
 import { useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { parseGoogleSheetAssessmentRows, resolveGoogleSheetRow, validateGoogleAppsScriptUrl, type GoogleSheetAssessmentEntry, type GoogleSheetDayPayload } from "@/lib/google-sheet-sync";
+import { confirmsGoogleSheetWrite, parseGoogleSheetAssessmentRows, resolveGoogleSheetRow, validateGoogleAppsScriptUrl, type GoogleSheetAssessmentEntry, type GoogleSheetDayPayload } from "@/lib/google-sheet-sync";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 
 const URL_KEY = "ctktkt-google-script-url";
 const TOKEN_KEY = "ctktkt-google-script-token";
-const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const format = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? "—" : numberFormat.format(value);
-
-type PreviewResponse = { configured?: boolean; preview?: GoogleSheetDayPayload; error?: string; results?: Array<{ status?: string }> };
+type PreviewResponse = { configured?: boolean; preview?: GoogleSheetDayPayload; error?: string; results?: unknown };
 
 export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = false, disabledReason: disabledReasonProp = "", onImported }: { operatingDate: string; disabled?: boolean; disabledReason?: string; onImported?: () => void | Promise<void> }) {
   const user = useSessionUser();
@@ -26,19 +23,8 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
   const [loading, setLoading] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const [serverConfigured, setServerConfigured] = useState(false);
 
-  async function requestPreview() {
-    const response = await fetch("/api/google-sheet-sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operatingDate, action: "preview" }),
-    });
-    const body = await response.json() as PreviewResponse;
-    if (!response.ok) throw new Error(body.error || "Không đồng bộ được Google Sheet.");
-    return body;
-  }
-
-  async function readSheetRow() {
-    const datesUrl = new URL(validateGoogleAppsScriptUrl(scriptUrl.trim()));
+  async function readSheetRow(url = scriptUrl) {
+    const datesUrl = new URL(validateGoogleAppsScriptUrl(url.trim()));
     datesUrl.searchParams.set("action", "dates");
     const response = await fetch(datesUrl.toString(), { method: "GET", cache: "no-store" });
     const body = await response.json() as { ok?: boolean; error?: string; rows?: unknown };
@@ -48,34 +34,13 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
     return row;
   }
 
-  async function loadPreview() {
+  async function loadHistoricalAssessments(credentials = { url: scriptUrl, token }) {
     setLoading(true); setError(""); setMessage("");
     try {
-      const body = await requestPreview();
-      if (!body.preview) throw new Error("Web chưa tạo được dữ liệu xem trước.");
-      setServerConfigured(Boolean(body.configured));
-      if (body.configured) { setPreview(body.preview); return; }
-      if (!scriptUrl.trim() || !token) { setSettingsOpen(true); return; }
-      validateGoogleAppsScriptUrl(scriptUrl.trim());
-      const row = await readSheetRow();
-      setPreview({ ...body.preview, row });
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Không kiểm tra được Google Sheet."); }
-    finally { setLoading(false); }
-  }
-
-  function start() {
-    setError(""); setMessage("");
-    setPendingAction("push");
-    void loadPreview();
-  }
-
-  async function loadHistoricalAssessments() {
-    setLoading(true); setError(""); setMessage("");
-    try {
-      const response = await fetch(validateGoogleAppsScriptUrl(scriptUrl.trim()), {
+      const response = await fetch(validateGoogleAppsScriptUrl(credentials.url.trim()), {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ token, action: "readAssessments" }),
+        body: JSON.stringify({ token: credentials.token, action: "readAssessments" }),
       });
       const body = await response.json() as { ok?: boolean; error?: string; rows?: unknown };
       if (!response.ok || body.ok === false) throw new Error(body.error || "Apps Script chưa đọc được cột Đánh giá.");
@@ -105,8 +70,8 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
     window.localStorage.setItem(TOKEN_KEY, token);
     setScriptUrl(validatedUrl);
     setSettingsOpen(false);
-    if (pendingAction === "import") void loadHistoricalAssessments();
-    else void loadPreview();
+    if (pendingAction === "import") void loadHistoricalAssessments({ url: validatedUrl, token });
+    else void pushGoogleSheet(preview, { url: validatedUrl, token });
   }
 
   async function importHistoricalAssessments() {
@@ -127,44 +92,65 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
     finally { setLoading(false); }
   }
 
-  async function sync() {
+  async function writeDirect(payload: GoogleSheetDayPayload, credentials = { url: scriptUrl, token }) {
+    const row = await readSheetRow(credentials.url);
+    const day = { ...payload, row };
+    const response = await fetch(validateGoogleAppsScriptUrl(credentials.url.trim()), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: credentials.token, days: [day] }),
+    });
+    const body = await response.json() as { ok?: boolean; error?: string; results?: unknown };
+    if (!response.ok || body.ok === false) throw new Error(body.error || "Google Apps Script không ghi được dữ liệu.");
+    if (!confirmsGoogleSheetWrite(body.results, row)) throw new Error(`Google Apps Script chưa xác nhận đã ghi đúng hàng ${row}.`);
+    return row;
+  }
+
+  async function pushGoogleSheet(
+    fallbackPreview?: GoogleSheetDayPayload | null,
+    credentials = { url: scriptUrl, token },
+  ) {
     setLoading(true); setError(""); setMessage("");
     try {
-      if (!preview) throw new Error("Chưa có dữ liệu xem trước để gửi.");
-      if (serverConfigured) {
+      let payload = fallbackPreview || null;
+      if (!payload) {
         const response = await fetch("/api/google-sheet-sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ operatingDate, action: "sync" }),
         });
         const body = await response.json() as PreviewResponse;
-        if (!response.ok || body.error || !body.results?.some(item => item.status === "ok")) throw new Error(body.error || "Google Apps Script chưa xác nhận ghi dữ liệu thành công.");
-        setPreview(null);
-        setMessage(`Đã ghi ngày ${operatingDate.split("-").reverse().join("/")} vào hàng ${preview.row} của trang DH1.`);
+        if (!response.ok || body.error) throw new Error(body.error || "Không đồng bộ được Google Sheet.");
+        setServerConfigured(Boolean(body.configured));
+        if (body.configured) {
+          const row = body.preview?.row;
+          if (!row || !confirmsGoogleSheetWrite(body.results, row)) throw new Error("Google Apps Script chưa xác nhận đã ghi đúng hàng cần đồng bộ.");
+          setPreview(null);
+          setMessage(`Đã đẩy ngày ${operatingDate.split("-").reverse().join("/")} lên hàng ${row} của trang DH1.`);
+          return;
+        }
+        payload = body.preview || null;
+      }
+      if (!payload) throw new Error("Web chưa tạo được dữ liệu để gửi.");
+      if (!credentials.url.trim() || !credentials.token) {
+        setPreview(payload);
+        setPendingAction("push");
+        setSettingsOpen(true);
         return;
       }
-      const response = await fetch(validateGoogleAppsScriptUrl(scriptUrl.trim()), {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ token, days: [preview] }),
-      });
-      const body = await response.json() as { ok?: boolean; error?: string; results?: Array<{ status?: string }> };
-      if (!response.ok || body.ok === false) throw new Error(body.error || "Google Apps Script không ghi được dữ liệu.");
-      if (!body.results?.some(item => item.status === "ok")) throw new Error("Google Apps Script chưa xác nhận ghi dữ liệu thành công.");
-      const row = preview.row;
+      const row = await writeDirect(payload, credentials);
       setPreview(null);
-      setMessage(`Đã ghi ngày ${operatingDate.split("-").reverse().join("/")} vào hàng ${row} của trang DH1.`);
+      setMessage(`Đã đẩy ngày ${operatingDate.split("-").reverse().join("/")} lên hàng ${row} của trang DH1.`);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Không ghi được Google Sheet."); }
     finally { setLoading(false); }
   }
 
-  const rows = preview ? [["S1", preview.S1], ["S2", preview.S2], ["NMNĐ", preview.NMND]] as const : [];
   const displayDate = operatingDate.split("-").reverse().join("/");
 
   return <>
     <div className="flex flex-col items-end gap-1">
       <div className="flex gap-1">
-        <button type="button" disabled={loading || disabled} onClick={start} title={disabled ? disabledReason : `Đẩy dữ liệu ngày ${displayDate} lên Google Sheet`} className="h-10 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80">{loading ? "Đang kiểm tra…" : `Đẩy Google Sheet · ${displayDate}`}</button>
+        <button type="button" disabled={loading || disabled} onClick={() => void pushGoogleSheet()} title={disabled ? disabledReason : `Đẩy ngay dữ liệu ngày ${displayDate} lên Google Sheet`} className="h-10 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80">{loading ? "Đang đẩy…" : `Đẩy Google Sheet · ${displayDate}`}</button>
         <button type="button" disabled={loading || disabled} onClick={startHistoricalImport} title={disabled ? disabledReason : "Nhập một lần các đánh giá S1/S2 cũ từ Google Sheet về web"} className="h-10 whitespace-nowrap rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-bold text-amber-800 shadow-sm disabled:opacity-60">Nhập đánh giá cũ</button>
         {!serverConfigured && <button type="button" onClick={() => { setError(""); setSettingsOpen(true); }} aria-label="Cài đặt đồng bộ Google Sheet" title="Cài đặt Google Sheet dự phòng" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">⚙</button>}
       </div>
@@ -190,7 +176,7 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
         </label>
         {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold leading-5 text-red-700">{error}</p>}
         <p className="text-xs leading-5 text-slate-500">Hai giá trị chỉ được lưu trong trình duyệt của máy này và không ghi vào GitHub.</p>
-        <div className="flex justify-end gap-2"><button type="button" onClick={() => setSettingsOpen(false)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" onClick={saveSettings} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white">Lưu và kiểm tra</button></div>
+        <div className="flex justify-end gap-2"><button type="button" onClick={() => setSettingsOpen(false)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" onClick={saveSettings} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white">Lưu và đẩy</button></div>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal></DialogPrimitive.Root>
 
@@ -203,14 +189,5 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal></DialogPrimitive.Root>
 
-    <DialogPrimitive.Root open={Boolean(preview)} onOpenChange={open => { if (!open && !loading) setPreview(null); }}><DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/>
-      <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid max-h-[88vh] w-[calc(100%-2rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none">
-        <div><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Kiểm tra dữ liệu gửi Google Sheet</DialogPrimitive.Title><DialogPrimitive.Description className="mt-1 text-sm text-slate-600">Ngày {operatingDate.split("-").reverse().join("/")} · trang DH1 · hàng {preview?.row}. Chưa ghi dữ liệu cho đến khi bạn xác nhận.</DialogPrimitive.Description></div>
-        <div className="overflow-auto rounded-xl border border-slate-200"><table className="min-w-[1050px] w-full text-xs"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="p-2 text-left">Phạm vi</th><th className="p-2">Sản lượng</th><th className="p-2">CS bình quân</th><th className="p-2">Suất hao than</th><th className="p-2">Nhiệt trị</th><th className="p-2">SHN thực tế</th><th className="p-2">SHN PPA</th><th className="p-2">Chênh lệch</th><th className="p-2 text-left">Đánh giá</th></tr></thead><tbody>{rows.map(([label, row]) => <tr key={label} className="border-t text-black"><td className="p-2 font-bold">{label}</td><td className="p-2 text-center">{format(row.sanLuong)}</td><td className="p-2 text-center">{format(row.csBinhQuan)}</td><td className="p-2 text-center">{format(row.suatHaoThan)}</td><td className="p-2 text-center">{format(row.nhietTri)}</td><td className="p-2 text-center">{format(row.shnThucTe)}</td><td className="p-2 text-center">{format(row.shnPPA)}</td><td className="p-2 text-center">{row.chenhLech || "—"}</td><td className="p-2">{row.danhGia || "—"}</td></tr>)}</tbody></table></div>
-        {error && <p role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold leading-6 text-red-800">Không ghi được Google Sheet: {error}</p>}
-        <div className="flex items-center justify-between gap-3"><p className="text-xs text-slate-500">Các cột tình hình vận hành và chỉ đạo không bị thay đổi. Cột công suất khả dụng được giữ nguyên vì web hiện chưa có nguồn tương ứng.</p><div className="flex shrink-0 gap-2"><button type="button" disabled={loading} onClick={() => setPreview(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" disabled={loading} onClick={() => void sync()} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{loading ? "Đang ghi…" : "Xác nhận đẩy lên Sheet"}</button></div></div>
-      </DialogPrimitive.Content>
-    </DialogPrimitive.Portal></DialogPrimitive.Root>
   </>;
 }

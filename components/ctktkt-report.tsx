@@ -54,6 +54,7 @@ import {
   CTKTKT_EXTRA_INPUT_FIELDS,
   CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS,
 } from "@/lib/ctktkt-extra-fields";
+import { parseSpreadsheetClipboard } from "@/lib/spreadsheet-grid";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
@@ -450,59 +451,43 @@ export function CtktktReport() {
     const currentRowIdx = inputRows.indexOf(currentTr);
     if (currentRowIdx === -1) return;
 
-    const currentInputsInRow = Array.from(
-      currentTr.querySelectorAll<HTMLInputElement>("input[data-cell]"),
+    const editableInputs = (row: HTMLTableRowElement) => Array.from(
+      row.querySelectorAll<HTMLInputElement>('input[data-cell][data-editable="true"]:not(:disabled)'),
     );
-    const currentColIdx = currentInputsInRow.indexOf(currentInput);
-    if (currentColIdx === -1) return;
+    const cellIndex = (input: HTMLInputElement) => input.closest<HTMLTableCellElement>("td,th")?.cellIndex ?? -1;
+    const currentInputsInRow = editableInputs(currentTr);
+    const currentInputIdx = currentInputsInRow.indexOf(currentInput);
+    const currentCellIndex = cellIndex(currentInput);
+    if (currentInputIdx === -1 || currentCellIndex === -1) return;
 
     let targetInput: HTMLInputElement | null = null;
 
     if (direction === "down") {
       for (let r = currentRowIdx + 1; r < inputRows.length; r++) {
-        const rowInputs = Array.from(
-          inputRows[r].querySelectorAll<HTMLInputElement>("input[data-cell]"),
-        );
-        const candidate = rowInputs[Math.min(currentColIdx, rowInputs.length - 1)];
-        if (candidate && !candidate.disabled) {
+        const rowInputs = editableInputs(inputRows[r]);
+        const candidate = rowInputs.find(input => cellIndex(input) === currentCellIndex)
+          || [...rowInputs].sort((a, b) => Math.abs(cellIndex(a) - currentCellIndex) - Math.abs(cellIndex(b) - currentCellIndex))[0];
+        if (candidate) {
           targetInput = candidate;
-          break;
-        }
-        const anyEditable = rowInputs.find(inp => !inp.disabled);
-        if (anyEditable) {
-          targetInput = anyEditable;
           break;
         }
       }
     } else if (direction === "up") {
       for (let r = currentRowIdx - 1; r >= 0; r--) {
-        const rowInputs = Array.from(
-          inputRows[r].querySelectorAll<HTMLInputElement>("input[data-cell]"),
-        );
-        const candidate = rowInputs[Math.min(currentColIdx, rowInputs.length - 1)];
-        if (candidate && !candidate.disabled) {
+        const rowInputs = editableInputs(inputRows[r]);
+        const candidate = rowInputs.find(input => cellIndex(input) === currentCellIndex)
+          || [...rowInputs].sort((a, b) => Math.abs(cellIndex(a) - currentCellIndex) - Math.abs(cellIndex(b) - currentCellIndex))[0];
+        if (candidate) {
           targetInput = candidate;
-          break;
-        }
-        const anyEditable = rowInputs.find(inp => !inp.disabled);
-        if (anyEditable) {
-          targetInput = anyEditable;
           break;
         }
       }
     } else if (direction === "right") {
-      for (let c = currentColIdx + 1; c < currentInputsInRow.length; c++) {
-        if (!currentInputsInRow[c].disabled) {
-          targetInput = currentInputsInRow[c];
-          break;
-        }
-      }
+      targetInput = currentInputsInRow[currentInputIdx + 1] || null;
       if (!targetInput) {
         for (let r = currentRowIdx + 1; r < inputRows.length; r++) {
-          const rowInputs = Array.from(
-            inputRows[r].querySelectorAll<HTMLInputElement>("input[data-cell]"),
-          );
-          const candidate = rowInputs.find(inp => !inp.disabled);
+          const rowInputs = editableInputs(inputRows[r]);
+          const candidate = rowInputs[0];
           if (candidate) {
             targetInput = candidate;
             break;
@@ -510,18 +495,10 @@ export function CtktktReport() {
         }
       }
     } else if (direction === "left") {
-      for (let c = currentColIdx - 1; c >= 0; c--) {
-        if (!currentInputsInRow[c].disabled) {
-          targetInput = currentInputsInRow[c];
-          break;
-        }
-      }
+      targetInput = currentInputsInRow[currentInputIdx - 1] || null;
       if (!targetInput) {
         for (let r = currentRowIdx - 1; r >= 0; r--) {
-          const rowInputs = Array.from(
-            inputRows[r].querySelectorAll<HTMLInputElement>("input[data-cell]"),
-          );
-          const candidates = rowInputs.filter(inp => !inp.disabled);
+          const candidates = editableInputs(inputRows[r]);
           if (candidates.length > 0) {
             targetInput = candidates[candidates.length - 1];
             break;
@@ -538,13 +515,6 @@ export function CtktktReport() {
 
   const handleCellKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
-    const isAllSelected =
-      input.selectionStart === 0 && input.selectionEnd === input.value.length;
-    const isCaretAtStart = input.selectionStart === 0 && input.selectionEnd === 0;
-    const isCaretAtEnd =
-      input.selectionStart === input.value.length &&
-      input.selectionEnd === input.value.length;
-    const isEmpty = input.value === "";
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -556,15 +526,11 @@ export function CtktktReport() {
       e.preventDefault();
       navigateCell(input, e.shiftKey ? "up" : "down");
     } else if (e.key === "ArrowRight") {
-      if (isAllSelected || isCaretAtEnd || isEmpty) {
-        e.preventDefault();
-        navigateCell(input, "right");
-      }
+      e.preventDefault();
+      navigateCell(input, "right");
     } else if (e.key === "ArrowLeft") {
-      if (isAllSelected || isCaretAtStart || isEmpty) {
-        e.preventDefault();
-        navigateCell(input, "left");
-      }
+      e.preventDefault();
+      navigateCell(input, "left");
     } else if (e.key === "Tab") {
       e.preventDefault();
       navigateCell(input, e.shiftKey ? "left" : "right");
@@ -586,36 +552,13 @@ export function CtktktReport() {
 
     e.preventDefault();
 
-    const rawRows = text
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n")
-      .split("\n")
-      .filter((line, idx, arr) => {
-        if (idx === arr.length - 1 && line.trim() === "") return false;
-        return true;
-      })
-      .map(line => line.split("\t"));
-
-    if (rawRows.length === 0) return;
-
-    // Tự động nhận diện nếu người dùng copy kèm cả cột tiêu đề chữ ở đầu:
-    // Ví dụ: ["P TD 911 (MW)", "30.5", "30.31", "30", ...]
-    // Nếu cột đầu là chữ và cột thứ 2 là số -> tự động bỏ cột tiêu đề để dán đúng các cột số liệu
-    let rows = rawRows;
-    const hasLeadingLabel = rows.every(row => {
-      if (row.length < 2) return false;
-      const first = row[0].trim().replace(",", ".");
-      const second = row[1].trim().replace(",", ".");
-      return isNaN(Number(first)) && first !== "" && !isNaN(Number(second)) && second !== "";
-    });
-    if (hasLeadingLabel) {
-      rows = rows.map(r => r.slice(1));
-    }
+    const rows = parseSpreadsheetClipboard(text);
+    if (rows.length === 0) return;
 
     const currentInput = e.currentTarget;
     const table = currentInput.closest("table");
     if (!table) {
-      const firstVal = rows[0]?.[0]?.trim().replace(",", ".");
+      const firstVal = rows[0]?.[0];
       if (firstVal !== undefined) update(startCell, firstVal);
       return;
     }
@@ -628,11 +571,14 @@ export function CtktktReport() {
     const startRowIdx = inputRows.indexOf(currentTr);
     if (startRowIdx === -1) return;
 
-    const currentInputsInRow = Array.from(
-      currentTr.querySelectorAll<HTMLInputElement>("input[data-cell]"),
-    );
-    const startColIdx = currentInputsInRow.indexOf(currentInput);
-    if (startColIdx === -1) return;
+    const currentInputsInRow = Array.from(currentTr.querySelectorAll<HTMLInputElement>("input[data-cell]"));
+    const currentEditableInputs = currentInputsInRow.filter(input => input.dataset.editable === "true" && !input.disabled);
+    const startEditableIdx = currentEditableInputs.indexOf(currentInput);
+    if (startEditableIdx === -1) return;
+    const startVisualCol = currentInput.closest<HTMLTableCellElement>("td,th")?.cellIndex ?? -1;
+    const widestClipboardRow = Math.max(...rows.map(row => row.length));
+    const compactCapacity = currentEditableInputs.length - startEditableIdx;
+    const useVisualColumns = startVisualCol >= 0 && widestClipboardRow > compactCapacity;
 
     const updates: Record<string, string> = {};
     let count = 0;
@@ -645,23 +591,19 @@ export function CtktktReport() {
       const targetInputs = Array.from(
         targetTr.querySelectorAll<HTMLInputElement>("input[data-cell]"),
       );
+      const targetEditableInputs = targetInputs.filter(input => input.dataset.editable === "true" && !input.disabled);
 
       const rowValues = rows[r];
       for (let c = 0; c < rowValues.length; c++) {
-        const targetColIdx = startColIdx + c;
-        if (targetColIdx >= targetInputs.length) break;
-
-        const targetInput = targetInputs[targetColIdx];
+        const targetInput = useVisualColumns
+          ? targetInputs.find(input => input.closest<HTMLTableCellElement>("td,th")?.cellIndex === startVisualCol + c)
+          : targetEditableInputs[startEditableIdx + c];
+        if (!targetInput) continue;
         const cellName = targetInput.getAttribute("data-cell");
         const isEditable = targetInput.getAttribute("data-editable") === "true";
 
         if (cellName && isEditable && !targetInput.disabled) {
-          let val = rowValues[c].trim();
-          // Chuyển dấu phẩy thập phân kiểu Việt Nam (30,5 -> 30.5)
-          if (/^-?\d+,\d+$/.test(val)) {
-            val = val.replace(",", ".");
-          }
-          updates[cellName] = val;
+          updates[cellName] = rowValues[c];
           count++;
         }
       }
