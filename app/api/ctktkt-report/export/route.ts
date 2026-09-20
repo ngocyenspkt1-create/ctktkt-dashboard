@@ -4,7 +4,7 @@ import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
-import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, getCtktktCoalAdjustmentNotes } from "@/lib/ctktkt-extra-fields";
+import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { seedCtktktSample2Days } from "../seed-sample/route";
@@ -32,6 +32,22 @@ function setNumber(sheet: ExcelJS.Worksheet, cell: string, value: number | null)
 
 function applyCoalAdjustmentNotes(sheet: ExcelJS.Worksheet, row: Record<string, string>) {
   for (const [cell, note] of Object.entries(getCtktktCoalAdjustmentNotes(row))) sheet.getCell(cell).note = note;
+}
+
+function applyWaterAdjustments(sheet: ExcelJS.Worksheet, row: Record<string, string>) {
+  const { adjS1, adjS2, noteS1, noteS2 } = getCtktktWaterAdjustments(row);
+  if (adjS1 !== 0) {
+    sheet.getCell("Y72").value = { formula: `X72-W72+(${adjS1})` };
+  }
+  if (noteS1) {
+    sheet.getCell("Y72").note = `Lý do hiệu chỉnh nước S1: ${noteS1}`;
+  }
+  if (adjS2 !== 0) {
+    sheet.getCell("Y73").value = { formula: `(X73-W73)+(${adjS2})` };
+  }
+  if (noteS2) {
+    sheet.getCell("Y73").note = `Lý do hiệu chỉnh nước S2: ${noteS2}`;
+  }
 }
 
 function fillDailyFallbacks(sheet: ExcelJS.Worksheet, row: Record<string, string>) {
@@ -158,6 +174,7 @@ export async function GET(request: Request) {
       }
       applyBcsxLinks(previousSheet, previous);
       applyWaterLinks(previousSheet, previous);
+      applyWaterAdjustments(previousSheet, previousRow || {});
       applyCoalAdjustmentNotes(previousSheet, previousRow || {});
       applyDateLabels(previousSheet, previous);
     }
@@ -176,6 +193,7 @@ export async function GET(request: Request) {
       }
       applyBcsxLinks(sheet, date);
       applyWaterLinks(sheet, date);
+      applyWaterAdjustments(sheet, row);
       applyCoalAdjustmentNotes(sheet, row);
       applyDateLabels(sheet, date);
     }

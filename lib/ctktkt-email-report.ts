@@ -90,11 +90,11 @@ export function extractCtktktEmailMetrics(
     numberOf(current, "Z60") ??
     (steamTonnesS1 != null && netMwhS1 ? (steamTonnesS1 * 1000) / netMwhS1 : null);
 
-  // Nước demin S1: Ô Y72 hoặc chênh lệch X72 - W72
+  // Nước demin S1: Ô Y72 hoặc chênh lệch (X72 - W72) + Hiệu chỉnh
   const deminWaterS1 =
     numberOf(current, "Y72") ??
     (numberOf(current, "X72") != null && numberOf(current, "W72") != null
-      ? numberOf(current, "X72")! - numberOf(current, "W72")!
+      ? numberOf(current, "X72")! - numberOf(current, "W72")! + (numberOf(current, "WATER_ADJ_S1") ?? 0)
       : null);
 
   // S2 metrics
@@ -121,11 +121,11 @@ export function extractCtktktEmailMetrics(
     numberOf(current, "AJ60") ??
     (steamTonnesS2 != null && netMwhS2 ? (steamTonnesS2 * 1000) / netMwhS2 : null);
 
-  // Nước demin S2: Ô Y73 hoặc chênh lệch X73 - W73
+  // Nước demin S2: Ô Y73 hoặc chênh lệch (X73 - W73) + Hiệu chỉnh
   const deminWaterS2 =
     numberOf(current, "Y73") ??
     (numberOf(current, "X73") != null && numberOf(current, "W73") != null
-      ? numberOf(current, "X73")! - numberOf(current, "W73")!
+      ? numberOf(current, "X73")! - numberOf(current, "W73")! + (numberOf(current, "WATER_ADJ_S2") ?? 0)
       : null);
 
   // Than nhập kho 24h

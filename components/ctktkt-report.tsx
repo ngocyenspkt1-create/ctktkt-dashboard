@@ -138,30 +138,46 @@ function parseDeminNum(val: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function formatDeminDiff(xVal: string | undefined, wVal: string | undefined): string {
+function formatDeminDiff(
+  xVal: string | undefined,
+  wVal: string | undefined,
+  adjVal?: string | undefined,
+): string {
   const x = parseDeminNum(xVal);
   const w = parseDeminNum(wVal);
+  const adj = parseDeminNum(adjVal) ?? 0;
   if (x === null || w === null) return "—";
-  return numberFormat.format(x - w);
+  return numberFormat.format(x - w + adj);
 }
 
 function formatDeminTotal(
   x1: string | undefined,
   w1: string | undefined,
+  adj1: string | undefined,
   x2: string | undefined,
   w2: string | undefined,
+  adj2: string | undefined,
 ): string {
   const nx1 = parseDeminNum(x1);
   const nw1 = parseDeminNum(w1);
+  const nadj1 = parseDeminNum(adj1) ?? 0;
   const nx2 = parseDeminNum(x2);
   const nw2 = parseDeminNum(w2);
+  const nadj2 = parseDeminNum(adj2) ?? 0;
 
-  const diff1 = nx1 !== null && nw1 !== null ? nx1 - nw1 : null;
-  const diff2 = nx2 !== null && nw2 !== null ? nx2 - nw2 : null;
+  const diff1 = nx1 !== null && nw1 !== null ? nx1 - nw1 + nadj1 : null;
+  const diff2 = nx2 !== null && nw2 !== null ? nx2 - nw2 + nadj2 : null;
 
   if (diff1 === null && diff2 === null) return "—";
   const total = (diff1 ?? 0) + (diff2 ?? 0);
   return numberFormat.format(total);
+}
+
+function formatAdjTotal(adj1: string | undefined, adj2: string | undefined): string {
+  const a1 = parseDeminNum(adj1);
+  const a2 = parseDeminNum(adj2);
+  if (a1 === null && a2 === null) return "0";
+  return numberFormat.format((a1 ?? 0) + (a2 ?? 0));
 }
 
 function formatResinTotal(z1: string | undefined, z2: string | undefined): string {
@@ -1661,7 +1677,7 @@ export function CtktktReport() {
                       Bảng công tơ nước demin tại DCS (Mốc 24h) — Hàng 72 đến 74
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Trưởng kíp điện nhập chỉ số công tơ 24h ngày D và lượng nước tái sinh hạt. Cột 24h ngày D-1 tự động kế thừa từ ngày trước (hoặc có thể chỉnh sửa). Lượng tiêu thụ ngày D tự động tính (X − W).
+                      Trưởng kíp điện nhập chỉ số công tơ 24h ngày D, lượng nước tái sinh hạt và số hiệu chỉnh (khi công tơ chạm dãy max 25.000 m³ reset về 0). Cột 24h ngày D-1 tự động kế thừa từ ngày trước. Lượng tiêu thụ ngày D tự động tính (X − W + Hiệu chỉnh).
                     </p>
                   </div>
                   <div className="flex items-center gap-2 text-xs">
@@ -1677,141 +1693,216 @@ export function CtktktReport() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border border-emerald-300 bg-white shadow-xs">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b bg-[#d1e7dd] text-[#0f5132]">
-                        <th className="p-2.5 text-left font-bold min-w-[260px]">Thông số công tơ nước</th>
-                        <th className="p-2.5 text-center font-bold w-36">
-                          24h ngày D-1
-                          <div className="text-[10px] font-normal text-emerald-700">(Cột W)</div>
-                        </th>
-                        <th className="p-2.5 text-center font-bold w-36">
-                          24h ngày D
-                          <div className="text-[10px] font-normal text-emerald-700">(Cột X)</div>
-                        </th>
-                        <th className="p-2.5 text-center font-bold w-40 bg-[#c3e6cb] text-[#0a3622]">
-                          Lượng nước SD ngày D (m³)
-                          <div className="text-[10px] font-normal text-emerald-800">(Cột Y = X − W)</div>
-                        </th>
-                        <th className="p-2.5 text-center font-bold w-36">
-                          Nước tái sinh hạt (m³)
-                          <div className="text-[10px] font-normal text-emerald-700">(Cột Z)</div>
-                        </th>
-                        <th className="p-2.5 text-center font-bold min-w-[160px]">Ghi chú</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-mono">
-                      {/* Hàng 72: Tổ máy 1 */}
-                      <tr className="hover:bg-emerald-50/30">
-                        <td className="p-2.5 font-semibold text-slate-800 font-sans">
-                          Công tơ nước demin tại DCS tổ máy 1
-                          <span className="ml-1 text-[10px] text-slate-400 font-mono">(Hàng 72)</span>
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("W72", {
-                            placeholder: previous?.["X72"] || "—",
-                            group: "tkd_trend",
-                            isNumber: true,
-                          })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("X72", {
-                            placeholder: "Nhập 24h",
-                            group: "tkd_trend",
-                            isNumber: true,
-                          })}
-                        </td>
-                        <td className="p-2 text-right font-black font-mono text-emerald-900 bg-emerald-50/60 tabular-nums">
-                          {formatDeminDiff(current["X72"], current["W72"] || previous?.["X72"])}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("Z72", {
-                            placeholder: linkedByDate[date]?.["Z72"] || "0",
-                            group: "tkd_trend",
-                            isNumber: true,
-                          })}
-                        </td>
-                        <td className="p-2 text-center text-[11px] text-slate-600 font-sans">
-                          {linkedByDate[date]?.["Z72"] !== undefined ? (
-                            <span className="inline-flex items-center gap-1 font-bold text-sky-700" title="Tự động liên kết từ Báo cáo Theo dõi lượng nước">
-                              <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-                              Link Lượng nước ({linkedByDate[date]["Z72"]} m³)
-                            </span>
-                          ) : (
-                            "TKD trend DCS nhập"
-                          )}
-                        </td>
-                      </tr>
+                {(() => {
+                  const numX72 = parseDeminNum(current["X72"]);
+                  const numW72 = parseDeminNum(current["W72"] || previous?.["X72"]);
+                  const isRolloverS1 = numX72 !== null && numW72 !== null && numX72 < numW72;
 
-                      {/* Hàng 73: Tổ máy 2 */}
-                      <tr className="hover:bg-emerald-50/30">
-                        <td className="p-2.5 font-semibold text-slate-800 font-sans">
-                          Công tơ nước demin tại DCS tổ máy 2
-                          <span className="ml-1 text-[10px] text-slate-400 font-mono">(Hàng 73)</span>
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("W73", {
-                            placeholder: previous?.["X73"] || "—",
-                            group: "tkd_trend",
-                            isNumber: true,
-                          })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("X73", {
-                            placeholder: "Nhập 24h",
-                            group: "tkd_trend",
-                            isNumber: true,
-                          })}
-                        </td>
-                        <td className="p-2 text-right font-black font-mono text-emerald-900 bg-emerald-50/60 tabular-nums">
-                          {formatDeminDiff(current["X73"], current["W73"] || previous?.["X73"])}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("Z73", {
-                            placeholder: linkedByDate[date]?.["Z73"] || "0",
-                            group: "tkd_trend",
-                            isNumber: true,
-                          })}
-                        </td>
-                        <td className="p-2 text-center text-[11px] text-slate-600 font-sans">
-                          {linkedByDate[date]?.["Z73"] !== undefined ? (
-                            <span className="inline-flex items-center gap-1 font-bold text-sky-700" title="Tự động liên kết từ Báo cáo Theo dõi lượng nước">
-                              <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-                              Link Lượng nước ({linkedByDate[date]["Z73"]} m³)
-                            </span>
-                          ) : (
-                            "TKD trend DCS nhập"
-                          )}
-                        </td>
-                      </tr>
+                  const numX73 = parseDeminNum(current["X73"]);
+                  const numW73 = parseDeminNum(current["W73"] || previous?.["X73"]);
+                  const isRolloverS2 = numX73 !== null && numW73 !== null && numX73 < numW73;
 
-                      {/* Hàng 74: Tổng cả ngày của 2 tổ máy */}
-                      <tr className="bg-[#e8f5e9] font-bold border-t-2 border-emerald-300">
-                        <td className="p-2.5 text-emerald-950 font-sans font-bold">
-                          Tổng lượng nước demin sử dụng của cả ngày D của 2 tổ máy
-                          <span className="ml-1 text-[10px] text-emerald-700 font-mono">(Hàng 74)</span>
-                        </td>
-                        <td className="p-2 text-center text-slate-400 font-sans">—</td>
-                        <td className="p-2 text-center text-slate-400 font-sans">—</td>
-                        <td className="p-2 text-right font-black font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-sm">
-                          {formatDeminTotal(
-                            current["X72"],
-                            current["W72"] || previous?.["X72"],
-                            current["X73"],
-                            current["W73"] || previous?.["X73"],
-                          )}
-                        </td>
-                        <td className="p-2 text-right font-black font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-sm">
-                          {formatResinTotal(current["Z72"], current["Z73"])}
-                        </td>
-                        <td className="p-2 text-center text-[11px] text-emerald-800 font-sans">
-                          Tự động (Y72+Y73, Z72+Z73)
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                  return (
+                    <div className="overflow-x-auto rounded-xl border border-emerald-300 bg-white shadow-xs">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-[#d1e7dd] text-[#0f5132]">
+                            <th className="p-2.5 text-left font-bold min-w-[240px]">Thông số công tơ nước</th>
+                            <th className="p-2.5 text-center font-bold w-32">
+                              24h ngày D-1
+                              <div className="text-[10px] font-normal text-emerald-700">(Cột W)</div>
+                            </th>
+                            <th className="p-2.5 text-center font-bold w-32">
+                              24h ngày D
+                              <div className="text-[10px] font-normal text-emerald-700">(Cột X)</div>
+                            </th>
+                            <th className="p-2.5 text-center font-bold w-36 bg-amber-100/70 text-amber-950">
+                              Hiệu chỉnh (m³)
+                              <div className="text-[10px] font-normal text-amber-800">(Mặc định 0 · Bù dãy 25.000)</div>
+                            </th>
+                            <th className="p-2.5 text-center font-bold w-36 bg-[#c3e6cb] text-[#0a3622]">
+                              Lượng nước SD ngày D (m³)
+                              <div className="text-[10px] font-normal text-emerald-800">(Cột Y = X − W + HC)</div>
+                            </th>
+                            <th className="p-2.5 text-center font-bold w-32">
+                              Nước tái sinh hạt (m³)
+                              <div className="text-[10px] font-normal text-emerald-700">(Cột Z)</div>
+                            </th>
+                            <th className="p-2.5 text-center font-bold min-w-[220px]">Lý do hiệu chỉnh / Ghi chú</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-mono">
+                          {/* Hàng 72: Tổ máy 1 */}
+                          <tr className="hover:bg-emerald-50/30">
+                            <td className="p-2.5 font-semibold text-slate-800 font-sans">
+                              Công tơ nước demin tại DCS tổ máy 1
+                              <span className="ml-1 text-[10px] text-slate-400 font-mono">(Hàng 72)</span>
+                            </td>
+                            <td className="p-1.5 text-center">
+                              {renderCellInput("W72", {
+                                placeholder: previous?.["X72"] || "—",
+                                group: "tkd_trend",
+                                isNumber: true,
+                              })}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              {renderCellInput("X72", {
+                                placeholder: "Nhập 24h",
+                                group: "tkd_trend",
+                                isNumber: true,
+                              })}
+                            </td>
+                            <td className="p-1.5 text-center bg-amber-50/30">
+                              {renderCellInput("WATER_ADJ_S1", {
+                                placeholder: "0",
+                                group: "tkd_trend",
+                                isNumber: true,
+                              })}
+                              {isRolloverS1 && (!current["WATER_ADJ_S1"] || current["WATER_ADJ_S1"] === "0") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    update("WATER_ADJ_S1", "25000");
+                                    if (!current["WATER_ADJ_NOTE_S1"]) update("WATER_ADJ_NOTE_S1", "Reset về 0 qua mốc 25.000");
+                                  }}
+                                  className="mt-1 inline-flex items-center gap-1 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 hover:bg-amber-300 border border-amber-400 shadow-2xs"
+                                  title="Phát hiện X < W: Nhấn để bù tự động +25.000 m³ do đảo công tơ"
+                                >
+                                  ⚡ +25.000 (Reset)
+                                </button>
+                              )}
+                            </td>
+                            <td className="p-2 text-right font-black font-mono text-emerald-900 bg-emerald-50/60 tabular-nums">
+                              {formatDeminDiff(current["X72"], current["W72"] || previous?.["X72"], current["WATER_ADJ_S1"])}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              {renderCellInput("Z72", {
+                                placeholder: linkedByDate[date]?.["Z72"] || "0",
+                                group: "tkd_trend",
+                                isNumber: true,
+                              })}
+                            </td>
+                            <td className="p-1.5">
+                              <div className="space-y-1">
+                                {renderCellInput("WATER_ADJ_NOTE_S1", {
+                                  placeholder: "Lý do hiệu chỉnh (nếu có)...",
+                                  group: "tkd_trend",
+                                  isNumber: false,
+                                  maxLength: 500,
+                                  className: "!text-left !font-sans !text-[11px]",
+                                })}
+                                {linkedByDate[date]?.["Z72"] !== undefined && (
+                                  <div className="text-[10px] text-sky-700 font-bold flex items-center gap-1 pl-1" title="Tự động liên kết từ Báo cáo Theo dõi lượng nước">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                                    Link Lượng nước ({linkedByDate[date]["Z72"]} m³)
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Hàng 73: Tổ máy 2 */}
+                          <tr className="hover:bg-emerald-50/30">
+                            <td className="p-2.5 font-semibold text-slate-800 font-sans">
+                              Công tơ nước demin tại DCS tổ máy 2
+                              <span className="ml-1 text-[10px] text-slate-400 font-mono">(Hàng 73)</span>
+                            </td>
+                            <td className="p-1.5 text-center">
+                              {renderCellInput("W73", {
+                                placeholder: previous?.["X73"] || "—",
+                                group: "tkd_trend",
+                                isNumber: true,
+                              })}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              {renderCellInput("X73", {
+                                placeholder: "Nhập 24h",
+                                group: "tkd_trend",
+                                isNumber: true,
+                              })}
+                            </td>
+                            <td className="p-1.5 text-center bg-amber-50/30">
+                              {renderCellInput("WATER_ADJ_S2", {
+                                placeholder: "0",
+                                group: "tkd_trend",
+                                isNumber: true,
+                              })}
+                              {isRolloverS2 && (!current["WATER_ADJ_S2"] || current["WATER_ADJ_S2"] === "0") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    update("WATER_ADJ_S2", "25000");
+                                    if (!current["WATER_ADJ_NOTE_S2"]) update("WATER_ADJ_NOTE_S2", "Reset về 0 qua mốc 25.000");
+                                  }}
+                                  className="mt-1 inline-flex items-center gap-1 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 hover:bg-amber-300 border border-amber-400 shadow-2xs"
+                                  title="Phát hiện X < W: Nhấn để bù tự động +25.000 m³ do đảo công tơ"
+                                >
+                                  ⚡ +25.000 (Reset)
+                                </button>
+                              )}
+                            </td>
+                            <td className="p-2 text-right font-black font-mono text-emerald-900 bg-emerald-50/60 tabular-nums">
+                              {formatDeminDiff(current["X73"], current["W73"] || previous?.["X73"], current["WATER_ADJ_S2"])}
+                            </td>
+                            <td className="p-1.5 text-center">
+                              {renderCellInput("Z73", {
+                                placeholder: linkedByDate[date]?.["Z73"] || "0",
+                                group: "tkd_trend",
+                                isNumber: true,
+                              })}
+                            </td>
+                            <td className="p-1.5">
+                              <div className="space-y-1">
+                                {renderCellInput("WATER_ADJ_NOTE_S2", {
+                                  placeholder: "Lý do hiệu chỉnh (nếu có)...",
+                                  group: "tkd_trend",
+                                  isNumber: false,
+                                  maxLength: 500,
+                                  className: "!text-left !font-sans !text-[11px]",
+                                })}
+                                {linkedByDate[date]?.["Z73"] !== undefined && (
+                                  <div className="text-[10px] text-sky-700 font-bold flex items-center gap-1 pl-1" title="Tự động liên kết từ Báo cáo Theo dõi lượng nước">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                                    Link Lượng nước ({linkedByDate[date]["Z73"]} m³)
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Hàng 74: Tổng cả ngày của 2 tổ máy */}
+                          <tr className="bg-[#e8f5e9] font-bold border-t-2 border-emerald-300">
+                            <td className="p-2.5 text-emerald-950 font-sans font-bold">
+                              Tổng lượng nước demin sử dụng của cả ngày D của 2 tổ máy
+                              <span className="ml-1 text-[10px] text-emerald-700 font-mono">(Hàng 74)</span>
+                            </td>
+                            <td className="p-2 text-center text-slate-400 font-sans">—</td>
+                            <td className="p-2 text-center text-slate-400 font-sans">—</td>
+                            <td className="p-2 text-right font-black font-mono text-amber-950 bg-amber-100/70 tabular-nums">
+                              {formatAdjTotal(current["WATER_ADJ_S1"], current["WATER_ADJ_S2"])}
+                            </td>
+                            <td className="p-2 text-right font-black font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-sm">
+                              {formatDeminTotal(
+                                current["X72"],
+                                current["W72"] || previous?.["X72"],
+                                current["WATER_ADJ_S1"],
+                                current["X73"],
+                                current["W73"] || previous?.["X73"],
+                                current["WATER_ADJ_S2"],
+                              )}
+                            </td>
+                            <td className="p-2 text-right font-black font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-sm">
+                              {formatResinTotal(current["Z72"], current["Z73"])}
+                            </td>
+                            <td className="p-2 text-center text-[11px] text-emerald-800 font-sans">
+                              Tự động (Y72+Y73, Z72+Z73)
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

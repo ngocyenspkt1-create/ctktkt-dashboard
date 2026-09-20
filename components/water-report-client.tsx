@@ -47,7 +47,6 @@ export function WaterReportClient() {
   const [baseline, setBaseline] = useState<WaterShiftLog | null>(null);
   const [leaders, setLeaders] = useState<string[]>(DEFAULT_SHIFT_LEADERS);
   const [summary, setSummary] = useState<MonthlyWaterSummary | null>(null);
-  const [daily24hWaterByDate, setDaily24hWaterByDate] = useState<Record<string, { s1Usage: number | null; s2Usage: number | null; totalUsage: number | null }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [successMsg, setSuccessMsg] = useState<string>("");
@@ -98,7 +97,6 @@ export function WaterReportClient() {
         baseline?: WaterShiftLog | null;
         leaders?: string[];
         summary?: MonthlyWaterSummary | null;
-        daily24hWaterByDate?: Record<string, { s1Usage: number | null; s2Usage: number | null; totalUsage: number | null }>;
       };
       if (!res.ok) throw new Error(data.error || "Không thể tải dữ liệu.");
       setShifts(data.shifts || []);
@@ -107,7 +105,6 @@ export function WaterReportClient() {
         setLeaders(data.leaders);
       }
       setSummary(data.summary || null);
-      setDaily24hWaterByDate(data.daily24hWaterByDate || {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lỗi kết nối.");
     } finally {
@@ -600,11 +597,11 @@ export function WaterReportClient() {
         <div className="flex items-center gap-2">
           <span className="text-base">💧</span>
           <div>
-            <strong className="font-bold">Công tơ nước demin mốc 24h (S1, S2, Tái sinh hạt):</strong> Nhập tại{" "}
+            <strong className="font-bold">Công tơ nước demin mốc 24h (S1, S2) &amp; Hiệu chỉnh:</strong> Đã chuyển sang nhập và quản lý tại{" "}
             <a href="/ctktkt-report" className="font-bold underline decoration-emerald-600 hover:text-emerald-950">
               Báo cáo Chỉ tiêu KTKT (nhóm TKĐ DCS, Hàng 72–74)
             </a>
-            . 3 cột Tổng ngày bên dưới tự động phản ánh lượng tiêu thụ 24h (X − W).
+            . Số liệu lượng nước tái sinh hạt nhập tại đây sẽ tự động link sang CTKTKT.
           </div>
         </div>
         <a
@@ -616,7 +613,7 @@ export function WaterReportClient() {
         </a>
       </div>
 
-      {/* 3. Bảng dữ liệu theo dõi lượng nước (20 cột gốc + 3 cột tổng ngày tự tính) */}
+      {/* 3. Bảng dữ liệu theo dõi lượng nước (20 cột gốc chuẩn Nhà máy) */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         {/* Thanh ghi chú phân quyền */}
         <div className="flex flex-wrap items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-2 text-xs">
@@ -701,10 +698,6 @@ export function WaterReportClient() {
                   TÁI SINH HẠT (24h)
                 </th>
 
-                <th colSpan={3} className="px-2 py-1 text-center whitespace-nowrap min-w-[210px] bg-[#009744]" title="Lượng nước tiêu thụ 24h DCS (S1, S2, Tổng) liên kết từ Báo cáo Chỉ tiêu KTKT (Hàng 72-74)">
-                  TỔNG NGÀY (24h DCS · CHỈ TIÊU KTKT)
-                </th>
-
                 <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap min-w-[65px]">
                   Thao tác
                 </th>
@@ -743,24 +736,19 @@ export function WaterReportClient() {
                 {/* Tái sinh hạt S1, S2 */}
                 <th className="px-1.5 py-1 text-center min-w-[70px]">S1</th>
                 <th className="px-1.5 py-1 text-center min-w-[70px]">S2</th>
-
-                {/* Tổng ngày S1, S2 và toàn nhà máy */}
-                <th className="px-1.5 py-1 text-center min-w-[70px] bg-[#009744]">S1</th>
-                <th className="px-1.5 py-1 text-center min-w-[70px] bg-[#009744]">S2</th>
-                <th className="px-1.5 py-1 text-center min-w-[70px] bg-[#009744]">Tổng</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={24} className="py-12 text-center text-slate-400">
+                  <td colSpan={21} className="py-12 text-center text-slate-400">
                     Đang tải dữ liệu theo dõi lượng nước...
                   </td>
                 </tr>
               ) : shifts.length === 0 && !baseline ? (
                 <tr>
-                  <td colSpan={24} className="py-12 text-center text-slate-400">
+                  <td colSpan={21} className="py-12 text-center text-slate-400">
                     Chưa có ca trực nào trong tháng {month}. Hãy nhấn{" "}
                     <strong className="text-emerald-700">"+ Thêm ca trực"</strong> hoặc{" "}
                     <strong className="text-slate-700">"Nạp từ Excel"</strong> để bắt đầu.
@@ -811,10 +799,6 @@ export function WaterReportClient() {
                       <td className="px-1.5 py-1 text-right font-mono">{formatNum(baseline.resinWaterS1_24h, 0)}</td>
                       <td className="px-1.5 py-1 text-right font-mono">{formatNum(baseline.resinWaterS2_24h, 0)}</td>
 
-                      <td className="px-1.5 py-1 text-right font-mono bg-slate-50 text-slate-400">—</td>
-                      <td className="px-1.5 py-1 text-right font-mono bg-slate-50 text-slate-400">—</td>
-                      <td className="px-1.5 py-1 text-right font-mono bg-slate-50 text-slate-400">—</td>
-
                       <td className="px-2 py-1 text-center text-slate-400">—</td>
                     </tr>
                   )}
@@ -824,7 +808,6 @@ export function WaterReportClient() {
                     const isHighRatioS1 = shift.waterRatioS1 > 0.08;
                     const isHighRatioS2 = shift.waterRatioS2 > 0.08;
                     const daily = shift.shiftTime === "22h00" ? dailyWaterByDate.get(shift.logDate) : undefined;
-                    const ctktkt24h = shift.shiftTime === "22h00" ? daily24hWaterByDate[shift.logDate] : undefined;
 
                     return (
                       <tr
@@ -953,38 +936,6 @@ export function WaterReportClient() {
                         {/* Tái sinh hạt S2 24h */}
                         <td className="px-1.5 py-1.5 text-right font-mono text-slate-700">
                           {formatNum(shift.resinWaterS2_24h, 0)}
-                        </td>
-
-                        {/* Tổng ngày từ 24h DCS CTKTKT (ưu tiên) hoặc mốc chốt ngày */}
-                        <td
-                          className="px-1.5 py-1.5 text-right font-mono bg-sky-50/50 font-bold text-sky-900"
-                          title={ctktkt24h?.s1Usage != null ? "Chỉ số 24h từ Báo cáo Chỉ tiêu KTKT (Hàng 72)" : undefined}
-                        >
-                          {ctktkt24h?.s1Usage != null
-                            ? formatNum(ctktkt24h.s1Usage, 2)
-                            : daily
-                            ? formatNum(daily.totalWaterUsedS1, 2)
-                            : "—"}
-                        </td>
-                        <td
-                          className="px-1.5 py-1.5 text-right font-mono bg-sky-50/50 font-bold text-sky-900"
-                          title={ctktkt24h?.s2Usage != null ? "Chỉ số 24h từ Báo cáo Chỉ tiêu KTKT (Hàng 73)" : undefined}
-                        >
-                          {ctktkt24h?.s2Usage != null
-                            ? formatNum(ctktkt24h.s2Usage, 2)
-                            : daily
-                            ? formatNum(daily.totalWaterUsedS2, 2)
-                            : "—"}
-                        </td>
-                        <td
-                          className="px-1.5 py-1.5 text-right font-mono bg-emerald-50 font-extrabold text-emerald-900"
-                          title={ctktkt24h?.totalUsage != null ? "Tổng 24h từ Báo cáo Chỉ tiêu KTKT (Hàng 74)" : undefined}
-                        >
-                          {ctktkt24h?.totalUsage != null
-                            ? formatNum(ctktkt24h.totalUsage, 2)
-                            : daily
-                            ? formatNum(daily.totalWaterUsedPlant, 2)
-                            : "—"}
                         </td>
 
                         {/* Thao tác (Sửa / Xóa) */}

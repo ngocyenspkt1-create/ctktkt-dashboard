@@ -93,7 +93,7 @@ export async function GET(request: Request) {
       views: [{ showGridLines: true }],
     });
 
-    // Cấu hình các cột (20 cột gốc + 3 cột tổng ngày tự tính)
+    // Cấu hình các cột (20 cột gốc chuẩn Nhà máy)
     ws.columns = [
       { width: 14 }, // A: Ngày
       { width: 13 }, // B: Thời gian
@@ -115,9 +115,6 @@ export async function GET(request: Request) {
       { width: 20 }, // R: Lượng nước cấp bình ngưng S2
       { width: 20 }, // S: Lượng nước tái sinh hạt S1 (24h)
       { width: 20 }, // T: Lượng nước tái sinh hạt S2 (24h)
-      { width: 18 }, // U: Tổng nước ngày S1
-      { width: 18 }, // V: Tổng nước ngày S2
-      { width: 18 }, // W: Tổng nước ngày nhà máy
     ];
 
     // Hàng 1
@@ -144,9 +141,6 @@ export async function GET(request: Request) {
       "Lượng nước cấp\n vào bình ngưng S2",
       "Lượng nước tái sinh hạt S1 (24h)",
       "Lượng Nước tái  sinh hạt S2 (24h)",
-      "TỔNG NƯỚC NGÀY\n(24h D - 24h D-1)",
-      "TỔNG NƯỚC NGÀY\n(24h D - 24h D-1)",
-      "TỔNG NƯỚC NGÀY\n(24h D - 24h D-1)",
     ];
 
     // Hàng 2
@@ -173,9 +167,6 @@ export async function GET(request: Request) {
       null,
       null,
       null,
-      "S1",
-      "S2",
-      "Tổng",
     ];
 
     // Merge Header Cells
@@ -195,7 +186,6 @@ export async function GET(request: Request) {
       "R1:R2",
       "S1:S2",
       "T1:T2",
-      "U1:W1",
     ];
     for (const m of merges) ws.mergeCells(m);
 
@@ -220,7 +210,7 @@ export async function GET(request: Request) {
 
     for (let r = 1; r <= 2; r++) {
       const row = ws.getRow(r);
-      for (let c = 1; c <= 23; c++) {
+      for (let c = 1; c <= 20; c++) {
         const cell = row.getCell(c);
         cell.fill = headerFill;
         cell.font = headerFont;
@@ -233,58 +223,6 @@ export async function GET(request: Request) {
     let currentRowIdx = 3;
     const dayGroups: { logDate: string; startRow: number; endRow: number }[] = [];
     const dailyWaterByDate = calculateDailyWaterUsages(chained);
-
-    const prevDay = new Date(`${month}-01T12:00:00+07:00`);
-    prevDay.setDate(prevDay.getDate() - 1);
-    const fromDate = new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(prevDay);
-
-    const ctktkt24hRes = await rawDb
-      .prepare(
-        `SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value 
-         FROM daily_inputs 
-         WHERE operating_date >= ? AND operating_date < ? 
-           AND (field_code LIKE 'KTKT:W72%' OR field_code LIKE 'KTKT:X72%' OR field_code LIKE 'KTKT:W73%' OR field_code LIKE 'KTKT:X73%')`
-      )
-      .bind(fromDate, `${nextMonth}-01`)
-      .all();
-
-    const ctktkt24hByDate = new Map<string, { s1Usage: number | null; s2Usage: number | null; totalUsage: number | null }>();
-    const ctktktMap = new Map<string, Record<string, string>>();
-    for (const r of (ctktkt24hRes.results || []) as Array<{ operatingDate: string; cell: string; value: string }>) {
-      const d = r.operatingDate;
-      const rec = ctktktMap.get(d) || {};
-      rec[r.cell] = r.value;
-      ctktktMap.set(d, rec);
-    }
-
-    for (const [d, cells] of ctktktMap.entries()) {
-      if (d < `${month}-01`) continue;
-      const prevD = new Date(`${d}T12:00:00+07:00`);
-      prevD.setDate(prevD.getDate() - 1);
-      const prevDateStr = new Intl.DateTimeFormat("sv-SE", {
-        timeZone: "Asia/Ho_Chi_Minh",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(prevD);
-      const prevCells = ctktktMap.get(prevDateStr) || {};
-
-      const x72 = parseFloat((cells["X72"] || "").replace(",", "."));
-      const w72 = parseFloat((cells["W72"] || prevCells["X72"] || "").replace(",", "."));
-      const x73 = parseFloat((cells["X73"] || "").replace(",", "."));
-      const w73 = parseFloat((cells["W73"] || prevCells["X73"] || "").replace(",", "."));
-
-      const s1Usage = Number.isFinite(x72) && Number.isFinite(w72) ? x72 - w72 : null;
-      const s2Usage = Number.isFinite(x73) && Number.isFinite(w73) ? x73 - w73 : null;
-      const totalUsage = (s1Usage !== null || s2Usage !== null) ? (s1Usage || 0) + (s2Usage || 0) : null;
-
-      ctktkt24hByDate.set(d, { s1Usage, s2Usage, totalUsage });
-    }
 
     for (let i = 0; i < chained.length; i++) {
       const item = chained[i];
@@ -322,9 +260,6 @@ export async function GET(request: Request) {
         row.getCell(18).value = null;
         row.getCell(19).value = null;
         row.getCell(20).value = null;
-        row.getCell(21).value = null;
-        row.getCell(22).value = null;
-        row.getCell(23).value = null;
       } else {
         // Gom nhóm theo ngày để gộp ô A (Ngày), S (Tái sinh S1), T (Tái sinh S2)
         const lastGroup = dayGroups[dayGroups.length - 1];
@@ -368,11 +303,6 @@ export async function GET(request: Request) {
         // Col S, T: Tái sinh hạt 24h
         row.getCell(19).value = item.resinWaterS1_24h ?? 0;
         row.getCell(20).value = item.resinWaterS2_24h ?? 0;
-        const ct24 = ctktkt24hByDate.get(item.logDate);
-        const daily = dailyWaterByDate.get(item.logDate);
-        row.getCell(21).value = ct24?.s1Usage ?? daily?.totalWaterUsedS1 ?? null;
-        row.getCell(22).value = ct24?.s2Usage ?? daily?.totalWaterUsedS2 ?? null;
-        row.getCell(23).value = ct24?.totalUsage ?? daily?.totalWaterUsedPlant ?? null;
       }
 
       // Format cells
@@ -381,7 +311,7 @@ export async function GET(request: Request) {
         size: 13,
       };
 
-      for (let c = 1; c <= 23; c++) {
+      for (let c = 1; c <= 20; c++) {
         const cell = row.getCell(c);
         cell.font = dataFont;
         cell.border = thinBorder;
@@ -389,7 +319,7 @@ export async function GET(request: Request) {
 
         if (c === 13 || c === 14) {
           cell.numFmt = "0.0000";
-        } else if ((c >= 5 && c <= 18) || (c >= 21 && c <= 23)) {
+        } else if (c >= 5 && c <= 18) {
           cell.numFmt = "#,##0.00";
         }
       }
@@ -397,7 +327,7 @@ export async function GET(request: Request) {
       currentRowIdx++;
     }
 
-    // Gộp ô theo ngày cho cột A, S:T và U:W (các giá trị 24h)
+    // Gộp ô theo ngày cho cột A, S:T (các giá trị 24h)
     for (const group of dayGroups) {
       if (group.endRow > group.startRow) {
         // Tìm giá trị tái sinh hạt của ngày (nếu có ca nhập > 0 thì lấy giá trị đó để điền vào toàn bộ ô trong nhóm)
@@ -419,17 +349,11 @@ export async function GET(request: Request) {
         ws.mergeCells(`A${group.startRow}:A${group.endRow}`);
         ws.mergeCells(`S${group.startRow}:S${group.endRow}`);
         ws.mergeCells(`T${group.startRow}:T${group.endRow}`);
-        ws.mergeCells(`U${group.startRow}:U${group.endRow}`);
-        ws.mergeCells(`V${group.startRow}:V${group.endRow}`);
-        ws.mergeCells(`W${group.startRow}:W${group.endRow}`);
 
         // Đảm bảo căn giữa theo cả chiều dọc và ngang
         ws.getCell(`A${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
         ws.getCell(`S${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
         ws.getCell(`T${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
-        ws.getCell(`U${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
-        ws.getCell(`V${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
-        ws.getCell(`W${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
       }
     }
 

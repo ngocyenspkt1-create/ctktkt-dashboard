@@ -241,7 +241,7 @@ test("canEditWaterField strictly enforces position permissions", () => {
   assert.equal(canEditWaterField(delegated, "resin_water"), true);
 });
 
-test("Excel export builder supports the 20 original columns plus 3 daily totals", async () => {
+test("Excel export builder supports the 20 original columns", async () => {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("T09.2026");

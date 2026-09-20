@@ -104,6 +104,8 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "M16", "N16", "O16", "P16", "Q16", "R16", // Q TD 21
     "W72", "X72", "Z72",                     // Nước demin DCS S1 (24h D-1, 24h D, Tái sinh hạt)
     "W73", "X73", "Z73",                     // Nước demin DCS S2 (24h D-1, 24h D, Tái sinh hạt)
+    "WATER_ADJ_S1", "WATER_ADJ_S2",           // Hiệu chỉnh công tơ nước demin DCS S1 & S2 (m³)
+    "WATER_ADJ_NOTE_S1", "WATER_ADJ_NOTE_S2", // Lý do hiệu chỉnh công tơ nước demin S1 & S2
   ]),
   tpd_tcd_power: new Set([
     // S1
