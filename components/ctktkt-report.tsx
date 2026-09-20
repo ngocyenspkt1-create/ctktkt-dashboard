@@ -336,10 +336,23 @@ export function CtktktReport() {
     return () => controller.abort();
   }, [period]);
 
-  const current = useMemo(
-    () => ({ ...(byDate[date] || {}), ...(linkedByDate[date] || {}) }),
-    [byDate, linkedByDate, date],
-  );
+  const current = useMemo(() => {
+    const manual = byDate[date] || {};
+    const linked = linkedByDate[date] || {};
+    const combined = { ...linked, ...manual };
+    // Nếu manual trống nhưng linked có giá trị tái sinh hạt từ Báo cáo lượng nước thì tự động link
+    if ((manual["Z72"] === undefined || manual["Z72"] === "") && linked["Z72"] !== undefined) {
+      combined["Z72"] = linked["Z72"];
+    }
+    if ((manual["Z73"] === undefined || manual["Z73"] === "") && linked["Z73"] !== undefined) {
+      combined["Z73"] = linked["Z73"];
+    }
+    // Các ô liên kết từ BCSX luôn lấy từ linked (bị khóa tự động từ BCSX)
+    for (const cell of CTKTKT_BCSX_LINKED_CELLS) {
+      if (linked[cell] !== undefined) combined[cell] = linked[cell];
+    }
+    return combined;
+  }, [byDate, linkedByDate, date]);
 
   const previousDate = previousIsoDate(date);
   const previous = useMemo(() => {
@@ -1714,13 +1727,20 @@ export function CtktktReport() {
                         </td>
                         <td className="p-1.5 text-center">
                           {renderCellInput("Z72", {
-                            placeholder: "0",
+                            placeholder: linkedByDate[date]?.["Z72"] || "0",
                             group: "tkd_trend",
                             isNumber: true,
                           })}
                         </td>
                         <td className="p-2 text-center text-[11px] text-slate-600 font-sans">
-                          TKD trend DCS nhập
+                          {linkedByDate[date]?.["Z72"] !== undefined ? (
+                            <span className="inline-flex items-center gap-1 font-bold text-sky-700" title="Tự động liên kết từ Báo cáo Theo dõi lượng nước">
+                              <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                              Link Lượng nước ({linkedByDate[date]["Z72"]} m³)
+                            </span>
+                          ) : (
+                            "TKD trend DCS nhập"
+                          )}
                         </td>
                       </tr>
 
@@ -1749,13 +1769,20 @@ export function CtktktReport() {
                         </td>
                         <td className="p-1.5 text-center">
                           {renderCellInput("Z73", {
-                            placeholder: "0",
+                            placeholder: linkedByDate[date]?.["Z73"] || "0",
                             group: "tkd_trend",
                             isNumber: true,
                           })}
                         </td>
                         <td className="p-2 text-center text-[11px] text-slate-600 font-sans">
-                          TKD trend DCS nhập
+                          {linkedByDate[date]?.["Z73"] !== undefined ? (
+                            <span className="inline-flex items-center gap-1 font-bold text-sky-700" title="Tự động liên kết từ Báo cáo Theo dõi lượng nước">
+                              <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                              Link Lượng nước ({linkedByDate[date]["Z73"]} m³)
+                            </span>
+                          ) : (
+                            "TKD trend DCS nhập"
+                          )}
                         </td>
                       </tr>
 

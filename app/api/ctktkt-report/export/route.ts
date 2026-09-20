@@ -128,7 +128,8 @@ export async function GET(request: Request) {
     };
     const applyWaterLinks = (sheet: ExcelJS.Worksheet, date: string) => {
       for (const [cell, value] of Object.entries(deriveCtktktCellsFromWater(waterLogs, date))) {
-        if (sheet.getCell(cell).value === null || sheet.getCell(cell).value === undefined) {
+        const curVal = sheet.getCell(cell).value;
+        if (curVal === null || curVal === undefined || curVal === 0 || curVal === "" || Number(value) > 0) {
           setNumber(sheet, cell, numeric(value));
         }
       }

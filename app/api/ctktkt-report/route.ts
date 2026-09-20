@@ -67,11 +67,11 @@ export async function GET(request: Request) {
       for (const warning of derived.warnings) warnings.push({ operatingDate, ...warning });
     }
     const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry => !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell));
-    const manualKeys = new Set(manualEntries.map(e => `${e.operatingDate}|${e.cell}`));
+    const nonEmptyManualKeys = new Set(manualEntries.filter(e => e.value !== "" && e.value !== null && e.value !== undefined).map(e => `${e.operatingDate}|${e.cell}`));
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
     for (const operatingDate of new Set(waterLogs.map(log => log.logDate))) {
       for (const [cell, value] of Object.entries(deriveCtktktCellsFromWater(waterLogs, operatingDate))) {
-        if (!manualKeys.has(`${operatingDate}|${cell}`)) {
+        if (!nonEmptyManualKeys.has(`${operatingDate}|${cell}`) || Number(value) > 0) {
           linkedEntries.push({ operatingDate, cell, value });
         }
       }

@@ -76,3 +76,4 @@ Tài liệu này tổng hợp toàn bộ các tính năng, giải pháp kỹ thu
    - Cây làm việc sạch sẽ (`working tree clean`).
 4. **Tải và cài repo MarkItDown:**
    - Đã clone thành công repository Microsoft MarkItDown tại đường dẫn: `c:\Users\HP\Downloads\CTKTKT\markitdown`.
+

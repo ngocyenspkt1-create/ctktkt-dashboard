@@ -1,4 +1,4 @@
-import { calculateDailyWaterUsages, type WaterShiftLog } from "@/lib/water-report/calculations";
+import { calculateDailyWaterUsages, type WaterShiftLog } from "./water-report/calculations.ts";
 
 export const CTKTKT_WATER_LINKS = [
   { cell: "W72", label: "Công tơ nước demin S1 · 24h ngày D-1" },
@@ -38,15 +38,37 @@ export function ctktktWaterLogFromRow(row: Record<string, unknown>): WaterShiftL
   };
 }
 
-export function deriveCtktktCellsFromWater(shifts: WaterShiftLog[], operatingDate: string) {
-  const daily = calculateDailyWaterUsages(shifts).get(operatingDate);
-  if (!daily) return {} as Record<string, string>;
-  return {
-    W72: String(daily.previousWaterRecS1),
-    X72: String(daily.currentWaterRecS1),
-    Z72: String(daily.resinWaterS1_24h),
-    W73: String(daily.previousWaterRecS2),
-    X73: String(daily.currentWaterRecS2),
-    Z73: String(daily.resinWaterS2_24h),
-  };
+export function deriveCtktktCellsFromWater(shifts: WaterShiftLog[], operatingDate: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const dayShifts = shifts.filter(s => s.logDate === operatingDate);
+
+  let s1 = 0;
+  let s2 = 0;
+  let hasShifts = false;
+
+  for (const shift of dayShifts) {
+    hasShifts = true;
+    if (Number(shift.resinWaterS1_24h) > 0) {
+      s1 = Math.max(s1, Number(shift.resinWaterS1_24h));
+    }
+    if (Number(shift.resinWaterS2_24h) > 0) {
+      s2 = Math.max(s2, Number(shift.resinWaterS2_24h));
+    }
+  }
+
+  if (!hasShifts) {
+    const daily = calculateDailyWaterUsages(shifts).get(operatingDate);
+    if (daily) {
+      s1 = daily.resinWaterS1_24h;
+      s2 = daily.resinWaterS2_24h;
+      hasShifts = true;
+    }
+  }
+
+  if (hasShifts) {
+    result.Z72 = String(s1);
+    result.Z73 = String(s2);
+  }
+
+  return result;
 }

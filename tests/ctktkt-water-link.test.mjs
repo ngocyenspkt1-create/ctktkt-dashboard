@@ -28,3 +28,15 @@ test("original CTKTKT workbook keeps the daily water formulas", async () => {
   assert.equal(sheet.getCell("Y74").formula, "Y72+Y73");
   assert.equal(sheet.getCell("Z74").formula, "Z72+Z73");
 });
+
+test("deriveCtktktCellsFromWater derives resin water Z72 and Z73 from water shift logs", async () => {
+  const { deriveCtktktCellsFromWater } = await import("../lib/ctktkt-water-link.ts");
+  const shifts = [
+    { logDate: "2026-09-17", shiftTime: "06h00", resinWaterS1_24h: 0, resinWaterS2_24h: 0 },
+    { logDate: "2026-09-17", shiftTime: "14h00", resinWaterS1_24h: 0, resinWaterS2_24h: 0 },
+    { logDate: "2026-09-17", shiftTime: "22h00", resinWaterS1_24h: 400, resinWaterS2_24h: 607 },
+  ];
+  const derived = deriveCtktktCellsFromWater(shifts, "2026-09-17");
+  assert.equal(derived.Z72, "400");
+  assert.equal(derived.Z73, "607");
+});
