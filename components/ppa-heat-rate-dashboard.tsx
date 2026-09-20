@@ -9,6 +9,7 @@ import { loadSheetJs, type SheetJsLib } from "@/lib/sheetjs-loader";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE } from "@/lib/google-sheet-sync";
+import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type StoredPpa = {
@@ -58,7 +59,6 @@ const format = (value: number | null | undefined) => value === null || value ===
 const formatPercent = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? "—" : `${percentFormat.format(value)}%`;
 const shortDate = (iso: string) => iso.split("-").reverse().slice(0, 2).join("/");
 const fullDate = (iso: string) => iso.split("-").reverse().join("/");
-const localToday = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const monthLabel = (period: string) => `Tháng ${period.slice(5, 7)}/${period.slice(0, 4)}`;
 
 function ExpandableNote({ note }: { note: string }) {
@@ -73,12 +73,6 @@ function ExpandableNote({ note }: { note: string }) {
       <span className="hidden whitespace-pre-wrap break-words leading-4 [overflow-wrap:anywhere] group-open:block">{note}</span>
     </summary>
   </details>;
-}
-
-function addDaysIso(iso: string, days: number) {
-  const date = new Date(`${iso}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
 }
 
 function periodsBetween(from: string, to: string) {
@@ -225,9 +219,10 @@ function buildPlantSheet(XLSX: SheetJsLib, rowsByMonthLocal: [string, Row[]][]) 
 export function PpaHeatRateDashboard() {
   const user = useSessionUser();
   const canEdit = hasPermission(user, "edit_ppa");
-  const today = useMemo(() => localToday(), []);
-  const [fromDate, setFromDate] = useState(() => addDaysIso(localToday(), -14));
-  const [toDate, setToDate] = useState(today);
+  const today = useMemo(() => vietnamDateIso(), []);
+  const defaultDate = useMemo(() => defaultOperatingDate(), []);
+  const [fromDate, setFromDate] = useState(() => addDaysIso(defaultOperatingDate(), -14));
+  const [toDate, setToDate] = useState(defaultDate);
   const [rangeLabel, setRangeLabel] = useState("15 ngày gần nhất");
   const [entries, setEntries] = useState<StoredPpa[]>([]);
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]);
@@ -236,7 +231,7 @@ export function PpaHeatRateDashboard() {
   const [restoredCount, setRestoredCount] = useState<number | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [sheetDate, setSheetDate] = useState(today);
+  const [sheetDate, setSheetDate] = useState(defaultDate);
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
     date: string;
@@ -351,12 +346,12 @@ export function PpaHeatRateDashboard() {
 
   function applyQuick(kind: "last15" | "all") {
     if (kind === "last15") {
-      const from = addDaysIso(today, -14);
-      setFromDate(from); setToDate(today); setRangeLabel("15 ngày gần nhất");
-      void loadRange(from, today, false);
+      const from = addDaysIso(defaultDate, -14);
+      setFromDate(from); setToDate(defaultDate); setRangeLabel("15 ngày gần nhất");
+      void loadRange(from, defaultDate, false);
     } else {
       setRangeLabel("Xem tất cả");
-      void loadRange("2026-01", today, true);
+      void loadRange("2026-01", defaultDate, true);
     }
   }
 

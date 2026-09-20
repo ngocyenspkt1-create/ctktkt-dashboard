@@ -6,18 +6,11 @@ import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMe
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from "@/lib/qlkt-sync";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
+import { defaultOperatingDate } from "@/lib/operating-date";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type StoredPpa = PpaResult & { operatingDate: string; sourceFiles: string; noteS1: string; noteS2: string; updatedAt: string };
 
-const localToday = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-// Số liệu vận hành của ngày hôm nay thường chưa có (đến sáng hôm sau mới đủ) nên mặc định mở trang
-// là ngày hôm qua (D-1), người dùng cần ngày khác thì tự đổi.
-const localYesterday = () => {
-  const date = new Date(`${localToday()}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() - 1);
-  return date.toISOString().slice(0, 10);
-};
 const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const format = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? "—" : numberFormat.format(value);
 
@@ -33,7 +26,7 @@ async function readCsvFile(file: File) {
 export function PpaHeatRateComparison() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_ppa");
-  const [operatingDate, setOperatingDate] = useState(localYesterday), [readings, setReadings] = useState<MeterReading[]>([]), [sourceFiles, setSourceFiles] = useState<string[]>([]);
+  const [operatingDate, setOperatingDate] = useState(defaultOperatingDate), [readings, setReadings] = useState<MeterReading[]>([]), [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [pastedText, setPastedText] = useState(""), [noteS1, setNoteS1] = useState(""), [noteS2, setNoteS2] = useState("");
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]), [history, setHistory] = useState<StoredPpa[]>([]);
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [savingNotes, setSavingNotes] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");

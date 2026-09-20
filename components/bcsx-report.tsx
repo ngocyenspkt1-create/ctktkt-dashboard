@@ -6,11 +6,7 @@ import { DateField } from "@/components/ui/date-field";
 import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
-
-function todayIso() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
+import { defaultOperatingDate } from "@/lib/operating-date";
 
 type Unit = "S1" | "S2";
 type ReadingsGrid = Record<ShiftMetric, string[]>;
@@ -78,7 +74,7 @@ export function BcsxReport() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_bcsx");
   const canSyncQlkt = hasPermission(user, "sync_qlkt");
-  const [operatingDate, setOperatingDate] = useState(todayIso());
+  const [operatingDate, setOperatingDate] = useState(defaultOperatingDate);
   const [unit, setUnit] = useState<Unit>("S1");
   const [grids, setGrids] = useState<Record<Unit, ReadingsGrid>>({ S1: emptyGrid(), S2: emptyGrid() });
   const [events, setEvents] = useState<Record<Unit, OperatingEvent[]>>({ S1: [], S2: [] });

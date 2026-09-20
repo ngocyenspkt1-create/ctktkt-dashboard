@@ -57,6 +57,14 @@ Mở địa chỉ localhost mà chương trình in ra. Không thêm `--remote` v
 
 ---
 
+## Bổ sung 21/09/2026 — Mặc định D-1, lưu NH3 có xác minh và PMIS đúng ngày
+
+- Các màn hình có chọn ngày vận hành mặc định mở ngày D-1 theo múi giờ Việt Nam; không còn ngày mẫu cố định tại Chỉ tiêu KTKT và không mặc định mở ngày hiện tại chưa đủ số liệu.
+- Lưu Chỉ tiêu KTKT chỉ gửi các ô đúng quyền của tài khoản. Sau POST, web đọc lại CSDL và đối chiếu từng ô; nếu NH3 hoặc ô khác chưa được giữ đúng, giao diện báo rõ mã ô và không báo lưu thành công.
+- Tiện ích QLKT `0.4.24` tránh lấy bảng cũ của PMIS/Sản lượng ngay sau khi đổi ngày bằng khoảng chờ an toàn và cơ chế thử lại. Hai cây mã nguồn tiện ích và gói ZIP phát hành đã được đồng bộ.
+- Kiểm tra: test mục tiêu đạt, TypeScript đạt, build production đạt. ESLint còn các lỗi/cảnh báo cũ về hook và biến chưa dùng ở các component lớn; không phát sinh lỗi biên dịch.
+- Nghiệm thu thủ công còn lại: cài lại tiện ích `0.4.24`; lưu và tải lại cụm NH3; đồng bộ một ngày PMIS/02-PĐ đã biết rồi đối chiếu trực tiếp với QLKT.
+
 ## Bổ sung 20/09/2026 — Nhập lịch sử Excel và đối chiếu công thức đến ngày 19/09
 
 ### Phạm vi nguồn và dữ liệu nhập

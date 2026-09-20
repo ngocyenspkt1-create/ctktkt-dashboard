@@ -8,6 +8,7 @@ import { DateField } from "@/components/ui/date-field";
 import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
+import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type Unit = "s1" | "s2";
@@ -40,19 +41,12 @@ const HEADER_ROW_H = "h-7";
 const BAND_ROW_H = "h-6";
 const METRIC_ROW_H = "h-8";
 
-const localToday = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const format = (value: number | null) => value === null || !Number.isFinite(value) ? "—" : numberFormat.format(value);
 const numberValue = (value?: string) => { if (!value?.trim()) return null; const n = Number(value.replace(",", ".")); return Number.isFinite(n) ? n : null; };
 const safeDivide = (a: number | null, b: number | null) => a === null || b === null || b === 0 ? null : a / b;
 const ddMM = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const formatInputValue = (value?: string) => { const parsed = numberValue(value); return parsed === null ? (value || "") : format(parsed); };
-
-function addDaysIso(iso: string, days: number) {
-  const date = new Date(`${iso}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
 
 function datesBetween(from: string, to: string) {
   const dates: string[] = [];
@@ -76,9 +70,10 @@ function periodsBetween(from: string, to: string) {
 export function PmisReport() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_pmis");
-  const today = useMemo(() => localToday(), []);
-  const [fromDate, setFromDate] = useState(() => addDaysIso(localToday(), -9));
-  const [toDate, setToDate] = useState(today);
+  const today = useMemo(() => vietnamDateIso(), []);
+  const defaultDate = useMemo(() => defaultOperatingDate(), []);
+  const [fromDate, setFromDate] = useState(() => addDaysIso(defaultOperatingDate(), -9));
+  const [toDate, setToDate] = useState(defaultDate);
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -86,7 +81,7 @@ export function PmisReport() {
   const [syncHelp, setSyncHelp] = useState(false);
   const [pendingSync, setPendingSync] = useState<QlktSyncPayload | null>(null);
   const [selectedSyncCodes, setSelectedSyncCodes] = useState<Set<string>>(new Set());
-  const [syncDate, setSyncDate] = useState(() => addDaysIso(localToday(), -1));
+  const [syncDate, setSyncDate] = useState(defaultOperatingDate);
   const [extensionVersion, setExtensionVersion] = useState("");
   const [syncingQlkt, setSyncingQlkt] = useState(false);
   const [savingSync, setSavingSync] = useState(false);
@@ -94,14 +89,14 @@ export function PmisReport() {
   // Đồng bộ nhiều ngày liên tiếp (ví dụ lấy lại dữ liệu tháng trước): lặp qua từng ngày trong
   // khoảng đã chọn, gọi lại đúng luồng "1 ngày · 2 tổ máy" ở trên cho mỗi ngày rồi tự lưu luôn (không
   // hiện hộp thoại xác nhận cho từng ngày, vì có thể tới vài chục ngày).
-  const [syncRangeFrom, setSyncRangeFrom] = useState(() => addDaysIso(localToday(), -9));
-  const [syncRangeTo, setSyncRangeTo] = useState(() => addDaysIso(localToday(), -1));
+  const [syncRangeFrom, setSyncRangeFrom] = useState(() => addDaysIso(defaultOperatingDate(), -9));
+  const [syncRangeTo, setSyncRangeTo] = useState(defaultOperatingDate);
   const [syncingRange, setSyncingRange] = useState(false);
   const [rangeProgress, setRangeProgress] = useState("");
   // Khoảng ngày riêng cho biểu đồ, độc lập với khoảng ngày của bảng — mặc định trùng bảng, người
   // dùng có thể đổi để xem xu hướng dài/ngắn hơn mà không phải đổi cả bảng.
-  const [chartFromDate, setChartFromDate] = useState(() => addDaysIso(localToday(), -9));
-  const [chartToDate, setChartToDate] = useState(today);
+  const [chartFromDate, setChartFromDate] = useState(() => addDaysIso(defaultOperatingDate(), -9));
+  const [chartToDate, setChartToDate] = useState(defaultDate);
   const cancelRangeRef = useRef(false);
 
   // Không cắt kết quả về đúng [from,to] nữa — giữ nguyên toàn bộ dữ liệu của các tháng đã tải, vì

@@ -5,20 +5,13 @@ import { useSessionUser } from "@/components/session-context";
 import { calculateDailyWaterUsages, formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/lib/water-report/calculations";
 import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/permissions";
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/lib/water-report/schema";
+import { defaultOperatingDate } from "@/lib/operating-date";
 
 function getCurrentMonth(): string {
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
-}
-
-function getTodayIso(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 function shiftMonth(current: string, delta: number): string {
@@ -125,7 +118,7 @@ export function WaterReportClient() {
   // Mở modal thêm ca mới (tự động gợi ý tiếp theo từ ca trước)
   function handleOpenAddModal() {
     const lastShift = shifts.length > 0 ? shifts[shifts.length - 1] : baseline;
-    let nextDate = getTodayIso();
+    let nextDate = defaultOperatingDate();
     let nextTime: "06h00" | "14h00" | "22h00" = "06h00";
     let nextTeam = "A";
 

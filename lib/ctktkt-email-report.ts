@@ -1,6 +1,5 @@
 // Node's built-in TypeScript test runner requires the explicit extension here.
 import type { CtktktDayEntries } from "./ctktkt-report.ts";
-// @ts-expect-error TS5097: runtime test compatibility; the bundler accepts this source import.
 import { calculateCtktktSummary, calculateNh3Summary } from "./ctktkt-report.ts";
 
 export interface CtktktEmailReportMetrics {

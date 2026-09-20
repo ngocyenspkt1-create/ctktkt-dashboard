@@ -2,8 +2,9 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.23";
+  const CONTENT_SCRIPT_VERSION = "0.4.24";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
+  const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
     const original = cleanText(raw);
     if (/[A-Za-zÀ-ỹ]/u.test(original) || /\d{1,2}\/\d{1,2}\/\d{4}/.test(original)) return null;
@@ -100,6 +101,13 @@
     const displayDate = `${match[3]}/${match[2]}/${match[1]}`;
     const dateInputs = visibleReportDateInputs();
     if (!dateInputs.length) throw new Error("Không tìm thấy ô ngày báo cáo trên màn hình QLKT.");
+    if (dateInputs.every(input => readValue(input) === displayDate)) {
+      try {
+        sessionStorage.setItem(PREPARED_DATE_KEY, operatingDate);
+        sessionStorage.removeItem(PREPARED_REFRESH_AT_KEY);
+      } catch { /* tiếp tục kiểm tra ngày qua DOM */ }
+      return { refreshed: false, changed: false, controlInfo: "Ngày trên QLKT đã đúng" };
+    }
     const nativeValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     dateInputs.forEach(input => {
       input.focus();
@@ -144,9 +152,12 @@
     }
     const controlText = cleanText(refreshControl.textContent).slice(0, 40);
     const controlInfo = `<${refreshControl.tagName?.toLowerCase() || "?"}${refreshControl.id ? `#${refreshControl.id}` : ""}${refreshControl.className ? `.${String(refreshControl.className).trim().replace(/\s+/g, ".")}` : ""}>${controlText ? ` "${controlText}"` : ""}`;
-    try { sessionStorage.setItem(PREPARED_DATE_KEY, operatingDate); } catch { /* giữ kiểm tra ngày qua DOM */ }
+    try {
+      sessionStorage.setItem(PREPARED_DATE_KEY, operatingDate);
+      sessionStorage.setItem(PREPARED_REFRESH_AT_KEY, String(Date.now()));
+    } catch { /* giữ kiểm tra ngày qua DOM */ }
     refreshControl.click();
-    return { refreshed: true, controlInfo };
+    return { refreshed: true, changed: true, controlInfo };
   }
 
   function inputsWithContext(table) {
@@ -453,6 +464,21 @@
   }
 
   function extract(expectedOperatingDate) {
+    // PrimeFaces đổi giá trị ô ngày ngay lập tức nhưng bảng 02-PĐ/Sản lượng
+    // vẫn có thể còn số liệu ngày cũ trong vài giây. Không cho bộ đọc trả kết
+    // quả trong khoảng an toàn này; background sẽ tự thử lại.
+    try {
+      const preparedDate = sessionStorage.getItem(PREPARED_DATE_KEY);
+      const refreshedAt = Number(sessionStorage.getItem(PREPARED_REFRESH_AT_KEY) || 0);
+      const kind = pageKind();
+      if (preparedDate === expectedOperatingDate && refreshedAt > 0
+        && (kind === "pmis_02pd" || kind === "production")
+        && Date.now() - refreshedAt < 4000) {
+        throw new Error("QLKT đang tải dữ liệu của ngày vừa chọn, tiện ích đang chờ bảng cập nhật xong.");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("đang tải dữ liệu")) throw error;
+    }
     const operatingDate = parseDate(expectedOperatingDate);
     if (!operatingDate) throw new Error("Không xác định được ngày báo cáo trên trang QLKT.");
     const currentPageKind = pageKind();

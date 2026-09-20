@@ -28,6 +28,7 @@ import {
 import { DateField } from "@/components/ui/date-field";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
 import { useSessionUser } from "@/components/session-context";
+import { defaultOperatingDate } from "@/lib/operating-date";
 import {
   canEditAnyCtktktField,
   canEditCtktktField,
@@ -55,6 +56,7 @@ import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import {
   CTKTKT_EXTRA_INPUT_FIELDS,
   CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS,
+  normalizeCtktktInputValue,
 } from "@/lib/ctktkt-extra-fields";
 import { parseSpreadsheetClipboard } from "@/lib/spreadsheet-grid";
 
@@ -79,14 +81,6 @@ type MainTab =
   | "startup_shutdown"
   | "pmis_reports"
   | "all_fields";
-
-const today = () =>
-  new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
 
 const editableFields = [
   ...CTKTKT_INPUT_FIELDS.filter(
@@ -200,7 +194,7 @@ export function CtktktReport() {
   const userCanEditAny = canEditAnyCtktktField(user);
   const editableGroups = useMemo(() => getEditableCtktktGroups(user), [user]);
 
-  const [date, setDate] = useState("2026-09-17");
+  const [date, setDate] = useState(defaultOperatingDate);
   const [byDate, setByDate] = useState<Record<string, CtktktDayEntries>>({});
   const [linkedByDate, setLinkedByDate] = useState<Record<string, CtktktDayEntries>>({});
   const [linkWarnings, setLinkWarnings] = useState<LinkWarning[]>([]);
@@ -422,10 +416,12 @@ export function CtktktReport() {
     setMessage("");
     try {
       // Gửi các ô được phép nhập
-      const toSend = editableFields.map(field => ({
-        cell: field.cell,
-        value: current[field.cell] || "",
-      }));
+      const toSend = editableFields
+        .filter(field => canEditCtktktField(user, field.cell))
+        .map(field => ({
+          cell: field.cell,
+          value: current[field.cell] || "",
+        }));
 
       const response = await fetch("/api/ctktkt-report", {
         method: "POST",
@@ -437,6 +433,25 @@ export function CtktktReport() {
       });
       const body = (await response.json()) as { saved?: number; error?: string };
       if (!response.ok) throw new Error(body.error || "Không lưu được dữ liệu.");
+
+      // Đọc lại ngay từ CSDL để không báo thành công giả. Lỗi từng gặp ở cụm
+      // NH3 là giao diện vẫn giữ số vừa nhập nhưng tải lại trang thì mất.
+      const verifyResponse = await fetch(`/api/ctktkt-report?period=${period}`, { cache: "no-store" });
+      const verifyBody = (await verifyResponse.json()) as { entries?: LoadedEntry[]; error?: string };
+      if (!verifyResponse.ok) throw new Error(verifyBody.error || "Đã gửi dữ liệu nhưng chưa kiểm tra lại được CSDL.");
+      const persisted = Object.fromEntries(
+        (verifyBody.entries || [])
+          .filter(entry => entry.operatingDate === date)
+          .map(entry => [entry.cell, entry.value]),
+      );
+      const mismatches = toSend.filter(entry =>
+        normalizeCtktktInputValue(entry.cell, persisted[entry.cell] || "")
+          !== normalizeCtktktInputValue(entry.cell, entry.value),
+      );
+      if (mismatches.length) {
+        throw new Error(`CSDL chưa giữ đúng ${mismatches.length} ô (${mismatches.slice(0, 6).map(entry => entry.cell).join(", ")}). Chưa xác nhận lưu thành công.`);
+      }
+      setByDate(old => ({ ...old, [date]: persisted }));
       setDirty(false);
       setMessage(
         `Đã lưu thành công ${body.saved || 0} ô dữ liệu ngày ${date.split("-").reverse().join("/")}.`,
