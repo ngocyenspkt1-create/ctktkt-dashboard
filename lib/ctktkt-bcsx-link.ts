@@ -44,7 +44,7 @@ const voltageLinks = sampleTimes.map(time => ({
   section: "power_meters" as const,
   sectionLabel: "Công suất và công tơ chính",
   label: `Utc 220kV · ${time.display}`,
-  unit: "S1/S2",
+  unit: "S1",
   metric: "E",
   timeSlot: time.timeSlot,
 }));
@@ -59,7 +59,7 @@ function readingKey(unit: string, timeSlot: string, metric: string) {
 function validNumber(value: string | undefined) {
   if (!value?.trim()) return null;
   const number = Number(value.replace(",", "."));
-  return Number.isFinite(number) ? { number, text: value.trim().replace(",", ".") } : null;
+  return Number.isFinite(number) ? { text: value.trim().replace(",", ".") } : null;
 }
 
 export function deriveCtktktCellsFromBcsx(readings: CtktktBcsxReading[]) {
@@ -74,21 +74,7 @@ export function deriveCtktktCellsFromBcsx(readings: CtktktBcsxReading[]) {
 
   for (const link of voltageLinks) {
     const s1 = validNumber(byKey.get(readingKey("S1", link.timeSlot, "E")));
-    const s2 = validNumber(byKey.get(readingKey("S2", link.timeSlot, "E")));
-    const common = validNumber(byKey.get(readingKey("S1/S2", link.timeSlot, "E")));
-    if (!s1 && !s2 && !common) continue;
-    if (common) {
-      entries[link.cell] = common.text;
-      continue;
-    }
-    if (s1 && s2 && Math.abs(s1.number - s2.number) > 0.01) {
-      warnings.push({
-        cell: link.cell,
-        message: `Điện áp ${link.timeSlot} của S1 (${s1.text} kV) khác S2 (${s2.text} kV); chưa tự điền ${link.cell}.`,
-      });
-      continue;
-    }
-    entries[link.cell] = (s1 || s2)!.text;
+    if (s1) entries[link.cell] = s1.text;
   }
 
   return { entries, warnings };

@@ -29,13 +29,15 @@ test("BCSX section 1 maps 42 cells to the six CTKTKT sampling times", () => {
   assert.equal(result.entries.Q20, "234");
 });
 
-test("common 220 kV voltage is not chosen silently when S1 and S2 disagree", () => {
+test("Utc 220 kV always uses S1 and ignores S2", () => {
   const readings = completeReadings();
-  readings.find(reading => reading.unit === "S2" && reading.timeSlot === "10:00" && reading.metric === "E").value = "233.5";
+  readings.find(reading => reading.unit === "S2" && reading.timeSlot === "10:00" && reading.metric === "E").value = "999";
   const result = deriveCtktktCellsFromBcsx(readings);
-  assert.equal(result.entries.N20, undefined);
-  assert.equal(result.warnings.length, 1);
-  assert.match(result.warnings[0].message, /S1 \(231 kV\) khác S2 \(233.5 kV\)/);
+  assert.equal(result.entries.N20, "231");
+  assert.deepEqual(result.warnings, []);
+
+  const withoutS1 = readings.filter(reading => !(reading.unit === "S1" && reading.timeSlot === "10:00" && reading.metric === "E"));
+  assert.equal(deriveCtktktCellsFromBcsx(withoutS1).entries.N20, undefined);
 });
 
 test("PMIS 02-PD QLKT extractor extracts row 'Duyên Hải 1' and maps to C181..T181 and J157..K158", async () => {
@@ -97,4 +99,3 @@ test("PMIS 02-PD QLKT extractor extracts row 'Duyên Hải 1' and maps to C181..
   assert.equal(entryMap.get("S181"), "100.0000");
   assert.equal(entryMap.get("T181"), "Đạt");
 });
-

@@ -812,4 +812,11 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Commit chức năng `f4cb03f` (`fix(bcsx-auth): nhận hai file Excel và bổ sung quyền nước`) đã được push lên `github/main`.
 - GitHub/Vercel báo `success` cho đúng SHA `f4cb03f8d76ebf0c5664812e40d582cf21b244df`; trang `/bcsx-report` trên production phản hồi và chuyển tới đăng nhập đúng cơ chế bảo vệ.
 
+## Bổ sung 20/09/2026 — Utc 220 kV chỉ lấy từ S1
+
+- Dòng `Utc 220 kV` của Chỉ tiêu KTKT (`M20:R20`) luôn lấy sáu mốc cột E của BCSX S1; bỏ qua hoàn toàn giá trị S2 và không lấy S2 thay thế khi S1 thiếu.
+- Khi xuất BCSX A0, các cột P/Q/P điểm bán vẫn cộng S1 + S2; riêng cột E (Utc 220 kV) sao chép nguyên giá trị S1. Mục 2 và nhật ký sự kiện A0 không thay đổi.
+- Đã cập nhật dữ liệu mẫu về đúng nguồn S1. Kiểm tra: 91/91 test đạt; TypeScript, ESLint các file thay đổi và build production đều đạt.
+- Còn cần sau triển khai: nhấn `Ctrl+F5`, mở lại Chỉ tiêu KTKT để kiểm tra `Utc 220 kV`, sau đó xuất một file A0 và đối chiếu cột E với file S1 cùng ngày.
+
 ---

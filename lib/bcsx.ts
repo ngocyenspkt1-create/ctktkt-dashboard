@@ -21,9 +21,9 @@
 // per the user — also pending the exact source; manual add/remove stays as
 // the interim/override UI.
 //
-// A0 (tổng nhà máy) rules, per explicit user instruction (17/09/2026):
-//   - Mục 1 (48 điểm nửa giờ): tổng S1+S2 tại TỪNG ô tương ứng, không có ngoại
-//     lệ (kể cả cột điện áp thanh cái).
+// A0 (tổng nhà máy) rules, per explicit user instruction (20/09/2026):
+//   - Mục 1 (48 điểm nửa giờ): P/Q/P điểm bán cộng S1+S2 tại từng ô.
+//     Riêng Utc 220 kV là điện áp thanh cái dùng chung nên luôn lấy S1, bỏ qua S2.
 //   - Mục 2 (5 số tổng ngày): tổng S1+S2 — NGOẠI TRỪ than tồn kho, là 1 kho
 //     dùng chung cho cả nhà máy (không cộng đôi) — người dùng xác nhận 17/09/2026.
 //   - Mục 3 (nhật ký sự kiện): các dòng của S1 đứng trước, S2 tiếp theo sau —
@@ -52,6 +52,25 @@ export const SHIFT_METRICS: { key: ShiftMetric; label: string; col: "B" | "C" | 
   { key: "D", label: "Tổng P (MW) điểm bán điện", col: "D" },
   { key: "E", label: "Điện áp thanh cái (kV)", col: "E" },
 ];
+
+function sumMaybe(a: number | null, b: number | null) {
+  return a === null && b === null ? null : (a ?? 0) + (b ?? 0);
+}
+
+export function deriveA0Readings(
+  s1: Partial<Record<ShiftMetric, (number | null)[]>>,
+  s2: Partial<Record<ShiftMetric, (number | null)[]>>,
+): Partial<Record<ShiftMetric, (number | null)[]>> {
+  const readings: Partial<Record<ShiftMetric, (number | null)[]>> = {};
+  for (const metric of SHIFT_METRICS) {
+    readings[metric.key] = SHIFT_TIME_SLOTS.map((_, index) => {
+      const s1Value = s1[metric.key]?.[index] ?? null;
+      if (metric.key === "E") return s1Value;
+      return sumMaybe(s1Value, s2[metric.key]?.[index] ?? null);
+    });
+  }
+  return readings;
+}
 
 // Legend from the source file (cols J/K, rows 73-77 of the day sheet) — kept
 // verbatim so the exported "Loại sự kiện" column matches the original codes.

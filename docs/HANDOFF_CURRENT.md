@@ -284,3 +284,10 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Kiểm tra: 90/90 test đạt; TypeScript, ESLint các file thay đổi và build đều đạt.
 - Còn dở: chưa thực hiện lần ghi thật 7.296 giá trị trên production vì không có phiên đăng nhập người dùng. Sau deploy, người dùng chọn đồng thời hai file S1/S2 và chờ thông báo đọc lại thành công; quản trị viên lưu cột quyền `Nước`, người dùng cần đăng nhập lại để JWT nhận quyền mới.
 - Đã push commit chức năng `f4cb03f` lên `github/main`; Vercel báo `success` cho SHA đầy đủ `f4cb03f8d76ebf0c5664812e40d582cf21b244df`.
+
+## 17. Cập nhật 20/09/2026 — Utc 220 kV chỉ lấy từ S1
+
+- Đã đổi liên kết Chỉ tiêu KTKT `M20:R20`: chỉ đọc metric E của S1, bỏ qua S2 và không còn cảnh báo chênh điện áp S1/S2.
+- Đã đổi phép tạo dữ liệu BCSX A0: P/Q/P điểm bán tiếp tục cộng S1 + S2; riêng Utc 220 kV sao chép S1. Các quy tắc tổng ngày, than tồn kho và thứ tự sự kiện giữ nguyên.
+- Dữ liệu mẫu và test đã cập nhật theo nguồn S1. Kết quả: 91/91 test đạt; TypeScript, ESLint phạm vi sửa và build production đều đạt.
+- Còn cần: sau deploy, người dùng `Ctrl+F5`, kiểm tra sáu ô Utc 220 kV trên Chỉ tiêu KTKT và xuất A0 để đối chiếu cột E với S1.

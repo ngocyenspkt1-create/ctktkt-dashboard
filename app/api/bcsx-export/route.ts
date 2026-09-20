@@ -1,5 +1,5 @@
 import { getRawDb } from "@/db";
-import { buildBcsxWorkbook, fileNameFor, SHIFT_METRICS, SHIFT_TIME_SLOTS, type ExportUnit, type OperatingEvent, type ShiftMetric, type UnitTotals } from "@/lib/bcsx";
+import { buildBcsxWorkbook, deriveA0Readings, fileNameFor, SHIFT_METRICS, SHIFT_TIME_SLOTS, type ExportUnit, type OperatingEvent, type ShiftMetric, type UnitTotals } from "@/lib/bcsx";
 
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const exportUnits = new Set(["S1", "S2", "A0"]);
@@ -73,12 +73,8 @@ export async function GET(request: Request) {
       payload = { operatingDate: date, unit, ...data };
     } else {
       const [s1, s2] = await Promise.all([loadUnitData(date, "S1"), loadUnitData(date, "S2")]);
-      // A0 = tổng S1+S2 tại từng ô tương ứng, theo đúng yêu cầu của người dùng
-      // (kể cả cột điện áp thanh cái — không có ngoại lệ).
-      const readings: Partial<Record<ShiftMetric, (number | null)[]>> = {};
-      for (const m of SHIFT_METRICS) {
-        readings[m.key] = SHIFT_TIME_SLOTS.map((_, i) => sumMaybe(s1.readings[m.key]?.[i] ?? null, s2.readings[m.key]?.[i] ?? null));
-      }
+      // A0 cộng P/Q/P điểm bán của S1+S2; riêng Utc 220 kV luôn lấy S1.
+      const readings = deriveA0Readings(s1.readings, s2.readings);
       const totals: UnitTotals = {
         dauCuc: sumMaybe(s1.totals.dauCuc, s2.totals.dauCuc),
         thuongPham: sumMaybe(s1.totals.thuongPham, s2.totals.thuongPham),

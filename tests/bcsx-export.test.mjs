@@ -4,6 +4,7 @@ import { test } from "node:test";
 import ExcelJS from "exceljs";
 import {
   buildBcsxWorkbookFromTemplate,
+  deriveA0Readings,
   nextOperatingDate,
   SHIFT_METRICS,
   SHIFT_TIME_SLOTS,
@@ -51,6 +52,18 @@ test("BCSX has all 48 source-template time points including 23:30 and 23:59", ()
   assert.equal(SHIFT_TIME_SLOTS[0], "00:30");
   assert.equal(SHIFT_TIME_SLOTS[46], "23:30");
   assert.equal(SHIFT_TIME_SLOTS[47], "23:59");
+});
+
+test("BCSX A0 sums P Q D but copies Utc 220 kV from S1", () => {
+  const s1 = { P: [400], Q: [10], D: [360], E: [233] };
+  const s2 = { P: [410], Q: [20], D: [370], E: [231] };
+  const a0 = deriveA0Readings(s1, s2);
+
+  assert.equal(a0.P[0], 810);
+  assert.equal(a0.Q[0], 30);
+  assert.equal(a0.D[0], 730);
+  assert.equal(a0.E[0], 233);
+  assert.equal(a0.E[1], null);
 });
 
 test("BCSX accepts an event ending after midnight on the next calendar day", () => {

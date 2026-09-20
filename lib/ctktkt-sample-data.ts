@@ -1308,7 +1308,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "403"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "06:00",
         "metric": "E",
         "value": "232"
@@ -1350,7 +1350,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "403"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "10:00",
         "metric": "E",
         "value": "231"
@@ -1392,7 +1392,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "403"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "14:00",
         "metric": "E",
         "value": "231"
@@ -1434,7 +1434,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "565"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "18:00",
         "metric": "E",
         "value": "231"
@@ -1476,7 +1476,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "490"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "22:00",
         "metric": "E",
         "value": "232"
@@ -1518,7 +1518,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "402"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "23:59",
         "metric": "E",
         "value": "233"
@@ -2795,7 +2795,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "402"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "06:00",
         "metric": "E",
         "value": "233"
@@ -2837,7 +2837,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "402"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "10:00",
         "metric": "E",
         "value": "232"
@@ -2879,7 +2879,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "403"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "14:00",
         "metric": "E",
         "value": "231"
@@ -2921,7 +2921,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "566"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "18:00",
         "metric": "E",
         "value": "231"
@@ -2963,7 +2963,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "402"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "22:00",
         "metric": "E",
         "value": "232"
@@ -3005,7 +3005,7 @@ export const CTKTKT_SAMPLE_2DAYS: Record<string, SampleDayData> = {
         "value": "402"
       },
       {
-        "unit": "S1/S2",
+        "unit": "S1",
         "timeSlot": "23:59",
         "metric": "E",
         "value": "233"
