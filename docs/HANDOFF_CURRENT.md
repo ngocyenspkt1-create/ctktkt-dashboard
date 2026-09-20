@@ -300,3 +300,4 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - `/api/ctktkt-report` và API xuất file tự liên kết Nước vào `W72/X72/Z72` và `W73/X73/Z73`. Không ghi vào các ô công thức Y72/Y73/Y74/Z74; các công thức của mẫu gốc đã được kiểm tra tự động.
 - Kiểm tra: 95/95 test đạt; TypeScript đạt; build production đạt. ESLint các file mới sạch; lệnh lint phạm vi còn báo đúng lỗi nền cũ trong hai component đã có trước lượt sửa.
 - Còn cần: sau deploy nhấn `Ctrl+F5`, đối chiếu một ngày có đủ mốc 22h D-1/D trên trang Nước và file Chỉ tiêu xuất ra. Local UI chưa được nghiệm thu do tiến trình Vinext cũ giữ khóa cổng 5173 nhưng không phản hồi.
+- Commit chức năng `1e24673` đã đồng bộ với `github/main`; Vercel báo `success`. `/water-report` và `/ctktkt-report` trên production phản hồi HTTP 307 về trang đăng nhập đúng cơ chế bảo vệ.

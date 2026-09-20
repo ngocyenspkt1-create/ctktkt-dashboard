@@ -828,5 +828,6 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Các ô nguồn liên kết Nước được khóa nhập tay trên web Chỉ tiêu; dữ liệu cũ từng nhập tay tại các ô này bị bỏ qua/xóa khi lưu để chỉ còn một nguồn chính thức.
 - Kiểm tra: ví dụ S1 `11.134,09 → 11.702,32 = 568,23 m³`; S2 `7.553,55 → 8.304,85 = 751,30 m³`; tổng `1.319,53 m³`. `node --test tests/*.test.mjs`: 95/95 đạt; `npx.cmd tsc --noEmit`: đạt; build production đạt.
 - Còn cần nghiệm thu sau triển khai: nhập đủ mốc `22h00` của hai ngày liên tiếp, mở trang Chỉ tiêu cùng ngày và xuất Excel để đối chiếu các ô W72:Z74. Phiên này chưa kiểm thử UI trình duyệt cục bộ do tiến trình Vinext cũ giữ khóa nhưng không phản hồi cổng 5173.
+- Đã push commit `1e24673` lên `github/main`; GitHub/Vercel báo `success`. Hai trang production `/water-report` và `/ctktkt-report` đều phản hồi HTTP 307 và chuyển đúng về đăng nhập, phù hợp cơ chế bảo vệ.
 
 ---
