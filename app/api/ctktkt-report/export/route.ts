@@ -2,9 +2,11 @@ import ExcelJS from "exceljs";
 import { getRawDb } from "@/db";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
+import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS } from "@/lib/ctktkt-extra-fields";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
+import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { seedCtktktSample2Days } from "../seed-sample/route";
 
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
@@ -79,11 +81,15 @@ export async function GET(request: Request) {
   try {
     const { year, month, previous, next } = monthBounds(period);
     const db = getRawDb();
+    await ensureWaterSchema(db);
     let { results } = await db.prepare(
       "SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, field_code",
     ).bind(previous, next).all();
     let { results: shiftResults } = await db.prepare(
       "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
+    ).bind(previous, next).all();
+    const { results: waterResults } = await db.prepare(
+      "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
     ).bind(previous, next).all();
 
     if (period === "2026-09" && (results as unknown[]).length === 0 && (shiftResults as unknown[]).length === 0) {
@@ -110,10 +116,14 @@ export async function GET(request: Request) {
       list.push(reading);
       readingsByDate.set(date, list);
     }
+    const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
 
     const applyBcsxLinks = (sheet: ExcelJS.Worksheet, date: string) => {
       const linked = deriveCtktktCellsFromBcsx(readingsByDate.get(date) || []);
       for (const [cell, value] of Object.entries(linked.entries)) setNumber(sheet, cell, numeric(value));
+    };
+    const applyWaterLinks = (sheet: ExcelJS.Worksheet, date: string) => {
+      for (const [cell, value] of Object.entries(deriveCtktktCellsFromWater(waterLogs, date))) setNumber(sheet, cell, numeric(value));
     };
 
     const workbook = new ExcelJS.Workbook();
@@ -133,11 +143,12 @@ export async function GET(request: Request) {
     const previousRow = byDate.get(previous);
     if (previousSheet) {
       if (previousRow) fillDailyFallbacks(previousSheet, previousRow);
-      for (const [code, value] of Object.entries(previousRow || {})) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5))) {
+      for (const [code, value] of Object.entries(previousRow || {})) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
         previousSheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
       applyBcsxLinks(previousSheet, previous);
+      applyWaterLinks(previousSheet, previous);
       applyDateLabels(previousSheet, previous);
     }
 
@@ -149,11 +160,12 @@ export async function GET(request: Request) {
       normalizeCoalMeterFormulas(sheet, day === 1 ? "d-1" : String(day - 1).padStart(2, "0"));
       const row = byDate.get(date) || {};
       fillDailyFallbacks(sheet, row);
-      for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5))) {
+      for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
         sheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
       applyBcsxLinks(sheet, date);
+      applyWaterLinks(sheet, date);
       applyDateLabels(sheet, date);
     }
     const totalSheet = workbook.getWorksheet("Tổng hợp tháng");

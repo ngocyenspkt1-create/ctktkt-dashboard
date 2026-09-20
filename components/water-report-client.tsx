@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSessionUser } from "@/components/session-context";
-import { formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/lib/water-report/calculations";
+import { calculateDailyWaterUsages, formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/lib/water-report/calculations";
 import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/permissions";
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/lib/water-report/schema";
 
@@ -79,6 +79,10 @@ export function WaterReportClient() {
   const canEditIntake = canEditWaterField(user, "water_intake");
   const canEditResin = canEditWaterField(user, "resin_water");
   const isAdmin = user?.role === "admin" || user?.permissions?.includes("manage_users");
+  const dailyWaterByDate = useMemo(
+    () => calculateDailyWaterUsages(baseline ? [baseline, ...shifts] : shifts),
+    [baseline, shifts],
+  );
 
   // Tải dữ liệu tháng
   async function loadData(targetMonth: string) {
@@ -588,7 +592,7 @@ export function WaterReportClient() {
         </div>
       )}
 
-      {/* 3. Bảng dữ liệu theo dõi lượng nước (20 Cột chuẩn gốc) */}
+      {/* 3. Bảng dữ liệu theo dõi lượng nước (20 cột gốc + 3 cột tổng ngày tự tính) */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         {/* Thanh ghi chú phân quyền */}
         <div className="flex flex-wrap items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-2 text-xs">
@@ -673,6 +677,10 @@ export function WaterReportClient() {
                   TÁI SINH HẠT (24h)
                 </th>
 
+                <th colSpan={3} className="px-2 py-1 text-center whitespace-nowrap min-w-[210px] bg-[#009744]">
+                  TỔNG NGÀY (24h D − 24h D-1)
+                </th>
+
                 <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap min-w-[65px]">
                   Thao tác
                 </th>
@@ -711,19 +719,24 @@ export function WaterReportClient() {
                 {/* Tái sinh hạt S1, S2 */}
                 <th className="px-1.5 py-1 text-center min-w-[70px]">S1</th>
                 <th className="px-1.5 py-1 text-center min-w-[70px]">S2</th>
+
+                {/* Tổng ngày S1, S2 và toàn nhà máy */}
+                <th className="px-1.5 py-1 text-center min-w-[70px] bg-[#009744]">S1</th>
+                <th className="px-1.5 py-1 text-center min-w-[70px] bg-[#009744]">S2</th>
+                <th className="px-1.5 py-1 text-center min-w-[70px] bg-[#009744]">Tổng</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={21} className="py-12 text-center text-slate-400">
+                  <td colSpan={24} className="py-12 text-center text-slate-400">
                     Đang tải dữ liệu theo dõi lượng nước...
                   </td>
                 </tr>
               ) : shifts.length === 0 && !baseline ? (
                 <tr>
-                  <td colSpan={21} className="py-12 text-center text-slate-400">
+                  <td colSpan={24} className="py-12 text-center text-slate-400">
                     Chưa có ca trực nào trong tháng {month}. Hãy nhấn{" "}
                     <strong className="text-emerald-700">"+ Thêm ca trực"</strong> hoặc{" "}
                     <strong className="text-slate-700">"Nạp từ Excel"</strong> để bắt đầu.
@@ -774,6 +787,10 @@ export function WaterReportClient() {
                       <td className="px-1.5 py-1 text-right font-mono">{formatNum(baseline.resinWaterS1_24h, 0)}</td>
                       <td className="px-1.5 py-1 text-right font-mono">{formatNum(baseline.resinWaterS2_24h, 0)}</td>
 
+                      <td className="px-1.5 py-1 text-right font-mono bg-slate-50 text-slate-400">—</td>
+                      <td className="px-1.5 py-1 text-right font-mono bg-slate-50 text-slate-400">—</td>
+                      <td className="px-1.5 py-1 text-right font-mono bg-slate-50 text-slate-400">—</td>
+
                       <td className="px-2 py-1 text-center text-slate-400">—</td>
                     </tr>
                   )}
@@ -782,6 +799,7 @@ export function WaterReportClient() {
                   {shifts.map((shift, idx) => {
                     const isHighRatioS1 = shift.waterRatioS1 > 0.08;
                     const isHighRatioS2 = shift.waterRatioS2 > 0.08;
+                    const daily = shift.shiftTime === "22h00" ? dailyWaterByDate.get(shift.logDate) : undefined;
 
                     return (
                       <tr
@@ -910,6 +928,17 @@ export function WaterReportClient() {
                         {/* Tái sinh hạt S2 24h */}
                         <td className="px-1.5 py-1.5 text-right font-mono text-slate-700">
                           {formatNum(shift.resinWaterS2_24h, 0)}
+                        </td>
+
+                        {/* Tổng ngày chỉ hiển thị tại dòng chốt 22h00 */}
+                        <td className="px-1.5 py-1.5 text-right font-mono bg-sky-50/50 font-bold text-sky-900">
+                          {daily ? formatNum(daily.totalWaterUsedS1, 2) : "—"}
+                        </td>
+                        <td className="px-1.5 py-1.5 text-right font-mono bg-sky-50/50 font-bold text-sky-900">
+                          {daily ? formatNum(daily.totalWaterUsedS2, 2) : "—"}
+                        </td>
+                        <td className="px-1.5 py-1.5 text-right font-mono bg-emerald-50 font-extrabold text-emerald-900">
+                          {daily ? formatNum(daily.totalWaterUsedPlant, 2) : "—"}
                         </td>
 
                         {/* Thao tác (Sửa / Xóa) */}
@@ -1505,4 +1534,3 @@ export function WaterReportClient() {
     </div>
   );
 }
-

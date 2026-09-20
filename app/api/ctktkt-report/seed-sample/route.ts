@@ -1,6 +1,7 @@
 import { getRawDb } from "@/db";
 import { CTKTKT_SAMPLE_2DAYS } from "@/lib/ctktkt-sample-data";
 import { CTKTKT_BCSX_LINKED_CELLS } from "@/lib/ctktkt-bcsx-link";
+import { CTKTKT_WATER_LINKED_CELLS } from "@/lib/ctktkt-water-link";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function seedCtktktSample2Days(db: any) {
@@ -20,7 +21,7 @@ export async function seedCtktktSample2Days(db: any) {
     }
 
     for (const entry of data.manualEntries) {
-      if (CTKTKT_BCSX_LINKED_CELLS.has(entry.cell)) continue;
+      if (CTKTKT_BCSX_LINKED_CELLS.has(entry.cell) || CTKTKT_WATER_LINKED_CELLS.has(entry.cell)) continue;
       totalManual++;
       statements.push(
         db.prepare(

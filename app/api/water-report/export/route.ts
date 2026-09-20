@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { getRawDb } from "@/db";
 import {
+  calculateDailyWaterUsages,
   formatIsoToDmy,
   recalculateWaterShiftChain,
   type WaterShiftLog,
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
       views: [{ showGridLines: true }],
     });
 
-    // Cấu hình các cột (Col 1 -> Col 20)
+    // Cấu hình các cột (20 cột gốc + 3 cột tổng ngày tự tính)
     ws.columns = [
       { width: 14 }, // A: Ngày
       { width: 13 }, // B: Thời gian
@@ -114,6 +115,9 @@ export async function GET(request: Request) {
       { width: 20 }, // R: Lượng nước cấp bình ngưng S2
       { width: 20 }, // S: Lượng nước tái sinh hạt S1 (24h)
       { width: 20 }, // T: Lượng nước tái sinh hạt S2 (24h)
+      { width: 18 }, // U: Tổng nước ngày S1
+      { width: 18 }, // V: Tổng nước ngày S2
+      { width: 18 }, // W: Tổng nước ngày nhà máy
     ];
 
     // Hàng 1
@@ -140,6 +144,9 @@ export async function GET(request: Request) {
       "Lượng nước cấp\n vào bình ngưng S2",
       "Lượng nước tái sinh hạt S1 (24h)",
       "Lượng Nước tái  sinh hạt S2 (24h)",
+      "TỔNG NƯỚC NGÀY\n(24h D - 24h D-1)",
+      "TỔNG NƯỚC NGÀY\n(24h D - 24h D-1)",
+      "TỔNG NƯỚC NGÀY\n(24h D - 24h D-1)",
     ];
 
     // Hàng 2
@@ -166,6 +173,9 @@ export async function GET(request: Request) {
       null,
       null,
       null,
+      "S1",
+      "S2",
+      "Tổng",
     ];
 
     // Merge Header Cells
@@ -185,6 +195,7 @@ export async function GET(request: Request) {
       "R1:R2",
       "S1:S2",
       "T1:T2",
+      "U1:W1",
     ];
     for (const m of merges) ws.mergeCells(m);
 
@@ -209,7 +220,7 @@ export async function GET(request: Request) {
 
     for (let r = 1; r <= 2; r++) {
       const row = ws.getRow(r);
-      for (let c = 1; c <= 20; c++) {
+      for (let c = 1; c <= 23; c++) {
         const cell = row.getCell(c);
         cell.fill = headerFill;
         cell.font = headerFont;
@@ -221,6 +232,7 @@ export async function GET(request: Request) {
     // Ghi dữ liệu từng dòng
     let currentRowIdx = 3;
     const dayGroups: { logDate: string; startRow: number; endRow: number }[] = [];
+    const dailyWaterByDate = calculateDailyWaterUsages(chained);
 
     for (let i = 0; i < chained.length; i++) {
       const item = chained[i];
@@ -258,6 +270,9 @@ export async function GET(request: Request) {
         row.getCell(18).value = null;
         row.getCell(19).value = null;
         row.getCell(20).value = null;
+        row.getCell(21).value = null;
+        row.getCell(22).value = null;
+        row.getCell(23).value = null;
       } else {
         // Gom nhóm theo ngày để gộp ô A (Ngày), S (Tái sinh S1), T (Tái sinh S2)
         const lastGroup = dayGroups[dayGroups.length - 1];
@@ -301,6 +316,10 @@ export async function GET(request: Request) {
         // Col S, T: Tái sinh hạt 24h
         row.getCell(19).value = item.resinWaterS1_24h ?? 0;
         row.getCell(20).value = item.resinWaterS2_24h ?? 0;
+        const daily = dailyWaterByDate.get(item.logDate);
+        row.getCell(21).value = daily?.totalWaterUsedS1 ?? null;
+        row.getCell(22).value = daily?.totalWaterUsedS2 ?? null;
+        row.getCell(23).value = daily?.totalWaterUsedPlant ?? null;
       }
 
       // Format cells
@@ -309,7 +328,7 @@ export async function GET(request: Request) {
         size: 13,
       };
 
-      for (let c = 1; c <= 20; c++) {
+      for (let c = 1; c <= 23; c++) {
         const cell = row.getCell(c);
         cell.font = dataFont;
         cell.border = thinBorder;
@@ -317,7 +336,7 @@ export async function GET(request: Request) {
 
         if (c === 13 || c === 14) {
           cell.numFmt = "0.0000";
-        } else if (c >= 5 && c <= 18) {
+        } else if ((c >= 5 && c <= 18) || (c >= 21 && c <= 23)) {
           cell.numFmt = "#,##0.00";
         }
       }
@@ -325,7 +344,7 @@ export async function GET(request: Request) {
       currentRowIdx++;
     }
 
-    // Gộp ô theo ngày cho cột A (Ngày), cột S và T (Lượng nước tái sinh hạt 24h)
+    // Gộp ô theo ngày cho cột A, S:T và U:W (các giá trị 24h)
     for (const group of dayGroups) {
       if (group.endRow > group.startRow) {
         // Tìm giá trị tái sinh hạt của ngày (nếu có ca nhập > 0 thì lấy giá trị đó để điền vào toàn bộ ô trong nhóm)
@@ -347,11 +366,17 @@ export async function GET(request: Request) {
         ws.mergeCells(`A${group.startRow}:A${group.endRow}`);
         ws.mergeCells(`S${group.startRow}:S${group.endRow}`);
         ws.mergeCells(`T${group.startRow}:T${group.endRow}`);
+        ws.mergeCells(`U${group.startRow}:U${group.endRow}`);
+        ws.mergeCells(`V${group.startRow}:V${group.endRow}`);
+        ws.mergeCells(`W${group.startRow}:W${group.endRow}`);
 
         // Đảm bảo căn giữa theo cả chiều dọc và ngang
         ws.getCell(`A${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
         ws.getCell(`S${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
         ws.getCell(`T${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
+        ws.getCell(`U${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
+        ws.getCell(`V${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
+        ws.getCell(`W${group.startRow}`).alignment = { vertical: "middle", horizontal: "center" };
       }
     }
 
@@ -370,4 +395,3 @@ export async function GET(request: Request) {
     return Response.json({ error: "Không thể xuất file Excel." }, { status: 500 });
   }
 }
-

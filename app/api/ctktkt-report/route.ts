@@ -2,14 +2,16 @@ import { getRawDb } from "@/db";
 import { getSessionUser } from "@/lib/auth/server";
 import { canEditAnyCtktktField, canEditCtktktField } from "@/lib/ctktkt-permissions";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
+import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS } from "@/lib/ctktkt-extra-fields";
+import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { seedCtktktSample2Days } from "./seed-sample/route";
 
 const fieldCells = new Set<string>([
   ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
   ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
-].filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell)));
+].filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell) && !CTKTKT_WATER_LINKED_CELLS.has(cell)));
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
@@ -28,11 +30,15 @@ export async function GET(request: Request) {
   const { from, next } = monthBounds(period);
   try {
     const db = getRawDb();
+    await ensureWaterSchema(db);
     let { results } = await db.prepare(
       "SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code",
     ).bind(from, next).all();
     let { results: shiftResults } = await db.prepare(
       "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
+    ).bind(from, next).all();
+    const { results: waterResults } = await db.prepare(
+      "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
     ).bind(from, next).all();
 
     if (period === "2026-09" && (results as unknown[]).length === 0 && (shiftResults as unknown[]).length === 0) {
@@ -60,7 +66,11 @@ export async function GET(request: Request) {
       for (const [cell, value] of Object.entries(derived.entries)) linkedEntries.push({ operatingDate, cell, value });
       for (const warning of derived.warnings) warnings.push({ operatingDate, ...warning });
     }
-    const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry => !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell));
+    const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
+    for (const operatingDate of new Set(waterLogs.map(log => log.logDate))) {
+      for (const [cell, value] of Object.entries(deriveCtktktCellsFromWater(waterLogs, operatingDate))) linkedEntries.push({ operatingDate, cell, value });
+    }
+    const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry => !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell) && !CTKTKT_WATER_LINKED_CELLS.has(entry.cell));
     return Response.json({ entries: manualEntries, linkedEntries, warnings }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Chưa tải được dữ liệu Chỉ tiêu KTKT." }, { status: 503 });
@@ -107,6 +117,7 @@ export async function POST(request: Request) {
       ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${entry.cell}`)
       : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(body.operatingDate, `KTKT:${entry.cell}`, entry.value));
     for (const cell of CTKTKT_BCSX_LINKED_CELLS) statements.push(db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${cell}`));
+    for (const cell of CTKTKT_WATER_LINKED_CELLS) statements.push(db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${cell}`));
     if (statements.length) await db.batch(statements);
     return Response.json({ saved: authorizedEntries.filter(entry => entry.value !== "").length });
   } catch (error) {

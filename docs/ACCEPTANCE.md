@@ -820,4 +820,13 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Commit chức năng `29d7b69` đã được push lên `github/main`; Vercel báo `success` và `/bcsx-report` phản hồi chuyển hướng đăng nhập HTTP 307 đúng cơ chế bảo vệ.
 - Còn cần nghiệm thu: nhấn `Ctrl+F5`, mở lại Chỉ tiêu KTKT để kiểm tra `Utc 220 kV`, sau đó xuất một file A0 và đối chiếu cột E với file S1 cùng ngày.
 
+## Bổ sung 20/09/2026 — Tổng nước ngày và liên kết Chỉ tiêu KTKT
+
+- Trang `Theo dõi lượng nước` có thêm ba cột sau `Tái sinh hạt`: S1, S2 và Tổng. S1/S2 tính theo chỉ số chốt cuối ngày D trừ đúng chỉ số chốt ngày D-1; Tổng = S1 + S2. Chỉ hiển thị kết quả tại dòng chốt `22h00`, ngày thiếu mốc D hoặc D-1 để trống nhằm tránh báo cáo một ngày chưa hoàn tất.
+- File Excel xuất từ trang Nước giữ nguyên 20 cột gốc và thêm ba cột tổng ngày U:W; các ô được gộp theo ngày giống cột tái sinh hạt.
+- Chỉ tiêu KTKT tự lấy công tơ Nước vào `W72/X72` (S1), `W73/X73` (S2) và tái sinh vào `Z72/Z73`. Các công thức gốc `Y72=X72-W72`, `Y73=(X73-W73)`, `Y74=Y72+Y73`, `Z74=Z72+Z73` được giữ nguyên, không ghi đè.
+- Các ô nguồn liên kết Nước được khóa nhập tay trên web Chỉ tiêu; dữ liệu cũ từng nhập tay tại các ô này bị bỏ qua/xóa khi lưu để chỉ còn một nguồn chính thức.
+- Kiểm tra: ví dụ S1 `11.134,09 → 11.702,32 = 568,23 m³`; S2 `7.553,55 → 8.304,85 = 751,30 m³`; tổng `1.319,53 m³`. `node --test tests/*.test.mjs`: 95/95 đạt; `npx.cmd tsc --noEmit`: đạt; build production đạt.
+- Còn cần nghiệm thu sau triển khai: nhập đủ mốc `22h00` của hai ngày liên tiếp, mở trang Chỉ tiêu cùng ngày và xuất Excel để đối chiếu các ô W72:Z74. Phiên này chưa kiểm thử UI trình duyệt cục bộ do tiến trình Vinext cũ giữ khóa nhưng không phản hồi cổng 5173.
+
 ---

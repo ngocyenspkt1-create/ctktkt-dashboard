@@ -41,6 +41,19 @@ export type MonthlyWaterSummary = {
   shiftCount: number;
 };
 
+export type DailyWaterUsage = {
+  logDate: string;
+  previousWaterRecS1: number;
+  currentWaterRecS1: number;
+  previousWaterRecS2: number;
+  currentWaterRecS2: number;
+  totalWaterUsedS1: number;
+  totalWaterUsedS2: number;
+  totalWaterUsedPlant: number;
+  resinWaterS1_24h: number;
+  resinWaterS2_24h: number;
+};
+
 const SHIFT_TIME_ORDER: Record<string, number> = {
   "06h00": 1,
   "14h00": 2,
@@ -60,6 +73,58 @@ export function getShiftSortKey(logDate: string, shiftTime: string): string {
  */
 export function sortWaterShifts<T extends { logDate: string; shiftTime: string }>(shifts: T[]): T[] {
   return [...shifts].sort((a, b) => getShiftSortKey(a.logDate, a.shiftTime).localeCompare(getShiftSortKey(b.logDate, b.shiftTime)));
+}
+
+function previousIsoDate(isoDate: string): string {
+  const date = new Date(`${isoDate}T12:00:00+07:00`);
+  date.setDate(date.getDate() - 1);
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+/**
+ * Tính lượng nước dùng cả ngày theo đúng công thức file Chỉ tiêu KTKT:
+ * chỉ số chốt ngày D trừ chỉ số chốt ngày D-1. Nhật ký nước hiện chốt ngày ở ca 22h00;
+ * nếu thiếu một trong hai mốc thì không sinh số liệu để tránh dùng nhầm ngày chưa hoàn tất.
+ */
+export function calculateDailyWaterUsages(shifts: WaterShiftLog[]): Map<string, DailyWaterUsage> {
+  const sorted = sortWaterShifts(shifts);
+  const dayEndByDate = new Map<string, WaterShiftLog>();
+  const resinByDate = new Map<string, { s1: number; s2: number }>();
+
+  for (const shift of sorted) {
+    if (shift.shiftTime === "22h00") dayEndByDate.set(shift.logDate, shift);
+    const resin = resinByDate.get(shift.logDate) || { s1: 0, s2: 0 };
+    if (shift.resinWaterS1_24h > 0) resin.s1 = shift.resinWaterS1_24h;
+    if (shift.resinWaterS2_24h > 0) resin.s2 = shift.resinWaterS2_24h;
+    resinByDate.set(shift.logDate, resin);
+  }
+
+  const result = new Map<string, DailyWaterUsage>();
+  for (const [logDate, current] of dayEndByDate) {
+    const previous = dayEndByDate.get(previousIsoDate(logDate));
+    if (!previous || current.waterRecS1 <= 0 || current.waterRecS2 <= 0 || previous.waterRecS1 <= 0 || previous.waterRecS2 <= 0) continue;
+    const totalWaterUsedS1 = roundTo(current.waterRecS1 - previous.waterRecS1, 2);
+    const totalWaterUsedS2 = roundTo(current.waterRecS2 - previous.waterRecS2, 2);
+    const resin = resinByDate.get(logDate) || { s1: 0, s2: 0 };
+    result.set(logDate, {
+      logDate,
+      previousWaterRecS1: previous.waterRecS1,
+      currentWaterRecS1: current.waterRecS1,
+      previousWaterRecS2: previous.waterRecS2,
+      currentWaterRecS2: current.waterRecS2,
+      totalWaterUsedS1,
+      totalWaterUsedS2,
+      totalWaterUsedPlant: roundTo(totalWaterUsedS1 + totalWaterUsedS2, 2),
+      resinWaterS1_24h: resin.s1,
+      resinWaterS2_24h: resin.s2,
+    });
+  }
+  return result;
 }
 
 /**
@@ -227,4 +292,3 @@ export function formatIsoToDmy(isoStr: string): string {
   }
   return isoStr;
 }
-

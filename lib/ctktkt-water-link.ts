@@ -1,0 +1,50 @@
+import { calculateDailyWaterUsages, type WaterShiftLog } from "@/lib/water-report/calculations";
+
+export const CTKTKT_WATER_LINKS = [
+  { cell: "W72", label: "Công tơ nước demin S1 · 24h ngày D-1" },
+  { cell: "X72", label: "Công tơ nước demin S1 · 24h ngày D" },
+  { cell: "Z72", label: "Nước tái sinh hạt S1" },
+  { cell: "W73", label: "Công tơ nước demin S2 · 24h ngày D-1" },
+  { cell: "X73", label: "Công tơ nước demin S2 · 24h ngày D" },
+  { cell: "Z73", label: "Nước tái sinh hạt S2" },
+] as const;
+
+export const CTKTKT_WATER_LINKED_CELLS = new Set<string>(CTKTKT_WATER_LINKS.map(link => link.cell));
+
+export function ctktktWaterLogFromRow(row: Record<string, unknown>): WaterShiftLog {
+  return {
+    logDate: String(row.logDate || row.log_date || ""),
+    shiftTime: String(row.shiftTime || row.shift_time || ""),
+    shiftTeam: "",
+    shiftLeader: "",
+    elecRecS1: 0,
+    elecRecS2: 0,
+    elecGenS1: 0,
+    elecGenS2: 0,
+    waterRecS1: Number(row.waterRecS1 ?? row.water_rec_s1 ?? 0),
+    waterRecS2: Number(row.waterRecS2 ?? row.water_rec_s2 ?? 0),
+    waterUsedS1: 0,
+    waterUsedS2: 0,
+    waterRatioS1: 0,
+    waterRatioS2: 0,
+    condenserRecS1: 0,
+    condenserRecS2: 0,
+    condenserUsedS1: 0,
+    condenserUsedS2: 0,
+    resinWaterS1_24h: Number(row.resinWaterS1_24h ?? row.resin_water_s1_24h ?? 0),
+    resinWaterS2_24h: Number(row.resinWaterS2_24h ?? row.resin_water_s2_24h ?? 0),
+  };
+}
+
+export function deriveCtktktCellsFromWater(shifts: WaterShiftLog[], operatingDate: string) {
+  const daily = calculateDailyWaterUsages(shifts).get(operatingDate);
+  if (!daily) return {} as Record<string, string>;
+  return {
+    W72: String(daily.previousWaterRecS1),
+    X72: String(daily.currentWaterRecS1),
+    Z72: String(daily.resinWaterS1_24h),
+    W73: String(daily.previousWaterRecS2),
+    X73: String(daily.currentWaterRecS2),
+    Z73: String(daily.resinWaterS2_24h),
+  };
+}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  calculateDailyWaterUsages,
   calculateMonthlyWaterSummary,
   getShiftSortKey,
   recalculateWaterShiftChain,
@@ -165,6 +166,40 @@ test("calculateMonthlyWaterSummary aggregates totals and weighted ratios correct
   assert.equal(summary.totalResinWaterS2, 500);
 });
 
+test("calculateDailyWaterUsages uses the 22h day-end meters for D minus D-1", () => {
+  const base = {
+    shiftTeam: "A", shiftLeader: "", elecRecS1: 0, elecRecS2: 0, elecGenS1: 0, elecGenS2: 0,
+    waterUsedS1: 0, waterUsedS2: 0, waterRatioS1: 0, waterRatioS2: 0,
+    condenserRecS1: 0, condenserRecS2: 0, condenserUsedS1: 0, condenserUsedS2: 0,
+    resinWaterS1_24h: 0, resinWaterS2_24h: 0,
+  };
+  const daily = calculateDailyWaterUsages([
+    { ...base, logDate: "2026-09-18", shiftTime: "22h00", waterRecS1: 11134.09, waterRecS2: 7553.55 },
+    { ...base, logDate: "2026-09-19", shiftTime: "06h00", waterRecS1: 11350, waterRecS2: 7800, resinWaterS1_24h: 400, resinWaterS2_24h: 207 },
+    { ...base, logDate: "2026-09-19", shiftTime: "22h00", waterRecS1: 11702.32, waterRecS2: 8304.85 },
+  ]).get("2026-09-19");
+
+  assert.ok(daily);
+  assert.equal(daily.previousWaterRecS1, 11134.09);
+  assert.equal(daily.currentWaterRecS1, 11702.32);
+  assert.equal(daily.totalWaterUsedS1, 568.23);
+  assert.equal(daily.totalWaterUsedS2, 751.3);
+  assert.equal(daily.totalWaterUsedPlant, 1319.53);
+  assert.equal(daily.resinWaterS1_24h, 400);
+  assert.equal(daily.resinWaterS2_24h, 207);
+});
+
+test("calculateDailyWaterUsages leaves an incomplete day blank", () => {
+  const incomplete = calculateDailyWaterUsages([{
+    logDate: "2026-09-19", shiftTime: "14h00", shiftTeam: "A", shiftLeader: "",
+    elecRecS1: 0, elecRecS2: 0, elecGenS1: 0, elecGenS2: 0,
+    waterRecS1: 11702.32, waterRecS2: 8304.85, waterUsedS1: 0, waterUsedS2: 0,
+    waterRatioS1: 0, waterRatioS2: 0, condenserRecS1: 0, condenserRecS2: 0,
+    condenserUsedS1: 0, condenserUsedS2: 0, resinWaterS1_24h: 0, resinWaterS2_24h: 0,
+  }]);
+  assert.equal(incomplete.has("2026-09-19"), false);
+});
+
 test("canEditWaterField strictly enforces position permissions", () => {
   const admin = { id: 1, role: "admin", displayName: "Quản đốc", position: "Quản đốc", permissions: ["manage_users"] };
   const tkDien = { id: 2, role: "viewer", displayName: "Trưởng kíp điện", position: "Trưởng kíp điện", permissions: ["view_all"] };
@@ -206,7 +241,7 @@ test("canEditWaterField strictly enforces position permissions", () => {
   assert.equal(canEditWaterField(delegated, "resin_water"), true);
 });
 
-test("Excel export builder generates exact 20-column template with green header and formulas", async () => {
+test("Excel export builder supports the 20 original columns plus 3 daily totals", async () => {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("T09.2026");

@@ -37,6 +37,7 @@ import {
   type CtktktFieldGroup,
 } from "@/lib/ctktkt-permissions";
 import { CTKTKT_BCSX_LINKED_CELLS, CTKTKT_BCSX_LINKS } from "@/lib/ctktkt-bcsx-link";
+import { CTKTKT_WATER_LINKED_CELLS, CTKTKT_WATER_LINKS } from "@/lib/ctktkt-water-link";
 import {
   calculateCtktktSummary,
   calculateTkdDcsSummary,
@@ -90,6 +91,7 @@ const today = () =>
 const editableFields = [
   ...CTKTKT_INPUT_FIELDS.filter(
     field => !CTKTKT_BCSX_LINKED_CELLS.has(field.cell)
+      && !CTKTKT_WATER_LINKED_CELLS.has(field.cell)
       && !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(field.cell),
   ),
   ...CTKTKT_EXTRA_INPUT_FIELDS,
@@ -98,6 +100,12 @@ const editableFields = [
 const displayFields: DisplayField[] = [
   ...editableFields,
   ...CTKTKT_BCSX_LINKS.map(link => ({
+    cell: link.cell,
+    label: link.label,
+    row: Number(link.cell.match(/\d+$/)?.[0] || 0),
+    column: link.cell.charCodeAt(0) - 64,
+  })),
+  ...CTKTKT_WATER_LINKS.map(link => ({
     cell: link.cell,
     label: link.label,
     row: Number(link.cell.match(/\d+$/)?.[0] || 0),
@@ -777,13 +785,14 @@ export function CtktktReport() {
       compact?: boolean;
     },
   ) => {
-    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell);
+    const isWaterLinked = CTKTKT_WATER_LINKED_CELLS.has(cell);
+    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked;
     const canEditThis = !isLinked && canEditCtktktField(user, cell);
     const value = current[cell] || "";
 
     const groupMeta = options?.group ? CTKTKT_GROUP_META[options.group] : null;
     const tooltip = isLinked
-      ? `${cell}: Liên kết tự động từ BCSX mục 1`
+      ? `${cell}: Liên kết tự động từ ${isWaterLinked ? "Theo dõi lượng nước" : "BCSX mục 1"}`
       : canEditThis
         ? `${cell}: Bạn có quyền nhập liệu (Phím mũi tên để chuyển ô, Ctrl+V để dán nhiều ô)`
         : `${cell}: Khóa (Chỉ ${groupMeta?.responsible || "cương vị được phân công"} nhập)`;

@@ -292,3 +292,11 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Dữ liệu mẫu và test đã cập nhật theo nguồn S1. Kết quả: 91/91 test đạt; TypeScript, ESLint phạm vi sửa và build production đều đạt.
 - Commit chức năng `29d7b69` đã được push lên `github/main`; Vercel báo `success` và `/bcsx-report` phản hồi chuyển hướng đăng nhập HTTP 307 đúng cơ chế bảo vệ.
 - Còn cần: người dùng `Ctrl+F5`, kiểm tra sáu ô Utc 220 kV trên Chỉ tiêu KTKT và xuất A0 để đối chiếu cột E với S1.
+
+## 18. Cập nhật 20/09/2026 — Tổng nước ngày tự động sang Chỉ tiêu KTKT
+
+- Đã thêm ba cột S1/S2/Tổng sau `Tái sinh hạt` tại `/water-report`. Nguồn chốt ngày là bản ghi `22h00`; chỉ tính khi có đủ ngày D và đúng ngày D-1. Công thức S1/S2 là chênh công tơ, Tổng là S1+S2.
+- Excel Nước mở rộng từ 20 lên 23 cột, giữ nguyên toàn bộ cột gốc và thêm U:W cho ba tổng ngày.
+- `/api/ctktkt-report` và API xuất file tự liên kết Nước vào `W72/X72/Z72` và `W73/X73/Z73`. Không ghi vào các ô công thức Y72/Y73/Y74/Z74; các công thức của mẫu gốc đã được kiểm tra tự động.
+- Kiểm tra: 95/95 test đạt; TypeScript đạt; build production đạt. ESLint các file mới sạch; lệnh lint phạm vi còn báo đúng lỗi nền cũ trong hai component đã có trước lượt sửa.
+- Còn cần: sau deploy nhấn `Ctrl+F5`, đối chiếu một ngày có đủ mốc 22h D-1/D trên trang Nước và file Chỉ tiêu xuất ra. Local UI chưa được nghiệm thu do tiến trình Vinext cũ giữ khóa cổng 5173 nhưng không phản hồi.
