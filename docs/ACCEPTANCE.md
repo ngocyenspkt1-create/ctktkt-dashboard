@@ -807,4 +807,9 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Dữ liệu production chưa được tự ghi trong lượt phát triển này vì không có phiên đăng nhập của người dùng; thao tác chọn hai file trên web là bước ghi thật có chủ đích.
 - Quyền `edit_water` mới sẽ có hiệu lực với cương vị sau khi Quản trị viên tích cột `Nước`, bấm lưu và người dùng đăng nhập lại. Quyền theo cương vị cũ trên trang Nước vẫn hoạt động trong thời gian chuyển tiếp.
 
+### Trạng thái triển khai
+
+- Commit chức năng `f4cb03f` (`fix(bcsx-auth): nhận hai file Excel và bổ sung quyền nước`) đã được push lên `github/main`.
+- GitHub/Vercel báo `success` cho đúng SHA `f4cb03f8d76ebf0c5664812e40d582cf21b244df`; trang `/bcsx-report` trên production phản hồi và chuyển tới đăng nhập đúng cơ chế bảo vệ.
+
 ---

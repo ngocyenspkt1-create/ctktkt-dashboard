@@ -283,3 +283,4 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Ma trận phân quyền có thêm quyền `edit_water` và cột `Nước`. Đây là tác vụ có trang riêng trên thanh bên nhưng trước đó chưa có quyền chức năng tương ứng. Cơ chế quyền chi tiết theo cương vị tại trang Nước được giữ nguyên; quyền mới là quyền quản lý toàn trang khi Quản trị viên chủ động cấp.
 - Kiểm tra: 90/90 test đạt; TypeScript, ESLint các file thay đổi và build đều đạt.
 - Còn dở: chưa thực hiện lần ghi thật 7.296 giá trị trên production vì không có phiên đăng nhập người dùng. Sau deploy, người dùng chọn đồng thời hai file S1/S2 và chờ thông báo đọc lại thành công; quản trị viên lưu cột quyền `Nước`, người dùng cần đăng nhập lại để JWT nhận quyền mới.
+- Đã push commit chức năng `f4cb03f` lên `github/main`; Vercel báo `success` cho SHA đầy đủ `f4cb03f8d76ebf0c5664812e40d582cf21b244df`.
