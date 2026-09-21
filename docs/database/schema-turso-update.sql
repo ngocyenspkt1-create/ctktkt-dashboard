@@ -19,4 +19,3 @@ CREATE TABLE IF NOT EXISTS `position_permissions` (
 	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS `uidx_position_permissions_position` ON `position_permissions` (`position`);
-

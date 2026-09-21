@@ -710,7 +710,7 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 2. **Cập nhật Cơ sở dữ liệu**:
    - Mở rộng bảng `users` (`db/schema.ts`): thêm các trường `employee_code`, `position`, `department`, `email_company`, `email_work`, `phone`, `status`.
    - Tạo bảng mới `position_permissions`: lưu trữ ma trận phân quyền cho từng Cương vị (`position`, `role`, `permissions` dạng JSON array, `description`).
-   - Tạo file migration: `drizzle/0005_position_permissions.sql` và script SQL chạy trực tiếp trên Turso: `drizzle/schema-turso-update.sql`.
+   - Tạo file migration: `drizzle/0005_position_permissions.sql` và script SQL chạy trực tiếp trên Turso: `docs/database/schema-turso-update.sql`.
 
 3. **Cập nhật Logic Xác thực & Phiên (Auth Session & Guards)**:
    - `lib/auth/session.ts`: Thêm `Permission`, `hasPermission(user, permission)`, mở rộng `SessionUser` chứa `position`, `employeeCode`, `permissions`.
