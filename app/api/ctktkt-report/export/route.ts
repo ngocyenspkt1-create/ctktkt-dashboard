@@ -3,7 +3,7 @@ import { getRawDb } from "@/db";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
-import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
+import { CTKTKT_DAY03_INPUT_CELLS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
@@ -143,9 +143,10 @@ export async function GET(request: Request) {
     const templateBytes = Uint8Array.from(atob(CTKTKT_TEMPLATE_BASE64), character => character.charCodeAt(0));
     await workbook.xlsx.load(templateBytes.buffer);
     const inputCells = [
-      ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
+      ...CTKTKT_DAY03_INPUT_CELLS,
       ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
     ].filter(cell => !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(cell));
+    const exportableCells = new Set<string>(inputCells);
     for (const sheetName of ["d-1", ...Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, "0"))]) {
       const sheet = workbook.getWorksheet(sheetName);
       if (!sheet) continue;
@@ -156,7 +157,7 @@ export async function GET(request: Request) {
     const previousRow = byDate.get(previous);
     if (previousSheet) {
       if (previousRow) fillDailyFallbacks(previousSheet, previousRow);
-      for (const [code, value] of Object.entries(previousRow || {})) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(code.slice(5))) {
+      for (const [code, value] of Object.entries(previousRow || {})) if (code.startsWith("KTKT:") && exportableCells.has(code.slice(5)) && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
         previousSheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
@@ -175,7 +176,7 @@ export async function GET(request: Request) {
       normalizeCoalMeterFormulas(sheet, day === 1 ? "d-1" : String(day - 1).padStart(2, "0"));
       const row = byDate.get(date) || {};
       fillDailyFallbacks(sheet, row);
-      for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(code.slice(5))) {
+      for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && exportableCells.has(code.slice(5)) && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
         sheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }

@@ -3,42 +3,27 @@ from __future__ import annotations
 import base64
 import io
 import json
-from collections import Counter, defaultdict
+import sys
+from copy import copy
 from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
+from openpyxl.worksheet.dimensions import DimensionHolder
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT.parent / ".tmp-inspect" / "ctktkt-17-09" / "CHI_TIEU_KTKT_17.09.2026_converted.xlsx"
+SOURCE = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT.parent / ".tmp-inspect" / "ctktkt-17-09" / "CHI_TIEU_KTKT_17.09.2026_converted.xlsx"
+REFERENCE_SHEET = sys.argv[2] if len(sys.argv) > 2 else "03"
 TEMPLATE_TARGET = ROOT / "lib" / "ctktkt-template.generated.ts"
 FIELDS_TARGET = ROOT / "lib" / "ctktkt-fields.generated.ts"
+CANDIDATES_SOURCE = ROOT / "assets" / "ctktkt-input-candidates.json"
 
 wb = load_workbook(SOURCE, data_only=False, read_only=False)
 daily_sheets = [f"{day:02d}" for day in range(1, 32)]
-coord_kinds: dict[str, Counter] = defaultdict(Counter)
-coord_values: dict[str, list[object]] = defaultdict(list)
-
-for name in daily_sheets:
-    ws = wb[name]
-    for row in ws.iter_rows():
-        for cell in row:
-            value = cell.value
-            if value is None:
-                kind = "blank"
-            elif isinstance(value, str) and value.startswith("="):
-                kind = "formula"
-            elif isinstance(value, (int, float)):
-                kind = "number"
-            else:
-                kind = "text"
-            coord_kinds[cell.coordinate][kind] += 1
-            if value is not None:
-                coord_values[cell.coordinate].append(value)
-
-ws = wb["17"]
-skip_columns = {1, 21, 31}  # STT/helper columns A/U/AE
-skip_rows = {2, 7, 23, 40, 48, 51, 53, 58}  # fixed time headers
+if REFERENCE_SHEET not in wb.sheetnames:
+    raise RuntimeError(f"missing reference sheet {REFERENCE_SHEET}")
+ws = wb[REFERENCE_SHEET]
+candidate_cells = json.loads(CANDIDATES_SOURCE.read_text(encoding="utf-8"))
 
 
 def section(row: int) -> tuple[str, str]:
@@ -95,29 +80,8 @@ def label_for(cell) -> str:
 
 
 fields = []
-for coordinate, kinds in coord_kinds.items():
-    cell = ws[coordinate]
-    numbers = [float(value) for value in coord_values[coordinate] if isinstance(value, (int, float))]
-    distinct = {round(value, 12) for value in numbers}
-    if kinds["formula"] or kinds["number"] < 3 or len(distinct) < 3:
-        continue
-    if cell.column in skip_columns or cell.row in skip_rows or cell.row <= 2:
-        continue
-    key, section_label = section(cell.row)
-    fields.append({
-        "cell": coordinate,
-        "section": key,
-        "sectionLabel": section_label,
-        "label": label_for(cell),
-        "row": cell.row,
-        "column": cell.column,
-    })
-
-explicit = ["J157", "K157", "J158", "K158"] + [f"{column}181" for column in "CDEFGHIJKLMNOPQRST"]
-known = {item["cell"] for item in fields}
-for coordinate in explicit:
-    if coordinate in known:
-        continue
+reference_input_cells = []
+for coordinate in candidate_cells:
     cell = ws[coordinate]
     key, section_label = section(cell.row)
     fields.append({
@@ -128,8 +92,71 @@ for coordinate in explicit:
         "row": cell.row,
         "column": cell.column,
     })
+    if cell.value is not None and not (isinstance(cell.value, str) and cell.value.startswith("=")):
+        reference_input_cells.append(coordinate)
 
 fields.sort(key=lambda item: (item["row"], item["column"]))
+reference_input_cells.sort(key=lambda coordinate: (ws[coordinate].row, ws[coordinate].column))
+
+
+def quoted_sheet_name(name: str) -> str:
+    return "'" + name.replace("'", "''") + "'!"
+
+
+def rebased_value(value: object, target_name: str, previous_name: str) -> object:
+    if not (isinstance(value, str) and value.startswith("=")):
+        return value
+    previous_marker = "__CTKTKT_PREVIOUS_SHEET__!"
+    current_marker = "__CTKTKT_CURRENT_SHEET__!"
+    formula = value.replace("'02'!", previous_marker).replace("02!", previous_marker)
+    formula = formula.replace("'03'!", current_marker).replace("03!", current_marker)
+    return formula.replace(previous_marker, quoted_sheet_name(previous_name)).replace(current_marker, quoted_sheet_name(target_name))
+
+
+def clone_reference_layout(reference, target, target_name: str, previous_name: str) -> None:
+    for merged_range in list(target.merged_cells.ranges):
+        target.unmerge_cells(str(merged_range))
+    max_row = max(reference.max_row, target.max_row)
+    max_column = max(reference.max_column, target.max_column)
+    for row in range(1, max_row + 1):
+        for column in range(1, max_column + 1):
+            source_cell = reference.cell(row, column)
+            target_cell = target.cell(row, column)
+            target_cell.value = rebased_value(source_cell.value, target_name, previous_name)
+            target_cell._style = source_cell._style
+            target_cell.hyperlink = copy(source_cell.hyperlink)
+            target_cell.comment = None
+    for merged_range in reference.merged_cells.ranges:
+        target.merge_cells(str(merged_range))
+    target.row_dimensions = DimensionHolder(worksheet=target)
+    for key, dimension in reference.row_dimensions.items():
+        cloned = copy(dimension)
+        cloned.worksheet = target
+        target.row_dimensions[key] = cloned
+    target.column_dimensions = DimensionHolder(worksheet=target)
+    for key, dimension in reference.column_dimensions.items():
+        cloned = copy(dimension)
+        cloned.worksheet = target
+        target.column_dimensions[key] = cloned
+    target.sheet_format = copy(reference.sheet_format)
+    target.sheet_properties = copy(reference.sheet_properties)
+    target.page_margins = copy(reference.page_margins)
+    target.page_setup = copy(reference.page_setup)
+    target.print_options = copy(reference.print_options)
+    target.views = copy(reference.views)
+    target.freeze_panes = reference.freeze_panes
+    target.auto_filter = copy(reference.auto_filter)
+    target.print_area = reference.print_area
+    target.print_title_cols = reference.print_title_cols
+    target.print_title_rows = reference.print_title_rows
+    target.sheet_state = reference.sheet_state
+
+
+for day, name in enumerate(daily_sheets, start=1):
+    if name == REFERENCE_SHEET:
+        continue
+    previous_name = "d-1" if day == 1 else f"{day - 1:02d}"
+    clone_reference_layout(ws, wb[name], name, previous_name)
 
 # Never commit the user's real operating figures. Build a clean template that
 # retains formulas/styles/layout but removes every identified manual field and
@@ -195,7 +222,11 @@ template_target = (
 fields_target = (
     "// Generated from the user-supplied workbook. Do not edit by hand.\n"
     f"export const CTKTKT_INPUT_FIELDS = {json.dumps(fields, ensure_ascii=False, separators=(',', ':'))} as const;\n"
+    f"export const CTKTKT_DAY03_INPUT_CELLS = {json.dumps(reference_input_cells, ensure_ascii=False, separators=(',', ':'))} as const;\n"
 )
 TEMPLATE_TARGET.write_text(template_target, encoding="utf-8")
 FIELDS_TARGET.write_text(fields_target, encoding="utf-8")
-print(f"generated {TEMPLATE_TARGET} and {FIELDS_TARGET} with {len(fields)} fields and {len(encoded)} base64 characters")
+print(
+    f"generated {TEMPLATE_TARGET} and {FIELDS_TARGET} from sheet {REFERENCE_SHEET} "
+    f"with {len(fields)} fields, {len(reference_input_cells)} reference inputs and {len(encoded)} base64 characters"
+)

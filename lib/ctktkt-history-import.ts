@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
-import { CTKTKT_INPUT_FIELDS } from "./ctktkt-fields.generated.ts";
+import { CTKTKT_DAY03_INPUT_CELLS } from "./ctktkt-fields.generated.ts";
 import {
-  CTKTKT_EXTRA_INPUT_FIELDS,
+  CTKTKT_COAL_ADJUSTMENT_FIELDS,
   CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS,
   CTKTKT_NON_WORKBOOK_INPUT_CELLS,
 } from "./ctktkt-extra-fields.ts";
@@ -178,11 +178,14 @@ export async function buildCtktktHistoryImportPackage(
   if (!throughDay) throw new Error("File không có các sheet ngày 01, 02, ... để nhập.");
 
   const inputCells = [...new Set([
-    ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
-    ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
+    ...CTKTKT_DAY03_INPUT_CELLS,
     ...CTKTKT_BCSX_LINKED_CELLS,
+    ...CTKTKT_WATER_LINKED_CELLS,
   ])].filter(cell => !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(cell));
-  const manualCells = inputCells.filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell) && !CTKTKT_WATER_LINKED_CELLS.has(cell) && !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(cell));
+  const manualCells = [...new Set([
+    ...inputCells.filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell) && !CTKTKT_WATER_LINKED_CELLS.has(cell) && !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(cell)),
+    ...CTKTKT_COAL_ADJUSTMENT_FIELDS.map(field => field.cell),
+  ])].filter(cell => !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(cell));
   const warnings: CtktktHistoryImportPackage["warnings"] = [];
   const entriesByDate = new Map<string, CtktktDayEntries>();
   const sheets: Array<{ sheetName: string; date: string; importDay: boolean }> = [];

@@ -53,3 +53,16 @@ test("history import reports the exact previous sheet required for formula compa
     /Thiếu sheet 16 để tính và đối chiếu/,
   );
 });
+
+test("history import ignores draft cells that are not part of the day-03 reference", async () => {
+  const bytes = workbookBytes({
+    "Ngày 02": { W8: 100 },
+    "Ngày 03": { W8: 120, G52: "1 thùng nháp" },
+  });
+
+  const result = await buildCtktktHistoryImportPackage("chi-tieu.xlsx", bytes, "2026-09-03");
+  const importedCells = new Set(result.days[0].manualEntries.map(entry => entry.cell));
+
+  assert.equal(importedCells.has("W8"), true);
+  assert.equal(importedCells.has("G52"), false);
+});
