@@ -112,6 +112,20 @@ const displayFields: DisplayField[] = [
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 
+function reportTabClass(active: boolean) {
+  return `flex min-w-0 items-center justify-between gap-1.5 rounded-xl border px-2.5 py-1.5 text-left text-[11px] font-bold leading-tight transition-all ${
+    active
+      ? "border-[#7a4b2f] bg-[#8a5a3b] text-white shadow-xs"
+      : "border-[#d8c0a8] bg-[#f3e8dc] text-[#6b4423] hover:border-[#bd9875] hover:bg-[#ead8c5]"
+  }`;
+}
+
+function reportTabBadgeClass(active: boolean) {
+  return `shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-mono ${
+    active ? "bg-white/20 text-white" : "bg-[#e4cfb9] text-[#70492d]"
+  }`;
+}
+
 const metricRows: Array<{ key: keyof CtktktKpis; label: string; unit: string }> = [
   { key: "grossMwh", label: "Điện đầu cực", unit: "MWh" },
   { key: "netMwh", label: "Điện giao", unit: "MWh" },
@@ -522,11 +536,21 @@ export function CtktktReport() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("targetDate", date);
       const parseResponse = await fetch("/api/ctktkt-report/history-import", { method: "POST", body: formData });
       const parsed = (await parseResponse.json()) as Partial<ImportPackage> & { error?: string };
       if (!parseResponse.ok || parsed.error) throw new Error(parsed.error || "Không đọc được file Chỉ tiêu KTKT.");
       if (!/^\d{4}-\d{2}$/.test(parsed.month || "") || !Array.isArray(parsed.days) || !parsed.days.length || !parsed.totals) throw new Error("File không đúng cấu trúc Chỉ tiêu KTKT.");
       const importPackage = parsed as ImportPackage;
+      if (importPackage.days.length !== 1 || importPackage.days[0]?.date !== date) {
+        throw new Error(`File không trả đúng dữ liệu của ngày ${date.split("-").reverse().join("/")}.`);
+      }
+      if (importPackage.totals.nonBlankManualValues <= 0) {
+        throw new Error(`Sheet ${importPackage.days[0].sheetName} không có dữ liệu nhập tay để tải lên.`);
+      }
+      if (importPackage.totals.checks <= 0) {
+        throw new Error(`Sheet ${importPackage.days[0].sheetName} không có kết quả tự tính để đối chiếu.`);
+      }
       for (const day of importPackage.days) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date) || !Array.isArray(day.manualEntries) || day.manualEntries.length > 400) {
           throw new Error(`Dữ liệu ngày ${day.date || "không rõ"} không hợp lệ.`);
@@ -537,13 +561,13 @@ export function CtktktReport() {
         const failures = importPackage.audits.flatMap(audit => audit.failed.map(item =>
           `${audit.date.split("-").reverse().join("/")} · ${item.name} (${item.sourceCell}): Excel=${item.expected ?? "trống"}, Web=${item.actual ?? "trống"}`,
         ));
-        throw new Error(`Chưa nhập vì có ${importPackage.totals.failed}/${importPackage.totals.checks} công thức không khớp:\n${failures.slice(0, 12).join("\n")}${failures.length > 12 ? `\n… và ${failures.length - 12} sai lệch khác.` : ""}`);
+        throw new Error(`Chưa nhập ngày ${date.split("-").reverse().join("/")} vì có ${importPackage.totals.failed}/${importPackage.totals.checks} kết quả tự tính chưa khớp:\n${failures.slice(0, 12).join("\n")}${failures.length > 12 ? `\n… và ${failures.length - 12} sai lệch khác.` : ""}`);
       }
       const confirmed = window.confirm(
-        `File ${file.name} đã đối chiếu đạt ${importPackage.totals.passed}/${importPackage.totals.checks} công thức.\n\nChỉ ${importPackage.totals.nonBlankManualValues || importPackage.days.reduce((sum, day) => sum + day.manualEntries.filter(entry => entry.value).length, 0)} ô nhập tay của ${importPackage.days.length} ngày sẽ được ghi. Các ô tự tính và ô liên kết không bị ghi đè.${importPackage.warnings.length ? `\nCó ${importPackage.warnings.length} ô nằm trong vùng nhập nhưng file chứa công thức nên được bỏ qua.` : ""}\n\nTiếp tục nhập dữ liệu?`,
+        `Ngày ${date.split("-").reverse().join("/")} đã khớp 100% (${importPackage.totals.passed}/${importPackage.totals.checks} kết quả tự tính).\n\nChỉ ${importPackage.totals.nonBlankManualValues || importPackage.days[0].manualEntries.filter(entry => entry.value).length} ô nhập tay từ sheet ${importPackage.days[0].sheetName} sẽ được ghi. Các ô tự tính và ô liên kết không bị ghi đè.${importPackage.warnings.length ? `\nCó ${importPackage.warnings.length} ô trong vùng nhập tay chứa công thức nên đã bỏ qua.` : ""}\n\nTiếp tục nhập dữ liệu?`,
       );
       if (!confirmed) {
-        setMessage("Đã kiểm tra file: công thức khớp 100%. Bạn đã chọn chưa ghi dữ liệu.");
+        setMessage(`Ngày ${date.split("-").reverse().join("/")} đã khớp 100%. Bạn đã chọn chưa ghi dữ liệu.`);
         return;
       }
 
@@ -602,9 +626,9 @@ export function CtktktReport() {
       setByDate(next);
       setLinkedByDate(nextLinked);
       setLinkWarnings(verified.warnings || []);
-      setDate(`${importPackage.month}-${String(importPackage.throughDay).padStart(2, "0")}`);
+      setDate(importPackage.days[0].date);
       setDirty(false);
-      setMessage(`Đã nhập và đọc lại xác nhận ${importPackage.days.length} ngày; chỉ ghi ô nhập tay; ${importPackage.totals.passed}/${importPackage.totals.checks} công thức Excel và web khớp.`);
+      setMessage(`Đã nhập ngày ${date.split("-").reverse().join("/")} từ sheet ${importPackage.days[0].sheetName}; chỉ ghi ô nhập tay; dữ liệu tự tính trên web và file đã khớp 100% (${importPackage.totals.passed}/${importPackage.totals.checks}).`);
     } catch (reason) {
       let rollbackMessage = "";
       if (backup && completed.length) {
@@ -902,7 +926,7 @@ export function CtktktReport() {
   return (
     <section className="mx-auto grid w-full min-w-0 max-w-full gap-3 xl:max-w-[1600px]">
       {/* 1. THANH TIÊU ĐỀ, CHỌN NGÀY VÀ ĐIỀU HÀNH */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -921,7 +945,7 @@ export function CtktktReport() {
 
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-              <span>Ngày:</span>
+              <span>Ngày báo cáo / nhập file:</span>
               <DateField
                 value={date}
                 onChange={value => {
@@ -946,11 +970,11 @@ export function CtktktReport() {
               type="button"
               onClick={() => importFileRef.current?.click()}
               disabled={!userCanEditAny || importingHistory || loading}
-              className="flex h-9 items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 text-xs font-bold text-amber-800 shadow-xs transition-all hover:bg-amber-100 disabled:opacity-45"
-              title="Chọn file Chỉ tiêu KTKT tháng cũ; hệ thống chỉ lấy ô nhập tay, đối chiếu công thức Excel với web và chỉ ghi khi khớp 100%"
+              className="flex h-9 items-center gap-1.5 rounded-xl border border-[#c6a17d] bg-[#f3e8dc] px-3 text-xs font-bold text-[#70492d] shadow-xs transition-all hover:bg-[#ead8c5] disabled:opacity-45"
+              title={`Tự tìm sheet ngày ${date.slice(8, 10)}; chỉ lấy ô nhập tay, đối chiếu kết quả tự tính và chỉ ghi khi khớp 100%`}
             >
               <Upload className="size-3.5" />
-              {importingHistory ? "Đang kiểm tra file…" : "Nhập dữ liệu file chỉ tiêu các tháng trước"}
+              {importingHistory ? "Đang kiểm tra file…" : `Nhập file ngày ${date.split("-").reverse().join("/")}`}
             </button>
 
             <button
@@ -1177,22 +1201,16 @@ export function CtktktReport() {
 
       {/* 3. TABS ĐIỀU HƯỚNG CÁC CỤM VẬN HÀNH (THIẾT KẾ RÕ RÀNG THEO CƯƠNG VỊ) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="flex flex-wrap items-center gap-1.5 border-b bg-[#f8fafc] p-2.5">
+        <div className="grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
           <button
             type="button"
             onClick={() => setActiveTab("tkd_dcs")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "tkd_dcs"
-                ? "bg-[#4057b5] text-white shadow-xs"
-                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
+            className={reportTabClass(activeTab === "tkd_dcs")}
           >
             <Zap className="size-3.5" />
             <span>Cụm 2: TKĐ DCS (P/Q &amp; Nước 24h)</span>
             <span
-              className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
-                activeTab === "tkd_dcs" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
-              }`}
+              className={reportTabBadgeClass(activeTab === "tkd_dcs")}
             >
               Trưởng kíp điện
             </span>
@@ -1201,20 +1219,12 @@ export function CtktktReport() {
           <button
             type="button"
             onClick={() => setActiveTab("unit_meters")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "unit_meters"
-                ? "bg-[#4057b5] text-white shadow-xs"
-                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
+            className={reportTabClass(activeTab === "unit_meters")}
           >
             <Power className="size-3.5" />
             <span>Cụm 4 & 5: Công tơ S1 & S2</span>
             <span
-              className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
-                activeTab === "unit_meters"
-                  ? "bg-white/20 text-white"
-                  : "bg-slate-100 text-slate-600"
-              }`}
+              className={reportTabBadgeClass(activeTab === "unit_meters")}
             >
               TPD · Lò phó · Máy nghiền
             </span>
@@ -1223,20 +1233,12 @@ export function CtktktReport() {
           <button
             type="button"
             onClick={() => setActiveTab("steam_nh3")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "steam_nh3"
-                ? "bg-[#4057b5] text-white shadow-xs"
-                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
+            className={reportTabClass(activeTab === "steam_nh3")}
           >
             <Droplets className="size-3.5" />
             <span>Cụm 6 & 8: Hơi & Bồn NH3</span>
             <span
-              className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
-                activeTab === "steam_nh3"
-                  ? "bg-white/20 text-white"
-                  : "bg-slate-100 text-slate-600"
-              }`}
+              className={reportTabBadgeClass(activeTab === "steam_nh3")}
             >
               TKĐ · VHV NH3
             </span>
@@ -1245,20 +1247,12 @@ export function CtktktReport() {
           <button
             type="button"
             onClick={() => setActiveTab("td21_coal_blend")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "td21_coal_blend"
-                ? "bg-[#4057b5] text-white shadow-xs"
-                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
+            className={reportTabClass(activeTab === "td21_coal_blend")}
           >
             <Boxes className="size-3.5" />
             <span>Cụm 9 & 14: TD21 & Than trộn PMIS</span>
             <span
-              className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
-                activeTab === "td21_coal_blend"
-                  ? "bg-white/20 text-white"
-                  : "bg-slate-100 text-slate-600"
-              }`}
+              className={reportTabBadgeClass(activeTab === "td21_coal_blend")}
             >
               TPD · TKĐ
             </span>
@@ -1267,15 +1261,11 @@ export function CtktktReport() {
           <button
             type="button"
             onClick={() => setActiveTab("startup_shutdown")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "startup_shutdown"
-                ? "bg-amber-700 text-white shadow-xs"
-                : "border border-amber-200 bg-amber-50/60 text-amber-900 hover:bg-amber-100/70"
-            }`}
+            className={reportTabClass(activeTab === "startup_shutdown")}
           >
             <Flame className="size-3.5" />
             <span>Cụm 11: KĐ / Ngừng tổ máy</span>
-            <span className="rounded-full bg-amber-200 px-1.5 py-0.2 text-[10px] font-bold text-amber-900">
+            <span className={reportTabBadgeClass(activeTab === "startup_shutdown")}>
               Sự kiện
             </span>
           </button>
@@ -1283,32 +1273,22 @@ export function CtktktReport() {
           <button
             type="button"
             onClick={() => setActiveTab("pmis_reports")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "pmis_reports"
-                ? "bg-slate-800 text-white shadow-xs"
-                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
+            className={reportTabClass(activeTab === "pmis_reports")}
           >
             <FileText className="size-3.5" />
             <span>Báo cáo PMIS 02-PĐ</span>
             <span
-              className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
-                activeTab === "pmis_reports" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
-              }`}
+              className={reportTabBadgeClass(activeTab === "pmis_reports")}
             >
               PMIS &amp; QLKT
             </span>
           </button>
 
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="min-w-0">
             <button
               type="button"
               onClick={() => setActiveTab("all_fields")}
-              className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all ${
-                activeTab === "all_fields"
-                  ? "bg-slate-700 text-white shadow-xs"
-                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              }`}
+              className={`${reportTabClass(activeTab === "all_fields")} w-full`}
             >
               <Search className="size-3.5" />
               <span>Tra cứu ô ({editableFields.length})</span>
@@ -1317,7 +1297,7 @@ export function CtktktReport() {
         </div>
 
         {/* NỘI DUNG TỪNG CỤM */}
-        <div className="p-4">
+        <div className="p-3">
           {/* ========================================================================= */}
           {/* TAB 1: CỤM 2 — BẢNG TKĐ TREND DCS (TRƯỞNG KÍP ĐIỆN NHẬP)                   */}
           {/* ========================================================================= */}

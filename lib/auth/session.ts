@@ -48,9 +48,13 @@ export type SessionUser = {
   permissions: Permission[];
 };
 
+export function isAdminUser(user: SessionUser | null | undefined): boolean {
+  return Boolean(user && (user.role === "admin" || user.permissions?.includes("manage_users")));
+}
+
 export function hasPermission(user: SessionUser | null | undefined, permission: Permission): boolean {
   if (!user) return false;
-  if (user.role === "admin" || user.permissions?.includes("manage_users")) return true;
+  if (isAdminUser(user)) return true;
   if (permission === "view_all") return true;
   return user.permissions?.includes(permission) ?? false;
 }

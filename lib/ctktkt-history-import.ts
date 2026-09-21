@@ -127,11 +127,54 @@ function previousMonthEnd(period: string) {
   return new Date(Date.UTC(year, month - 1, 0)).toISOString().slice(0, 10);
 }
 
-export async function buildCtktktHistoryImportPackage(fileName: string, bytes: ArrayBuffer): Promise<CtktktHistoryImportPackage> {
-  const { period, throughDay: namedThroughDay } = monthFromFileName(fileName);
+function validatedIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Ngày nhập dữ liệu không hợp lệ.");
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error("Ngày nhập dữ liệu không tồn tại trên lịch.");
+  }
+  return { date: value, period: value.slice(0, 7), day, month, year };
+}
+
+function previousIsoDate(value: string) {
+  const date = new Date(`${value}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function findSheetForDate(sheetNames: string[], isoDate: string) {
+  const { day, month, year } = validatedIsoDate(isoDate);
+  const directNames = [String(day).padStart(2, "0"), String(day)];
+  for (const directName of directNames) {
+    const exact = sheetNames.find(name => name.trim() === directName);
+    if (exact) return exact;
+  }
+  return sheetNames.find(name => {
+    const normalized = name.trim().toLocaleLowerCase("vi-VN");
+    const match = normalized.match(/^(?:ngày\s*)?0?(\d{1,2})(?:[.\-_/]0?(\d{1,2})(?:[.\-_/](\d{4}))?)?$/i);
+    if (!match || Number(match[1]) !== day) return false;
+    if (match[2] && Number(match[2]) !== month) return false;
+    if (match[3] && Number(match[3]) !== year) return false;
+    return true;
+  });
+}
+
+export async function buildCtktktHistoryImportPackage(
+  fileName: string,
+  bytes: ArrayBuffer,
+  targetDate?: string,
+): Promise<CtktktHistoryImportPackage> {
   const workbook = XLSX.read(bytes, { type: "array", cellFormula: true, cellDates: true });
-  const numericSheets = workbook.SheetNames.map(name => Number(name)).filter(day => Number.isInteger(day) && day >= 1 && day <= 31);
-  const throughDay = Math.min(namedThroughDay, Math.max(...numericSheets, 0));
+  const requested = targetDate ? validatedIsoDate(targetDate) : null;
+  const named = requested ? null : monthFromFileName(fileName);
+  const period = requested?.period ?? named!.period;
+  const numericSheets = workbook.SheetNames.map(name => Number(name.trim())).filter(day => Number.isInteger(day) && day >= 1 && day <= 31);
+  const throughDay = requested?.day ?? Math.min(named!.throughDay, Math.max(...numericSheets, 0));
   if (!throughDay) throw new Error("File không có các sheet ngày 01, 02, ... để nhập.");
 
   const inputCells = [...new Set([
@@ -143,9 +186,26 @@ export async function buildCtktktHistoryImportPackage(fileName: string, bytes: A
   const warnings: CtktktHistoryImportPackage["warnings"] = [];
   const entriesByDate = new Map<string, CtktktDayEntries>();
   const sheets: Array<{ sheetName: string; date: string; importDay: boolean }> = [];
-  const priorSheetName = workbook.SheetNames.find(name => name.toLowerCase() === "d-1");
-  if (priorSheetName) sheets.push({ sheetName: priorSheetName, date: previousMonthEnd(period), importDay: true });
-  for (let day = 1; day <= throughDay; day++) sheets.push({ sheetName: String(day).padStart(2, "0"), date: `${period}-${String(day).padStart(2, "0")}`, importDay: true });
+  if (requested) {
+    const targetSheetName = findSheetForDate(workbook.SheetNames, requested.date);
+    if (!targetSheetName) {
+      throw new Error(`Không tìm thấy sheet ngày ${String(requested.day).padStart(2, "0")} cho ngày ${requested.date.split("-").reverse().join("/")}.`);
+    }
+    const priorDate = previousIsoDate(requested.date);
+    const priorSheetName = requested.day === 1
+      ? workbook.SheetNames.find(name => name.trim().toLocaleLowerCase("vi-VN") === "d-1")
+      : findSheetForDate(workbook.SheetNames, priorDate);
+    if (!priorSheetName) {
+      const priorLabel = requested.day === 1 ? "D-1" : String(requested.day - 1).padStart(2, "0");
+      throw new Error(`Thiếu sheet ${priorLabel} để tính và đối chiếu các chỉ tiêu chênh lệch của ngày ${requested.date.split("-").reverse().join("/")}.`);
+    }
+    sheets.push({ sheetName: priorSheetName, date: priorDate, importDay: false });
+    sheets.push({ sheetName: targetSheetName, date: requested.date, importDay: true });
+  } else {
+    const priorSheetName = workbook.SheetNames.find(name => name.trim().toLocaleLowerCase("vi-VN") === "d-1");
+    if (priorSheetName) sheets.push({ sheetName: priorSheetName, date: previousMonthEnd(period), importDay: true });
+    for (let day = 1; day <= throughDay; day++) sheets.push({ sheetName: String(day).padStart(2, "0"), date: `${period}-${String(day).padStart(2, "0")}`, importDay: true });
+  }
 
   const days: CtktktHistoryImportPackage["days"] = [];
   for (const item of sheets) {
@@ -156,7 +216,7 @@ export async function buildCtktktHistoryImportPackage(fileName: string, bytes: A
     for (const cell of inputCells) {
       const source = rawCellValue(sheet, cell);
       if (source.isFormula) {
-        warnings.push({ ...item, cell, message: "Ô thuộc nhóm nhập tay nhưng file chứa công thức; đã bỏ qua." });
+        if (item.importDay) warnings.push({ ...item, cell, message: "Ô thuộc nhóm nhập tay nhưng file chứa công thức; đã bỏ qua." });
         continue;
       }
       const value = storageValue(source.value);
@@ -188,7 +248,9 @@ export async function buildCtktktHistoryImportPackage(fileName: string, bytes: A
       }
     }
     entriesByDate.set(item.date, entries);
-    days.push({ date: item.date, sheetName: actualSheetName!, manualEntries: manualCells.map(cell => ({ cell, value: entries[cell] ?? "" })) });
+    if (item.importDay) {
+      days.push({ date: item.date, sheetName: actualSheetName!, manualEntries: manualCells.map(cell => ({ cell, value: entries[cell] ?? "" })) });
+    }
   }
 
   const audits = days.filter(day => day.date.startsWith(period)).map(day => {

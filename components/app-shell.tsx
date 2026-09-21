@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { getSessionUser } from "@/lib/auth/server";
-import { ROLE_LABELS } from "@/lib/auth/session";
+import { isAdminUser, ROLE_LABELS } from "@/lib/auth/session";
 import { SessionProvider } from "@/components/session-context";
 import { LogoutButton } from "@/components/logout-button";
 
@@ -25,7 +25,7 @@ const adminNavItem = { icon: "⚙", label: "Quản lý tài khoản", href: "/ad
 export async function AppShell({ children, active, hideSearch }: { children: ReactNode; active: string; hideSearch?: boolean }) {
   const user = await getSessionUser();
   if (!user) return null; // middleware đã chặn trước khi tới đây; chỉ để TypeScript yên tâm.
-  const canManage = user.role === "admin" || user.permissions?.includes("manage_users");
+  const canManage = isAdminUser(user);
   const items = canManage ? [...navigation, adminNavItem] : navigation;
   const initials = user.displayName.trim().slice(0, 2).toUpperCase() || "??";
 

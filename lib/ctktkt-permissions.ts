@@ -1,4 +1,4 @@
-import type { SessionUser } from "@/lib/auth/session";
+import { isAdminUser, type SessionUser } from "./auth/session.ts";
 
 export type CtktktFieldGroup =
   | "kpi_summary"        // Ô I35, I36
@@ -232,7 +232,7 @@ export function canEditCtktktGroup(
   if (!user) return false;
 
   // 1. Quản trị hệ thống, Quản đốc, Phó Quản đốc có toàn quyền
-  if (user.role === "admin" || user.permissions?.includes("manage_users")) {
+  if (isAdminUser(user)) {
     return true;
   }
 
@@ -352,8 +352,7 @@ export function canEditCtktktField(
   if (!group) {
     // Nếu ô không thuộc nhóm nào đặc định, chỉ Admin/KTV/Trưởng ca được sửa
     return (
-      user.role === "admin" ||
-      user.permissions?.includes("manage_users") ||
+      isAdminUser(user) ||
       user.role === "technician" ||
       user.role === "supervisor" ||
       (user.position || "").toLowerCase().includes("trưởng ca")
@@ -368,11 +367,10 @@ export function canEditCtktktField(
 export function canEditAnyCtktktField(user: SessionUser | null | undefined): boolean {
   if (!user) return false;
   if (
-    user.role === "admin" ||
+    isAdminUser(user) ||
     user.role === "supervisor" ||
     user.role === "technician" ||
     user.role === "editor" ||
-    user.permissions?.includes("manage_users") ||
     user.permissions?.includes("edit_daily_inputs")
   ) {
     return true;

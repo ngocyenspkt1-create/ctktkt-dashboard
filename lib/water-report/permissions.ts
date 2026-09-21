@@ -1,4 +1,4 @@
-import type { SessionUser } from "@/lib/auth/session";
+import { isAdminUser, type SessionUser } from "../auth/session.ts";
 
 export type WaterColumnGroup = 
   | "meta"         // Ngày, Giờ, Kíp, Trưởng ca
@@ -18,7 +18,7 @@ export function canEditWaterField(user: SessionUser | null | undefined, group: W
   if (!user) return false;
 
   // 1. Quản trị hệ thống hoặc Ban Quản đốc có toàn quyền
-  if (user.role === "admin" || user.permissions?.includes("manage_users")) {
+  if (isAdminUser(user)) {
     return true;
   }
 

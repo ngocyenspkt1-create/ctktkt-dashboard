@@ -917,3 +917,11 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Chỉ tiêu KTKT là nguồn gốc cho các số NH3 trùng trường: Dữ liệu các tháng tự lấy `BN` (NH3 theo mức bồn) từ phép tính `P73 + P72 - P74` và `CN` (NH3 nhập ngày) từ `P72`; hai ô liên kết được khóa nhập tay. NH3 DCS riêng S1/S2 (`BQ/BR`) không có trường tương ứng trong file Chỉ tiêu nên vẫn nhập/đồng bộ tại nguồn hiện hữu, không suy diễn từ tổng bồn.
 - Kiểm tra: **112/112 test đạt**, TypeScript đạt, build production đạt. `storage:check` chưa đọc được production vì môi trường hiện tại thiếu `TURSO_DATABASE_URL`; không có số liệu dung lượng để kết luận hoặc cảnh báo ngưỡng.
 - Còn cần nghiệm thu sau triển khai: đối chiếu một ngày than có đủ ba ca; kiểm tra Tổng tự dùng và `1245 MW`; bấm từng nút đồng bộ riêng; nhập NH3 tại Chỉ tiêu, lưu/tải lại rồi mở Dữ liệu các tháng xác nhận `BN/CN` tự cập nhật và không cho sửa tay.
+## 2026-09-21 — Nhập lịch sử theo ngày và tối ưu thanh chức năng CTKTKT
+
+- Các nút chuyển cụm trên `/ctktkt-report` dùng nền nâu nhạt thống nhất; cụm đang chọn dùng nâu đậm và thanh nút chuyển sang lưới responsive để giảm chiều cao, tăng vùng hiển thị dữ liệu.
+- Ngày đang chọn trên trang đồng thời là ngày nhập file lịch sử. Hệ thống tự nhận diện sheet dạng `17`, `Ngày 17` hoặc `17.09.2026`.
+- Chỉ đúng một ngày được chuẩn bị để ghi; sheet ngày trước (hoặc `D-1` khi chọn ngày 01) chỉ dùng làm dữ liệu nền cho phép tính chênh lệch.
+- Chỉ các ô nhập tay được ghi. Ô công thức, ô liên kết BCSX/Nước và vùng không phải dữ liệu nhập không bị ghi đè.
+- Trước khi ghi, kết quả tự tính bằng công thức web được so với giá trị trong file. Sai lệch được báo theo ngày, tên chỉ tiêu, ô nguồn, giá trị Excel và giá trị web; chỉ cho nhập khi đạt 100%.
+- Kiểm tra mã: `119/119` test đạt, TypeScript đạt, build production đạt; lint phạm vi không có lỗi.

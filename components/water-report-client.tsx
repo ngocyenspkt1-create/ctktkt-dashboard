@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSessionUser } from "@/components/session-context";
+import { isAdminUser } from "@/lib/auth/session";
 import { calculateDailyWaterUsages, formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/lib/water-report/calculations";
 import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/permissions";
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/lib/water-report/schema";
@@ -71,7 +72,7 @@ export function WaterReportClient() {
   const canEditElec = canEditWaterField(user, "electricity");
   const canEditIntake = canEditWaterField(user, "water_intake");
   const canEditResin = canEditWaterField(user, "resin_water");
-  const isAdmin = user?.role === "admin" || user?.permissions?.includes("manage_users");
+  const isAdmin = isAdminUser(user);
   const dailyWaterByDate = useMemo(
     () => calculateDailyWaterUsages(baseline ? [baseline, ...shifts] : shifts),
     [baseline, shifts],

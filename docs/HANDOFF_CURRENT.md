@@ -357,3 +357,10 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Dữ liệu các tháng đọc `/api/ctktkt-report` để liên kết `BN` từ tổng NH3 dùng theo mức bồn và `CN` từ lượng NH3 nhập `P72`; các ô này khóa nhập. `BQ/BR` là NH3 DCS riêng từng tổ máy, file Chỉ tiêu không có nguồn tương ứng nên không tự suy diễn.
 - Kiểm tra hiện tại: 112/112 test, TypeScript và build production đạt. Kiểm tra lưu trữ bị chặn chính xác bởi thiếu `TURSO_DATABASE_URL`; chưa xác minh Turso/Vercel usage trực tiếp.
 - Chưa commit/push/deploy. Cần nghiệm thu UI thật sau triển khai theo danh sách cuối mục mới trong `docs/ACCEPTANCE.md`.
+## Cập nhật 2026-09-21 — Nhập file CTKTKT theo ngày
+
+- Nút nhập lịch sử trên `/ctktkt-report` dùng ngày đang chọn và gửi `targetDate` tới `/api/ctktkt-report/history-import`.
+- `lib/ctktkt-history-import.ts` tự nhận diện sheet ngày, yêu cầu sheet ngày trước để đối chiếu, chỉ trả một ngày cần nhập và chỉ gồm các ô nhập tay.
+- Giao diện báo chi tiết mọi công thức chưa khớp; chỉ ghi khi kết quả Excel và web khớp 100%, sau đó đọc lại xác nhận dữ liệu nhập tay.
+- Thanh chuyển cụm dùng màu nâu nhạt và lưới responsive 1/2/4/7 cột để dành thêm không gian cho bảng dữ liệu.
+- Test mới: `tests/ctktkt-history-import.test.mjs` bao phủ tên sheet tiếng Việt, tên sheet ngày đầy đủ và lỗi thiếu sheet ngày trước.
