@@ -856,4 +856,13 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Còn cần nghiệm thu: nhập một lý do thật, lưu, đổi ngày rồi quay lại kiểm tra dữ liệu; xuất Excel và rê chuột vào ô hiệu chỉnh để xem ghi chú.
 - Đã push commit `d97e77e` lên `github/main`; Vercel báo `success` và `/ctktkt-report` production phản hồi HTTP 307 về đăng nhập đúng cơ chế bảo vệ.
 
+## Bổ sung 21/09/2026 — Một nút đồng bộ toàn bộ QLKT tại Dữ liệu các tháng
+
+- Trang `/` có một nút **“Đồng bộ toàn bộ QLKT”** theo ngày. Một lượt đọc gồm dữ liệu vận hành hằng ngày, 4 công tơ PPA × 48 chu kỳ, 8 thông số PMIS cân bằng nhiệt, nhật ký BCSX S1/S2 và hàng PMIS/02-PĐ.
+- Tiện ích chỉ trả gói tổng hợp khi các nguồn bắt buộc cùng đúng ngày và đủ cấu trúc. Web tự lưu từng nhóm và hiển thị riêng nhóm thành công/lỗi; nhận xét PPA đã có được giữ nguyên.
+- Các nút đồng bộ riêng theo ngày trên PPA, PMIS, BCSX và Chỉ tiêu KTKT đã được bỏ khỏi giao diện. Công cụ PMIS đồng bộ theo khoảng ngày vẫn giữ để nạp lịch sử.
+- Popup tiện ích chỉ còn nút mở trang “Dữ liệu các tháng”; gói phát hành nâng lên `0.4.25`, hai cây nguồn và ZIP đã đồng bộ. SHA-256 ZIP: `4576A0EF45F702D7F7A3B9E06FF584E7E0EB86683EB9F260DCF03E7D23C7EED2`.
+- Kiểm tra tự động: **108/108 test đạt**, TypeScript đạt, build production đạt. ESLint không phát hiện lỗi mới của luồng tổng hợp; các lỗi React-hook/ref nền cũ trong component và cảnh báo unused của mã đồng bộ dự phòng vẫn còn.
+- Còn cần nghiệm thu thật: cài/Reload tiện ích `0.4.25`, đăng nhập QLKT, chọn một ngày đã biết và bấm nút tổng hợp; mở lần lượt PPA, PMIS, BCSX và Báo cáo PMIS để đối chiếu dữ liệu đã lưu.
+
 ---

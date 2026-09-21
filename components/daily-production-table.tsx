@@ -6,10 +6,13 @@ import { DateField } from "@/components/ui/date-field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
+import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktUnifiedSyncPayload, type QlktSyncPayload, type QlktUnifiedSyncPayload } from "@/lib/qlkt-sync";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
+import { canEditCtktktGroup } from "@/lib/ctktkt-permissions";
+import { mergeMeterReadings, selectPpaSource } from "@/lib/ppa-heat-rate";
+import { defaultOperatingDate } from "@/lib/operating-date";
 
 type Group = "production" | "environment" | "operation";
 type Field = { code: string; label: string; unit?: string; input?: boolean; noteFor?: string; width?: string };
@@ -47,7 +50,8 @@ const fields: Record<Group, Field[]> = {
 
 const numericCodes = new Set(Object.values(fields).flat().filter(f => f.input && f.code !== "CW").map(f => f.code));
 const currentPeriod = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(new Date());
-const previousOperatingDate = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now()-86400000));
+const dailySyncCodes = new Set(["B","C","F","H","I","L","X","AE","AF","AJ","AR","AT","CC","CD","DA","DB","DC","DD","DE","DF","DG","DH"]);
+const pmisSyncCodes = new Set(["J157","K157","J158","K158","C181","D181","E181","F181","G181","H181","I181","J181","K181","L181","M181","N181","O181","P181","Q181","R181","S181","T181"]);
 const numberValue = (value?: string) => { if (!value?.trim()) return null; const n = Number(value.replace(",", ".")); return Number.isFinite(n) ? n : null; };
 const formatResult = (value: number | null) => value === null ? "—" : new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(value);
 const formatInputValue = (value?: string) => { if (!value) return ""; const parsed=numberValue(value); return parsed===null?value:formatResult(parsed); };
@@ -60,12 +64,13 @@ function isWaterAbnormal(rows: DailyRow[], dayIndex: number, code: "CE" | "CF") 
 export function DailyProductionTable() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_daily_inputs") && !hasPermission(user, "edit_monthly_kpi");
+  const canRunUnifiedSync = hasPermission(user, "sync_qlkt") && hasPermission(user, "edit_daily_inputs") && hasPermission(user, "edit_ppa") && hasPermission(user, "edit_bcsx") && canEditCtktktGroup(user, "pmis_reports");
   const [period, setPeriod] = useState(currentPeriod), [group, setGroup] = useState<Group>("production");
   const [showCalculated, setShowCalculated] = useState(false), [rows, setRows] = useState<DailyRow[]>(() => Array.from({ length: 31 }, () => ({})));
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
   const [noteCell, setNoteCell] = useState<{ day: number; code: string; label: string } | null>(null), [noteDraft, setNoteDraft] = useState("");
   const [syncHelp, setSyncHelp] = useState(false), [pendingSync, setPendingSync] = useState<QlktSyncPayload | null>(null), [selectedSyncCodes, setSelectedSyncCodes] = useState<Set<string>>(new Set());
-  const [syncDate, setSyncDate] = useState(previousOperatingDate), [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
+  const [syncDate, setSyncDate] = useState(defaultOperatingDate), [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false), [syncProgress, setSyncProgress] = useState("");
   const [focusedCell, setFocusedCell] = useState("");
   const [chartField, setChartField] = useState<Field | null>(null);
   // Bấm vào 1 ô (dù là ô nhập liệu hay ô kết quả tính) sẽ tô vàng ô đó để dễ dò theo hàng/cột trên
@@ -76,6 +81,41 @@ export function DailyProductionTable() {
   const dirty = useRef(new Set<string>());
   const qlktRequestRef = useRef<{id:string;timer:number}|null>(null);
   const days = useMemo(() => { const [y,m] = period.split("-").map(Number); return new Date(y,m,0).getDate(); }, [period]);
+
+  async function saveUnifiedPayload(payload: QlktUnifiedSyncPayload) {
+    const saved:string[]=[]; const failed:string[]=[];
+    const post=async(path:string,body:unknown,fallback:string)=>{const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const json=await response.json() as {error?:string;saved?:number};if(!response.ok||json.error)throw new Error(json.error||fallback);return json;};
+    const allDaily=[...payload.daily.entries,...payload.heatRate.entries].filter(entry=>dailySyncCodes.has(entry.fieldCode));
+    const dailyEntries=[...new Map(allDaily.map(entry=>[entry.fieldCode,{operatingDate:payload.operatingDate,fieldCode:entry.fieldCode,value:normalizeQlktValue(entry.value),note:""}])).values()];
+    try {
+      const result=await post("/api/daily-inputs",{period:payload.operatingDate.slice(0,7),entries:dailyEntries},"Không lưu được dữ liệu ngày/PMIS.");
+      if(result.saved!==dailyEntries.length)throw new Error(`Máy chủ chỉ xác nhận ${result.saved??0}/${dailyEntries.length} chỉ tiêu.`);
+      saved.push(`dữ liệu ngày & PMIS (${dailyEntries.length})`);
+      const loaded=await fetch(`/api/daily-inputs?period=${encodeURIComponent(payload.operatingDate.slice(0,7))}`,{cache:"no-store"});
+      const loadedBody=await loaded.json() as {entries?:LoadedEntry[];error?:string};
+      if(loaded.ok){const next=Array.from({length:31},()=>({} as DailyRow));for(const entry of loadedBody.entries||[]){const day=Number(entry.operatingDate.slice(8,10))-1;if(day>=0&&day<31){next[day][entry.fieldCode]=entry.value;if(entry.note)next[day][`${entry.fieldCode}_NOTE`]=entry.note;}}setRows(next);dirty.current.clear();}
+    } catch(caught){failed.push(`dữ liệu ngày/PMIS (${caught instanceof Error?caught.message:"lỗi không rõ"})`);}
+    try {
+      const selected=selectPpaSource(mergeMeterReadings([payload.ppa.readings]));
+      if(!selected.source)throw new Error("Thiếu 4 điểm đo PPA.");
+      let noteS1="",noteS2="";
+      const current=await fetch(`/api/ppa-heat-rate?period=${payload.operatingDate.slice(0,7)}`,{cache:"no-store"});
+      if(current.ok){const body=await current.json() as {entries?:Array<{operatingDate:string;noteS1?:string;noteS2?:string}>};const existing=body.entries?.find(entry=>entry.operatingDate===payload.operatingDate);noteS1=existing?.noteS1||"";noteS2=existing?.noteS2||"";}
+      await post("/api/ppa-heat-rate",{operatingDate:payload.operatingDate,source:selected.source,sourceFiles:["QLKT · Số liệu đo đếm công tơ"],noteS1,noteS2},"Không lưu được PPA.");
+      saved.push("công tơ PPA");
+    } catch(caught){failed.push(`PPA (${caught instanceof Error?caught.message:"lỗi không rõ"})`);}
+    try {
+      await post("/api/bcsx-sync",{date:payload.operatingDate,events:{S1:payload.events.s1,S2:payload.events.s2}},"Không lưu được nhật ký BCSX.");
+      saved.push(`nhật ký BCSX S1/S2 (${payload.events.s1.length+payload.events.s2.length} sự kiện)`);
+    } catch(caught){failed.push(`nhật ký BCSX (${caught instanceof Error?caught.message:"lỗi không rõ"})`);}
+    try {
+      const entries=payload.pmis02Pd.entries.filter(entry=>pmisSyncCodes.has(entry.fieldCode)).map(entry=>({cell:entry.fieldCode,value:normalizeQlktValue(entry.value)}));
+      const result=await post("/api/ctktkt-report",{operatingDate:payload.operatingDate,entries},"Không lưu được PMIS/02-PĐ.");
+      if(result.saved!==entries.length)throw new Error(`Tài khoản chỉ được lưu ${result.saved??0}/${entries.length} ô.`);
+      saved.push(`PMIS & 02-PĐ (${entries.length})`);
+    } catch(caught){failed.push(`PMIS/02-PĐ (${caught instanceof Error?caught.message:"lỗi không rõ"})`);}
+    return {saved,failed};
+  }
 
   useEffect(() => { const controller = new AbortController(); setLoading(true); setError(""); setMessage(""); dirty.current.clear();
     fetch(`/api/daily-inputs?period=${encodeURIComponent(period)}`, { cache:"no-store", signal:controller.signal }).then(async r => { const body=await r.json() as { entries?:LoadedEntry[]; error?:string }; if(!r.ok) throw new Error(body.error||"Không tải được dữ liệu.");
@@ -93,17 +133,23 @@ export function DailyProductionTable() {
 
   useEffect(() => {
     const channel="ctktkt-qlkt-sync";
-    const handleMessage=(event:MessageEvent)=>{
+    const handleMessage=async(event:MessageEvent)=>{
       if(event.source!==window||event.origin!==window.location.origin)return;
       const data=event.data as {channel?:string;sender?:string;type?:string;version?:string;requestId?:string;result?:{ok?:boolean;payload?:unknown;error?:string}};
       if(!data||data.channel!==channel||data.sender!=="ctktkt-extension")return;
       if(data.type==="READY"){setExtensionVersion(String(data.version||"đã kết nối"));return;}
-      if(data.type!=="SYNC_ALL_RESULT"||!qlktRequestRef.current||data.requestId!==qlktRequestRef.current.id)return;
-      window.clearTimeout(qlktRequestRef.current.timer); qlktRequestRef.current=null; setSyncingQlkt(false);
-      if(!data.result?.ok){setError(data.result?.error||"Chưa đồng bộ được dữ liệu từ QLKT.");return;}
-      const payload=validateQlktSyncPayload(data.result.payload);
-      if(!payload){setError("Dữ liệu tiện ích trả về không hợp lệ hoặc không có chỉ tiêu.");return;}
-      setPendingSync(payload); setSelectedSyncCodes(new Set(payload.entries.map(entry=>entry.fieldCode))); setPeriod(payload.operatingDate.slice(0,7)); setError("");
+      if(data.type!=="SYNC_UNIFIED_RESULT"||!qlktRequestRef.current||data.requestId!==qlktRequestRef.current.id)return;
+      window.clearTimeout(qlktRequestRef.current.timer); qlktRequestRef.current=null;
+      if(!data.result?.ok){setSyncingQlkt(false);setSyncProgress("");setError(data.result?.error||"Chưa đồng bộ được dữ liệu từ QLKT.");return;}
+      const payload=validateQlktUnifiedSyncPayload(data.result.payload);
+      if(!payload){setSyncingQlkt(false);setError("Dữ liệu tổng hợp từ tiện ích chưa đủ hoặc không đúng ngày. Chưa lưu nhóm dữ liệu nào.");setSyncProgress("");return;}
+      setSyncProgress("Đã đọc đủ dữ liệu QLKT, đang lưu 5 nhóm…");
+      const outcome=await saveUnifiedPayload(payload);
+      setPeriod(payload.operatingDate.slice(0,7));
+      setMessage(outcome.saved.length?`Đã đồng bộ ngày ${payload.operatingDate.split("-").reverse().join("/")}: ${outcome.saved.join(", ")}.`:"");
+      setError(outcome.failed.length?`Chưa lưu được ${outcome.failed.join("; ")}. Các nhóm đã lưu thành công không bị mất.`:"");
+      setSyncProgress("");
+      setSyncingQlkt(false);
     };
     window.addEventListener("message",handleMessage);
     window.postMessage({channel,sender:"ctktkt-web",type:"PING"},window.location.origin);
@@ -146,12 +192,13 @@ export function DailyProductionTable() {
   }
   function syncFromQlkt(){
     setError("");setMessage("");
-    if(!extensionVersion){window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"PING"},window.location.origin);setSyncHelp(true);setError("Web chưa kết nối với tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.6 rồi nhấn F5 trang này.");return;}
+    if(!canRunUnifiedSync){setError("Tài khoản cần đủ quyền đồng bộ QLKT, dữ liệu ngày, PPA, BCSX và Báo cáo PMIS để dùng nút tổng hợp.");return;}
+    if(!extensionVersion){window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"PING"},window.location.origin);setSyncHelp(true);setError("Web chưa kết nối với tiện ích QLKT. Hãy cài hoặc Reload tiện ích mới rồi nhấn F5 trang này.");return;}
     if(qlktRequestRef.current)window.clearTimeout(qlktRequestRef.current.timer);
     const requestId=crypto.randomUUID();
-    const timer=window.setTimeout(()=>{if(qlktRequestRef.current?.id!==requestId)return;qlktRequestRef.current=null;setSyncingQlkt(false);setError("QLKT phản hồi quá lâu. Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");},90000);
-    qlktRequestRef.current={id:requestId,timer};setSyncingQlkt(true);
-    window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"SYNC_ALL",requestId,operatingDate:syncDate},window.location.origin);
+    const timer=window.setTimeout(()=>{if(qlktRequestRef.current?.id!==requestId)return;qlktRequestRef.current=null;setSyncingQlkt(false);setSyncProgress("");setError("QLKT phản hồi quá lâu. Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");},360000);
+    qlktRequestRef.current={id:requestId,timer};setSyncingQlkt(true);setSyncProgress("Đang đọc lần lượt dữ liệu ngày, PPA, PMIS, BCSX và 02-PĐ…");
+    window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"SYNC_UNIFIED",requestId,operatingDate:syncDate},window.location.origin);
   }
   function noteButton(day:number, field:Field){ const hasNote=Boolean(rows[day][`${field.code}_NOTE`]?.trim()); return <button type="button" onClick={event=>{event.stopPropagation();openNote(day,field);}} aria-label={`${hasNote?"Xem hoặc sửa":"Thêm"} ghi chú cho ${field.label}, ngày ${day+1}`} title={hasNote?rows[day][`${field.code}_NOTE`]:"Thêm ghi chú"} className={`absolute right-0 top-0 z-10 h-4 w-4 ${hasNote?"opacity-100":"opacity-0 group-hover:opacity-100 focus:opacity-100"}`}><span className={`absolute right-0 top-0 h-0 w-0 border-l-[10px] border-l-transparent ${hasNote?"border-t-[10px] border-t-orange-500":"border-t-[10px] border-t-slate-300"}`}/></button>; }
   async function save(){ setError(""); setMessage(""); const entries=[...dirty.current].map(key=>{const [dayText,code]=key.split(":"); const day=Number(dayText); return {operatingDate:`${period}-${String(day+1).padStart(2,"0")}`,fieldCode:code,value:rows[day][code]||"",note:rows[day][`${code}_NOTE`]||""};});
@@ -160,7 +207,7 @@ export function DailyProductionTable() {
   return <section className="space-y-3">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Dữ liệu vận hành hằng ngày</p><h2 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">Chỉ tiêu kinh tế kỹ thuật</h2><p className="mt-1 text-sm text-slate-500">Nhập trực tiếp theo tháng · kết quả được tính tự động</p></div>
-      <div className="flex flex-wrap items-end justify-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">THÁNG<input type="month" value={period} onChange={e=>setPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐỒNG BỘ<DateField value={syncDate} onChange={setSyncDate} className="w-[150px]"/></label><button type="button" disabled={syncingQlkt} onClick={syncFromQlkt} className="h-10 rounded-xl border border-[#b9cae5] bg-[#eef6fc] px-4 text-sm font-bold text-[#274f78] shadow-sm disabled:cursor-wait disabled:opacity-60">{syncingQlkt?"Đang đồng bộ…":"Đồng bộ QLKT"}</button><button disabled={saving||loading||isViewer} title={isViewer?"Tài khoản Chỉ xem không có quyền lưu dữ liệu.":undefined} onClick={save} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-5 text-sm font-bold text-white shadow-md disabled:opacity-50">{saving?"Đang lưu…":"＋ Lưu thay đổi"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionVersion?"text-emerald-700":"text-amber-700"}`}>{extensionVersion?`Tiện ích v${extensionVersion} đã kết nối`:"Chưa kết nối tiện ích"}</p></div>
+      <div className="flex flex-wrap items-end justify-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">THÁNG<input type="month" value={period} onChange={e=>setPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐỒNG BỘ<DateField value={syncDate} onChange={setSyncDate} className="w-[150px]"/></label><button type="button" disabled={syncingQlkt||!canRunUnifiedSync} title={!canRunUnifiedSync?"Tài khoản chưa đủ quyền lưu toàn bộ các nhóm dữ liệu.":"Đọc và tự lưu dữ liệu ngày, PPA, PMIS, BCSX và 02-PĐ"} onClick={syncFromQlkt} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-wait disabled:opacity-60">{syncingQlkt?"Đang đồng bộ toàn bộ…":"⚡ Đồng bộ toàn bộ QLKT"}</button><button disabled={saving||loading||isViewer} title={isViewer?"Tài khoản Chỉ xem không có quyền lưu dữ liệu.":undefined} onClick={save} className="h-10 rounded-xl border border-[#b9cae5] bg-[#eef6fc] px-5 text-sm font-bold text-[#274f78] shadow-sm disabled:opacity-50">{saving?"Đang lưu…":"＋ Lưu thay đổi"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionVersion?"text-emerald-700":"text-amber-700"}`}>{syncProgress|| (extensionVersion?`Tiện ích v${extensionVersion} đã kết nối`:"Chưa kết nối tiện ích")}</p></div>
     </div>
 
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

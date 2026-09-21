@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from '../lib/qlkt-sync.ts';
+import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload, validateQlktUnifiedSyncPayload } from '../lib/qlkt-sync.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
 
-test('extension package 0.4.24 aligns production values, events and preserves the prepared date', () => {
+test('extension package 0.4.25 supports the one-button unified sync and preserves the prepared date', () => {
   const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
@@ -16,15 +16,18 @@ test('extension package 0.4.24 aligns production values, events and preserves th
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
   const popup = readFileSync(new URL('../public/qlkt-sync-extension/popup.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.24');
+  assert.equal(manifest.version, '0.4.25');
   assert.ok(manifest.host_permissions.includes('https://ctktkt-dashboard.vercel.app/*'));
   assert.ok(manifest.content_scripts.some(item => item.js.includes('web-bridge.js') && item.matches.includes('https://ctktkt-dashboard.vercel.app/*')));
   assert.match(webBridge, /\/bcsx-report/);
   assert.match(webBridge, /SYNC_BCSX_EVENTS/);
+  assert.match(webBridge, /SYNC_UNIFIED/);
   assert.match(popup, /DEFAULT_TARGET_URL = "https:\/\/ctktkt-dashboard\.vercel\.app\/"/);
   assert.match(background, /DEFAULT_OPERATION_URL = "http:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\/sxd\/rpt_hour_operation\.jsf"/);
   assert.match(background, /SYNC_BCSX_EVENTS_QLKT/);
-  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.24"/);
+  assert.match(background, /SYNC_UNIFIED_QLKT/);
+  assert.match(background, /async function syncUnified\(operatingDate\)/);
+  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.25"/);
   assert.match(content, /extractOperatingEvents/);
   assert.match(content, /classifyEventUnit/);
   assert.match(background, /prepareDateWithRetry/);
@@ -66,12 +69,15 @@ test('extension package 0.4.24 aligns production values, events and preserves th
 
 test('BCSX syncs operating events from QLKT and sources Section 2 totals from CTKTKT', () => {
   const source = readFileSync(new URL('../components/bcsx-report.tsx', import.meta.url), 'utf8');
+  const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
   const ctktktSource = readFileSync(new URL('../components/ctktkt-report.tsx', import.meta.url), 'utf8');
   const saveRoute = readFileSync(new URL('../app/api/bcsx-sync/route.ts', import.meta.url), 'utf8');
   const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.match(source, /Đồng bộ nhật ký sự kiện từ QLKT/);
+  assert.match(source, /Nhật ký QLKT đồng bộ tại/);
   assert.match(source, /type: "SYNC_BCSX_EVENTS"/);
+  assert.match(dailySource, /type:"SYNC_UNIFIED"/);
+  assert.match(dailySource, /"\/api\/bcsx-sync"/);
   assert.match(source, /\/api\/ctktkt-report/);
   assert.match(source, /ktktByCell\.get\("J157"\)/);
   assert.match(ctktktSource, /SYNC_PMIS_02PD/);
@@ -147,6 +153,29 @@ test('web app decodes a complete PPA payload and rejects missing meters', () => 
   assert.equal(validateQlktPpaSyncPayload(payload)?.readings.length, 4);
   const incomplete = { ...payload, readings: payload.readings.slice(0, 3) };
   assert.equal(decodeQlktPpaSyncHash(`#qlkt-sync=${Buffer.from(JSON.stringify(incomplete)).toString('base64url')}`), null);
+});
+
+test('web app accepts only a complete same-date unified QLKT payload', () => {
+  const operatingDate = '2026-09-14';
+  const ppa = globalThis.QlktMeterExtractor.extractPpaMeterReadings([[headers, ...meterRows]], operatingDate, 'http://qlkt/example');
+  const entry = fieldCode => ({ fieldCode, value: '1', sourceLabel: 'QLKT' });
+  const dailyCodes = ['B', 'C', 'F', 'H', 'I', 'L', 'AE', 'AF', 'AR'];
+  const heatRateCodes = ['DA', 'DB', 'DC', 'DD', 'DE', 'DF', 'DG', 'DH'];
+  const pmisCodes = ['J157', 'K157', 'J158', 'K158', 'C181', 'D181', 'F181'];
+  const payload = {
+    version: 1,
+    kind: 'unified-sync',
+    operatingDate,
+    sourcePage: 'QLKT · Đồng bộ tổng hợp',
+    daily: { version: 1, operatingDate, sourcePage: 'daily', entries: dailyCodes.map(entry) },
+    ppa,
+    heatRate: { version: 1, operatingDate, sourcePage: 'heatrate', entries: heatRateCodes.map(entry) },
+    events: { version: 1, operatingDate, s1: [], s2: [], totalCount: 0 },
+    pmis02Pd: { version: 1, operatingDate, sourcePage: '02-PĐ', entries: pmisCodes.map(entry) },
+  };
+  assert.ok(validateQlktUnifiedSyncPayload(payload));
+  assert.equal(validateQlktUnifiedSyncPayload({ ...payload, operatingDate: '2026-09-15' }), null);
+  assert.equal(validateQlktUnifiedSyncPayload({ ...payload, pmis02Pd: { ...payload.pmis02Pd, entries: pmisCodes.slice(1).map(entry) } }), null);
 });
 
 test('operating events extractor correctly classifies S1 and S2 events from QLKT format', () => {

@@ -418,8 +418,39 @@ async function syncPmis02Pd(operatingDate) {
   };
 }
 
+async function syncUnified(operatingDate) {
+  const daily = await syncAll(operatingDate);
+  const ppa = await syncPpa(operatingDate);
+  const heatRate = await syncHeatRate(operatingDate);
+  const events = await syncBcsxEvents(operatingDate);
+  const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
+  const pmisReport = await readSource("pmis_02pd", qlktPages.pmis_02pd || DEFAULT_PMIS_02PD_URL, operatingDate);
+  const productionCodes = new Set(["J157", "K157", "J158", "K158"]);
+  const pmisEntries = new Map();
+  (daily.entries || []).filter(entry => productionCodes.has(entry.fieldCode)).forEach(entry => pmisEntries.set(entry.fieldCode, entry));
+  (pmisReport.entries || []).forEach(entry => pmisEntries.set(entry.fieldCode, entry));
+  const pmis02Pd = {
+    version: 1,
+    operatingDate,
+    sourcePage: "QLKT · PMIS 02-PĐ & Sản lượng",
+    entries: [...pmisEntries.values()],
+  };
+  return {
+    version: 1,
+    kind: "unified-sync",
+    operatingDate,
+    sourcePage: "QLKT · Đồng bộ tổng hợp",
+    daily,
+    ppa,
+    heatRate,
+    events,
+    pmis02Pd,
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  const task = message?.type === "SYNC_ALL_QLKT" ? syncAll
+  const task = message?.type === "SYNC_UNIFIED_QLKT" ? syncUnified
+    : message?.type === "SYNC_ALL_QLKT" ? syncAll
     : message?.type === "SYNC_PPA_QLKT" ? syncPpa
     : message?.type === "SYNC_HEATRATE_QLKT" ? syncHeatRate
     : message?.type === "SYNC_BCSX_QLKT" ? syncBcsx

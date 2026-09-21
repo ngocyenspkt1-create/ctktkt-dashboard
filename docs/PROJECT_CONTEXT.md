@@ -32,7 +32,7 @@
 | Cơ sở dữ liệu | Turso/libSQL qua `@libsql/client/http` |
 | Xác thực | Cookie JWT, khóa `AUTH_SECRET` từ biến môi trường |
 | Triển khai | Vercel |
-| Tiện ích QLKT | Chrome/Edge Manifest V3, phiên bản `0.4.24` |
+| Tiện ích QLKT | Chrome/Edge Manifest V3, phiên bản `0.4.25` |
 
 Biến môi trường quan trọng: `AUTH_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`. Không ghi token, mật khẩu hoặc URL Apps Script có mã bí mật vào Git.
 
@@ -272,3 +272,11 @@ git -c safe.directory=C:/Users/HP/Downloads/CTKTKT/ctktkt-dashboard diff --check
 - Đã chạy lại toàn bộ test: 105/105 đạt.
 - Còn dở: các hạng mục bảo mật/phân quyền API và nghiệm thu production liệt kê tại mục 9.
 - Bước tiếp theo khuyến nghị: nghiệm thu công tơ nước 24h trên hai ngày liên tiếp và đối chiếu file xuất trước, sau đó xử lý hai rủi ro P0.
+
+### 21/09/2026 — Một nút đồng bộ QLKT
+
+- Đã gom quy trình đồng bộ hằng ngày về nút **Đồng bộ toàn bộ QLKT** tại trang Dữ liệu các tháng.
+- Một lần bấm đọc và tự lưu: dữ liệu ngày, PPA, PMIS cân bằng nhiệt, nhật ký BCSX S1/S2 và PMIS/02-PĐ; mọi gói phải đúng cùng ngày trước khi bắt đầu ghi.
+- Các trang đích không còn nút đồng bộ riêng theo ngày. Công cụ PMIS nhiều ngày vẫn còn để phục vụ nạp lịch sử.
+- Tiện ích hiện hành là `0.4.25`; popup chỉ mở trang đồng bộ tập trung. Hai cây tiện ích và file ZIP phải tiếp tục được cập nhật cùng nhau.
+- Đã kiểm tra 108/108 test, TypeScript và build production. Còn cần nghiệm thu end-to-end bằng tài khoản QLKT thật và tiện ích `0.4.25` sau triển khai.

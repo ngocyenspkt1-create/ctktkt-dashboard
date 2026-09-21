@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.24";
+  const CONTENT_SCRIPT_VERSION = "0.4.25";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {

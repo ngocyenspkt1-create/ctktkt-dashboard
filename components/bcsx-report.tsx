@@ -726,15 +726,7 @@ export function BcsxReport() {
           </span>
           <span className="text-xs font-bold text-slate-600">Ngày:</span>
           <DateField value={operatingDate} onChange={changeOperatingDate} className="w-[145px] h-8 text-xs"/>
-          <button
-            type="button"
-            disabled={syncingAll || isViewer || !canSyncQlkt}
-            onClick={syncAllFromQlkt}
-            title={isViewer || !canSyncQlkt ? "Tài khoản chưa được cấp quyền đồng bộ QLKT." : "Lấy và lưu nhật ký sự kiện từ QLKT cho cả S1 và S2 (Số liệu Mục 2 được liên kết từ Chỉ tiêu KTKT)"}
-            className="h-8 rounded-lg bg-gradient-to-r from-[#334785] to-[#438ec1] px-3 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {syncingAll ? "Đang đồng bộ sự kiện S1 & S2…" : "⚡ Đồng bộ nhật ký sự kiện từ QLKT"}
-          </button>
+          <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-[#354a9f]">Nhật ký QLKT đồng bộ tại “Dữ liệu các tháng”</span>
           <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
             {(["S1", "S2"] as const).map(u => (
               <button key={u} type="button" onClick={() => setUnit(u)} className={`rounded-md px-3 py-1 text-xs font-bold transition ${unit === u ? "bg-[#334785] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>

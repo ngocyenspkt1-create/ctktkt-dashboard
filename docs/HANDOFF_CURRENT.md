@@ -323,3 +323,13 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Phân quyền theo đúng nhóm Máy nghiền S1/S2. File Excel xuất ra gắn nội dung thành comment tại W/Y/AA28 hoặc AG/AI/AK28 để truy vết ngay tại các ô hiệu chỉnh.
 - Kiểm tra: 98/98 test đạt; TypeScript đạt; lint phạm vi API/thư viện/test sạch; build production đạt. Còn cần nghiệm thu lưu/nạp lại một ghi chú thật và kiểm tra comment trong Excel.
 - Commit chức năng `d97e77e` đã push lên `github/main`; Vercel báo `success`, trang production phản hồi đúng cơ chế đăng nhập.
+
+## 20. Cập nhật 21/09/2026 — Đồng bộ QLKT tập trung
+
+- Điểm thao tác hằng ngày duy nhất là trang `/` (Dữ liệu các tháng), nút `Đồng bộ toàn bộ QLKT` và ngày mặc định D-1.
+- Message mới: web `SYNC_UNIFIED` → tiện ích `SYNC_UNIFIED_QLKT` → kết quả `SYNC_UNIFIED_RESULT`.
+- Gói kết quả gồm `daily`, `ppa`, `heatRate`, `events`, `pmis02Pd`; validator yêu cầu cùng ngày, đủ 4 công tơ PPA, DA:DH, B/C/F/H/I/L/AE/AF/AR và J157/K157/J158/K158/C181/D181/F181 trước khi web bắt đầu lưu.
+- Web lưu qua bốn API hiện hữu: `/api/daily-inputs`, `/api/ppa-heat-rate`, `/api/bcsx-sync`, `/api/ctktkt-report`. Đây là bốn lượt ghi độc lập; nếu một nhóm lỗi, thông báo ghi rõ nhóm lỗi và các nhóm đã ghi thành công vẫn được giữ.
+- Nút đồng bộ riêng theo ngày đã bỏ khỏi PPA, BCSX, PMIS và Chỉ tiêu KTKT. Đồng bộ PMIS theo khoảng ngày được giữ riêng cho nhập lịch sử.
+- Tiện ích phát hành `0.4.25`; ZIP SHA-256 `4576A0EF45F702D7F7A3B9E06FF584E7E0EB86683EB9F260DCF03E7D23C7EED2`.
+- Đã kiểm tra 108/108 test, TypeScript và build production. Bước tiếp theo: nghiệm thu bằng phiên QLKT thật rồi xác nhận từng trang đích; nếu một nguồn lỗi, lưu nguyên thông báo nhóm lỗi và ảnh màn hình QLKT tương ứng.

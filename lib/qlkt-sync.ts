@@ -75,6 +75,33 @@ export type QlktPpaSyncPayload = {
   readings: QlktPpaReading[];
 };
 
+export type QlktOperatingEvent = {
+  startAt: string;
+  endAt: string;
+  eventType: number;
+  description: string;
+};
+
+export type QlktEventSyncPayload = {
+  version: 1;
+  operatingDate: string;
+  s1: QlktOperatingEvent[];
+  s2: QlktOperatingEvent[];
+  totalCount: number;
+};
+
+export type QlktUnifiedSyncPayload = {
+  version: 1;
+  kind: "unified-sync";
+  operatingDate: string;
+  sourcePage: string;
+  daily: QlktSyncPayload;
+  ppa: QlktPpaSyncPayload;
+  heatRate: QlktSyncPayload;
+  events: QlktEventSyncPayload;
+  pmis02Pd: QlktSyncPayload;
+};
+
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const numericPattern = /^-?\d+(?:\.\d+)?$/;
 
@@ -125,6 +152,46 @@ export function validateQlktPpaSyncPayload(value: unknown): QlktPpaSyncPayload |
       return [{ meter, channel: "kWhGiao", operatingDate: raw.operatingDate, total, intervals, sourceName: String(item.sourceName || "QLKT · Số liệu đo đếm công tơ").slice(0, 500) }];
     });
     return readings.length === 4 ? { version: 1, kind: "ppa-meter", operatingDate: raw.operatingDate, sourcePage: raw.sourcePage.slice(0, 500), readings } : null;
+  } catch {
+    return null;
+  }
+}
+
+function validateEventPayload(value: unknown, operatingDate: string): QlktEventSyncPayload | null {
+  try {
+    const raw = value as Partial<QlktEventSyncPayload>;
+    if (raw.version !== 1 || raw.operatingDate !== operatingDate || !Array.isArray(raw.s1) || !Array.isArray(raw.s2)) return null;
+    const clean = (items: QlktOperatingEvent[]) => items.map(item => {
+      const startAt = String(item?.startAt || ""), endAt = String(item?.endAt || "");
+      const eventType = Number(item?.eventType), description = String(item?.description || "").trim();
+      if (!new RegExp(`^${operatingDate} (?:[01]\\d|2[0-3]):[0-5]\\d$`).test(startAt) || (endAt && !/^\d{4}-\d{2}-\d{2} (?:[01]\d|2[0-3]):[0-5]\d$/.test(endAt)) || !Number.isInteger(eventType) || eventType < 1 || eventType > 5 || description.length > 500) {
+        throw new Error("Sự kiện QLKT không hợp lệ.");
+      }
+      return { startAt, endAt, eventType, description };
+    });
+    const s1 = clean(raw.s1), s2 = clean(raw.s2);
+    return { version: 1, operatingDate, s1, s2, totalCount: s1.length + s2.length };
+  } catch {
+    return null;
+  }
+}
+
+export function validateQlktUnifiedSyncPayload(value: unknown): QlktUnifiedSyncPayload | null {
+  try {
+    const raw = value as Partial<QlktUnifiedSyncPayload>;
+    if (raw.version !== 1 || raw.kind !== "unified-sync" || typeof raw.operatingDate !== "string" || !datePattern.test(raw.operatingDate) || typeof raw.sourcePage !== "string") return null;
+    const daily = validateQlktSyncPayload(raw.daily);
+    const ppa = validateQlktPpaSyncPayload(raw.ppa);
+    const heatRate = validateQlktSyncPayload(raw.heatRate);
+    const events = validateEventPayload(raw.events, raw.operatingDate);
+    const pmis02Pd = validateQlktSyncPayload(raw.pmis02Pd);
+    if (!daily || !ppa || !heatRate || !events || !pmis02Pd) return null;
+    if ([daily.operatingDate, ppa.operatingDate, heatRate.operatingDate, pmis02Pd.operatingDate].some(date => date !== raw.operatingDate)) return null;
+    const hasCodes = (payload: QlktSyncPayload, codes: string[]) => codes.every(code => payload.entries.some(entry => entry.fieldCode === code));
+    if (!hasCodes(daily, ["B", "C", "F", "H", "I", "L", "AE", "AF", "AR"])) return null;
+    if (!hasCodes(heatRate, ["DA", "DB", "DC", "DD", "DE", "DF", "DG", "DH"])) return null;
+    if (!hasCodes(pmis02Pd, ["J157", "K157", "J158", "K158", "C181", "D181", "F181"])) return null;
+    return { version: 1, kind: "unified-sync", operatingDate: raw.operatingDate, sourcePage: raw.sourcePage.slice(0, 500), daily, ppa, heatRate, events, pmis02Pd };
   } catch {
     return null;
   }

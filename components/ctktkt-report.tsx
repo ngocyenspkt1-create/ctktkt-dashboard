@@ -3144,16 +3144,7 @@ export function CtktktReport() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={syncingPmis || !canEditPmis}
-                      onClick={syncPmis02PdFromQlkt}
-                      title={!canEditPmis ? "Tài khoản chưa được cấp quyền nhập nhóm Báo cáo PMIS." : "Đồng bộ Sản lượng (DH1_MF1/MF2) và 18 chỉ tiêu 02-PĐ (hàng Duyên Hải 1) từ QLKT"}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#173b64] to-[#2563eb] px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Zap className="size-3.5" />
-                      {syncingPmis ? "Đang đồng bộ từ QLKT…" : "⚡ Đồng bộ PMIS & 02-PĐ từ QLKT"}
-                    </button>
+                    <span className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold text-[#354a9f]">PMIS & 02-PĐ đồng bộ tại “Dữ liệu các tháng”</span>
                     <button
                       type="button"
                       disabled={saving || !userCanEditAny}

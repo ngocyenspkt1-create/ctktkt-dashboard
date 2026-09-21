@@ -275,8 +275,7 @@ export function PmisReport() {
       <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">TỪ NGÀY<DateField value={fromDate} max={toDate} onChange={setFromDate} className="h-8 w-[128px]"/></label>
       <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">ĐẾN NGÀY<DateField value={toDate} min={fromDate} max={today} onChange={setToDate} className="h-8 w-[128px]"/></label>
       <button type="button" onClick={applyManualRange} className="h-8 rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-3 text-xs font-bold text-[#354a9f]">Áp dụng</button>
-      <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">NGÀY ĐỒNG BỘ<DateField value={syncDate} onChange={setSyncDate} className="h-8 w-[128px]"/></label>
-      <button type="button" disabled={syncingQlkt} onClick={syncFromQlkt} className="h-8 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3 text-xs font-bold text-white shadow-md disabled:cursor-wait disabled:opacity-60">{syncingQlkt ? "Đang đồng bộ…" : "Đồng bộ QLKT"}</button>
+      <span className="rounded-xl bg-blue-50 px-3 py-2 text-[10px] font-semibold text-[#354a9f]">Đồng bộ từng ngày tại “Dữ liệu các tháng”</span>
       <div className="h-7 w-px bg-slate-200"/>
       <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">ĐỒNG BỘ TỪ<DateField value={syncRangeFrom} max={syncRangeTo} onChange={setSyncRangeFrom} className="h-8 w-[128px]"/></label>
       <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">ĐẾN<DateField value={syncRangeTo} min={syncRangeFrom} max={today} onChange={setSyncRangeTo} className="h-8 w-[128px]"/></label>

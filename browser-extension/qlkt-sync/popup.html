@@ -9,10 +9,7 @@
   <body>
     <main>
       <h1>Đồng bộ QLKT</h1>
-      <p class="hint">Chọn ngày cần lấy. Tiện ích sẽ tự mở các màn hình QLKT đã ghi nhớ và gom dữ liệu trong một lần.</p>
-      <label>Ngày báo cáo
-        <input id="operatingDate" type="date" />
-      </label>
+      <p class="hint">Tất cả dữ liệu được đồng bộ bằng một nút tại trang “Dữ liệu các tháng”.</p>
       <label>Địa chỉ web Chỉ tiêu KTKT
         <input id="targetUrl" type="url" value="https://ctktkt-dashboard.vercel.app/" spellcheck="false" />
       </label>
@@ -21,12 +18,12 @@
         <div><span>Nhiên liệu</span><strong id="source-fuel">Chưa nhận diện</strong></div>
         <div><span>Vận hành</span><strong id="source-operation">Chưa nhận diện</strong></div>
         <div><span>Công tơ PPA</span><strong id="source-meter">Chưa nhận diện</strong></div>
+        <div><span>Cân bằng nhiệt</span><strong id="source-heatrate">Chưa nhận diện</strong></div>
+        <div><span>Báo cáo 02-PĐ</span><strong id="source-pmis_02pd">Chưa nhận diện</strong></div>
       </section>
-      <button id="syncAllButton" type="button">Đồng bộ chỉ tiêu KTKT</button>
-      <button id="syncPpaButton" class="ppa" type="button">Đồng bộ công tơ PPA</button>
-      <button id="syncPageButton" class="secondary" type="button">Chỉ lấy trang đang mở</button>
+      <button id="openDashboardButton" type="button">Mở Dữ liệu các tháng</button>
       <p id="status" role="status"></p>
-      <p class="privacy">Lần đầu: mở từng màn hình Sản lượng, Nhiên liệu, Vận hành và Số liệu đo đếm công tơ để tiện ích ghi nhớ địa chỉ. Tiện ích không đọc hoặc lưu tên đăng nhập, mật khẩu.</p>
+      <p class="privacy">Lần đầu: mở từng màn hình nguồn trên QLKT để tiện ích ghi nhớ địa chỉ. Sau đó chọn ngày và bấm “Đồng bộ toàn bộ QLKT” trên web. Tiện ích không đọc hoặc lưu tên đăng nhập, mật khẩu.</p>
     </main>
     <script src="popup.js"></script>
   </body>

@@ -11,14 +11,16 @@
       post({ type: "READY", version: chrome.runtime.getManifest().version });
       return;
     }
-    const runtimeType = message.type === "SYNC_PPA" ? "SYNC_PPA_QLKT"
+    const runtimeType = message.type === "SYNC_UNIFIED" ? "SYNC_UNIFIED_QLKT"
+      : message.type === "SYNC_PPA" ? "SYNC_PPA_QLKT"
       : message.type === "SYNC_HEATRATE" ? "SYNC_HEATRATE_QLKT"
       : message.type === "SYNC_BCSX" ? "SYNC_BCSX_QLKT"
       : message.type === "SYNC_BCSX_EVENTS" ? "SYNC_BCSX_EVENTS_QLKT"
       : message.type === "SYNC_PMIS_02PD" ? "SYNC_PMIS_02PD_QLKT"
       : message.type === "SYNC_ALL" ? "SYNC_ALL_QLKT"
       : "";
-    const resultType = message.type === "SYNC_PPA" ? "SYNC_PPA_RESULT"
+    const resultType = message.type === "SYNC_UNIFIED" ? "SYNC_UNIFIED_RESULT"
+      : message.type === "SYNC_PPA" ? "SYNC_PPA_RESULT"
       : message.type === "SYNC_HEATRATE" ? "SYNC_HEATRATE_RESULT"
       : message.type === "SYNC_BCSX" ? "SYNC_BCSX_RESULT"
       : message.type === "SYNC_BCSX_EVENTS" ? "SYNC_BCSX_EVENTS_RESULT"

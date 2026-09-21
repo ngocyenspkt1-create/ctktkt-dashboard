@@ -1,8 +1,5 @@
 const targetInput = document.getElementById("targetUrl");
-const dateInput = document.getElementById("operatingDate");
-const syncAllButton = document.getElementById("syncAllButton");
-const syncPpaButton = document.getElementById("syncPpaButton");
-const syncPageButton = document.getElementById("syncPageButton");
+const openDashboardButton = document.getElementById("openDashboardButton");
 const status = document.getElementById("status");
 const DEFAULT_TARGET_URL = "https://ctktkt-dashboard.vercel.app/";
 const LEGACY_LOCAL_TARGET = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::5173)?\/?$/i;
@@ -12,31 +9,12 @@ const sourceIds = {
   fuel: "source-fuel",
   operation: "source-operation",
   meter: "source-meter",
+  heatrate: "source-heatrate",
+  pmis_02pd: "source-pmis_02pd",
 };
 
-function localIsoDate() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
-function encodePayload(payload) {
-  const bytes = new TextEncoder().encode(JSON.stringify(payload));
-  let binary = "";
-  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function openTarget(target, payload) {
-  if (payload?.kind === "ppa-meter") target = new URL("ppa-heat-rate", target);
-  else if (payload?.kind === "heatrate") target = new URL("pmis-report", target);
-  target.hash = `qlkt-sync=${encodePayload(payload)}`;
-  return chrome.tabs.create({ url: target.toString() });
-}
-
 function setBusy(busy) {
-  syncAllButton.disabled = busy;
-  syncPpaButton.disabled = busy;
-  syncPageButton.disabled = busy;
+  openDashboardButton.disabled = busy;
 }
 
 async function refreshSources() {
@@ -66,66 +44,22 @@ async function recognizeActivePage() {
 chrome.storage.local.get({ targetUrl: DEFAULT_TARGET_URL }, value => {
   targetInput.value = LEGACY_LOCAL_TARGET.test(value.targetUrl) ? DEFAULT_TARGET_URL : value.targetUrl;
 });
-dateInput.value = localIsoDate();
 refreshSources();
 recognizeActivePage();
 
-syncAllButton.addEventListener("click", async () => {
-  status.textContent = "Đang mở các màn hình QLKT và thu thập dữ liệu…";
+openDashboardButton.addEventListener("click", async () => {
+  status.textContent = "Đang mở trang Dữ liệu các tháng…";
   setBusy(true);
   try {
     const target = new URL(targetInput.value.trim());
     if (!/^https?:$/.test(target.protocol)) throw new Error("Địa chỉ web chỉ tiêu không hợp lệ.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput.value)) throw new Error("Hãy chọn ngày báo cáo.");
-    await chrome.storage.local.set({ targetUrl: target.origin + target.pathname });
-    const result = await chrome.runtime.sendMessage({ type: "SYNC_ALL_QLKT", operatingDate: dateInput.value });
-    if (!result?.ok) throw new Error(result?.error || "Chưa đồng bộ được toàn bộ dữ liệu.");
-    await openTarget(target, result.payload);
+    const dashboard = new URL("/", target);
+    await chrome.storage.local.set({ targetUrl: dashboard.toString() });
+    await chrome.tabs.create({ url: dashboard.toString() });
     window.close();
   } catch (error) {
-    status.textContent = error instanceof Error ? error.message : "Chưa đồng bộ được dữ liệu.";
+    status.textContent = error instanceof Error ? error.message : "Chưa mở được trang web.";
     setBusy(false);
     refreshSources();
-  }
-});
-
-syncPpaButton.addEventListener("click", async () => {
-  status.textContent = "Đang mở màn hình công tơ và thu thập H1–H48…";
-  setBusy(true);
-  try {
-    const target = new URL(targetInput.value.trim());
-    if (!/^https?:$/.test(target.protocol)) throw new Error("Địa chỉ web chỉ tiêu không hợp lệ.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput.value)) throw new Error("Hãy chọn ngày báo cáo.");
-    await chrome.storage.local.set({ targetUrl: target.origin + target.pathname });
-    const result = await chrome.runtime.sendMessage({ type: "SYNC_PPA_QLKT", operatingDate: dateInput.value });
-    if (!result?.ok) throw new Error(result?.error || "Chưa đồng bộ được công tơ PPA.");
-    await openTarget(target, result.payload);
-    window.close();
-  } catch (error) {
-    status.textContent = error instanceof Error ? error.message : "Chưa đồng bộ được công tơ PPA.";
-    setBusy(false);
-    refreshSources();
-  }
-});
-
-syncPageButton.addEventListener("click", async () => {
-  status.textContent = "";
-  setBusy(true);
-  try {
-    const target = new URL(targetInput.value.trim());
-    if (!/^https?:$/.test(target.protocol)) throw new Error("Địa chỉ web chỉ tiêu không hợp lệ.");
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id || !/^https?:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\//i.test(tab.url || "")) throw new Error("Hãy mở một màn hình QLKT trước khi đồng bộ.");
-    const prepared = await chrome.tabs.sendMessage(tab.id, { type: "PREPARE_QLKT_DATE", operatingDate: dateInput.value });
-    if (!prepared?.ok) throw new Error(prepared?.error || "Không đặt được ngày báo cáo.");
-    await new Promise(resolve => setTimeout(resolve, prepared.refreshed ? 2200 : 300));
-    const result = await chrome.tabs.sendMessage(tab.id, { type: "READ_QLKT_VALUES", operatingDate: dateInput.value });
-    if (!result?.ok) throw new Error(result?.error || "Không tìm thấy chỉ tiêu được cấu hình trên màn hình này.");
-    await chrome.storage.local.set({ targetUrl: target.origin + target.pathname });
-    await openTarget(target, result.payload);
-    window.close();
-  } catch (error) {
-    status.textContent = error instanceof Error ? error.message : "Chưa đồng bộ được dữ liệu.";
-    setBusy(false);
   }
 });
