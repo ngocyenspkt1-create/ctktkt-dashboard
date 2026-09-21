@@ -32,7 +32,7 @@
 | Cơ sở dữ liệu | Turso/libSQL qua `@libsql/client/http` |
 | Xác thực | Cookie JWT, khóa `AUTH_SECRET` từ biến môi trường |
 | Triển khai | Vercel |
-| Tiện ích QLKT | Chrome/Edge Manifest V3, phiên bản `0.4.25` |
+| Tiện ích QLKT | Chrome/Edge Manifest V3, phiên bản `0.4.26` |
 
 Biến môi trường quan trọng: `AUTH_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`. Không ghi token, mật khẩu hoặc URL Apps Script có mã bí mật vào Git.
 
@@ -279,4 +279,9 @@ git -c safe.directory=C:/Users/HP/Downloads/CTKTKT/ctktkt-dashboard diff --check
 - Một lần bấm đọc và tự lưu: dữ liệu ngày, PPA, PMIS cân bằng nhiệt, nhật ký BCSX S1/S2 và PMIS/02-PĐ; mọi gói phải đúng cùng ngày trước khi bắt đầu ghi.
 - Các trang đích không còn nút đồng bộ riêng theo ngày. Công cụ PMIS nhiều ngày vẫn còn để phục vụ nạp lịch sử.
 - Tiện ích hiện hành là `0.4.25`; popup chỉ mở trang đồng bộ tập trung. Hai cây tiện ích và file ZIP phải tiếp tục được cập nhật cùng nhau.
-- Đã kiểm tra 108/108 test, TypeScript và build production. Còn cần nghiệm thu end-to-end bằng tài khoản QLKT thật và tiện ích `0.4.25` sau triển khai.
+- Đã kiểm tra 108/108 test, TypeScript và build production. Còn cần nghiệm thu end-to-end bằng tài khoản QLKT thật và tiện ích `0.4.26` sau triển khai.
+
+### 21/09/2026 — Sửa dropdown tổ máy Cân bằng nhiệt
+
+- Tiện ích `0.4.26` không còn dừng ngay khi PrimeFaces không phản ánh tổ máy qua `selectedIndex`; nhận diện thêm nhãn widget và chủ động đọc MF1 → MF2 khi trạng thái ban đầu mơ hồ.
+- Còn cần nghiệm thu thực tế bằng nút tổng hợp. Đây là phần phụ thuộc DOM/AJAX của QLKT nên kiểm thử mô phỏng và build không thay thế được lần chạy thật.

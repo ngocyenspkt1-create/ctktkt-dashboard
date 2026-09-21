@@ -863,6 +863,13 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Các nút đồng bộ riêng theo ngày trên PPA, PMIS, BCSX và Chỉ tiêu KTKT đã được bỏ khỏi giao diện. Công cụ PMIS đồng bộ theo khoảng ngày vẫn giữ để nạp lịch sử.
 - Popup tiện ích chỉ còn nút mở trang “Dữ liệu các tháng”; gói phát hành nâng lên `0.4.25`, hai cây nguồn và ZIP đã đồng bộ. SHA-256 ZIP: `4576A0EF45F702D7F7A3B9E06FF584E7E0EB86683EB9F260DCF03E7D23C7EED2`.
 - Kiểm tra tự động: **108/108 test đạt**, TypeScript đạt, build production đạt. ESLint không phát hiện lỗi mới của luồng tổng hợp; các lỗi React-hook/ref nền cũ trong component và cảnh báo unused của mã đồng bộ dự phòng vẫn còn.
-- Còn cần nghiệm thu thật: cài/Reload tiện ích `0.4.25`, đăng nhập QLKT, chọn một ngày đã biết và bấm nút tổng hợp; mở lần lượt PPA, PMIS, BCSX và Báo cáo PMIS để đối chiếu dữ liệu đã lưu.
+- Còn cần nghiệm thu thật: cài/Reload tiện ích `0.4.26`, đăng nhập QLKT, chọn một ngày đã biết và bấm nút tổng hợp; mở lần lượt PPA, PMIS, BCSX và Báo cáo PMIS để đối chiếu dữ liệu đã lưu.
+
+## Bổ sung 21/09/2026 — Sửa nhận diện tổ máy Cân bằng nhiệt
+
+- Lỗi thực tế của `0.4.25`: PrimeFaces có thể cập nhật nhãn widget nhưng không cập nhật `selectedIndex` của thẻ `<select>` ẩn, làm tiện ích không xác định được DH1_MF1/DH1_MF2 và dừng lượt đồng bộ tổng hợp.
+- Bản `0.4.26` nhận diện thêm từ giá trị option, `Tổ máy 1/2`, `S1/S2`, `TM1/TM2` và nhãn `<id>_label` của PrimeFaces. Nếu vẫn không đọc được lựa chọn hiện tại, tiện ích chủ động chọn MF1, đọc dữ liệu, chuyển MF2 và chỉ khôi phục tổ máy khi đã biết lựa chọn ban đầu.
+- Đã thêm kiểm thử cho các cách ghi `DH1_MF1`, `DH1-MF2`, `Tổ máy 1/2` và giá trị số. Kết quả phát hành: **108/108 test đạt**, TypeScript đạt, build production đạt; cây nguồn và cây public trùng SHA-256 cho các file thay đổi. ZIP `0.4.26`: `D234F560B52215EE748829F2FF21E9FFC50B4361C591BF37ABAA8D65691E5A05`.
+- Còn cần: Reload tiện ích `0.4.26` rồi nghiệm thu lại trên QLKT thật. Nếu QLKT đã đổi hẳn cấu trúc danh sách tổ máy thì cần ảnh chụp màn hình Cân bằng nhiệt có mở danh sách chọn để bổ sung đúng DOM thực tế.
 
 ---

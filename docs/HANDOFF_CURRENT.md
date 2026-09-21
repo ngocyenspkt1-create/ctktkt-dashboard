@@ -333,3 +333,10 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Nút đồng bộ riêng theo ngày đã bỏ khỏi PPA, BCSX, PMIS và Chỉ tiêu KTKT. Đồng bộ PMIS theo khoảng ngày được giữ riêng cho nhập lịch sử.
 - Tiện ích phát hành `0.4.25`; ZIP SHA-256 `4576A0EF45F702D7F7A3B9E06FF584E7E0EB86683EB9F260DCF03E7D23C7EED2`.
 - Đã kiểm tra 108/108 test, TypeScript và build production. Bước tiếp theo: nghiệm thu bằng phiên QLKT thật rồi xác nhận từng trang đích; nếu một nguồn lỗi, lưu nguyên thông báo nhóm lỗi và ảnh màn hình QLKT tương ứng.
+
+## 21. Cập nhật 21/09/2026 — Cân bằng nhiệt PrimeFaces
+
+- Ảnh nghiệm thu `0.4.25` báo không xác định được tổ máy đang chọn. Nguyên nhân là bộ đọc chỉ dựa vào selected option của thẻ select ẩn.
+- `0.4.26` nhận dạng nhiều dạng nhãn/giá trị và nhãn widget PrimeFaces; khi trạng thái ban đầu vẫn mơ hồ, tự chọn MF1 rồi MF2 thay vì dừng.
+- Phát hành đã qua 108/108 test, TypeScript và build production; SHA-256 ZIP `0.4.26`: `D234F560B52215EE748829F2FF21E9FFC50B4361C591BF37ABAA8D65691E5A05`.
+- Cần người dùng tải lại ZIP, thay thư mục tiện ích cũ hoặc bấm Reload, F5 web và thử lại đúng ngày 20/09/2026. Nếu còn lỗi, ảnh tiếp theo phải kèm màn hình Cân bằng nhiệt sau khi tiện ích chuyển tab để xác định cơ chế AJAX của dropdown.

@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.25";
+  const CONTENT_SCRIPT_VERSION = "0.4.26";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -219,12 +219,28 @@
   // Tổ máy đang xem trên màn hình QLKT (DH1_MF1/DH1_MF2) được chọn qua dropdown
   // "formMain:cbSelectMainAsset" (đã xác nhận trực tiếp trên hệ thống QLKT thật) — nhưng vẫn dò theo
   // kiểu chung (mọi <select> đang chọn, không khoá cứng id) để không vỡ nếu QLKT đổi id.
+  function heatRateUnitFromText(value) {
+    const text = normalized(value).replace(/[_-]+/g, " ");
+    if (!text) return null;
+    if (text === "2" || /(?:^|\s)(?:dh1\s*)?mf\s*2(?:\s|$)/.test(text) || /(?:^|\s)(?:s|tm)\s*2(?:\s|$)/.test(text) || text.includes("to may 2")) return "2";
+    if (text === "1" || /(?:^|\s)(?:dh1\s*)?mf\s*1(?:\s|$)/.test(text) || /(?:^|\s)(?:s|tm)\s*1(?:\s|$)/.test(text) || text.includes("to may 1")) return "1";
+    return null;
+  }
+
+  function optionHeatRateUnit(option) {
+    return heatRateUnitFromText(`${option?.textContent || ""} ${option?.value || ""}`);
+  }
+
   function detectHeatRateUnit() {
     for (const select of document.querySelectorAll("select")) {
-      const optionText = normalized(select.options?.[select.selectedIndex]?.textContent || "");
-      if (!optionText) continue;
-      if (optionText.includes("mf2")) return "2";
-      if (optionText.includes("mf1")) return "1";
+      const selected = select.options?.[select.selectedIndex];
+      const unit = optionHeatRateUnit(selected) || heatRateUnitFromText(select.value);
+      if (unit) return unit;
+      // PrimeFaces selectOneMenu đôi khi không phản ánh selectedIndex vào thẻ
+      // <select> ẩn, mà chỉ cập nhật nhãn `<id>_label` đang hiển thị.
+      const label = select.id ? document.getElementById(`${select.id.replace(/_input$/, "")}_label`) : null;
+      const labelUnit = heatRateUnitFromText(label?.textContent || "");
+      if (labelUnit) return labelUnit;
     }
     return null;
   }
@@ -233,9 +249,11 @@
   // chọn MF1/MF2 trong danh sách) để không vỡ nếu QLKT đổi id, khác với detectHeatRateUnit() ở trên
   // vốn chỉ đọc lựa chọn ĐANG chọn chứ không cần liệt kê toàn bộ option.
   function findMainAssetSelect() {
+    const exact = [...document.querySelectorAll("select")].find(select => /cbSelectMainAsset/i.test(select.id || select.name || ""));
+    if (exact) return exact;
     for (const select of document.querySelectorAll("select")) {
-      const optionTexts = [...select.options].map(option => normalized(option.textContent || ""));
-      if (optionTexts.some(text => text.includes("mf1")) && optionTexts.some(text => text.includes("mf2"))) return select;
+      const units = new Set([...select.options].map(optionHeatRateUnit).filter(Boolean));
+      if (units.has("1") && units.has("2")) return select;
     }
     return null;
   }
@@ -251,7 +269,7 @@
   async function switchHeatRateUnit(targetUnit) {
     const select = findMainAssetSelect();
     if (!select) throw new Error("Không tìm thấy danh sách chọn Tổ máy trên màn hình này.");
-    const targetOption = [...select.options].find(option => normalized(option.textContent || "").includes(`mf${targetUnit}`));
+    const targetOption = [...select.options].find(option => optionHeatRateUnit(option) === targetUnit);
     if (!targetOption) throw new Error(`Không tìm thấy Tổ máy DH1_MF${targetUnit} trong danh sách chọn.`);
     if (select.value === targetOption.value) return;
     const before = sampleHeatRateSignature();
@@ -299,14 +317,18 @@
   // Tổ máy ban đầu — để người dùng chỉ cần bấm 1 nút đồng bộ trên web Chỉ tiêu KTKT.
   async function extractHeatRatePayload(operatingDate) {
     const originalUnit = detectHeatRateUnit();
-    if (!originalUnit) throw new Error("Không xác định được Tổ máy (DH1_MF1/DH1_MF2) đang chọn trên màn hình QLKT.");
-    const otherUnit = originalUnit === "2" ? "1" : "2";
-    const entriesByUnit = { [originalUnit]: readHeatRateEntriesForCurrentUnit(originalUnit) };
+    // Không phụ thuộc nhãn đang chọn: một số phiên bản PrimeFaces chỉ cập nhật
+    // nhãn widget, khiến selectedIndex của <select> ẩn không xác định. Khi đó
+    // chủ động chọn MF1 làm điểm bắt đầu rồi đọc lần lượt MF1 -> MF2.
+    const firstUnit = originalUnit || "1";
+    if (!originalUnit) await switchHeatRateUnit(firstUnit);
+    const otherUnit = firstUnit === "2" ? "1" : "2";
+    const entriesByUnit = { [firstUnit]: readHeatRateEntriesForCurrentUnit(firstUnit) };
     try {
       await switchHeatRateUnit(otherUnit);
       entriesByUnit[otherUnit] = readHeatRateEntriesForCurrentUnit(otherUnit);
     } finally {
-      if (detectHeatRateUnit() !== originalUnit) {
+      if (originalUnit && detectHeatRateUnit() !== originalUnit) {
         try { await switchHeatRateUnit(originalUnit); } catch { /* đã lấy đủ dữ liệu cần thiết, bỏ qua lỗi khôi phục */ }
       }
     }
@@ -764,6 +786,7 @@
   }
 
   globalThis.QlktOperatingExtractor = { parseOperatingRow, classifyEventUnit, extractOperatingEvents };
+  globalThis.QlktHeatRateExtractor = { heatRateUnitFromText };
   globalThis.Qlkt02PdExtractor = { extractPmis02PdPayload };
 
   if (typeof chrome !== "undefined" && chrome?.runtime?.onMessage) {

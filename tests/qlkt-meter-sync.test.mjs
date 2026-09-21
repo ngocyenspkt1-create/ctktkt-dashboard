@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload, validateQlktUnifiedSyncPayload } from '../lib/qlkt-sync.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
 
-test('extension package 0.4.25 supports the one-button unified sync and preserves the prepared date', () => {
+test('extension package 0.4.26 supports unified sync and robust heat-rate unit selection', () => {
   const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
@@ -16,7 +16,7 @@ test('extension package 0.4.25 supports the one-button unified sync and preserve
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
   const popup = readFileSync(new URL('../public/qlkt-sync-extension/popup.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.25');
+  assert.equal(manifest.version, '0.4.26');
   assert.ok(manifest.host_permissions.includes('https://ctktkt-dashboard.vercel.app/*'));
   assert.ok(manifest.content_scripts.some(item => item.js.includes('web-bridge.js') && item.matches.includes('https://ctktkt-dashboard.vercel.app/*')));
   assert.match(webBridge, /\/bcsx-report/);
@@ -27,7 +27,9 @@ test('extension package 0.4.25 supports the one-button unified sync and preserve
   assert.match(background, /SYNC_BCSX_EVENTS_QLKT/);
   assert.match(background, /SYNC_UNIFIED_QLKT/);
   assert.match(background, /async function syncUnified\(operatingDate\)/);
-  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.25"/);
+  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.26"/);
+  assert.match(content, /const firstUnit = originalUnit \|\| "1"/);
+  assert.match(content, /cbSelectMainAsset/);
   assert.match(content, /extractOperatingEvents/);
   assert.match(content, /classifyEventUnit/);
   assert.match(background, /prepareDateWithRetry/);
@@ -187,6 +189,12 @@ test('operating events extractor correctly classifies S1 and S2 events from QLKT
   fn(mockGlobal, { location: { origin: 'http://test' } }, { querySelectorAll: () => [], documentElement: {} }, { pathname: '', search: '', href: '' }, { runtime: { onMessage: { addListener: () => {} } }, storage: { local: { get: () => {} } } }, MockMutationObserver);
 
   const classify = mockGlobal.QlktOperatingExtractor.classifyEventUnit;
+  const heatRateUnit = mockGlobal.QlktHeatRateExtractor.heatRateUnitFromText;
+  assert.equal(heatRateUnit('DH1_MF1'), '1');
+  assert.equal(heatRateUnit('DH1-MF2'), '2');
+  assert.equal(heatRateUnit('Tổ máy 1'), '1');
+  assert.equal(heatRateUnit('Tổ máy 2'), '2');
+  assert.equal(heatRateUnit('2'), '2');
   assert.deepEqual(classify('Tăng tải S1 từ 435.7MW lên 470MW'), ['S1']);
   assert.deepEqual(classify('Giảm tải S1 từ 470MW về 435.7MW'), ['S1']);
   assert.deepEqual(classify('Tăng tải S2 từ 435.7MW lên 470MW'), ['S2']);
