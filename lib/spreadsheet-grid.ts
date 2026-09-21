@@ -35,3 +35,22 @@ export function parseSpreadsheetClipboard(text: string) {
   if (hasLeadingLabel) matrix = matrix.map(row => row.slice(1));
   return matrix.map(row => row.map(normalizeSpreadsheetValue));
 }
+
+export type SpreadsheetCellPosition<T> = {
+  item: T;
+  top: number;
+  left: number;
+};
+
+/** Gom các ô theo vị trí hiển thị để mọi bảng/card đều điều hướng như Excel. */
+export function groupSpreadsheetCells<T>(cells: SpreadsheetCellPosition<T>[], rowTolerance = 8) {
+  const rows: Array<Array<SpreadsheetCellPosition<T>>> = [];
+  for (const cell of [...cells].sort((a, b) => a.top - b.top || a.left - b.left)) {
+    const row = rows.find(candidate => Math.abs(candidate[0].top - cell.top) <= rowTolerance);
+    if (row) row.push(cell);
+    else rows.push([cell]);
+  }
+  return rows
+    .sort((a, b) => a[0].top - b[0].top)
+    .map(row => row.sort((a, b) => a.left - b.left));
+}

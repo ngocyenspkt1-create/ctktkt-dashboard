@@ -340,3 +340,10 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - `0.4.26` nhận dạng nhiều dạng nhãn/giá trị và nhãn widget PrimeFaces; khi trạng thái ban đầu vẫn mơ hồ, tự chọn MF1 rồi MF2 thay vì dừng.
 - Phát hành đã qua 108/108 test, TypeScript và build production; SHA-256 ZIP `0.4.26`: `D234F560B52215EE748829F2FF21E9FFC50B4361C591BF37ABAA8D65691E5A05`.
 - Cần người dùng tải lại ZIP, thay thư mục tiện ích cũ hoặc bấm Reload, F5 web và thử lại đúng ngày 20/09/2026. Nếu còn lỗi, ảnh tiếp theo phải kèm màn hình Cân bằng nhiệt sau khi tiện ích chuyển tab để xác định cơ chế AJAX của dropdown.
+
+## 22. Cập nhật 21/09/2026 — Bảng nhập kiểu Excel và nhập lịch sử trực tiếp
+
+- `SpreadsheetInputBehavior` được gắn tại `app/layout.tsx`, áp dụng paste ma trận và điều hướng bàn phím cho các ô số/văn bản trên toàn ứng dụng. Các ô Chỉ tiêu có `data-cell` vẫn đi qua bộ xử lý chuyên biệt để không phá phân quyền hoặc lệch cột khóa.
+- `/ctktkt-report` chỉ còn nút `Nhập dữ liệu file chỉ tiêu các tháng trước`. Endpoint `/api/ctktkt-report/history-import` nhận `.xls/.xlsx`, giới hạn 12 MB, kiểm tra đăng nhập/quyền/origin và dùng `lib/ctktkt-history-import.ts` để đọc, đối chiếu trước khi ghi.
+- Chỉ `manualEntries` được gửi vào `/api/ctktkt-report`; dữ liệu liên kết BCSX/Nước không bị ghi đè. Lượt ghi có backup, read-back và rollback. API seed mẫu và hành vi tự seed khi GET/export kho trống đã bỏ.
+- Bằng chứng file thật 19/09/2026: 20 ngày, 5.839 giá trị nhập tay, 1.634/1.634 công thức đạt. 109/109 test, TypeScript và build đạt. Chưa thực hiện ghi production; bước kế tiếp là nghiệm thu bằng tài khoản người dùng sau deploy.

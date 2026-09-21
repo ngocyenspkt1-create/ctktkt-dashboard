@@ -7,7 +7,6 @@ import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
-import { seedCtktktSample2Days } from "../seed-sample/route";
 
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 
@@ -102,27 +101,16 @@ export async function GET(request: Request) {
     const { year, month, previous, next } = monthBounds(period);
     const db = getRawDb();
     await ensureWaterSchema(db);
-    let { results } = await db.prepare(
+    const { results } = await db.prepare(
       "SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, field_code",
     ).bind(previous, next).all();
-    let { results: shiftResults } = await db.prepare(
+    const { results: shiftResults } = await db.prepare(
       "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
     ).bind(previous, next).all();
     const { results: waterResults } = await db.prepare(
       "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
     ).bind(previous, next).all();
 
-    if (period === "2026-09" && (results as unknown[]).length === 0 && (shiftResults as unknown[]).length === 0) {
-      await seedCtktktSample2Days(db);
-      const reQuery = await db.prepare(
-        "SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, field_code",
-      ).bind(previous, next).all();
-      const reShift = await db.prepare(
-        "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
-      ).bind(previous, next).all();
-      results = reQuery.results;
-      shiftResults = reShift.results;
-    }
     const byDate = new Map<string, Record<string, string>>();
     for (const item of results as { operatingDate: string; fieldCode: string; value: string }[]) {
       const row = byDate.get(item.operatingDate) || {};

@@ -285,3 +285,9 @@ git -c safe.directory=C:/Users/HP/Downloads/CTKTKT/ctktkt-dashboard diff --check
 
 - Tiện ích `0.4.26` không còn dừng ngay khi PrimeFaces không phản ánh tổ máy qua `selectedIndex`; nhận diện thêm nhãn widget và chủ động đọc MF1 → MF2 khi trạng thái ban đầu mơ hồ.
 - Còn cần nghiệm thu thực tế bằng nút tổng hợp. Đây là phần phụ thuộc DOM/AJAX của QLKT nên kiểm thử mô phỏng và build không thay thế được lần chạy thật.
+
+### Cập nhật nhập liệu và lịch sử 21/09/2026
+
+- Mọi ô dữ liệu số/văn bản dùng chung thao tác kiểu Excel: paste ma trận và di chuyển bằng phím mũi tên/Enter/Tab; các loại input điều khiển, tìm kiếm và ô khóa bị loại trừ.
+- Chỉ tiêu KTKT nhập lịch sử trực tiếp từ `.xls/.xlsx` bằng một nút. Hệ thống chỉ ghi ô nhập tay sau khi kết quả tự tính của web khớp 100% với các ô công thức Excel được kiểm tra; sai lệch được báo đến ngày/chỉ tiêu/ô/giá trị.
+- File gốc 19/09/2026 đã đạt 1.634/1.634 kiểm tra, nhưng chưa ghi production. Luồng cũ nạp mẫu 16–17/09 đã bỏ khỏi UI, API và hành vi tự seed.

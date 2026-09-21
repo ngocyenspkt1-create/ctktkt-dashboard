@@ -20,7 +20,6 @@ import {
   Rows3,
   TableProperties,
   UserCheck,
-  Database,
   RefreshCw,
   Mail,
   Upload,
@@ -64,13 +63,15 @@ type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
 type DisplayField = { cell: string; label: string; row: number; column: number };
 type ImportEntry = { cell: string; value: string };
-type ImportShiftEntry = { unit: string; timeSlot: string; metric: string; value: string };
-type ImportDay = { date: string; sheetName: string; manualEntries: ImportEntry[]; shiftEntries: ImportShiftEntry[] };
+type ImportDay = { date: string; sheetName: string; manualEntries: ImportEntry[] };
 type ImportPackage = {
+  fileName: string;
   month: string;
   throughDay: number;
   days: ImportDay[];
-  totals: { failed: number; checks: number; passed: number };
+  audits: Array<{ date: string; total: number; passed: number; failed: Array<{ name: string; sourceCell: string; expected: number | null; actual: number | null }> }>;
+  totals: { failed: number; checks: number; passed: number; nonBlankManualValues: number };
+  warnings: Array<{ date: string; cell: string; message: string }>;
 };
 
 type MainTab =
@@ -206,7 +207,6 @@ export function CtktktReport() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [importingHistory, setImportingHistory] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState("");
@@ -495,62 +495,13 @@ export function CtktktReport() {
     }, window.location.origin);
   };
 
-  const handleSeedSample = async () => {
-    setSeeding(true);
-    setError("");
-    setMessage("");
-    try {
-      const response = await fetch("/api/ctktkt-report/seed-sample", { method: "POST" });
-      const body = (await response.json()) as { error?: string; totalManual?: number; totalShift?: number };
-      if (!response.ok) throw new Error(body.error || "Không nạp được số liệu mẫu.");
-
-      setDate("2026-09-17");
-      setDirty(false);
-      setLoading(true);
-      const res = await fetch(`/api/ctktkt-report?period=2026-09`, { cache: "no-store" });
-      const resBody = (await res.json()) as {
-        entries?: LoadedEntry[];
-        linkedEntries?: LoadedEntry[];
-        warnings?: LinkWarning[];
-        error?: string;
-      };
-      if (!res.ok) throw new Error(resBody.error || "Không tải lại được dữ liệu.");
-
-      const next: Record<string, CtktktDayEntries> = {};
-      for (const entry of resBody.entries || []) {
-        next[entry.operatingDate] ||= {};
-        next[entry.operatingDate][entry.cell] = entry.value;
-      }
-      const nextLinked: Record<string, CtktktDayEntries> = {};
-      for (const entry of resBody.linkedEntries || []) {
-        nextLinked[entry.operatingDate] ||= {};
-        nextLinked[entry.operatingDate][entry.cell] = entry.value;
-      }
-      setByDate(next);
-      setLinkedByDate(nextLinked);
-      setLinkWarnings(resBody.warnings || []);
-      setMessage(
-        "Đã nạp thành công dữ liệu mẫu 2 ngày (16/09 & 17/09/2026). Toàn bộ KPI ngày 17/09 đã tự động tính toán so với ngày 16/09. Bạn có thể kiểm tra các cụm hoặc bấm 'Xuất Excel tháng' để tải file!",
-      );
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Lỗi khi nạp dữ liệu mẫu.");
-    } finally {
-      setSeeding(false);
-      setLoading(false);
-    }
-  };
-
   const handleHistoryImport = async (file: File | undefined) => {
     if (!file || !userCanEditAny) return;
     setImportingHistory(true);
     setError("");
     setMessage("");
     const completed: ImportDay[] = [];
-    let backup: {
-      report: { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[] };
-      shifts: Record<string, ImportShiftEntry[]>;
-      importedDays: ImportDay[];
-    } | null = null;
+    let backup: { reports: Record<string, { entries?: LoadedEntry[] }>; importedDays: ImportDay[] } | null = null;
 
     const postJson = async (url: string, body: unknown) => {
       const response = await fetch(url, {
@@ -563,31 +514,42 @@ export function CtktktReport() {
     };
 
     try {
-      const parsed = JSON.parse(await file.text()) as Partial<ImportPackage>;
-      if (!/^\d{4}-\d{2}$/.test(parsed.month || "") || !Array.isArray(parsed.days) || !parsed.days.length) {
-        throw new Error("Gói nhập không đúng cấu trúc CTKTKT.");
-      }
-      if (!parsed.totals || parsed.totals.failed !== 0 || parsed.totals.checks !== parsed.totals.passed) {
-        throw new Error("Gói nhập chưa đạt đối chiếu công thức 100%; chưa ghi dữ liệu.");
-      }
+      const formData = new FormData();
+      formData.append("file", file);
+      const parseResponse = await fetch("/api/ctktkt-report/history-import", { method: "POST", body: formData });
+      const parsed = (await parseResponse.json()) as Partial<ImportPackage> & { error?: string };
+      if (!parseResponse.ok || parsed.error) throw new Error(parsed.error || "Không đọc được file Chỉ tiêu KTKT.");
+      if (!/^\d{4}-\d{2}$/.test(parsed.month || "") || !Array.isArray(parsed.days) || !parsed.days.length || !parsed.totals) throw new Error("File không đúng cấu trúc Chỉ tiêu KTKT.");
       const importPackage = parsed as ImportPackage;
       for (const day of importPackage.days) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date) || !Array.isArray(day.manualEntries) || day.manualEntries.length > 400 || !Array.isArray(day.shiftEntries) || day.shiftEntries.length > 400) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date) || !Array.isArray(day.manualEntries) || day.manualEntries.length > 400) {
           throw new Error(`Dữ liệu ngày ${day.date || "không rõ"} không hợp lệ.`);
         }
       }
 
-      const reportResponse = await fetch(`/api/ctktkt-report?period=${encodeURIComponent(importPackage.month)}`, { cache: "no-store" });
-      const reportBackup = (await reportResponse.json()) as { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[]; error?: string };
-      if (!reportResponse.ok) throw new Error(reportBackup.error || "Không sao lưu được dữ liệu CTKTKT hiện có.");
-      const shiftBackup: Record<string, ImportShiftEntry[]> = {};
-      for (const day of importPackage.days) {
-        const response = await fetch(`/api/shift-readings?date=${encodeURIComponent(day.date)}`, { cache: "no-store" });
-        const body = (await response.json()) as { entries?: ImportShiftEntry[]; error?: string };
-        if (!response.ok) throw new Error(body.error || `Không sao lưu được dữ liệu BCSX ngày ${day.date}.`);
-        shiftBackup[day.date] = body.entries || [];
+      if (importPackage.totals.failed > 0 || importPackage.totals.checks !== importPackage.totals.passed) {
+        const failures = importPackage.audits.flatMap(audit => audit.failed.map(item =>
+          `${audit.date.split("-").reverse().join("/")} · ${item.name} (${item.sourceCell}): Excel=${item.expected ?? "trống"}, Web=${item.actual ?? "trống"}`,
+        ));
+        throw new Error(`Chưa nhập vì có ${importPackage.totals.failed}/${importPackage.totals.checks} công thức không khớp:\n${failures.slice(0, 12).join("\n")}${failures.length > 12 ? `\n… và ${failures.length - 12} sai lệch khác.` : ""}`);
       }
-      backup = { report: reportBackup, shifts: shiftBackup, importedDays: importPackage.days };
+      const confirmed = window.confirm(
+        `File ${file.name} đã đối chiếu đạt ${importPackage.totals.passed}/${importPackage.totals.checks} công thức.\n\nChỉ ${importPackage.totals.nonBlankManualValues || importPackage.days.reduce((sum, day) => sum + day.manualEntries.filter(entry => entry.value).length, 0)} ô nhập tay của ${importPackage.days.length} ngày sẽ được ghi. Các ô tự tính và ô liên kết không bị ghi đè.\n\nTiếp tục nhập dữ liệu?`,
+      );
+      if (!confirmed) {
+        setMessage("Đã kiểm tra file: công thức khớp 100%. Bạn đã chọn chưa ghi dữ liệu.");
+        return;
+      }
+
+      const periods = [...new Set(importPackage.days.map(day => day.date.slice(0, 7)))];
+      const reports: Record<string, { entries?: LoadedEntry[] }> = {};
+      for (const backupPeriod of periods) {
+        const response = await fetch(`/api/ctktkt-report?period=${encodeURIComponent(backupPeriod)}`, { cache: "no-store" });
+        const body = (await response.json()) as { entries?: LoadedEntry[]; error?: string };
+        if (!response.ok) throw new Error(body.error || `Không sao lưu được dữ liệu tháng ${backupPeriod}.`);
+        reports[backupPeriod] = body;
+      }
+      backup = { reports, importedDays: importPackage.days };
       const backupBlob = new Blob([JSON.stringify({ createdAt: new Date().toISOString(), ...backup }, null, 2)], { type: "application/json" });
       const backupUrl = URL.createObjectURL(backupBlob);
       const backupLink = document.createElement("a");
@@ -597,17 +559,18 @@ export function CtktktReport() {
       URL.revokeObjectURL(backupUrl);
 
       for (const day of importPackage.days) {
-        // Mark the day before the first mutation. If the manual write succeeds
-        // but the BCSX write fails, the catch block must restore both stores.
         completed.push(day);
         await postJson("/api/ctktkt-report", { operatingDate: day.date, entries: day.manualEntries });
-        await postJson("/api/shift-readings", { date: day.date, entries: day.shiftEntries });
       }
 
-      const verifyResponse = await fetch(`/api/ctktkt-report?period=${encodeURIComponent(importPackage.month)}`, { cache: "no-store" });
-      const verified = (await verifyResponse.json()) as { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[]; error?: string };
-      if (!verifyResponse.ok) throw new Error(verified.error || "Không đọc lại được dữ liệu sau khi nhập.");
-      const actual = new Map([...(verified.entries || []), ...(verified.linkedEntries || [])].map(entry => [`${entry.operatingDate}|${entry.cell}`, entry.value]));
+      const verifiedByPeriod: Record<string, { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[] }> = {};
+      for (const verifyPeriod of periods) {
+        const response = await fetch(`/api/ctktkt-report?period=${encodeURIComponent(verifyPeriod)}`, { cache: "no-store" });
+        const body = (await response.json()) as { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[]; error?: string };
+        if (!response.ok) throw new Error(body.error || `Không đọc lại được dữ liệu tháng ${verifyPeriod}.`);
+        verifiedByPeriod[verifyPeriod] = body;
+      }
+      const actual = new Map(Object.values(verifiedByPeriod).flatMap(body => body.entries || []).map(entry => [`${entry.operatingDate}|${entry.cell}`, entry.value]));
       const sameValue = (left: string | undefined, right: string) => {
         if (!right) return left === undefined || left === "";
         const a = Number(left), b = Number(right);
@@ -617,13 +580,9 @@ export function CtktktReport() {
         for (const entry of day.manualEntries) {
           if (!sameValue(actual.get(`${day.date}|${entry.cell}`), entry.value)) throw new Error(`Đọc lại không khớp ô ${entry.cell}, ngày ${day.date}.`);
         }
-        for (const link of CTKTKT_BCSX_LINKS) {
-          const sourceUnit = link.unit === "S1/S2" ? "S1" : link.unit;
-          const expected = day.shiftEntries.find(entry => entry.unit === sourceUnit && entry.timeSlot === link.timeSlot && entry.metric === link.metric)?.value || "";
-          if (!sameValue(actual.get(`${day.date}|${link.cell}`), expected)) throw new Error(`Đọc lại không khớp ô liên kết ${link.cell}, ngày ${day.date}.`);
-        }
       }
 
+      const verified = verifiedByPeriod[importPackage.month];
       const next: Record<string, CtktktDayEntries> = {};
       for (const entry of verified.entries || []) {
         next[entry.operatingDate] ||= {};
@@ -639,13 +598,13 @@ export function CtktktReport() {
       setLinkWarnings(verified.warnings || []);
       setDate(`${importPackage.month}-${String(importPackage.throughDay).padStart(2, "0")}`);
       setDirty(false);
-      setMessage(`Đã nhập và đọc lại xác nhận ${importPackage.days.length} ngày; ${importPackage.totals.passed}/${importPackage.totals.checks} phép đối chiếu công thức đạt.`);
+      setMessage(`Đã nhập và đọc lại xác nhận ${importPackage.days.length} ngày; chỉ ghi ô nhập tay; ${importPackage.totals.passed}/${importPackage.totals.checks} công thức Excel và web khớp.`);
     } catch (reason) {
       let rollbackMessage = "";
       if (backup && completed.length) {
         try {
           const oldByDate = new Map<string, Record<string, string>>();
-          for (const entry of backup.report.entries || []) {
+          for (const body of Object.values(backup.reports)) for (const entry of body.entries || []) {
             const values = oldByDate.get(entry.operatingDate) || {};
             values[entry.cell] = entry.value;
             oldByDate.set(entry.operatingDate, values);
@@ -655,11 +614,6 @@ export function CtktktReport() {
             await postJson("/api/ctktkt-report", {
               operatingDate: day.date,
               entries: day.manualEntries.map(entry => ({ cell: entry.cell, value: oldManual[entry.cell] || "" })),
-            });
-            const oldShifts = new Map((backup.shifts[day.date] || []).map(entry => [`${entry.unit}|${entry.timeSlot}|${entry.metric}`, entry.value]));
-            await postJson("/api/shift-readings", {
-              date: day.date,
-              entries: day.shiftEntries.map(entry => ({ ...entry, value: oldShifts.get(`${entry.unit}|${entry.timeSlot}|${entry.metric}`) || "" })),
             });
           }
           rollbackMessage = " Đã hoàn nguyên các ngày đã ghi.";
@@ -975,21 +929,10 @@ export function CtktktReport() {
               />
             </label>
 
-            <button
-              type="button"
-              onClick={handleSeedSample}
-              disabled={seeding || loading}
-              className="flex h-9 items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/90 px-3.5 text-xs font-bold text-indigo-700 shadow-xs transition-all hover:bg-indigo-100 disabled:opacity-50"
-              title="Nạp dữ liệu thực tế 2 ngày (16 & 17/09/2026) từ file gốc để thử nghiệm và kiểm tra xuất file"
-            >
-              <Database className="size-3.5" />
-              {seeding ? "Đang nạp…" : "Nạp 2 ngày mẫu (16 & 17/09)"}
-            </button>
-
             <input
               ref={importFileRef}
               type="file"
-              accept="application/json,.json"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden"
               onChange={event => void handleHistoryImport(event.target.files?.[0])}
             />
@@ -998,10 +941,10 @@ export function CtktktReport() {
               onClick={() => importFileRef.current?.click()}
               disabled={!userCanEditAny || importingHistory || loading}
               className="flex h-9 items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 text-xs font-bold text-amber-800 shadow-xs transition-all hover:bg-amber-100 disabled:opacity-45"
-              title="Nhập gói dữ liệu lịch sử đã đối chiếu 100% với file Excel; hệ thống tự tải bản sao lưu trước khi ghi"
+              title="Chọn file Chỉ tiêu KTKT tháng cũ; hệ thống chỉ lấy ô nhập tay, đối chiếu công thức Excel với web và chỉ ghi khi khớp 100%"
             >
               <Upload className="size-3.5" />
-              {importingHistory ? "Đang nhập lịch sử…" : "Nhập dữ liệu Excel đã kiểm tra"}
+              {importingHistory ? "Đang kiểm tra file…" : "Nhập dữ liệu file chỉ tiêu các tháng trước"}
             </button>
 
             <button
@@ -1079,7 +1022,7 @@ export function CtktktReport() {
           <p
             key={`${item.cell}-${item.message}`}
             role="alert"
-            className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800"
+            className="mt-2 whitespace-pre-line rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800"
           >
             {item.message}
           </p>
@@ -1087,7 +1030,7 @@ export function CtktktReport() {
         {error && (
           <p
             role="alert"
-            className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800"
+            className="mt-2 whitespace-pre-line rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800"
           >
             {error}
           </p>

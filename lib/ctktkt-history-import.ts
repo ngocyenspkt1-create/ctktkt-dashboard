@@ -1,0 +1,209 @@
+import * as XLSX from "xlsx";
+import { CTKTKT_INPUT_FIELDS } from "./ctktkt-fields.generated.ts";
+import {
+  CTKTKT_EXTRA_INPUT_FIELDS,
+  CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS,
+  CTKTKT_NON_WORKBOOK_INPUT_CELLS,
+} from "./ctktkt-extra-fields.ts";
+import { CTKTKT_BCSX_LINKED_CELLS } from "./ctktkt-bcsx-link.ts";
+import { CTKTKT_WATER_LINKED_CELLS } from "./ctktkt-water-link.ts";
+import {
+  calculateCtktktSummary,
+  calculateNh3Summary,
+  calculateOilDifferences,
+  calculateSteamDifferences,
+  calculateTkdDcsSummary,
+  type CtktktDayEntries,
+} from "./ctktkt-report.ts";
+
+export type CtktktImportEntry = { cell: string; value: string };
+export type CtktktFormulaCheck = {
+  name: string;
+  sourceCell: string;
+  expected: number | null;
+  actual: number | null;
+  passed: boolean;
+};
+export type CtktktHistoryImportPackage = {
+  fileName: string;
+  month: string;
+  throughDay: number;
+  days: Array<{ date: string; sheetName: string; manualEntries: CtktktImportEntry[] }>;
+  audits: Array<{ date: string; total: number; passed: number; failed: CtktktFormulaCheck[] }>;
+  totals: { dates: number; manualCellsPrepared: number; nonBlankManualValues: number; checks: number; passed: number; failed: number };
+  warnings: Array<{ date: string; sheetName: string; cell: string; message: string }>;
+};
+
+function rawCellValue(sheet: XLSX.WorkSheet, address: string) {
+  const cell = sheet[address];
+  if (!cell) return { isFormula: false, value: null as unknown };
+  return { isFormula: Boolean(cell.f), value: cell.v as unknown };
+}
+
+function numeric(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const parsed = Number(String(value).trim().replaceAll(" ", "").replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function storageValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "";
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+  return String(value).trim();
+}
+
+function expectedNumber(sheet: XLSX.WorkSheet, address: string) {
+  return numeric(rawCellValue(sheet, address).value);
+}
+
+function closeEnough(actual: number | null, expected: number | null) {
+  if (actual === null || expected === null) return actual === expected;
+  return Math.abs(actual - expected) <= Math.max(1e-8, Math.abs(expected) * 1e-10);
+}
+
+function auditDay(sheet: XLSX.WorkSheet, entries: CtktktDayEntries, previous?: CtktktDayEntries) {
+  const checks: CtktktFormulaCheck[] = [];
+  const add = (name: string, sourceCell: string, actual: number | null) => {
+    const expected = expectedNumber(sheet, sourceCell);
+    checks.push({ name, sourceCell, expected, actual, passed: closeEnough(actual, expected) });
+  };
+  const summary = calculateCtktktSummary(entries, previous);
+  const summaryMappings: Array<[string, string, number | null]> = [
+    ["S1 sản lượng đầu cực", "E20", summary.s1.grossMwh], ["S2 sản lượng đầu cực", "H20", summary.s2.grossMwh], ["NM sản lượng đầu cực", "I20", summary.plant.grossMwh],
+    ["S1 sản lượng phát lưới", "E21", summary.s1.netMwh], ["S2 sản lượng phát lưới", "H21", summary.s2.netMwh], ["NM sản lượng phát lưới", "I21", summary.plant.netMwh],
+    ["S1 điện tự dùng", "E25", summary.s1.auxiliaryMwh], ["S2 điện tự dùng", "H25", summary.s2.auxiliaryMwh], ["NM điện tự dùng", "I25", summary.plant.auxiliaryMwh],
+    ["S1 tỷ lệ tự dùng", "E27", summary.s1.auxiliaryPercent], ["S2 tỷ lệ tự dùng", "H27", summary.s2.auxiliaryPercent], ["NM tỷ lệ tự dùng", "I27", summary.plant.auxiliaryPercent],
+    ["S1 than nguyên trạng", "E19", summary.s1.rawCoalTonnes], ["S2 than nguyên trạng", "H19", summary.s2.rawCoalTonnes], ["NM than nguyên trạng", "I19", summary.plant.rawCoalTonnes],
+    ["NM than quy ẩm", "AR86", summary.plant.adjustedCoalTonnes], ["Nhiệt trị chung", "AT87", summary.plant.hhvKjKg ?? null],
+    ["S1 suất hao than", "AU87", summary.s1.netCoalRate], ["S2 suất hao than", "AU88", summary.s2.netCoalRate], ["NM suất hao than", "AU86", summary.plant.netCoalRate],
+    ["S1 suất hao nhiệt", "AV87", summary.s1.netHeatRate], ["S2 suất hao nhiệt", "AV88", summary.s2.netHeatRate], ["NM suất hao nhiệt", "AV86", summary.plant.netHeatRate],
+  ];
+  summaryMappings.forEach(([name, cell, actual]) => add(name, cell, actual));
+  for (const [name, rows, actual] of [
+    ["S1 than quy ẩm", [87, 88, 89], summary.s1.adjustedCoalTonnes],
+    ["S2 than quy ẩm", [90, 91, 92], summary.s2.adjustedCoalTonnes],
+  ] as Array<[string, number[], number | null]>) {
+    const values = rows.map(row => expectedNumber(sheet, `AR${row}`));
+    const expected = values.some(value => value === null) ? null : values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    checks.push({ name, sourceCell: `SUM(AR${rows[0]}:AR${rows.at(-1)})`, expected, actual, passed: closeEnough(actual, expected) });
+  }
+
+  const tkd = calculateTkdDcsSummary(entries);
+  for (const column of ["M", "N", "O", "P", "Q", "R"] as const) {
+    for (const [property, row] of [["pSumTdS1", 11], ["pSumTdS2", 14], ["pSumS1S2", 17], ["pSumT1T2", 18], ["qSumS1S2", 19]] as const) {
+      add(`TKĐ ${property} ${column}`, `${column}${row}`, tkd[column][property]);
+    }
+  }
+  const oil1 = calculateOilDifferences(entries, "s1", previous);
+  const oil2 = calculateOilDifferences(entries, "s2", previous);
+  ["W", "X", "Y", "Z", "AA", "AB"].forEach((column, index) => add(`Dầu S1 ${oil1[index].label}`, `${column}15`, oil1[index].diff));
+  ["AG", "AH", "AI", "AJ", "AK", "AL"].forEach((column, index) => add(`Dầu S2 ${oil2[index].label}`, `${column}15`, oil2[index].diff));
+  const steam1 = calculateSteamDifferences(entries, "s1");
+  const steam2 = calculateSteamDifferences(entries, "s2");
+  const steamInputRow = Array.from({ length: 12 }, (_, index) => 50 + index).find(row => String(sheet[`V${row}`]?.v || "").trim() === "Tổng lưu lượng hơi") ?? 54;
+  const steamResultRow = steamInputRow + 1;
+  ["W", "X", "Y", "Z", "AA", "AB"].forEach((column, index) => add(`Hơi S1 ${steam1[index].label}`, `${column}${steamResultRow}`, steam1[index].consumption));
+  ["AG", "AH", "AI", "AJ", "AK", "AL"].forEach((column, index) => add(`Hơi S2 ${steam2[index].label}`, `${column}${steamResultRow}`, steam2[index].consumption));
+  const nh3 = calculateNh3Summary(entries, summary.plant.grossMwh, summary.plant.netMwh);
+  [69, 70, 71].forEach((row, index) => add(`NH3 bồn ${index + 1} khả dụng 95%`, `Q${row}`, nh3.tankAvailable[index]));
+  add("NH3 tồn 24h", "P74", nh3.stock24h); add("NH3 tiêu thụ", "P75", nh3.usedTonnes);
+  add("Suất hao NH3 đầu cực", "P77", nh3.rateGross); add("Suất hao NH3 phát lưới", "Q77", nh3.rateNet);
+  return checks;
+}
+
+function monthFromFileName(fileName: string) {
+  const matches = [...fileName.matchAll(/(\d{1,2})[.\-_](\d{1,2})[.\-_](20\d{2})/g)];
+  const last = matches.at(-1);
+  if (!last) throw new Error("Không xác định được tháng từ tên file. Hãy đặt tên file có ngày dạng dd.mm.yyyy, ví dụ CHỈ TIÊU KTKT 19.09.2026.xlsx.");
+  const day = Number(last[1]), month = Number(last[2]), year = Number(last[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) throw new Error("Ngày trong tên file không hợp lệ.");
+  return { period: `${year}-${String(month).padStart(2, "0")}`, throughDay: day };
+}
+
+function previousMonthEnd(period: string) {
+  const [year, month] = period.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, 0)).toISOString().slice(0, 10);
+}
+
+export async function buildCtktktHistoryImportPackage(fileName: string, bytes: ArrayBuffer): Promise<CtktktHistoryImportPackage> {
+  const { period, throughDay: namedThroughDay } = monthFromFileName(fileName);
+  const workbook = XLSX.read(bytes, { type: "array", cellFormula: true, cellDates: true });
+  const numericSheets = workbook.SheetNames.map(name => Number(name)).filter(day => Number.isInteger(day) && day >= 1 && day <= 31);
+  const throughDay = Math.min(namedThroughDay, Math.max(...numericSheets, 0));
+  if (!throughDay) throw new Error("File không có các sheet ngày 01, 02, ... để nhập.");
+
+  const inputCells = [...new Set([
+    ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
+    ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
+    ...CTKTKT_BCSX_LINKED_CELLS,
+  ])].filter(cell => !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(cell));
+  const manualCells = inputCells.filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell) && !CTKTKT_WATER_LINKED_CELLS.has(cell) && !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(cell));
+  const warnings: CtktktHistoryImportPackage["warnings"] = [];
+  const entriesByDate = new Map<string, CtktktDayEntries>();
+  const sheets: Array<{ sheetName: string; date: string; importDay: boolean }> = [];
+  const priorSheetName = workbook.SheetNames.find(name => name.toLowerCase() === "d-1");
+  if (priorSheetName) sheets.push({ sheetName: priorSheetName, date: previousMonthEnd(period), importDay: true });
+  for (let day = 1; day <= throughDay; day++) sheets.push({ sheetName: String(day).padStart(2, "0"), date: `${period}-${String(day).padStart(2, "0")}`, importDay: true });
+
+  const days: CtktktHistoryImportPackage["days"] = [];
+  for (const item of sheets) {
+    const actualSheetName = workbook.SheetNames.find(name => name === item.sheetName || name === String(Number(item.sheetName)));
+    const sheet = actualSheetName ? workbook.Sheets[actualSheetName] : undefined;
+    if (!sheet) throw new Error(`Thiếu sheet ngày ${item.sheetName}.`);
+    const entries: CtktktDayEntries = {};
+    for (const cell of inputCells) {
+      const source = rawCellValue(sheet, cell);
+      if (source.isFormula) {
+        warnings.push({ ...item, cell, message: "Ô thuộc nhóm nhập tay nhưng file chứa công thức; đã bỏ qua." });
+        continue;
+      }
+      const value = storageValue(source.value);
+      if (value !== "") entries[cell] = value;
+    }
+    // File cũ có thể nhúng hiệu chỉnh cân than vào công thức kết quả. Thu hồi
+    // hiệu chỉnh về đúng các ô nhập riêng để web không cộng thiếu hoặc cộng hai lần.
+    const priorDate = new Date(`${item.date}T12:00:00Z`); priorDate.setUTCDate(priorDate.getUTCDate() - 1);
+    const previous = entriesByDate.get(priorDate.toISOString().slice(0, 10));
+    const meterTotal = (source: CtktktDayEntries | undefined, column: string) => {
+      const values = Array.from({ length: 12 }, (_, index) => numeric(source?.[`${column}${16 + index}`]));
+      return values.some(value => value === null) ? null : values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    };
+    const recover = (columns: string[], correctionCells: string[]) => columns.forEach((resultColumn, index) => {
+      const currentTotal = meterTotal(entries, resultColumn);
+      const base = index === 0 ? meterTotal(previous, columns[2]) : meterTotal(entries, columns[index - 1]);
+      const expected = expectedNumber(sheet, `${resultColumn}28`);
+      if (expected !== null && currentTotal !== null && base !== null) entries[correctionCells[index]] = String(expected - (currentTotal - base));
+    });
+    recover(["X", "Z", "AB"], ["W28", "Y28", "AA28"]); recover(["AH", "AJ", "AL"], ["AG28", "AI28", "AK28"]);
+    // Một số file tháng cũ chèn thêm dòng trong cụm hơi, làm hàng nhập dịch
+    // khỏi hàng 54. Chuẩn hóa về mã ô nội bộ cố định của web trước khi tính.
+    const steamInputRow = Array.from({ length: 12 }, (_, index) => 50 + index)
+      .find(row => String(sheet[`V${row}`]?.v || "").trim() === "Tổng lưu lượng hơi") ?? 54;
+    if (steamInputRow !== 54) {
+      for (const column of ["W", "X", "Y", "Z", "AA", "AB", "AG", "AH", "AI", "AJ", "AK", "AL"]) {
+        const source = rawCellValue(sheet, `${column}${steamInputRow}`);
+        if (!source.isFormula) entries[`${column}54`] = storageValue(source.value);
+      }
+    }
+    entriesByDate.set(item.date, entries);
+    days.push({ date: item.date, sheetName: actualSheetName!, manualEntries: manualCells.map(cell => ({ cell, value: entries[cell] ?? "" })) });
+  }
+
+  const audits = days.filter(day => day.date.startsWith(period)).map(day => {
+    const sheet = workbook.Sheets[day.sheetName]!;
+    const priorDate = new Date(`${day.date}T12:00:00Z`); priorDate.setUTCDate(priorDate.getUTCDate() - 1);
+    const checks = auditDay(sheet, entriesByDate.get(day.date) || {}, entriesByDate.get(priorDate.toISOString().slice(0, 10)));
+    return { date: day.date, total: checks.length, passed: checks.filter(check => check.passed).length, failed: checks.filter(check => !check.passed) };
+  });
+  const totals = {
+    dates: days.length,
+    manualCellsPrepared: days.reduce((sum, day) => sum + day.manualEntries.length, 0),
+    nonBlankManualValues: days.reduce((sum, day) => sum + day.manualEntries.filter(entry => entry.value !== "").length, 0),
+    checks: audits.reduce((sum, audit) => sum + audit.total, 0),
+    passed: audits.reduce((sum, audit) => sum + audit.passed, 0),
+    failed: audits.reduce((sum, audit) => sum + audit.failed.length, 0),
+  };
+  return { fileName, month: period, throughDay, days, audits, totals, warnings };
+}

@@ -6,7 +6,6 @@ import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFrom
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_TEXT_INPUT_CELLS, normalizeCtktktInputValue } from "@/lib/ctktkt-extra-fields";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
-import { seedCtktktSample2Days } from "./seed-sample/route";
 
 const fieldCells = new Set<string>([
   ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
@@ -31,27 +30,16 @@ export async function GET(request: Request) {
   try {
     const db = getRawDb();
     await ensureWaterSchema(db);
-    let { results } = await db.prepare(
+    const { results } = await db.prepare(
       "SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code",
     ).bind(from, next).all();
-    let { results: shiftResults } = await db.prepare(
+    const { results: shiftResults } = await db.prepare(
       "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
     ).bind(from, next).all();
     const { results: waterResults } = await db.prepare(
       "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
     ).bind(from, next).all();
 
-    if (period === "2026-09" && (results as unknown[]).length === 0 && (shiftResults as unknown[]).length === 0) {
-      await seedCtktktSample2Days(db);
-      const reQuery = await db.prepare(
-        "SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code",
-      ).bind(from, next).all();
-      const reShift = await db.prepare(
-        "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
-      ).bind(from, next).all();
-      results = reQuery.results;
-      shiftResults = reShift.results;
-    }
     const readingsByDate = new Map<string, CtktktBcsxReading[]>();
     for (const reading of shiftResults as CtktktBcsxReading[]) {
       const date = reading.operatingDate || "";

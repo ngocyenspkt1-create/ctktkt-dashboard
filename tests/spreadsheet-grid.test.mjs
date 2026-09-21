@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeSpreadsheetValue, parseSpreadsheetClipboard } from "../lib/spreadsheet-grid.ts";
+import { groupSpreadsheetCells, normalizeSpreadsheetValue, parseSpreadsheetClipboard } from "../lib/spreadsheet-grid.ts";
 
 test("chuẩn hóa số Việt Nam khi dán từ Excel nhưng giữ nguyên văn bản", () => {
   assert.equal(normalizeSpreadsheetValue("1.617.408,5"), "1617408.5");
@@ -23,4 +23,14 @@ test("tự bỏ cột nhãn khi người dùng copy cả tên chỉ tiêu", () =
     ["0.1", "0.2"],
     ["0.3", "0.4"],
   ]);
+});
+
+test("gom ô theo tọa độ hiển thị để dùng chung phím mũi tên trên mọi bảng", () => {
+  const rows = groupSpreadsheetCells([
+    { item: "B2", top: 51, left: 220 },
+    { item: "A1", top: 10, left: 100 },
+    { item: "B1", top: 13, left: 220 },
+    { item: "A2", top: 49, left: 100 },
+  ]);
+  assert.deepEqual(rows.map(row => row.map(cell => cell.item)), [["A1", "B1"], ["A2", "B2"]]);
 });

@@ -872,4 +872,15 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Đã thêm kiểm thử cho các cách ghi `DH1_MF1`, `DH1-MF2`, `Tổ máy 1/2` và giá trị số. Kết quả phát hành: **108/108 test đạt**, TypeScript đạt, build production đạt; cây nguồn và cây public trùng SHA-256 cho các file thay đổi. ZIP `0.4.26`: `D234F560B52215EE748829F2FF21E9FFC50B4361C591BF37ABAA8D65691E5A05`.
 - Còn cần: Reload tiện ích `0.4.26` rồi nghiệm thu lại trên QLKT thật. Nếu QLKT đã đổi hẳn cấu trúc danh sách tổ máy thì cần ảnh chụp màn hình Cân bằng nhiệt có mở danh sách chọn để bổ sung đúng DOM thực tế.
 
+## Bổ sung 21/09/2026 — Nhập liệu kiểu Excel toàn web và nhập lịch sử Chỉ tiêu
+
+- Đã gắn cơ chế nhập liệu dùng chung ở cấp ứng dụng: các ô dữ liệu dạng số/văn bản trên mọi trang có thể nhận ma trận nhiều hàng/nhiều cột từ Excel bằng `Ctrl+V`, và di chuyển bằng `← ↑ → ↓`, `Enter`, `Shift+Enter`, `Tab`, `Shift+Tab`. Ô ngày, giờ, tìm kiếm, mật khẩu, ô khóa và ô chỉ đọc không bị can thiệp. Trang Chỉ tiêu tiếp tục dùng cơ chế riêng để giữ chính xác phân quyền và vị trí cột tự tính.
+- Đã gộp hai nút `Nạp 2 ngày mẫu` và `Nhập dữ liệu Excel đã kiểm tra` thành một nút **`Nhập dữ liệu file chỉ tiêu các tháng trước`**. API mẫu tự ghi dữ liệu đã được gỡ; đọc trang hoặc xuất file khi kho trống không còn tự nạp ngày 16–17/09.
+- Luồng mới nhận trực tiếp `.xls` và `.xlsx`, xác định tháng/ngày từ tên file, đọc `D-1` và các sheet ngày, chỉ chuẩn bị ô nhập tay; không ghi đè ô công thức, ô liên kết BCSX/Nước hoặc trường ghi chú nội bộ không có trong workbook.
+- Trước khi ghi, web so sánh các nhóm công thức đang hỗ trợ với kết quả lưu trong Excel: sản lượng/điện tự dùng, than và SHN, TKĐ DCS, dầu, hơi và NH3. Nếu còn sai lệch, hệ thống chặn toàn bộ lượt nhập và hiển thị ngày, tên chỉ tiêu, địa chỉ ô, giá trị Excel và giá trị web. Nếu khớp 100%, người dùng xác nhận; web tải bản sao lưu, ghi từng ngày, đọc lại từng ô và tự hoàn nguyên khi lỗi.
+- Đã thử trực tiếp file `CHỈ TIÊU KINH TẾ KỸ THUẬT 19.09.2026.xls`: nhận 20 ngày gồm D-1, 5.839 giá trị nhập tay; **1.634/1.634 phép đối chiếu đạt**. Không ghi dữ liệu production trong lượt kiểm thử này.
+- SheetJS dùng bản vá `0.20.3` từ nguồn phát hành chính thức; hai cảnh báo bảo mật của gói npm `xlsx@0.18.5` không còn trong `npm audit`. Dự án vẫn còn các cảnh báo phụ thuộc cũ không phát sinh từ thay đổi này.
+- Kiểm tra mã: **109/109 test đạt**, TypeScript đạt, build production đạt; lint phạm vi không có lỗi, còn 15 cảnh báo unused cũ trong `ctktkt-report.tsx`.
+- Còn cần: sau triển khai, đăng nhập tài khoản có quyền Chỉ tiêu KTKT, thử dán một khối ở từng trang nghiệp vụ chính và nhập một bản sao file tháng cũ; xác nhận hộp đối chiếu trước khi cho phép ghi dữ liệu thật.
+
 ---
