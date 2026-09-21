@@ -16,7 +16,7 @@ test("Cell group mapping identifies key cells correctly", () => {
   assert.equal(getCtktktFieldGroup("W13"), "lo_pho_oil");
   assert.equal(getCtktktFieldGroup("AL14"), "lo_pho_oil");
   assert.equal(getCtktktFieldGroup("AK28"), "may_nghien_coal_s2");
-  assert.equal(getCtktktFieldGroup("AO90"), "coal_blend_pmis");
+  assert.equal(getCtktktFieldGroup("AO90"), null);
   assert.equal(getCtktktFieldGroup("X16"), "may_nghien_coal_s1");
   assert.equal(getCtktktFieldGroup("COAL_ADJ_NOTE_S1"), "may_nghien_coal_s1");
   assert.equal(getCtktktFieldGroup("AL27"), "may_nghien_coal_s2");

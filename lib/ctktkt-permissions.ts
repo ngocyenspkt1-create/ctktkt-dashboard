@@ -171,14 +171,9 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "C94", "D94", "E94", "F94", "G94",
   ]),
   coal_blend_pmis: new Set([
-    // Tỷ lệ trộn
-    "AI83", "AL83", "AI84", "AL84", "AI85", "AL85",
-    // S1 Ẩm toàn phần & Nhiệt trị khô (3 ca)
-    "AJ87", "AK87", "AL87", "AJ88", "AK88", "AL88", "AJ89", "AK89", "AL89",
-    // S2 Ẩm toàn phần & Nhiệt trị khô (3 ca)
-    "AJ90", "AK90", "AL90", "AJ91", "AK91", "AL91", "AJ92", "AK92", "AL92",
-    // Độ ẩm than Sub bitum dùng khi tỷ lệ trộn > 0
-    "AO87", "AO88", "AO89", "AO90", "AO91", "AO92",
+    // Chỉ còn than 6A10: Ẩm toàn phần & Nhiệt trị khô theo 3 ca của S1/S2.
+    "AJ87", "AK87", "AJ88", "AK88", "AJ89", "AK89",
+    "AJ90", "AK90", "AJ91", "AK91", "AJ92", "AK92",
   ]),
   pmis_reports: new Set([
     "J157", "K157", "J158", "K158",

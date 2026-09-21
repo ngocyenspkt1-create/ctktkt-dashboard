@@ -291,3 +291,11 @@ git -c safe.directory=C:/Users/HP/Downloads/CTKTKT/ctktkt-dashboard diff --check
 - Mọi ô dữ liệu số/văn bản dùng chung thao tác kiểu Excel: paste ma trận và di chuyển bằng phím mũi tên/Enter/Tab; các loại input điều khiển, tìm kiếm và ô khóa bị loại trừ.
 - Chỉ tiêu KTKT nhập lịch sử trực tiếp từ `.xls/.xlsx` bằng một nút. Hệ thống chỉ ghi ô nhập tay sau khi kết quả tự tính của web khớp 100% với các ô công thức Excel được kiểm tra; sai lệch được báo đến ngày/chỉ tiêu/ô/giá trị.
 - File gốc 19/09/2026 đã đạt 1.634/1.634 kiểm tra, nhưng chưa ghi production. Luồng cũ nạp mẫu 16–17/09 đã bỏ khỏi UI, API và hành vi tự seed.
+
+### 21/09/2026 — Than 6A10, PMIS, đồng bộ riêng và nguồn NH3
+
+- Bảng than Chỉ tiêu KTKT chỉ còn 6A10 theo ba ca của S1/S2; dữ liệu Sub-bitum cũ không còn quyền nhập, hiển thị hoặc tham gia tính.
+- Công suất đặt PMIS mặc định `1245 MW`; bộ đọc số Việt Nam được dùng trước khi tính để tránh mất Tổng tự dùng.
+- Quyết định đồng bộ tập trung đã được thay thế theo yêu cầu vận hành: Dữ liệu các tháng, PPA, BCSX, PMIS và Chỉ tiêu KTKT có nút đồng bộ riêng theo thời điểm cần dùng.
+- File Chỉ tiêu là nguồn gốc cho các trường NH3 có đối tượng tương ứng: `BN` (dùng theo mức bồn) và `CN` (nhập trong ngày) được liên kết sang Dữ liệu các tháng và khóa nhập tay. Không suy diễn `BQ/BR` vì đây là NH3 DCS riêng S1/S2, không có trường nguồn tương ứng trong file Chỉ tiêu.
+- Trạng thái kiểm tra: 112/112 test đạt; TypeScript và build production đạt. Chưa commit/push/deploy; chưa có số liệu Turso production vì thiếu biến môi trường kết nối trong phiên hiện tại.

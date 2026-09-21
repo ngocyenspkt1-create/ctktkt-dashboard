@@ -248,7 +248,9 @@ export function PpaHeatRateComparison() {
       <div className="flex items-center gap-2">
         <span className="text-xs font-bold text-slate-600">Ngày:</span>
         <DateField value={operatingDate} onChange={value => { setOperatingDate(value); clearImport(); }} className="w-[145px]" />
-        <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-[#354a9f]">QLKT đồng bộ tập trung tại “Dữ liệu các tháng”</span>
+        <button type="button" disabled={syncingQlkt || isViewer} onClick={syncFromQlkt} className="rounded-lg bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3 py-1.5 text-xs font-bold text-white shadow-sm disabled:opacity-50">
+          {syncingQlkt ? "Đang đồng bộ PPA…" : "⚡ Đồng bộ PPA từ QLKT"}
+        </button>
       </div>
     </div>
 
@@ -293,7 +295,7 @@ export function PpaHeatRateComparison() {
         <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#20345f]">Kết quả so sánh suất hao nhiệt (kJ/kWh)</h2>
       </div>
       {!calculation ? (
-        <div className="p-3 text-xs text-slate-500">Chưa có dữ liệu PPA cho ngày {operatingDate.split("-").reverse().join("/")}. Hãy dùng nút <b>Đồng bộ toàn bộ QLKT</b> tại trang “Dữ liệu các tháng”.</div>
+        <div className="p-3 text-xs text-slate-500">Chưa có dữ liệu PPA cho ngày {operatingDate.split("-").reverse().join("/")}. Hãy dùng nút <b>Đồng bộ PPA từ QLKT</b> ở đầu trang này.</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-xs">

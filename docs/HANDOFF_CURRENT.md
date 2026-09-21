@@ -348,3 +348,12 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Chỉ `manualEntries` được gửi vào `/api/ctktkt-report`; dữ liệu liên kết BCSX/Nước không bị ghi đè. Lượt ghi có backup, read-back và rollback. API seed mẫu và hành vi tự seed khi GET/export kho trống đã bỏ.
 - Bằng chứng file thật 19/09/2026: 20 ngày, 5.839 giá trị nhập tay, 1.634/1.634 công thức đạt. 109/109 test, TypeScript và build đạt. Chưa thực hiện ghi production; bước kế tiếp là nghiệm thu bằng tài khoản người dùng sau deploy.
 - Commit chức năng `b7d7be3` đã push lên `github/main`; GitHub báo trạng thái Vercel `success` cho đúng SHA.
+
+## 23. Cập nhật 21/09/2026 — Than 6A10, PMIS, đồng bộ riêng và liên kết NH3
+
+- Cụm than Chỉ tiêu KTKT đã bỏ hoàn toàn Sub-bitum khỏi giao diện, quyền nhập và công thức. Nguồn còn lại là sáu dòng 6A10 theo S1/S2 × ba ca, quy về cơ sở ẩm 8,5%.
+- `C181` dùng mặc định `1245 MW` khi thiếu dữ liệu QLKT; số Việt Nam được chuẩn hóa trước khi tính PMIS để tránh Tổng tự dùng trống do dấu phân cách.
+- Yêu cầu mới thay thế mục 20: mỗi trang có nút đồng bộ riêng. Không tiếp tục dùng `SYNC_UNIFIED` trên Dữ liệu các tháng; các luồng riêng `SYNC_HEATRATE`, PPA, BCSX events và PMIS/02-PĐ được giữ độc lập.
+- Dữ liệu các tháng đọc `/api/ctktkt-report` để liên kết `BN` từ tổng NH3 dùng theo mức bồn và `CN` từ lượng NH3 nhập `P72`; các ô này khóa nhập. `BQ/BR` là NH3 DCS riêng từng tổ máy, file Chỉ tiêu không có nguồn tương ứng nên không tự suy diễn.
+- Kiểm tra hiện tại: 112/112 test, TypeScript và build production đạt. Kiểm tra lưu trữ bị chặn chính xác bởi thiếu `TURSO_DATABASE_URL`; chưa xác minh Turso/Vercel usage trực tiếp.
+- Chưa commit/push/deploy. Cần nghiệm thu UI thật sau triển khai theo danh sách cuối mục mới trong `docs/ACCEPTANCE.md`.

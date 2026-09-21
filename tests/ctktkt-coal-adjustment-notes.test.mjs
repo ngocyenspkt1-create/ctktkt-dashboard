@@ -18,14 +18,7 @@ test("coal input fields use the plant shift order: 08h Ca 1, 16h Ca 2, 24h Ca 3"
     CTKTKT_COAL_ADJUSTMENT_FIELDS.slice(3, 6).map((field) => field.label),
     ["S2 Ca 1 (00h-08h)", "S2 Ca 2 (08h-16h)", "S2 Ca 3 (16h-24h)"],
   );
-  assert.deepEqual(
-    CTKTKT_COAL_BLEND_FIELDS.slice(0, 3).map((field) => field.label),
-    [
-      "S1 tỷ lệ trộn Ca 1 (00h-08h)",
-      "S1 tỷ lệ trộn Ca 2 (08h-16h)",
-      "S1 tỷ lệ trộn Ca 3 (16h-24h)",
-    ],
-  );
+  assert.deepEqual(CTKTKT_COAL_BLEND_FIELDS, []);
 });
 
 test("coal adjustment reasons are text-only fields outside worksheet cell addresses", () => {

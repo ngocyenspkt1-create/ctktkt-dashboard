@@ -907,3 +907,13 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Phần sửa đã ổn sẽ được commit riêng; chưa push/deploy trong lượt này nếu chưa có yêu cầu đẩy GitHub.
 
 ---
+
+## Bổ sung 21/09/2026 — Bỏ Sub-bitum, sửa PMIS, tách nút đồng bộ và liên kết NH3
+
+- Bảng than tại Chỉ tiêu KTKT chỉ còn than 6A10 theo sáu dòng S1/S2 × ba ca. Các hàng/cột Sub-bitum cũ (`AL87:AL92`, `AO87:AO92`) bị loại khỏi quyền nhập, không hiển thị và không còn tham gia công thức quy ẩm/nhiệt trị.
+- Công thức than dùng lượng than thô từng ca, độ ẩm 6A10 và nhiệt trị khô để quy về cơ sở ẩm 8,5%; bảng hiển thị đồng thời lượng thô, độ ẩm, nhiệt trị khô, lượng quy ẩm và nhiệt trị nhận.
+- Ô công suất đặt PMIS `C181` mặc định `1245 MW` khi QLKT chưa trả dữ liệu. Bộ đọc số của Chỉ tiêu KTKT dùng chuẩn hóa số Việt Nam để các giá trị có phân cách hàng nghìn/thập phân không làm “Tổng tự dùng” bị trống.
+- Quyết định “một nút đồng bộ tập trung” được thay thế: Dữ liệu các tháng, PPA, BCSX, PMIS và Chỉ tiêu KTKT có nút đồng bộ riêng để người dùng lấy từng nguồn vào các thời điểm khác nhau. Luồng `SYNC_UNIFIED` không còn được gọi từ trang Dữ liệu các tháng.
+- Chỉ tiêu KTKT là nguồn gốc cho các số NH3 trùng trường: Dữ liệu các tháng tự lấy `BN` (NH3 theo mức bồn) từ phép tính `P73 + P72 - P74` và `CN` (NH3 nhập ngày) từ `P72`; hai ô liên kết được khóa nhập tay. NH3 DCS riêng S1/S2 (`BQ/BR`) không có trường tương ứng trong file Chỉ tiêu nên vẫn nhập/đồng bộ tại nguồn hiện hữu, không suy diễn từ tổng bồn.
+- Kiểm tra: **112/112 test đạt**, TypeScript đạt, build production đạt. `storage:check` chưa đọc được production vì môi trường hiện tại thiếu `TURSO_DATABASE_URL`; không có số liệu dung lượng để kết luận hoặc cảnh báo ngưỡng.
+- Còn cần nghiệm thu sau triển khai: đối chiếu một ngày than có đủ ba ca; kiểm tra Tổng tự dùng và `1245 MW`; bấm từng nút đồng bộ riêng; nhập NH3 tại Chỉ tiêu, lưu/tải lại rồi mở Dữ liệu các tháng xác nhận `BN/CN` tự cập nhật và không cho sửa tay.

@@ -22,6 +22,16 @@ export type Nh3Summary = {
   rateNet: number | null;
 };
 
+export type CoalShiftDetail = {
+  unit: "S1" | "S2";
+  shift: 1 | 2 | 3;
+  rawCoalTonnes: number | null;
+  moisturePercent: number | null;
+  dryKcalKg: number | null;
+  adjustedCoalTonnes: number | null;
+  asReceivedKcalKg: number | null;
+};
+
 function numberOf(entries: CtktktDayEntries | undefined, cell: string) {
   const raw = entries?.[cell]?.trim().replace(",", ".");
   if (!raw) return null;
@@ -78,60 +88,62 @@ function coalRawShifts(
 }
 
 /**
- * Mirrors the source workbook rows AG:AT 83:92.
- *
- * The workbook first converts each shift's coal to the 8.5% moisture basis,
- * including the optional Sub-bituminous blend (AL/AO). It then derives one
- * common daily HHV at the corrected-mass basis and uses that same HHV for S1,
- * S2 and the whole plant.
+ * Converts domestic 6A10 coal to the 8.5% moisture basis. The plant stopped
+ * using Sub-bituminous coal, so legacy AL/AO values must not affect results.
  */
-function calculateCoalModel(
+export function calculateCoalShiftDetails(
   current: CtktktDayEntries,
   previous: CtktktDayEntries | undefined,
-): CoalModelResult {
+): CoalShiftDetail[] {
   const s1Raw = coalRawShifts("s1", current, previous);
   const s2Raw = coalRawShifts("s2", current, previous);
   const rows = [87, 88, 89, 90, 91, 92];
   const rawShifts = [...s1Raw, ...s2Raw];
 
-  const details = rawShifts.map((raw, index) => {
+  return rawShifts.map((raw, index) => {
     const row = rows[index];
     const moisture = numberOf(current, `AJ${row}`);
     const dryKcalKg = numberOf(current, `AK${row}`);
     if (raw === null || moisture === null || dryKcalKg === null) {
-      return { raw, adjusted: null, asReceivedKcalKg: null };
+      return {
+        unit: index < 3 ? "S1" : "S2",
+        shift: (index % 3 + 1) as 1 | 2 | 3,
+        rawCoalTonnes: raw,
+        moisturePercent: moisture,
+        dryKcalKg,
+        adjustedCoalTonnes: null,
+        asReceivedKcalKg: null,
+      };
     }
-
-    // Excel treats an empty blend ratio/moisture cell as zero.
-    const blendRatio = numberOf(current, `AL${row}`) ?? 0;
-    const blendMoisture = numberOf(current, `AO${row}`) ?? 0;
-    const domesticRaw = raw * (1 - blendRatio);
-    const blendRaw = raw * blendRatio;
-    const correctedDomesticMoisture = blendRaw > 0
-      ? (domesticRaw === 0 ? null : (raw * moisture - blendRaw * blendMoisture) / domesticRaw)
-      : moisture;
-    const adjustedDomestic = correctedDomesticMoisture === null
-      ? null
-      : domesticRaw * (1 - correctedDomesticMoisture / 100) / (1 - 0.085);
-
     return {
-      raw,
-      adjusted: adjustedDomestic === null ? null : adjustedDomestic + blendRaw,
+      unit: index < 3 ? "S1" : "S2",
+      shift: (index % 3 + 1) as 1 | 2 | 3,
+      rawCoalTonnes: raw,
+      moisturePercent: moisture,
+      dryKcalKg,
+      adjustedCoalTonnes: raw * (1 - moisture / 100) / (1 - 0.085),
       asReceivedKcalKg: dryKcalKg * (1 - moisture / 100),
     };
   });
+}
+
+function calculateCoalModel(
+  current: CtktktDayEntries,
+  previous: CtktktDayEntries | undefined,
+): CoalModelResult {
+  const details = calculateCoalShiftDetails(current, previous);
 
   const unitResult = (start: number): CoalUnitResult => ({
-    rawCoalTonnes: sum(details.slice(start, start + 3).map(item => item.raw)),
-    adjustedCoalTonnes: sum(details.slice(start, start + 3).map(item => item.adjusted)),
+    rawCoalTonnes: sum(details.slice(start, start + 3).map(item => item.rawCoalTonnes)),
+    adjustedCoalTonnes: sum(details.slice(start, start + 3).map(item => item.adjustedCoalTonnes)),
   });
   const s1 = unitResult(0);
   const s2 = unitResult(3);
-  const plantRaw = sum(details.map(item => item.raw));
-  const plantAdjusted = sum(details.map(item => item.adjusted));
-  const energyNumerator = details.some(item => item.raw === null || item.asReceivedKcalKg === null)
+  const plantRaw = sum(details.map(item => item.rawCoalTonnes));
+  const plantAdjusted = sum(details.map(item => item.adjustedCoalTonnes));
+  const energyNumerator = details.some(item => item.rawCoalTonnes === null || item.asReceivedKcalKg === null)
     ? null
-    : details.reduce((total, item) => total + (item.raw ?? 0) * (item.asReceivedKcalKg ?? 0), 0);
+    : details.reduce((total, item) => total + (item.rawCoalTonnes ?? 0) * (item.asReceivedKcalKg ?? 0), 0);
   const averageAsReceivedKcalKg = divide(energyNumerator, plantRaw);
   const correctedKcalKg = averageAsReceivedKcalKg === null || plantRaw === null || plantAdjusted === null || plantAdjusted === 0
     ? null

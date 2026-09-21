@@ -44,6 +44,7 @@ import {
   calculateOilDifferences,
   calculateSteamDifferences,
   calculateNh3Summary,
+  calculateCoalShiftDetails,
   previousIsoDate,
   TKD_HOURS,
   OIL_HOURS,
@@ -51,6 +52,7 @@ import {
   type CtktktDayEntries,
   type CtktktKpis,
 } from "@/lib/ctktkt-report";
+import { parseLocaleNumber } from "@/lib/ppa-heat-rate";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import {
   CTKTKT_EXTRA_INPUT_FIELDS,
@@ -184,10 +186,7 @@ function formatResinTotal(z1: string | undefined, z2: string | undefined): strin
 }
 
 function num(entries: CtktktDayEntries, cell: string): number | null {
-  const v = entries[cell]?.trim().replace(",", ".");
-  if (!v) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+  return parseLocaleNumber(entries[cell] || "");
 }
 
 export function CtktktReport() {
@@ -361,6 +360,9 @@ export function CtktktReport() {
     for (const cell of CTKTKT_BCSX_LINKED_CELLS) {
       if (linked[cell] !== undefined) combined[cell] = linked[cell];
     }
+    // Công suất đặt DH1 là thông số cố định của nhà máy, dùng làm giá trị mặc định
+    // khi QLKT chưa trả ô C181.
+    if (!combined.C181?.trim()) combined.C181 = "1245";
     return combined;
   }, [byDate, linkedByDate, date]);
 
@@ -381,6 +383,10 @@ export function CtktktReport() {
   // Tính toán chỉ tiêu tổng hợp toàn nhà máy
   const summary = useMemo(
     () => calculateCtktktSummary(current, previous),
+    [current, previous],
+  );
+  const coalShiftDetails = useMemo(
+    () => calculateCoalShiftDetails(current, previous),
     [current, previous],
   );
 
@@ -2781,11 +2787,11 @@ export function CtktktReport() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 mb-3">
                   <div>
                     <h3 className="text-sm font-black text-[#173b64]">
-                      Cụm 14: Bảng nhập PMIS đốt than trộn 6A10 và Sub bitum
+                      Cụm 14: Bảng than 6A10 theo ca
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Trưởng kíp điện nhập theo 3 ca (0h-08h, 08h-16h, 16h-24h): Độ ẩm Wtp (%),
-                      Nhiệt trị khô Qk (kcal/kg) của S1 & S2 và Tỷ lệ trộn than.
+                      Bố cục theo file Excel: chỉ nhập độ ẩm Wtp và nhiệt trị khô Qk; khối lượng than
+                      chưa quy ẩm, quy ẩm 8,5% và nhiệt trị thực tế được tính tự động.
                     </p>
                   </div>
                   <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-800">
@@ -2794,134 +2800,33 @@ export function CtktktReport() {
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full text-xs">
+                  <table className="min-w-[980px] w-full text-xs">
                     <thead>
                       <tr className="bg-[#f0f4f9] text-[#173b64]">
-                        <th className="p-2 text-left font-bold w-48">Tổ máy / Thông số</th>
-                        <th className="p-2 text-center font-bold">Ca 1 (0h - 08h)</th>
-                        <th className="p-2 text-center font-bold">Ca 2 (08h - 16h)</th>
-                        <th className="p-2 text-center font-bold">Ca 3 (16h - 24h)</th>
+                        <th className="p-2 text-center font-bold">Tổ máy</th>
+                        <th className="p-2 text-center font-bold">Ca</th>
+                        <th className="p-2 text-center font-bold">Than chưa quy ẩm (t)</th>
+                        <th className="p-2 text-center font-bold bg-yellow-50">Ẩm toàn phần Wtp (%)</th>
+                        <th className="p-2 text-center font-bold bg-yellow-50">Nhiệt trị khô Qk (kcal/kg)</th>
+                        <th className="p-2 text-center font-bold">Than quy ẩm 8,5% (t)</th>
+                        <th className="p-2 text-center font-bold">Nhiệt trị thực tế (kcal/kg)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono">
-                      {/* S1 Độ ẩm */}
-                      <tr>
-                        <td className="p-2 font-bold text-slate-800 font-sans">
-                          S1: Ẩm toàn phần Wtp (%)
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AJ87", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AJ88", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AJ89", { group: "coal_blend_pmis" })}
-                        </td>
-                      </tr>
-                      {/* S1 Nhiệt trị */}
-                      <tr>
-                        <td className="p-2 font-bold text-slate-800 font-sans">
-                          S1: Nhiệt trị khô Qk (kcal/kg)
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AK87", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AK88", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AK89", { group: "coal_blend_pmis" })}
-                        </td>
-                      </tr>
-
-                      {/* S2 Độ ẩm */}
-                      <tr className="bg-slate-50/50">
-                        <td className="p-2 font-bold text-slate-800 font-sans">
-                          S2: Ẩm toàn phần Wtp (%)
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AJ90", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AJ91", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AJ92", { group: "coal_blend_pmis" })}
-                        </td>
-                      </tr>
-                      {/* S2 Nhiệt trị */}
-                      <tr className="bg-slate-50/50">
-                        <td className="p-2 font-bold text-slate-800 font-sans">
-                          S2: Nhiệt trị khô Qk (kcal/kg)
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AK90", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AK91", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AK92", { group: "coal_blend_pmis" })}
-                        </td>
-                      </tr>
-
-                      <tr className="bg-amber-50/40">
-                        <td className="p-2 font-bold text-amber-950 font-sans">
-                          S1: Tỷ lệ trộn Sub bitum (0–1; 20% nhập 0,20)
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AL87", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AL88", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AL89", { group: "coal_blend_pmis" })}
-                        </td>
-                      </tr>
-                      <tr className="bg-amber-50/40">
-                        <td className="p-2 font-bold text-amber-950 font-sans">
-                          S2: Tỷ lệ trộn Sub bitum (0–1; 20% nhập 0,20)
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AL90", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AL91", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AL92", { group: "coal_blend_pmis" })}
-                        </td>
-                      </tr>
-                      <tr className="bg-orange-50/40">
-                        <td className="p-2 font-bold text-orange-950 font-sans">
-                          S1: Độ ẩm than Sub bitum (%)
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AO87", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AO88", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AO89", { group: "coal_blend_pmis" })}
-                        </td>
-                      </tr>
-                      <tr className="bg-orange-50/40">
-                        <td className="p-2 font-bold text-orange-950 font-sans">
-                          S2: Độ ẩm than Sub bitum (%)
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AO90", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AO91", { group: "coal_blend_pmis" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("AO92", { group: "coal_blend_pmis" })}
-                        </td>
-                      </tr>
+                      {coalShiftDetails.map((item, index) => {
+                        const row = 87 + index;
+                        return (
+                          <tr key={`${item.unit}-${item.shift}`} className={item.unit === "S2" ? "bg-slate-50/60" : "bg-white"}>
+                            <td className="p-2 text-center font-sans font-extrabold text-[#173b64]">{item.unit}</td>
+                            <td className="p-2 text-center font-sans font-semibold">Ca {item.shift}</td>
+                            <td className="p-2 text-right tabular-nums">{format(item.rawCoalTonnes)}</td>
+                            <td className="p-1.5 bg-yellow-50/60">{renderCellInput(`AJ${row}`, { group: "coal_blend_pmis" })}</td>
+                            <td className="p-1.5 bg-yellow-50/60">{renderCellInput(`AK${row}`, { group: "coal_blend_pmis" })}</td>
+                            <td className="p-2 text-right tabular-nums">{format(item.adjustedCoalTonnes)}</td>
+                            <td className="p-2 text-right tabular-nums">{format(item.asReceivedKcalKg)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -3087,7 +2992,15 @@ export function CtktktReport() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold text-[#354a9f]">PMIS & 02-PĐ đồng bộ tại “Dữ liệu các tháng”</span>
+                    <button
+                      type="button"
+                      disabled={syncingPmis || !canEditPmis}
+                      onClick={syncPmis02PdFromQlkt}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3.5 py-2 text-xs font-bold text-white shadow-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <RefreshCw className={`size-3.5 ${syncingPmis ? "animate-spin" : ""}`} />
+                      {syncingPmis ? "Đang đồng bộ PMIS…" : "Đồng bộ PMIS & 02-PĐ"}
+                    </button>
                     <button
                       type="button"
                       disabled={saving || !userCanEditAny}

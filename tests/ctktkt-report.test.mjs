@@ -76,7 +76,7 @@ test("calculateOilDifferences follows Excel: delta F1 minus delta F2, with D-1 f
   assert.equal(s2[0].diff, 50);
 });
 
-test("CTKTKT mirrors Excel coal blend correction and common daily HHV", () => {
+test("CTKTKT ignores legacy Sub-bituminous fields and calculates 6A10 only", () => {
   const previous = { AB8: "1000", AB9: "900", AB10: "100", AB11: "50", AL8: "2000", AL9: "1800", AL10: "200", AL11: "100" };
   const current = { AB8: "1100", AB9: "990", AB10: "106", AB11: "54", AL8: "2100", AL9: "1890", AL10: "206", AL11: "104" };
   coalMeters(previous, ["X", "Z", "AB"], [0, 0, 0]);
@@ -91,8 +91,7 @@ test("CTKTKT mirrors Excel coal blend correction and common daily HHV", () => {
   }
 
   const result = calculateCtktktSummary(current, previous);
-  const domesticMoisture = (10 * 10 - 2 * 20) / 8;
-  const adjustedPerShift = 8 * (1 - domesticMoisture / 100) / 0.915 + 2;
+  const adjustedPerShift = 10 * (1 - 0.1) / 0.915;
   const plantAdjusted = adjustedPerShift * 6;
   const expectedHhv = (5000 * 0.9 * 60 / plantAdjusted) * 4.1868;
   assert.ok(Math.abs(result.s1.adjustedCoalTonnes - adjustedPerShift * 3) < 1e-9);

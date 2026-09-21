@@ -96,20 +96,7 @@ export function getCtktktWaterAdjustments(row: Record<string, string>) {
   };
 }
 
-export const CTKTKT_COAL_BLEND_FIELDS = [
-  { cell: "AL87", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S1 tỷ lệ trộn Ca 1 (00h-08h)", row: 87, column: 38 },
-  { cell: "AL88", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S1 tỷ lệ trộn Ca 2 (08h-16h)", row: 88, column: 38 },
-  { cell: "AL89", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S1 tỷ lệ trộn Ca 3 (16h-24h)", row: 89, column: 38 },
-  { cell: "AL90", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S2 tỷ lệ trộn Ca 1 (00h-08h)", row: 90, column: 38 },
-  { cell: "AL91", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S2 tỷ lệ trộn Ca 2 (08h-16h)", row: 91, column: 38 },
-  { cell: "AL92", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S2 tỷ lệ trộn Ca 3 (16h-24h)", row: 92, column: 38 },
-  { cell: "AO87", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S1 ẩm Sub bitum Ca 1 (00h-08h)", row: 87, column: 41 },
-  { cell: "AO88", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S1 ẩm Sub bitum Ca 2 (08h-16h)", row: 88, column: 41 },
-  { cell: "AO89", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S1 ẩm Sub bitum Ca 3 (16h-24h)", row: 89, column: 41 },
-  { cell: "AO90", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S2 ẩm Sub bitum Ca 1 (00h-08h)", row: 90, column: 41 },
-  { cell: "AO91", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S2 ẩm Sub bitum Ca 2 (08h-16h)", row: 91, column: 41 },
-  { cell: "AO92", section: "coal_quality", sectionLabel: "Than trộn, độ ẩm và nhiệt trị", label: "S2 ẩm Sub bitum Ca 3 (16h-24h)", row: 92, column: 41 },
-] as const;
+export const CTKTKT_COAL_BLEND_FIELDS = [] as const;
 
 export const CTKTKT_EXTRA_INPUT_FIELDS = [
   ...CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS,
@@ -122,4 +109,7 @@ export const CTKTKT_EXTRA_INPUT_FIELDS = [
 
 export const CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS = new Set([
   "AI83", "AL83", "AI84", "AL84", "AI85", "AL85",
+  "AL87", "AL88", "AL89", "AL90", "AL91", "AL92",
+  "AN87", "AN88", "AN89", "AN90", "AN91", "AN92",
+  "AO87", "AO88", "AO89", "AO90", "AO91", "AO92",
 ]);

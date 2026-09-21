@@ -76,10 +76,10 @@ test('BCSX syncs operating events from QLKT and sources Section 2 totals from CT
   const saveRoute = readFileSync(new URL('../app/api/bcsx-sync/route.ts', import.meta.url), 'utf8');
   const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.match(source, /Nhật ký QLKT đồng bộ tại/);
+  assert.match(source, /Đồng bộ nhật ký S1 & S2/);
   assert.match(source, /type: "SYNC_BCSX_EVENTS"/);
-  assert.match(dailySource, /type:"SYNC_UNIFIED"/);
-  assert.match(dailySource, /"\/api\/bcsx-sync"/);
+  assert.match(dailySource, /type:"SYNC_HEATRATE"/);
+  assert.doesNotMatch(dailySource, /type:"SYNC_UNIFIED"/);
   assert.match(source, /\/api\/ctktkt-report/);
   assert.match(source, /ktktByCell\.get\("J157"\)/);
   assert.match(ctktktSource, /SYNC_PMIS_02PD/);
@@ -88,6 +88,29 @@ test('BCSX syncs operating events from QLKT and sources Section 2 totals from CT
   assert.match(webBridge, /SYNC_PMIS_02PD/);
   assert.match(source, /fetch\("\/api\/bcsx-sync"/);
   assert.match(saveRoute, /requirePermission\("edit_bcsx"\)/);
+});
+
+test('each report keeps its own sync action and NH3 overlaps link from CTKTKT', () => {
+  const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
+  const bcsxSource = readFileSync(new URL('../components/bcsx-report.tsx', import.meta.url), 'utf8');
+  const ppaSource = readFileSync(new URL('../components/ppa-heat-rate-comparison.tsx', import.meta.url), 'utf8');
+  const pmisSource = readFileSync(new URL('../components/pmis-report.tsx', import.meta.url), 'utf8');
+  const ctktktSource = readFileSync(new URL('../components/ctktkt-report.tsx', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(dailySource, /SYNC_UNIFIED/);
+  assert.match(dailySource, /Đồng bộ dữ liệu ngày/);
+  assert.match(bcsxSource, /Đồng bộ nhật ký S1 & S2/);
+  assert.match(ppaSource, /Đồng bộ PPA từ QLKT/);
+  assert.match(pmisSource, /Đồng bộ ngày/);
+  assert.match(ctktktSource, /Đồng bộ PMIS & 02-PĐ/);
+
+  assert.match(dailySource, /fetch\(`\/api\/ctktkt-report\?period=/);
+  assert.match(dailySource, /calculateNh3Summary\(values, null, null\)/);
+  assert.match(dailySource, /next\[day\]\.BN = String\(nh3\.usedTonnes\)/);
+  assert.match(dailySource, /next\[day\]\.CN = values\.P72/);
+  assert.match(dailySource, /disabled=\{isLinked\}/);
+  assert.match(ctktktSource, /combined\.C181 = "1245"/);
+  assert.match(ctktktSource, /parseLocaleNumber\(entries\[cell\] \|\| ""\)/);
 });
 
 const headers = ['', 'Tên điểm đo', 'Kênh', 'Ngày', 'Nguồn dữ liệu', 'Tổng', ...Array.from({ length: 48 }, (_, index) => `H${index + 1}`)];
