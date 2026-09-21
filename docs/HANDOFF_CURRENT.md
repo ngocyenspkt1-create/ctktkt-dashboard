@@ -347,3 +347,4 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - `/ctktkt-report` chỉ còn nút `Nhập dữ liệu file chỉ tiêu các tháng trước`. Endpoint `/api/ctktkt-report/history-import` nhận `.xls/.xlsx`, giới hạn 12 MB, kiểm tra đăng nhập/quyền/origin và dùng `lib/ctktkt-history-import.ts` để đọc, đối chiếu trước khi ghi.
 - Chỉ `manualEntries` được gửi vào `/api/ctktkt-report`; dữ liệu liên kết BCSX/Nước không bị ghi đè. Lượt ghi có backup, read-back và rollback. API seed mẫu và hành vi tự seed khi GET/export kho trống đã bỏ.
 - Bằng chứng file thật 19/09/2026: 20 ngày, 5.839 giá trị nhập tay, 1.634/1.634 công thức đạt. 109/109 test, TypeScript và build đạt. Chưa thực hiện ghi production; bước kế tiếp là nghiệm thu bằng tài khoản người dùng sau deploy.
+- Commit chức năng `b7d7be3` đã push lên `github/main`; GitHub báo trạng thái Vercel `success` cho đúng SHA.

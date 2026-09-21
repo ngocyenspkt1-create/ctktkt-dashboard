@@ -882,5 +882,6 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - SheetJS dùng bản vá `0.20.3` từ nguồn phát hành chính thức; hai cảnh báo bảo mật của gói npm `xlsx@0.18.5` không còn trong `npm audit`. Dự án vẫn còn các cảnh báo phụ thuộc cũ không phát sinh từ thay đổi này.
 - Kiểm tra mã: **109/109 test đạt**, TypeScript đạt, build production đạt; lint phạm vi không có lỗi, còn 15 cảnh báo unused cũ trong `ctktkt-report.tsx`.
 - Còn cần: sau triển khai, đăng nhập tài khoản có quyền Chỉ tiêu KTKT, thử dán một khối ở từng trang nghiệp vụ chính và nhập một bản sao file tháng cũ; xác nhận hộp đối chiếu trước khi cho phép ghi dữ liệu thật.
+- Đã triển khai commit `b7d7be3` lên `github/main`; trạng thái Vercel của đúng commit là `success`. Bước tiếp theo chỉ còn nghiệm thu thao tác thật sau `Ctrl+F5`.
 
 ---
