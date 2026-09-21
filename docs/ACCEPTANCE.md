@@ -912,7 +912,7 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 
 - Bảng than tại Chỉ tiêu KTKT chỉ còn than 6A10 theo sáu dòng S1/S2 × ba ca. Các hàng/cột Sub-bitum cũ (`AL87:AL92`, `AO87:AO92`) bị loại khỏi quyền nhập, không hiển thị và không còn tham gia công thức quy ẩm/nhiệt trị.
 - Công thức than dùng lượng than thô từng ca, độ ẩm 6A10 và nhiệt trị khô để quy về cơ sở ẩm 8,5%; bảng hiển thị đồng thời lượng thô, độ ẩm, nhiệt trị khô, lượng quy ẩm và nhiệt trị nhận.
-- Ô công suất đặt PMIS `C181` mặc định `1245 MW` khi QLKT chưa trả dữ liệu. Bộ đọc số của Chỉ tiêu KTKT dùng chuẩn hóa số Việt Nam để các giá trị có phân cách hàng nghìn/thập phân không làm “Tổng tự dùng” bị trống.
+- Ô công suất đặt PMIS `C181` cố định `1245 MW`, không phụ thuộc giá trị QLKT hoặc file nhập. Bộ đọc số của Chỉ tiêu KTKT dùng chuẩn hóa số Việt Nam để các giá trị có phân cách hàng nghìn/thập phân không làm “Tổng tự dùng” bị trống.
 - Quyết định “một nút đồng bộ tập trung” được thay thế: Dữ liệu các tháng, PPA, BCSX, PMIS và Chỉ tiêu KTKT có nút đồng bộ riêng để người dùng lấy từng nguồn vào các thời điểm khác nhau. Luồng `SYNC_UNIFIED` không còn được gọi từ trang Dữ liệu các tháng.
 - Chỉ tiêu KTKT là nguồn gốc cho các số NH3 trùng trường: Dữ liệu các tháng tự lấy `BN` (NH3 theo mức bồn) từ phép tính `P73 + P72 - P74` và `CN` (NH3 nhập ngày) từ `P72`; hai ô liên kết được khóa nhập tay. NH3 DCS riêng S1/S2 (`BQ/BR`) không có trường tương ứng trong file Chỉ tiêu nên vẫn nhập/đồng bộ tại nguồn hiện hữu, không suy diễn từ tổng bồn.
 - Kiểm tra: **112/112 test đạt**, TypeScript đạt, build production đạt. `storage:check` chưa đọc được production vì môi trường hiện tại thiếu `TURSO_DATABASE_URL`; không có số liệu dung lượng để kết luận hoặc cảnh báo ngưỡng.
@@ -925,3 +925,14 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Chỉ các ô nhập tay được ghi. Ô công thức, ô liên kết BCSX/Nước và vùng không phải dữ liệu nhập không bị ghi đè.
 - Trước khi ghi, kết quả tự tính bằng công thức web được so với giá trị trong file. Sai lệch được báo theo ngày, tên chỉ tiêu, ô nguồn, giá trị Excel và giá trị web; chỉ cho nhập khi đạt 100%.
 - Kiểm tra mã: `119/119` test đạt, TypeScript đạt, build production đạt; lint phạm vi không có lỗi.
+
+---
+
+## Bổ sung 21/09/2026 — Cố định công suất đặt và đồng bộ thời gian vận hành QLKT
+
+- Ô công suất đặt PMIS `C181` được cố định ở `1245 MW` trên giao diện, khi nhập file lịch sử, khi lưu API và khi xuất Excel. Giá trị trong file dạng `1 245` được chuẩn hóa thành `1245`; người dùng không thể sửa tay ô cố định này.
+- Nút **Đồng bộ dữ liệu ngày** tại **Dữ liệu các tháng** đọc thêm màn hình QLKT `rpt_hour_operation.jsf` theo ngày đã chọn. Tiện ích dùng URL chuẩn của màn hình này, không còn yêu cầu người dùng phải mở trang một lần để ghi nhớ địa chỉ.
+- Hai dòng `DH1_MF1` và `DH1_MF2` được quy đổi vào các trường: giờ phát S1/S2 (`F/L`), dừng dự phòng (`CS`), sự cố (`CT`), sửa chữa/bảo dưỡng kế hoạch và đột xuất (`CU`), thời gian khởi động còn lại (`CV`). Tổng thời gian được kiểm tra trên cơ sở `48 giờ tổ máy/ngày`; nếu vượt quá `0,01 giờ`, tiện ích dừng và báo lỗi chi tiết thay vì ghi dữ liệu thiếu hoặc sai.
+- Kiểm tra mã: **124/124 test đạt**, TypeScript đạt, build production đạt. Gói `public/qlkt-sync-extension.zip` đã được giải nén kiểm tra đủ 9 file, khớp mã nguồn tiện ích, manifest `0.4.27`, SHA-256 `228517C4D30C867274CDD7E3E28536A02BD1743B676517FF2C850B11994EC058`. Lint toàn phạm vi còn 6 lỗi React Hooks và 15 cảnh báo cũ; thay đổi lần này không tạo thêm lỗi lint mới.
+- `storage:check` chưa đọc được production vì môi trường hiện tại thiếu `TURSO_DATABASE_URL`; chưa có số liệu Turso/Vercel usage để kết luận hoặc cảnh báo ngưỡng.
+- Cần nghiệm thu thật sau triển khai: Reload tiện ích `0.4.27`, đăng nhập QLKT, chọn một ngày có đủ dữ liệu `DH1_MF1/DH1_MF2`, bấm đồng bộ tại **Dữ liệu các tháng**, đối chiếu sáu trường thời gian trước khi nhấn **Lưu thay đổi**.

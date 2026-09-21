@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.26";
+  const CONTENT_SCRIPT_VERSION = "0.4.27";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -485,6 +485,52 @@
     };
   }
 
+  function operationRowSummary(row) {
+    const cells = [...(row?.cells || [])];
+    if (cells.length < 6) return null;
+    const rowLabel = normalized(`${cells.slice(0, 2).map(cell => cell.textContent || "").join(" ")} ${row.textContent || ""}`);
+    const unit = rowLabel.includes("dh1_mf1") || rowLabel.includes("dh1 mf1") ? "S1"
+      : rowLabel.includes("dh1_mf2") || rowLabel.includes("dh1 mf2") ? "S2"
+      : null;
+    if (!unit) return null;
+    const numericValues = [];
+    for (const cell of cells) {
+      const inputs = [...cell.querySelectorAll("input:not([type='checkbox']):not([type='radio']):not([type='hidden']), textarea")];
+      const rawValues = inputs.length ? inputs.map(readValue) : [cell.textContent];
+      for (const rawValue of rawValues) {
+        const parsed = parseNumber(rawValue);
+        if (parsed !== null) numericValues.push(Number(parsed));
+      }
+    }
+    if (numericValues.length < 6) return null;
+    const [starts, generationHours, standbyHours, plannedMaintenanceHours, unplannedRepairHours, incidentHours] = numericValues.slice(-6);
+    return { unit, starts, generationHours, standbyHours, plannedMaintenanceHours, unplannedRepairHours, incidentHours };
+  }
+
+  function operationSummaryEntries(rows) {
+    const summaries = new Map();
+    for (const row of rows) {
+      const summary = operationRowSummary(row);
+      if (summary) summaries.set(summary.unit, summary);
+    }
+    const s1 = summaries.get("S1"), s2 = summaries.get("S2");
+    if (!s1 || !s2) throw new Error("Không đọc đủ hai dòng DH1_MF1 và DH1_MF2 trên bảng Thời gian vận hành.");
+    const standby = s1.standbyHours + s2.standbyHours;
+    const incident = s1.incidentHours + s2.incidentHours;
+    const maintenance = s1.plannedMaintenanceHours + s1.unplannedRepairHours + s2.plannedMaintenanceHours + s2.unplannedRepairHours;
+    const startupRaw = 48 - s1.generationHours - s2.generationHours - standby - incident - maintenance;
+    if (startupRaw < -0.01) throw new Error("Tổng giờ phát và giờ dừng trên QLKT vượt quá 48 giờ tổ máy/ngày.");
+    const format = value => String(Number(Math.max(0, value).toFixed(6)));
+    return [
+      { fieldCode: "F", value: format(s1.generationHours), sourceLabel: "QLKT · DH1_MF1 · Số giờ phát" },
+      { fieldCode: "L", value: format(s2.generationHours), sourceLabel: "QLKT · DH1_MF2 · Số giờ phát" },
+      { fieldCode: "CS", value: format(standby), sourceLabel: "QLKT · Tổng dừng dự phòng S1 + S2" },
+      { fieldCode: "CT", value: format(incident), sourceLabel: "QLKT · Tổng dừng sự cố S1 + S2" },
+      { fieldCode: "CU", value: format(maintenance), sourceLabel: "QLKT · Bảo dưỡng kế hoạch + sửa chữa đột xuất S1 + S2" },
+      { fieldCode: "CV", value: format(startupRaw), sourceLabel: "QLKT · Giờ khởi động còn lại trong 48 giờ tổ máy" },
+    ];
+  }
+
   function extract(expectedOperatingDate) {
     // PrimeFaces đổi giá trị ô ngày ngay lập tức nhưng bảng 02-PĐ/Sản lượng
     // vẫn có thể còn số liệu ngày cũ trong vài giây. Không cho bộ đọc trả kết
@@ -512,6 +558,9 @@
       if (!candidate || candidate.value === null || entries.has(fieldCode)) return;
       entries.set(fieldCode, { fieldCode, value: candidate.value, sourceLabel });
     };
+    if (currentPageKind === "operation") {
+      for (const entry of operationSummaryEntries(document.querySelectorAll("tr"))) entries.set(entry.fieldCode, entry);
+    }
     const allTables = [...document.querySelectorAll("table")];
     allTables.forEach(table => {
       const tableText = normalized(table.textContent);
@@ -785,7 +834,7 @@
     };
   }
 
-  globalThis.QlktOperatingExtractor = { parseOperatingRow, classifyEventUnit, extractOperatingEvents };
+  globalThis.QlktOperatingExtractor = { parseOperatingRow, classifyEventUnit, extractOperatingEvents, operationRowSummary, operationSummaryEntries };
   globalThis.QlktHeatRateExtractor = { heatRateUnitFromText };
   globalThis.Qlkt02PdExtractor = { extractPmis02PdPayload };
 

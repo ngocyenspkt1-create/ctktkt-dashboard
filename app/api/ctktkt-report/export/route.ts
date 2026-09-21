@@ -7,6 +7,7 @@ import { CTKTKT_DAY03_INPUT_CELLS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
+import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
 
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 
@@ -50,6 +51,7 @@ function applyWaterAdjustments(sheet: ExcelJS.Worksheet, row: Record<string, str
 }
 
 function fillDailyFallbacks(sheet: ExcelJS.Worksheet, row: Record<string, string>) {
+  setNumber(sheet, CTKTKT_INSTALLED_CAPACITY_CELL, Number(CTKTKT_INSTALLED_CAPACITY_MW));
   const value = (code: string) => numeric(row[code]);
   const B = value("B"), C = value("C"), H = value("H"), I = value("I");
   const AE = value("AE"), AF = value("AF"), AJ = value("AJ"), CJ = value("CJ"), AR = value("AR");

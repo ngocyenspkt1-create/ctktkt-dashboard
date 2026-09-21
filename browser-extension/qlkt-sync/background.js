@@ -26,7 +26,7 @@ const DAILY_SOURCES = ["production", "fuel", "operation"];
 const REQUIRED_FIELDS = {
   production: ["B", "C", "H", "I"],
   fuel: ["X", "AE", "AF", "AJ", "AR", "AT", "CC", "CD"],
-  operation: ["F", "L"],
+  operation: ["F", "L", "CS", "CT", "CU", "CV"],
   // 8 mã của cả 2 tổ máy (S1+S2) — content.js tự đổi "Tổ máy" trên màn hình Cân bằng nhiệt và đọc
   // lần lượt cả 2 trong 1 lần gọi READ_QLKT_VALUES, nên chỉ cần 1 tab, không cần mở 2 lần như trước.
   heatrate: ["DA", "DB", "DC", "DD", "DE", "DF", "DG", "DH"],
@@ -274,7 +274,9 @@ async function readSource(source, url, operatingDate) {
 
 async function syncAll(operatingDate) {
   const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
-  const urlFor = source => source === "production" ? DEFAULT_PRODUCTION_URL : qlktPages[source];
+  const urlFor = source => source === "production" ? DEFAULT_PRODUCTION_URL
+    : source === "operation" ? DEFAULT_OPERATION_URL
+    : qlktPages[source];
   const missing = DAILY_SOURCES.filter(key => !urlFor(key));
   if (missing.length) {
     const labels = missing.map(key => SOURCE_LABELS[key]).join(", ");

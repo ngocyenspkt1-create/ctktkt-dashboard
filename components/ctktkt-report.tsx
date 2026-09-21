@@ -60,6 +60,7 @@ import {
   normalizeCtktktInputValue,
 } from "@/lib/ctktkt-extra-fields";
 import { parseSpreadsheetClipboard } from "@/lib/spreadsheet-grid";
+import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
@@ -369,8 +370,8 @@ export function CtktktReport() {
       if (linked[cell] !== undefined) combined[cell] = linked[cell];
     }
     // Công suất đặt DH1 là thông số cố định của nhà máy, dùng làm giá trị mặc định
-    // khi QLKT chưa trả ô C181.
-    if (!combined.C181?.trim()) combined.C181 = "1245";
+    // bất kể file hoặc QLKT trả về giá trị nào cho ô C181.
+    combined[CTKTKT_INSTALLED_CAPACITY_CELL] = CTKTKT_INSTALLED_CAPACITY_MW;
     return combined;
   }, [byDate, linkedByDate, date]);
 
@@ -486,7 +487,7 @@ export function CtktktReport() {
     }
     if (!extensionVersion) {
       window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
-      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.23 rồi thử lại.");
+      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.27 rồi thử lại.");
       return;
     }
     if (pmisRequestRef.current) window.clearTimeout(pmisRequestRef.current.timer);
@@ -850,13 +851,16 @@ export function CtktktReport() {
     },
   ) => {
     const isWaterLinked = CTKTKT_WATER_LINKED_CELLS.has(cell);
-    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked;
+    const isFixed = cell === CTKTKT_INSTALLED_CAPACITY_CELL;
+    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isFixed;
     const canEditThis = !isLinked && canEditCtktktField(user, cell);
     const value = current[cell] || "";
 
     const groupMeta = options?.group ? CTKTKT_GROUP_META[options.group] : null;
     const tooltip = isLinked
-      ? `${cell}: Liên kết tự động từ ${isWaterLinked ? "Theo dõi lượng nước" : "BCSX mục 1"}`
+      ? isFixed
+        ? `${cell}: Công suất đặt cố định của NMNĐ Duyên Hải 1 (${CTKTKT_INSTALLED_CAPACITY_MW} MW)`
+        : `${cell}: Liên kết tự động từ ${isWaterLinked ? "Theo dõi lượng nước" : "BCSX mục 1"}`
       : canEditThis
         ? `${cell}: Bạn có quyền nhập liệu (Phím mũi tên để chuyển ô, Ctrl+V để dán nhiều ô)`
         : `${cell}: Khóa (Chỉ ${groupMeta?.responsible || "cương vị được phân công"} nhập)`;

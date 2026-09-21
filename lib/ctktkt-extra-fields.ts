@@ -70,7 +70,9 @@ export const CTKTKT_NON_WORKBOOK_INPUT_CELLS = new Set<string>([
 
 export function normalizeCtktktInputValue(cell: string, rawValue: unknown) {
   const value = String(rawValue ?? "").trim();
-  return CTKTKT_TEXT_INPUT_CELLS.has(cell) || cell === "T181" ? value : value.replace(",", ".");
+  return CTKTKT_TEXT_INPUT_CELLS.has(cell) || cell === "T181"
+    ? value
+    : value.replace(/\s+/g, "").replace(",", ".");
 }
 
 export function getCtktktCoalAdjustmentNotes(row: Record<string, string>) {

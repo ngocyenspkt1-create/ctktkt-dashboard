@@ -65,4 +65,5 @@ test("history import ignores draft cells that are not part of the day-03 referen
 
   assert.equal(importedCells.has("W8"), true);
   assert.equal(importedCells.has("G52"), false);
+  assert.equal(result.days[0].manualEntries.find(entry => entry.cell === "C181")?.value, "1245");
 });

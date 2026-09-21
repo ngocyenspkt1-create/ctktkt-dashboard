@@ -44,7 +44,7 @@ const fields: Record<Group, Field[]> = {
     { code: "CM", label: "Bi nghiền bổ sung", unit: "kg", input: true },
   ],
   operation: [
-    { code: "CQ", label: "Hơi cấp VH2", unit: "tấn", input: true }, { code: "CR", label: "Áp suất hơi VH2", unit: "bar", input: true }, { code: "CS", label: "Thời gian dự phòng", unit: "giờ", input: true }, { code: "CT", label: "Thời gian sự cố", unit: "giờ", input: true }, { code: "CU", label: "Thời gian sửa chữa", unit: "giờ", input: true }, { code: "CV", label: "Thời gian khởi động", unit: "giờ", input: true }, { code: "CW", label: "Ghi chú vận hành", input: true, width: "min-w-64" },
+    { code: "CQ", label: "Hơi cấp VH2", unit: "tấn", input: true }, { code: "CR", label: "Áp suất hơi VH2", unit: "bar", input: true }, { code: "CS", label: "Thời gian dự phòng", unit: "giờ", input: true }, { code: "CT", label: "Thời gian sự cố", unit: "giờ", input: true }, { code: "CU", label: "Thời gian sửa chữa/bảo dưỡng", unit: "giờ", input: true }, { code: "CV", label: "Thời gian khởi động", unit: "giờ", input: true }, { code: "CW", label: "Ghi chú vận hành", input: true, width: "min-w-64" },
   ],
 };
 
@@ -124,7 +124,7 @@ export function DailyProductionTable() {
       const data=event.data as {channel?:string;sender?:string;type?:string;version?:string;requestId?:string;result?:{ok?:boolean;payload?:unknown;error?:string}};
       if(!data||data.channel!==channel||data.sender!=="ctktkt-extension")return;
       if(data.type==="READY"){setExtensionVersion(String(data.version||"đã kết nối"));return;}
-      if(data.type!=="SYNC_HEATRATE_RESULT"||!qlktRequestRef.current||data.requestId!==qlktRequestRef.current.id)return;
+      if(data.type!=="SYNC_ALL_RESULT"||!qlktRequestRef.current||data.requestId!==qlktRequestRef.current.id)return;
       window.clearTimeout(qlktRequestRef.current.timer); qlktRequestRef.current=null;
       if(!data.result?.ok){setSyncingQlkt(false);setSyncProgress("");setError(data.result?.error||"Chưa đồng bộ được dữ liệu từ QLKT.");return;}
       const payload=validateQlktSyncPayload(data.result.payload);
@@ -182,8 +182,8 @@ export function DailyProductionTable() {
     if(qlktRequestRef.current)window.clearTimeout(qlktRequestRef.current.timer);
     const requestId=crypto.randomUUID();
     const timer=window.setTimeout(()=>{if(qlktRequestRef.current?.id!==requestId)return;qlktRequestRef.current=null;setSyncingQlkt(false);setSyncProgress("");setError("QLKT phản hồi quá lâu. Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");},360000);
-    qlktRequestRef.current={id:requestId,timer};setSyncingQlkt(true);setSyncProgress("Đang đọc dữ liệu chỉ tiêu ngày từ QLKT…");
-    window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"SYNC_HEATRATE",requestId,operatingDate:syncDate},window.location.origin);
+    qlktRequestRef.current={id:requestId,timer};setSyncingQlkt(true);setSyncProgress("Đang đọc sản lượng, nhiên liệu và thời gian vận hành từ QLKT…");
+    window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"SYNC_ALL",requestId,operatingDate:syncDate},window.location.origin);
   }
   function noteButton(day:number, field:Field){ const hasNote=Boolean(rows[day][`${field.code}_NOTE`]?.trim()); return <button type="button" onClick={event=>{event.stopPropagation();openNote(day,field);}} aria-label={`${hasNote?"Xem hoặc sửa":"Thêm"} ghi chú cho ${field.label}, ngày ${day+1}`} title={hasNote?rows[day][`${field.code}_NOTE`]:"Thêm ghi chú"} className={`absolute right-0 top-0 z-10 h-4 w-4 ${hasNote?"opacity-100":"opacity-0 group-hover:opacity-100 focus:opacity-100"}`}><span className={`absolute right-0 top-0 h-0 w-0 border-l-[10px] border-l-transparent ${hasNote?"border-t-[10px] border-t-orange-500":"border-t-[10px] border-t-slate-300"}`}/></button>; }
   async function save(){ setError(""); setMessage(""); const entries=[...dirty.current].map(key=>{const [dayText,code]=key.split(":"); const day=Number(dayText); return {operatingDate:`${period}-${String(day+1).padStart(2,"0")}`,fieldCode:code,value:rows[day][code]||"",note:rows[day][`${code}_NOTE`]||""};});

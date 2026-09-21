@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload, validateQlktUnifiedSyncPayload } from '../lib/qlkt-sync.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
 
-test('extension package 0.4.26 supports unified sync and robust heat-rate unit selection', () => {
+test('extension package 0.4.27 supports unified sync and operation-hour totals', () => {
   const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
@@ -16,7 +16,7 @@ test('extension package 0.4.26 supports unified sync and robust heat-rate unit s
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
   const popup = readFileSync(new URL('../public/qlkt-sync-extension/popup.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.26');
+  assert.equal(manifest.version, '0.4.27');
   assert.ok(manifest.host_permissions.includes('https://ctktkt-dashboard.vercel.app/*'));
   assert.ok(manifest.content_scripts.some(item => item.js.includes('web-bridge.js') && item.matches.includes('https://ctktkt-dashboard.vercel.app/*')));
   assert.match(webBridge, /\/bcsx-report/);
@@ -27,7 +27,9 @@ test('extension package 0.4.26 supports unified sync and robust heat-rate unit s
   assert.match(background, /SYNC_BCSX_EVENTS_QLKT/);
   assert.match(background, /SYNC_UNIFIED_QLKT/);
   assert.match(background, /async function syncUnified\(operatingDate\)/);
-  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.26"/);
+  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.27"/);
+  assert.match(background, /operation: \["F", "L", "CS", "CT", "CU", "CV"\]/);
+  assert.match(background, /source === "operation" \? DEFAULT_OPERATION_URL/);
   assert.match(content, /const firstUnit = originalUnit \|\| "1"/);
   assert.match(content, /cbSelectMainAsset/);
   assert.match(content, /extractOperatingEvents/);
@@ -78,7 +80,7 @@ test('BCSX syncs operating events from QLKT and sources Section 2 totals from CT
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
   assert.match(source, /Đồng bộ nhật ký S1 & S2/);
   assert.match(source, /type: "SYNC_BCSX_EVENTS"/);
-  assert.match(dailySource, /type:"SYNC_HEATRATE"/);
+  assert.match(dailySource, /type:"SYNC_ALL"/);
   assert.doesNotMatch(dailySource, /type:"SYNC_UNIFIED"/);
   assert.match(source, /\/api\/ctktkt-report/);
   assert.match(source, /ktktByCell\.get\("J157"\)/);
@@ -98,6 +100,9 @@ test('each report keeps its own sync action and NH3 overlaps link from CTKTKT', 
   const ctktktSource = readFileSync(new URL('../components/ctktkt-report.tsx', import.meta.url), 'utf8');
 
   assert.doesNotMatch(dailySource, /SYNC_UNIFIED/);
+  assert.match(dailySource, /type:"SYNC_ALL"/);
+  assert.match(dailySource, /SYNC_ALL_RESULT/);
+  assert.match(dailySource, /Thời gian sửa chữa\/bảo dưỡng/);
   assert.match(dailySource, /Đồng bộ dữ liệu ngày/);
   assert.match(bcsxSource, /Đồng bộ nhật ký S1 & S2/);
   assert.match(ppaSource, /Đồng bộ PPA từ QLKT/);
@@ -109,7 +114,7 @@ test('each report keeps its own sync action and NH3 overlaps link from CTKTKT', 
   assert.match(dailySource, /next\[day\]\.BN = String\(nh3\.usedTonnes\)/);
   assert.match(dailySource, /next\[day\]\.CN = values\.P72/);
   assert.match(dailySource, /disabled=\{isLinked\}/);
-  assert.match(ctktktSource, /combined\.C181 = "1245"/);
+  assert.match(ctktktSource, /combined\[CTKTKT_INSTALLED_CAPACITY_CELL\] = CTKTKT_INSTALLED_CAPACITY_MW/);
   assert.match(ctktktSource, /parseLocaleNumber\(entries\[cell\] \|\| ""\)/);
 });
 
@@ -245,4 +250,29 @@ test('operating events extractor correctly classifies S1 and S2 events from QLKT
   assert.equal(parsed.endAt, '2026-09-17 14:44');
   assert.equal(parsed.eventType, 1);
   assert.equal(parsed.description, 'Tăng tải S1 từ 435.7MW lên 470MW');
+});
+
+test('operation page maps generation, standby, incident, maintenance and startup hours to monthly data', () => {
+  const contentCode = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
+  const mockGlobal = {};
+  class MockMutationObserver { observe() {} disconnect() {} }
+  const fn = new Function('globalThis', 'window', 'document', 'location', 'chrome', 'MutationObserver', contentCode);
+  fn(mockGlobal, { location: { origin: 'http://test' } }, { querySelectorAll: () => [], documentElement: {} }, { pathname: '', search: '', href: '' }, { runtime: { onMessage: { addListener: () => {} } }, storage: { local: { get: () => {} } } }, MockMutationObserver);
+
+  const makeCell = text => ({ textContent: text, querySelectorAll: () => [] });
+  const makeRow = (unit, values) => ({
+    textContent: `${unit} 20/09/2026`,
+    cells: [makeCell(unit), makeCell('20/09/2026'), ...values.map(value => makeCell(String(value)))],
+  });
+  const entries = mockGlobal.QlktOperatingExtractor.operationSummaryEntries([
+    makeRow('DH1_MF1', [5594.664, 0, 0, 0, 24, 0, 0, 0, 0]),
+    makeRow('DH1_MF2', [4915.35, 0, 0, 0, 20, 2, 1, 0.5, 0.5]),
+  ]);
+  const values = new Map(entries.map(entry => [entry.fieldCode, entry.value]));
+  assert.equal(values.get('F'), '24');
+  assert.equal(values.get('L'), '20');
+  assert.equal(values.get('CS'), '2');
+  assert.equal(values.get('CT'), '0.5');
+  assert.equal(values.get('CU'), '1.5');
+  assert.equal(values.get('CV'), '0');
 });

@@ -5,6 +5,7 @@ import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxRea
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_TEXT_INPUT_CELLS, normalizeCtktktInputValue } from "@/lib/ctktkt-extra-fields";
+import { applyCtktktFixedValue } from "@/lib/ctktkt-defaults";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 
 const fieldCells = new Set<string>([
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
       const entry = item as Record<string, unknown>;
       const cell = String(entry.cell || "").toUpperCase();
       const isText = CTKTKT_TEXT_INPUT_CELLS.has(cell) || cell === "T181";
-      const value = normalizeCtktktInputValue(cell, entry.value);
+      const value = normalizeCtktktInputValue(cell, applyCtktktFixedValue(cell, entry.value));
       if (!fieldCells.has(cell)) throw new Error(`Ô ${cell || "không rõ"} không nằm trong mẫu được phép nhập.`);
       if (value.length > (CTKTKT_TEXT_INPUT_CELLS.has(cell) ? 500 : 80)) throw new Error(`Giá trị ô ${cell} quá dài.`);
       if (value && !isText && !/^-?\d+(?:\.\d+)?$/.test(value)) throw new Error(`Ô ${cell} phải là số.`);

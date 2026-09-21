@@ -7,6 +7,7 @@ import {
 } from "./ctktkt-extra-fields.ts";
 import { CTKTKT_BCSX_LINKED_CELLS } from "./ctktkt-bcsx-link.ts";
 import { CTKTKT_WATER_LINKED_CELLS } from "./ctktkt-water-link.ts";
+import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "./ctktkt-defaults.ts";
 import {
   calculateCtktktSummary,
   calculateNh3Summary,
@@ -225,6 +226,7 @@ export async function buildCtktktHistoryImportPackage(
       const value = storageValue(source.value);
       if (value !== "") entries[cell] = value;
     }
+    entries[CTKTKT_INSTALLED_CAPACITY_CELL] = CTKTKT_INSTALLED_CAPACITY_MW;
     // File cũ có thể nhúng hiệu chỉnh cân than vào công thức kết quả. Thu hồi
     // hiệu chỉnh về đúng các ô nhập riêng để web không cộng thiếu hoặc cộng hai lần.
     const priorDate = new Date(`${item.date}T12:00:00Z`); priorDate.setUTCDate(priorDate.getUTCDate() - 1);
