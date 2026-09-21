@@ -22,6 +22,43 @@ export const CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS = [
   { cell: "WATER_ADJ_NOTE_S2", section: "tkd_trend", sectionLabel: "Công tơ nước demin DCS", label: "Lý do hiệu chỉnh nước S2", row: 73, column: 30 },
 ] as const;
 
+// Các ô nhập tay để trống trong workbook mẫu không xuất hiện trong
+// CTKTKT_INPUT_FIELDS (danh sách sinh tự động từ workbook). Khai báo rõ tại đây
+// để giao diện, API lưu và trang "Tất cả trường" dùng cùng một nguồn dữ liệu.
+export const CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS = [
+  { cell: "I35", section: "kpi_summary", sectionLabel: "Chỉ tiêu KTKT tổng hợp", label: "Suất hao bi nghiền than", row: 35, column: 9 },
+
+  { cell: "M15", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "P TD 21 (MW) · 06h", row: 15, column: 13 },
+  { cell: "N15", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "P TD 21 (MW) · 10h", row: 15, column: 14 },
+  { cell: "O15", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "P TD 21 (MW) · 14h", row: 15, column: 15 },
+  { cell: "P15", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "P TD 21 (MW) · 18h", row: 15, column: 16 },
+  { cell: "Q15", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "P TD 21 (MW) · 22h", row: 15, column: 17 },
+  { cell: "R15", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "P TD 21 (MW) · 24h", row: 15, column: 18 },
+  { cell: "M16", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "Q TD 21 (MVAr) · 06h", row: 16, column: 13 },
+  { cell: "N16", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "Q TD 21 (MVAr) · 10h", row: 16, column: 14 },
+  { cell: "R16", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "Q TD 21 (MVAr) · 24h", row: 16, column: 18 },
+
+  { cell: "C87", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu cấp lò S2 · Khởi động", row: 87, column: 3 },
+  { cell: "E87", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu cấp lò S2 · Tách lưới I", row: 87, column: 5 },
+  { cell: "F87", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu cấp lò S2 · Hòa lưới II", row: 87, column: 6 },
+  { cell: "G87", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu cấp lò S2 · Tách lưới II", row: 87, column: 7 },
+  { cell: "C88", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò S2 · Khởi động", row: 88, column: 3 },
+  { cell: "D88", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò S2 · Hòa lưới I", row: 88, column: 4 },
+  { cell: "E88", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò S2 · Tách lưới I", row: 88, column: 5 },
+  { cell: "F88", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò S2 · Hòa lưới II", row: 88, column: 6 },
+  { cell: "G88", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò S2 · Tách lưới II", row: 88, column: 7 },
+  { cell: "C93", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu cấp lò hơi phụ · Khởi động", row: 93, column: 3 },
+  { cell: "D93", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu cấp lò hơi phụ · Hòa lưới I", row: 93, column: 4 },
+  { cell: "E93", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu cấp lò hơi phụ · Tách lưới I", row: 93, column: 5 },
+  { cell: "F93", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu cấp lò hơi phụ · Hòa lưới II", row: 93, column: 6 },
+  { cell: "G93", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu cấp lò hơi phụ · Tách lưới II", row: 93, column: 7 },
+  { cell: "C94", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò hơi phụ · Khởi động", row: 94, column: 3 },
+  { cell: "D94", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò hơi phụ · Hòa lưới I", row: 94, column: 4 },
+  { cell: "E94", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò hơi phụ · Tách lưới I", row: 94, column: 5 },
+  { cell: "F94", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò hơi phụ · Hòa lưới II", row: 94, column: 6 },
+  { cell: "G94", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò hơi phụ · Tách lưới II", row: 94, column: 7 },
+] as const;
+
 export const CTKTKT_TEXT_INPUT_CELLS = new Set<string>([
   ...CTKTKT_COAL_ADJUSTMENT_NOTE_FIELDS.map(field => field.cell),
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS.map(field => field.cell),
@@ -75,6 +112,7 @@ export const CTKTKT_COAL_BLEND_FIELDS = [
 ] as const;
 
 export const CTKTKT_EXTRA_INPUT_FIELDS = [
+  ...CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS,
   ...CTKTKT_COAL_ADJUSTMENT_FIELDS,
   ...CTKTKT_COAL_ADJUSTMENT_NOTE_FIELDS,
   ...CTKTKT_WATER_ADJUSTMENT_FIELDS,

@@ -884,4 +884,26 @@ Người dùng cung cấp danh sách đầy đủ 124 nhân sự Phân xưởng 
 - Còn cần: sau triển khai, đăng nhập tài khoản có quyền Chỉ tiêu KTKT, thử dán một khối ở từng trang nghiệp vụ chính và nhập một bản sao file tháng cũ; xác nhận hộp đối chiếu trước khi cho phép ghi dữ liệu thật.
 - Đã triển khai commit `b7d7be3` lên `github/main`; trạng thái Vercel của đúng commit là `success`. Bước tiếp theo chỉ còn nghiệm thu thao tác thật sau `Ctrl+F5`.
 
+## Bổ sung 21/09/2026 — Không mất ô nhập tay khi lưu Chỉ tiêu KTKT
+
+- Nguyên nhân đã xác định: danh sách ô lưu được sinh từ workbook mẫu nên bỏ sót các ô nhập tay đang để trống trong mẫu. Giao diện vẫn cho nhập, nhưng nút lưu không gửi các ô đó; sau khi đọc lại dữ liệu từ máy chủ, giá trị vừa nhập biến mất.
+- Đã bổ sung đủ **29 ô** vào nguồn dữ liệu dùng chung của giao diện và API: `I35`; toàn bộ `M15:R15`; `M16`, `N16`, `R16`; và các ô dầu khởi động/ngừng `C87`, `E87:G87`, `C88:G88`, `C93:G94`. Ba ô `O16:P16:Q16` và `D87` đã có sẵn từ workbook nên không khai báo trùng.
+- Có kiểm thử bao phủ tự động: mọi ô mà một nhóm quyền được phép sửa phải thuộc danh sách lưu hoặc là ô liên kết chỉ đọc. Kiểm thử này sẽ thất bại nếu sau này giao diện thêm ô nhập nhưng quên cho API lưu.
+- Rà các nút lưu nghiệp vụ còn lại: BCSX gửi toàn bộ lưới hoặc toàn bộ trường của từng mục; Dữ liệu các tháng gửi toàn bộ ô đã đánh dấu thay đổi; Nước gửi nguyên bản ghi ca; PPA gửi nhận xét và công suất khả dụng. Không phát hiện thêm trường hợp cùng kiểu “nhập được nhưng payload không gửi”.
+- Đã thêm `npm.cmd run storage:check` để kiểm tra dung lượng Turso ở chế độ chỉ đọc, báo các ngưỡng 70%/85%/95%, tổng số bảng và số dòng mà không in URL/token. Máy hiện tại chưa có `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` trong `.env.local` nên chưa đọc được dung lượng production; không suy đoán số liệu. Quy tắc kiểm tra dung lượng trước khi dừng đã được ghi vào cấu hình Codex toàn cục.
+
+### Kiểm tra
+
+- **111/111 test đạt**; kiểm thử hồi quy mới đạt.
+- `npx.cmd tsc --noEmit`: đạt.
+- `npm.cmd run build`: đạt.
+- `npm.cmd run lint`: chưa đạt do **16 lỗi React lint cũ** ở các component ngoài phạm vi thay đổi; bản sửa này không tạo lỗi lint mới.
+- `npm.cmd run storage:check`: chạy đúng cơ chế an toàn nhưng báo thiếu biến kết nối production trên máy local.
+
+### Còn cần / bước tiếp theo
+
+- Sau khi deploy, nhập thử cả sáu ô `P TD 21`, ba ô Q trước đây bị mất và một ô dầu khởi động/ngừng; bấm lưu, tải lại trang và đổi ngày quay lại để nghiệm thu dữ liệu vẫn còn.
+- Muốn xem mức dùng thật: mở Turso Dashboard → Organization/Usage để kiểm tra Storage, Rows read, Rows written; mở Vercel Dashboard → Usage → chọn dự án `ctktkt-dashboard` và khoảng `Last 30 days`. Không đưa token production vào GitHub.
+- Phần sửa đã ổn sẽ được commit riêng; chưa push/deploy trong lượt này nếu chưa có yêu cầu đẩy GitHub.
+
 ---
