@@ -2,7 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload, validateQlktUnifiedSyncPayload } from '../lib/qlkt-sync.ts';
+import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXTENSION_VERSION } from '../lib/qlkt-extension-version.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
+
+test('web blocks old QLKT extensions and downloads the current package', () => {
+  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.27');
+  assert.equal(isQlktExtensionOutdated('0.4.26'), true);
+  assert.equal(isQlktExtensionOutdated('0.4.27'), false);
+  assert.equal(isQlktExtensionOutdated('0.4.28'), false);
+  assert.equal(isQlktExtensionOutdated(''), false);
+  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.27/);
+});
 
 test('extension package 0.4.27 supports unified sync and operation-hour totals', () => {
   const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
