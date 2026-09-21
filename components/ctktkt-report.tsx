@@ -534,7 +534,7 @@ export function CtktktReport() {
         throw new Error(`Chưa nhập vì có ${importPackage.totals.failed}/${importPackage.totals.checks} công thức không khớp:\n${failures.slice(0, 12).join("\n")}${failures.length > 12 ? `\n… và ${failures.length - 12} sai lệch khác.` : ""}`);
       }
       const confirmed = window.confirm(
-        `File ${file.name} đã đối chiếu đạt ${importPackage.totals.passed}/${importPackage.totals.checks} công thức.\n\nChỉ ${importPackage.totals.nonBlankManualValues || importPackage.days.reduce((sum, day) => sum + day.manualEntries.filter(entry => entry.value).length, 0)} ô nhập tay của ${importPackage.days.length} ngày sẽ được ghi. Các ô tự tính và ô liên kết không bị ghi đè.\n\nTiếp tục nhập dữ liệu?`,
+        `File ${file.name} đã đối chiếu đạt ${importPackage.totals.passed}/${importPackage.totals.checks} công thức.\n\nChỉ ${importPackage.totals.nonBlankManualValues || importPackage.days.reduce((sum, day) => sum + day.manualEntries.filter(entry => entry.value).length, 0)} ô nhập tay của ${importPackage.days.length} ngày sẽ được ghi. Các ô tự tính và ô liên kết không bị ghi đè.${importPackage.warnings.length ? `\nCó ${importPackage.warnings.length} ô nằm trong vùng nhập nhưng file chứa công thức nên được bỏ qua.` : ""}\n\nTiếp tục nhập dữ liệu?`,
       );
       if (!confirmed) {
         setMessage("Đã kiểm tra file: công thức khớp 100%. Bạn đã chọn chưa ghi dữ liệu.");
