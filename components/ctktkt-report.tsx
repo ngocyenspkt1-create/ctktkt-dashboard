@@ -113,16 +113,10 @@ const displayFields: DisplayField[] = [
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 
 function reportTabClass(active: boolean) {
-  return `flex min-w-0 items-center justify-between gap-1.5 rounded-xl border px-2.5 py-1.5 text-left text-[11px] font-bold leading-tight transition-all ${
+  return `flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-center text-[13px] font-bold leading-snug transition-all ${
     active
-      ? "border-[#7a4b2f] bg-[#8a5a3b] text-white shadow-xs"
-      : "border-[#d8c0a8] bg-[#f3e8dc] text-[#6b4423] hover:border-[#bd9875] hover:bg-[#ead8c5]"
-  }`;
-}
-
-function reportTabBadgeClass(active: boolean) {
-  return `shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-mono ${
-    active ? "bg-white/20 text-white" : "bg-[#e4cfb9] text-[#70492d]"
+      ? "border-[#765038] bg-[#8a6247] text-white shadow-sm"
+      : "border-[#d9c3ad] bg-[#f4eadf] text-[#68462e] hover:border-[#b99472] hover:bg-[#ead9c8]"
   }`;
 }
 
@@ -1201,19 +1195,14 @@ export function CtktktReport() {
 
       {/* 3. TABS ĐIỀU HƯỚNG CÁC CỤM VẬN HÀNH (THIẾT KẾ RÕ RÀNG THEO CƯƠNG VỊ) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+        <div className="grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-[repeat(6,minmax(0,1fr))_minmax(150px,0.78fr)]">
           <button
             type="button"
             onClick={() => setActiveTab("tkd_dcs")}
             className={reportTabClass(activeTab === "tkd_dcs")}
           >
-            <Zap className="size-3.5" />
-            <span>Cụm 2: TKĐ DCS (P/Q &amp; Nước 24h)</span>
-            <span
-              className={reportTabBadgeClass(activeTab === "tkd_dcs")}
-            >
-              Trưởng kíp điện
-            </span>
+            <Zap className="size-4 shrink-0" />
+            <span>DCS P/Q/U và lượng nước 24h</span>
           </button>
 
           <button
@@ -1221,13 +1210,8 @@ export function CtktktReport() {
             onClick={() => setActiveTab("unit_meters")}
             className={reportTabClass(activeTab === "unit_meters")}
           >
-            <Power className="size-3.5" />
-            <span>Cụm 4 & 5: Công tơ S1 & S2</span>
-            <span
-              className={reportTabBadgeClass(activeTab === "unit_meters")}
-            >
-              TPD · Lò phó · Máy nghiền
-            </span>
+            <Power className="size-4 shrink-0" />
+            <span>Công tơ điện/than/dầu</span>
           </button>
 
           <button
@@ -1235,13 +1219,8 @@ export function CtktktReport() {
             onClick={() => setActiveTab("steam_nh3")}
             className={reportTabClass(activeTab === "steam_nh3")}
           >
-            <Droplets className="size-3.5" />
-            <span>Cụm 6 & 8: Hơi & Bồn NH3</span>
-            <span
-              className={reportTabBadgeClass(activeTab === "steam_nh3")}
-            >
-              TKĐ · VHV NH3
-            </span>
+            <Droplets className="size-4 shrink-0" />
+            <span>Tiêu hao hơi và NH3</span>
           </button>
 
           <button
@@ -1249,13 +1228,8 @@ export function CtktktReport() {
             onClick={() => setActiveTab("td21_coal_blend")}
             className={reportTabClass(activeTab === "td21_coal_blend")}
           >
-            <Boxes className="size-3.5" />
-            <span>Cụm 9 & 14: TD21 & Than trộn PMIS</span>
-            <span
-              className={reportTabBadgeClass(activeTab === "td21_coal_blend")}
-            >
-              TPD · TKĐ
-            </span>
+            <Boxes className="size-4 shrink-0" />
+            <span>TD21 và tính toán than</span>
           </button>
 
           <button
@@ -1263,11 +1237,8 @@ export function CtktktReport() {
             onClick={() => setActiveTab("startup_shutdown")}
             className={reportTabClass(activeTab === "startup_shutdown")}
           >
-            <Flame className="size-3.5" />
-            <span>Cụm 11: KĐ / Ngừng tổ máy</span>
-            <span className={reportTabBadgeClass(activeTab === "startup_shutdown")}>
-              Sự kiện
-            </span>
+            <Flame className="size-4 shrink-0" />
+            <span>Khởi động/ngừng tổ máy</span>
           </button>
 
           <button
@@ -1275,13 +1246,8 @@ export function CtktktReport() {
             onClick={() => setActiveTab("pmis_reports")}
             className={reportTabClass(activeTab === "pmis_reports")}
           >
-            <FileText className="size-3.5" />
-            <span>Báo cáo PMIS 02-PĐ</span>
-            <span
-              className={reportTabBadgeClass(activeTab === "pmis_reports")}
-            >
-              PMIS &amp; QLKT
-            </span>
+            <FileText className="size-4 shrink-0" />
+            <span>Báo cáo từ PMIS</span>
           </button>
 
           <div className="min-w-0">
@@ -1290,7 +1256,7 @@ export function CtktktReport() {
               onClick={() => setActiveTab("all_fields")}
               className={`${reportTabClass(activeTab === "all_fields")} w-full`}
             >
-              <Search className="size-3.5" />
+              <Search className="size-4 shrink-0" />
               <span>Tra cứu ô ({editableFields.length})</span>
             </button>
           </div>

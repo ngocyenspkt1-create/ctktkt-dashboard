@@ -17,6 +17,9 @@
    when a matching --color-* token exists, so without this mapping they silently compile to
    nothing — e.g. the date-picker popover rendered with no background at all. */
 @theme inline {
+  --font-sans: "Times New Roman", Times, serif;
+  --font-serif: "Times New Roman", Times, serif;
+  --font-mono: "Times New Roman", Times, serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -39,8 +42,8 @@
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--background); color: var(--foreground); font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-feature-settings: "cv02", "cv03", "cv04", "cv11"; }
-button, input, select { font: inherit; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Times New Roman", Times, serif; }
+button, input, select, textarea { font: inherit; }
 
 /* Keep the QLKT review actions visible while its indicator list scrolls. */
 [role="dialog"]:has(table) {
