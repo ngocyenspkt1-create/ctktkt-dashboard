@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
-import { buildQlktOperationWorkbook, parseOperationCommandWorkbook, qlktOperationFileName } from "../lib/bcsx-operation-import.ts";
+import { buildQlktOperationWorkbook, classifyOperationCommand, parseOperationCommandWorkbook, qlktOperationFileName } from "../lib/bcsx-operation-import.ts";
 
 const headers = ["ID Lệnh", "Nhà máy", "Tổ máy", "Nội dung lệnh", "CS ra lệnh (MW)", "CS hoàn thành (MW)", "Thời điểm BĐTH", "Thời điểm hoàn thành", "Người ra lệnh", "Người thực hiện", "AGC", "Nhiên liệu", "Lý do lệnh", "Ghi chú ra lệnh", "Ghi chú hoàn thành", "Hoàn thành"];
 
@@ -26,6 +26,35 @@ async function sourceWorkbookBytes() {
   return workbook.xlsx.writeBuffer();
 }
 
+async function september21WorkbookBytes() {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("All");
+  worksheet.addRow([null, null, null, null, null, null, "Danh sách lệnh kết thúc"]);
+  worksheet.addRow([]);
+  worksheet.addRow(headers);
+  const add = (id, unit, command, target, completedPower, completed, startHour, startMinute, endHour, endMinute) => worksheet.addRow([
+    id, "Duyên Hải 1", unit, command, target, completedPower,
+    new Date(Date.UTC(2026, 8, 21, startHour, startMinute)),
+    new Date(Date.UTC(2026, 8, 21, endHour, endMinute)),
+    "NSMO", completed ? "DH1" : null, false, null, "Để đáp ứng cân bằng hệ thống", null, null, completed,
+  ]);
+  add("S2-1", "S2", "Thay đổi công suất", 540.7, 540.7, 1, 14, 32, 15, 3);
+  add("S2-2", "S2", "Thay đổi công suất", 622.5, 622.5, 1, 15, 4, 15, 28);
+  add("S1-stop", "S1", "Ngừng tổ máy", 0, 0, 1, 7, 55, 9, 56);
+  add("S1-abort-1", "S1", "Thay đổi công suất", 330.7, null, 0, 8, 33, 8, 44);
+  add("S1-abort-2", "S1", "Thay đổi công suất", 225.7, null, 0, 9, 6, 9, 9);
+  return workbook.xlsx.writeBuffer();
+}
+
+async function belowMinimumWithoutShutdownBytes() {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("All");
+  worksheet.addRow(headers);
+  worksheet.addRow(["1", "Duyên Hải 1", "S1", "Thay đổi công suất", 225.7, 225.7, new Date(Date.UTC(2026, 8, 21, 1, 0)), new Date(Date.UTC(2026, 8, 21, 1, 10)), "NSMO", "DH1", false, null, "Xử lý sự cố", null, null, 1]);
+  worksheet.addRow(["2", "Duyên Hải 1", "S1", "Thay đổi công suất", 435.7, 435.7, new Date(Date.UTC(2026, 8, 21, 1, 20)), new Date(Date.UTC(2026, 8, 21, 1, 30)), "NSMO", "DH1", false, null, "Khôi phục tải", null, null, 1]);
+  return workbook.xlsx.writeBuffer();
+}
+
 test("imports completed DH1 power commands into S1/S2 operating events", async () => {
   const result = await parseOperationCommandWorkbook(await sourceWorkbookBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-19");
   assert.equal(result.operatingDate, "2026-09-19");
@@ -46,6 +75,33 @@ test("imports completed DH1 power commands into S1/S2 operating events", async (
   assert.deepEqual(result.allEvents.slice(0, 2).map(event => event.unit), ["S2", "S1"]);
   assert.equal(result.allEvents[0].startAt, "2026-09-19 00:07");
   assert.equal(result.allEvents[0].endAt, "2026-09-19 00:34");
+});
+
+test("classifies operation commands by the BCSX event-type regulation", () => {
+  assert.equal(classifyOperationCommand("Thay đổi công suất"), 1);
+  assert.equal(classifyOperationCommand("Ngừng tổ máy"), 2);
+  assert.equal(classifyOperationCommand("Khởi động tổ máy"), 2);
+  assert.equal(classifyOperationCommand("Tách sửa chữa"), 3);
+  assert.equal(classifyOperationCommand("Bất thường điện áp cao"), 4);
+  assert.equal(classifyOperationCommand("Ngừng sự cố do bảo vệ tác động"), 5);
+});
+
+test("imports the completed S1 shutdown on 21/09 and ignores stopped power commands", async () => {
+  const result = await parseOperationCommandWorkbook(await september21WorkbookBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-21");
+  assert.equal(result.sourceRows, 3);
+  assert.equal(result.ignoredRows, 2);
+  assert.equal(result.events.S1.length, 1);
+  assert.equal(result.events.S2.length, 2);
+  assert.equal(result.events.S1[0].eventType, 2);
+  assert.equal(result.events.S1[0].description, "Ngừng tổ máy S1 theo lệnh điều độ (giảm tải từ 435.7MW về 0MW)");
+  assert.deepEqual(result.events.S2.map(event => event.eventType), [1, 1]);
+});
+
+test("keeps below-minimum reduction and recovery as normal type-1 events when there is no shutdown command", async () => {
+  const result = await parseOperationCommandWorkbook(await belowMinimumWithoutShutdownBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-21");
+  assert.deepEqual(result.events.S1.map(event => event.eventType), [1, 1]);
+  assert.equal(result.events.S1[0].description.includes("225.7MW"), true);
+  assert.equal(result.events.S1[1].description.includes("435.7MW"), true);
 });
 
 test("builds the five-column QLKT upload workbook", async () => {

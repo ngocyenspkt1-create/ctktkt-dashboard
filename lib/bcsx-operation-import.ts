@@ -18,6 +18,8 @@ export type OperationImportResult = {
 type SourceCommand = {
   rowNumber: number;
   unit: OperationUnit;
+  commandLabel: string;
+  eventType: number;
   startAt: string;
   endAt: string;
   startOrder: number;
@@ -51,6 +53,16 @@ function readNumber(value: unknown, location: string) {
 function isCompleted(value: unknown) {
   if (value === true || value === 1) return true;
   return ["1", "true", "x", "yes", "co"].includes(normalizeText(value));
+}
+
+export function classifyOperationCommand(value: unknown) {
+  const command = normalizeText(value);
+  if (command === "thay doi cong suat") return 1;
+  if (command.includes("ngung su co") || (command.includes("su co") && command.includes("bao ve"))) return 5;
+  if (["bat thuong", "qua tai", "dien ap cao", "dien ap thap", "nhiet do cao"].some(term => command.includes(term))) return 4;
+  if (["tach sua chua", "dua vao du phong sau sua chua", "dua vao du phong"].some(term => command.includes(term))) return 3;
+  if (["dot lo", "khoi dong", "hoa luoi", "ngung to may"].some(term => command.includes(term))) return 2;
+  return null;
 }
 
 function pad2(value: number) {
@@ -109,6 +121,7 @@ function inferInitialPower(commands: SourceCommand[]) {
   const first = commands[0];
   const second = commands[1];
   if (!first) return minimumPowerMw;
+  if (first.eventType === 2 && first.completedPowerMw === 0) return minimumPowerMw;
   if (first.completedPowerMw <= minimumPowerMw) return maximumPowerMw;
   if (first.completedPowerMw >= maximumPowerMw) return minimumPowerMw;
   if (second) {
@@ -131,6 +144,17 @@ function buildDescription(unit: OperationUnit, fromPower: number, toPower: numbe
   return "Duy trì tải " + unit + " ở " + formatPower(toPower) + "MW";
 }
 
+function buildEventDescription(command: SourceCommand, fromPower: number) {
+  if (command.eventType === 1) return buildDescription(command.unit, fromPower, command.completedPowerMw);
+  if (command.eventType === 2 && command.completedPowerMw === 0) {
+    return "Ngừng tổ máy " + command.unit + " theo lệnh điều độ (giảm tải từ " + formatPower(fromPower) + "MW về 0MW)";
+  }
+  const powerDetail = command.completedPowerMw === fromPower
+    ? ""
+    : " (" + buildDescription(command.unit, fromPower, command.completedPowerMw).toLowerCase() + ")";
+  return command.commandLabel + " " + command.unit + powerDetail;
+}
+
 export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFileName: string, expectedDate?: string): Promise<OperationImportResult> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(bytes);
@@ -146,15 +170,17 @@ export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFi
     nonEmptyRows += 1;
     const plant = normalizeText(row.getCell(column("plant")).value);
     const unitValue = String(row.getCell(column("unit")).value ?? "").trim().toUpperCase() as OperationUnit;
-    const command = normalizeText(row.getCell(column("command")).value);
-    if (!plant.includes("duyen hai 1") || !units.has(unitValue) || command !== "thay doi cong suat" || !isCompleted(row.getCell(column("completed")).value)) continue;
+    const commandValue = row.getCell(column("command")).value;
+    const commandLabel = String(commandValue ?? "").trim();
+    const eventType = classifyOperationCommand(commandValue);
+    if (!plant.includes("duyen hai 1") || !units.has(unitValue) || eventType === null || !isCompleted(row.getCell(column("completed")).value)) continue;
     const location = worksheet.name + "!" + rowNumber;
     const startValue = row.getCell(column("startAt")).value;
     const endValue = row.getCell(column("endAt")).value;
     const startAt = readTimestamp(startValue, location);
     const endAt = readTimestamp(endValue, location);
     if (endAt < startAt) throw new Error(location + ": thời điểm hoàn thành trước thời điểm bắt đầu.");
-    commands.push({ rowNumber, unit: unitValue, startAt, endAt, startOrder: readTimestampOrder(startValue, startAt), endOrder: readTimestampOrder(endValue, endAt), completedPowerMw: readNumber(row.getCell(column("completedPower")).value, location) });
+    commands.push({ rowNumber, unit: unitValue, commandLabel, eventType, startAt, endAt, startOrder: readTimestampOrder(startValue, startAt), endOrder: readTimestampOrder(endValue, endAt), completedPowerMw: readNumber(row.getCell(column("completedPower")).value, location) });
   }
 
   if (!commands.length) throw new Error("File không có lệnh thay đổi công suất đã hoàn thành của Duyên Hải 1 cho S1/S2.");
@@ -173,7 +199,7 @@ export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFi
     initialPowerMw[unit] = inferInitialPower(unitCommands);
     let currentPower = initialPowerMw[unit];
     for (const command of unitCommands) {
-      const event = { startAt: command.startAt, endAt: command.endAt, eventType: 1, description: buildDescription(unit, currentPower, command.completedPowerMw) };
+      const event = { startAt: command.startAt, endAt: command.endAt, eventType: command.eventType, description: buildEventDescription(command, currentPower) };
       events[unit].push(event);
       eventByRow.set(command.rowNumber, event);
       currentPower = command.completedPowerMw;
