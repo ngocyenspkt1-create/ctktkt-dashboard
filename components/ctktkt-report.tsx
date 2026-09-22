@@ -65,6 +65,7 @@ import {
 } from "@/lib/ctktkt-extra-fields";
 import { parseSpreadsheetClipboard } from "@/lib/spreadsheet-grid";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
+import { findCtktktHistoryReadbackMismatch } from "@/lib/ctktkt-history-readback";
 import { isQlktExtensionOutdated, REQUIRED_QLKT_EXTENSION_VERSION } from "@/lib/qlkt-extension-version";
 import {
   CTKTKT_OIL_EVENT_CONFIG,
@@ -648,23 +649,28 @@ export function CtktktReport() {
         await postJson("/api/ctktkt-report", { operatingDate: day.date, entries: day.manualEntries });
       }
 
-      const verifiedByPeriod: Record<string, { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[] }> = {};
-      for (const verifyPeriod of periods) {
-        const response = await fetch(`/api/ctktkt-report?period=${encodeURIComponent(verifyPeriod)}`, { cache: "no-store" });
-        const body = (await response.json()) as { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[]; error?: string };
-        if (!response.ok) throw new Error(body.error || `Không đọc lại được dữ liệu tháng ${verifyPeriod}.`);
-        verifiedByPeriod[verifyPeriod] = body;
-      }
-      const actual = new Map(Object.values(verifiedByPeriod).flatMap(body => body.entries || []).map(entry => [`${entry.operatingDate}|${entry.cell}`, entry.value]));
-      const sameValue = (left: string | undefined, right: string) => {
-        if (!right) return left === undefined || left === "";
-        const a = Number(left), b = Number(right);
-        return Number.isFinite(a) && Number.isFinite(b) ? Math.abs(a - b) <= 1e-9 : left === right;
-      };
-      for (const day of importPackage.days) {
-        for (const entry of day.manualEntries) {
-          if (!sameValue(actual.get(`${day.date}|${entry.cell}`), entry.value)) throw new Error(`Đọc lại không khớp ô ${entry.cell}, ngày ${day.date}.`);
+      let verifiedByPeriod: Record<string, { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[] }> = {};
+      let readbackMismatch: ReturnType<typeof findCtktktHistoryReadbackMismatch> = null;
+      for (let attempt = 1; attempt <= 6; attempt += 1) {
+        verifiedByPeriod = {};
+        for (const verifyPeriod of periods) {
+          const response = await fetch(`/api/ctktkt-report?period=${encodeURIComponent(verifyPeriod)}&verify=${Date.now()}`, { cache: "no-store" });
+          const body = (await response.json()) as { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[]; error?: string };
+          if (!response.ok) throw new Error(body.error || `Không đọc lại được dữ liệu tháng ${verifyPeriod}.`);
+          verifiedByPeriod[verifyPeriod] = body;
         }
+        readbackMismatch = findCtktktHistoryReadbackMismatch(
+          importPackage.days,
+          Object.values(verifiedByPeriod).flatMap(body => body.entries || []),
+        );
+        if (!readbackMismatch) break;
+        if (attempt < 6) await new Promise(resolve => window.setTimeout(resolve, 750));
+      }
+      if (readbackMismatch) {
+        throw new Error(
+          `Đọc lại không khớp ô ${readbackMismatch.cell}, ngày ${readbackMismatch.date}: `
+          + `file=${readbackMismatch.expected || "trống"}, web=${readbackMismatch.actual ?? "trống"}.`,
+        );
       }
 
       const verified = verifiedByPeriod[importPackage.month];
