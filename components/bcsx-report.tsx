@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
-import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
+import { BCSX_COAL_STOCK_24H_CODE, EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
+import { deriveDailyValuesFromCtktkt } from "@/lib/daily-source-links";
+import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
@@ -31,13 +33,6 @@ function blankEventDraft(): EventDraft {
   return { startTime: "", endTime: "", eventType: 1, description: "" };
 }
 
-// Đầu cực/thương phẩm/than tiêu thụ có mã QLKT-sync riêng theo tổ máy; than tồn
-// kho là số toàn nhà máy (dùng chung 1 mã cho cả S1 và S2).
-const TOTAL_FIELD_CODES: Record<Unit, { dauCuc: string; thuongPham: string; thanTieuThu: string; thanTonKho: string }> = {
-  S1: { dauCuc: "B", thuongPham: "C", thanTieuThu: "AE", thanTonKho: "AR" },
-  S2: { dauCuc: "H", thuongPham: "I", thanTieuThu: "AF", thanTonKho: "AR" },
-};
-
 type TotalsDraft = { dauCuc: string; thuongPham: string; thanTieuThu: string; thanTonKho: string };
 
 function blankTotals(): TotalsDraft {
@@ -57,17 +52,14 @@ function parseAndScaleMwh(valStr: string | undefined): string {
   return String(num);
 }
 
-function scaleDownToMillionKwh(valStr: string): string {
-  if (!valStr || !valStr.trim()) return "";
-  const clean = valStr.trim().replace(",", ".");
-  const num = Number(clean);
-  if (!Number.isFinite(num)) return valStr;
-  // Nếu người dùng nhập đơn vị MWh (>= 100, ví dụ 10470), quy đổi về triệu kWh (/ 1000) khi lưu daily_inputs
-  if (num >= 100) {
-    const mil = num / 1000;
-    return String(Number(mil.toFixed(6)));
+function ctktktEntriesByDate(entries: Array<{ operatingDate: string; cell: string; value: string }>) {
+  const byDate = new Map<string, CtktktDayEntries>();
+  for (const entry of entries) {
+    const values = byDate.get(entry.operatingDate) || {};
+    values[entry.cell] = entry.value;
+    byDate.set(entry.operatingDate, values);
   }
-  return String(num);
+  return byDate;
 }
 
 export function BcsxReport() {
@@ -103,7 +95,7 @@ export function BcsxReport() {
         const readingsJson = await readingsRes.json() as { entries?: { unit: Unit; timeSlot: string; metric: ShiftMetric; value: string }[]; error?: string };
         const eventsJson = await eventsRes.json() as { events?: (OperatingEvent & { unit: Unit })[]; error?: string };
         const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[]; error?: string };
-        const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[]; error?: string };
+        const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[]; linkedEntries?: { operatingDate: string; cell: string; value: string }[]; error?: string };
         if (cancelled) return;
         if (readingsJson.error || eventsJson.error) throw new Error(readingsJson.error || eventsJson.error);
 
@@ -121,29 +113,25 @@ export function BcsxReport() {
         setEvents(nextEvents);
 
         const byCode = new Map((totalsJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
-        const ktktByCell = new Map((ctktktJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.cell, e.value]));
-
-        // Mục 2 của BCSX lấy nguồn từ file Chỉ tiêu KTKT (J157/K157 cho S1, J158/K158 cho S2, Than tiêu thụ & Tồn kho)
-        const ktktJ157 = ktktByCell.get("J157");
-        const ktktK157 = ktktByCell.get("K157");
-        const ktktJ158 = ktktByCell.get("J158");
-        const ktktK158 = ktktByCell.get("K158");
-        const ktktN169 = ktktByCell.get("N169");
-        const ktktN171 = ktktByCell.get("N171");
-        const ktktAR = ktktByCell.get("I38") || ktktByCell.get("B38");
+        const ktktByDate = ctktktEntriesByDate([...(ctktktJson.entries || []), ...(ctktktJson.linkedEntries || [])]);
+        const ktktValues = deriveDailyValuesFromCtktkt(
+          ktktByDate.get(operatingDate) || {},
+          ktktByDate.get(previousIsoDate(operatingDate)),
+        );
+        const stock24h = byCode.get(BCSX_COAL_STOCK_24H_CODE) || "";
 
         setTotals({
           S1: {
-            dauCuc: ktktJ157 || parseAndScaleMwh(byCode.get("B")),
-            thuongPham: ktktK157 || parseAndScaleMwh(byCode.get("C")),
-            thanTieuThu: ktktN169 || byCode.get("AE") || "",
-            thanTonKho: ktktAR || byCode.get("AR") || "",
+            dauCuc: parseAndScaleMwh(ktktValues.B),
+            thuongPham: parseAndScaleMwh(ktktValues.C),
+            thanTieuThu: ktktValues.AE || "",
+            thanTonKho: stock24h,
           },
           S2: {
-            dauCuc: ktktJ158 || parseAndScaleMwh(byCode.get("H")),
-            thuongPham: ktktK158 || parseAndScaleMwh(byCode.get("I")),
-            thanTieuThu: ktktN171 || byCode.get("AF") || "",
-            thanTonKho: ktktAR || byCode.get("AR") || "",
+            dauCuc: parseAndScaleMwh(ktktValues.H),
+            thuongPham: parseAndScaleMwh(ktktValues.I),
+            thanTieuThu: ktktValues.AF || "",
+            thanTonKho: stock24h,
           },
         });
       } catch (err) {
@@ -349,7 +337,9 @@ export function BcsxReport() {
   }
 
   function setTotal(field: keyof TotalsDraft, value: string) {
-    setTotals(old => ({ ...old, [unit]: { ...old[unit], [field]: value } }));
+    setTotals(old => field === "thanTonKho"
+      ? { S1: { ...old.S1, thanTonKho: value }, S2: { ...old.S2, thanTonKho: value } }
+      : { ...old, [unit]: { ...old[unit], [field]: value } });
   }
 
   async function reloadTotalsFromCtktkt() {
@@ -361,33 +351,30 @@ export function BcsxReport() {
         fetch(`/api/ctktkt-report?period=${period}`),
       ]);
       const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[] };
-      const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[] };
+      const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[]; linkedEntries?: { operatingDate: string; cell: string; value: string }[] };
       const byCode = new Map((totalsJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
-      const ktktByCell = new Map((ctktktJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.cell, e.value]));
-
-      const ktktJ157 = ktktByCell.get("J157");
-      const ktktK157 = ktktByCell.get("K157");
-      const ktktJ158 = ktktByCell.get("J158");
-      const ktktK158 = ktktByCell.get("K158");
-      const ktktN169 = ktktByCell.get("N169");
-      const ktktN171 = ktktByCell.get("N171");
-      const ktktAR = ktktByCell.get("I38") || ktktByCell.get("B38");
+      const ktktByDate = ctktktEntriesByDate([...(ctktktJson.entries || []), ...(ctktktJson.linkedEntries || [])]);
+      const ktktValues = deriveDailyValuesFromCtktkt(
+        ktktByDate.get(operatingDate) || {},
+        ktktByDate.get(previousIsoDate(operatingDate)),
+      );
+      const stock24h = byCode.get(BCSX_COAL_STOCK_24H_CODE) || "";
 
       setTotals({
         S1: {
-          dauCuc: ktktJ157 || parseAndScaleMwh(byCode.get("B")),
-          thuongPham: ktktK157 || parseAndScaleMwh(byCode.get("C")),
-          thanTieuThu: ktktN169 || byCode.get("AE") || "",
-          thanTonKho: ktktAR || byCode.get("AR") || "",
+          dauCuc: parseAndScaleMwh(ktktValues.B),
+          thuongPham: parseAndScaleMwh(ktktValues.C),
+          thanTieuThu: ktktValues.AE || "",
+          thanTonKho: stock24h,
         },
         S2: {
-          dauCuc: ktktJ158 || parseAndScaleMwh(byCode.get("H")),
-          thuongPham: ktktK158 || parseAndScaleMwh(byCode.get("I")),
-          thanTieuThu: ktktN171 || byCode.get("AF") || "",
-          thanTonKho: ktktAR || byCode.get("AR") || "",
+          dauCuc: parseAndScaleMwh(ktktValues.H),
+          thuongPham: parseAndScaleMwh(ktktValues.I),
+          thanTieuThu: ktktValues.AF || "",
+          thanTonKho: stock24h,
         },
       });
-      setNotice(`Đã nạp lại 4 số liệu Mục 2 từ Chỉ tiêu KTKT cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
+      setNotice(`Đã nạp lại 3 số liệu liên kết từ Chỉ tiêu KTKT và than tồn kho 24h đã lưu cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không tải lại được số liệu từ Chỉ tiêu KTKT.");
     }
@@ -396,33 +383,13 @@ export function BcsxReport() {
   async function saveTotals() {
     setSaving(true); setError(null); setNotice(null);
     try {
-      const codes = TOTAL_FIELD_CODES[unit];
       const t = totals[unit];
-      const entries = [
-        { operatingDate, fieldCode: codes.dauCuc, value: scaleDownToMillionKwh(t.dauCuc.trim()) },
-        { operatingDate, fieldCode: codes.thuongPham, value: scaleDownToMillionKwh(t.thuongPham.trim()) },
-        { operatingDate, fieldCode: codes.thanTieuThu, value: t.thanTieuThu.trim() },
-        { operatingDate, fieldCode: codes.thanTonKho, value: t.thanTonKho.trim() },
-      ];
+      const entries = [{ operatingDate, fieldCode: BCSX_COAL_STOCK_24H_CODE, value: t.thanTonKho.trim() }];
       const res = await fetch("/api/daily-inputs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period: operatingDate.slice(0, 7), entries }) });
       const json = await res.json() as { saved?: number; error?: string };
       if (!res.ok || json.error) throw new Error(json.error || "Không lưu được số liệu tổng ngày.");
 
-      // Đồng bộ đồng thời sang Chỉ tiêu KTKT (J157/K157 cho S1, J158/K158 cho S2)
-      try {
-        const ktktEntries = unit === "S1"
-          ? [{ cell: "J157", value: t.dauCuc.trim() }, { cell: "K157", value: t.thuongPham.trim() }]
-          : [{ cell: "J158", value: t.dauCuc.trim() }, { cell: "K158", value: t.thuongPham.trim() }];
-        await fetch("/api/ctktkt-report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ operatingDate, entries: ktktEntries }),
-        });
-      } catch {
-        // Bỏ qua nếu người dùng không thuộc nhóm phân quyền chỉ tiêu
-      }
-
-      setNotice(`Đã lưu số liệu tổng ngày tổ máy ${unit} (đồng bộ sang Chỉ tiêu KTKT & Dữ liệu các tháng).`);
+      setNotice("Đã lưu than tồn kho 24h dùng chung cho BCSX S1, S2 và A0.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không lưu được số liệu tổng ngày.");
     } finally {
@@ -875,7 +842,7 @@ export function BcsxReport() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-extrabold text-[#173b64]">2. Số liệu tổng ngày — tổ máy {unit}</h2>
-          <p className="mt-0.5 text-xs text-slate-500">4 số liệu được liên kết trực tiếp từ trang <Link href="/ctktkt-report" className="font-semibold text-[#334785] underline">Chỉ tiêu KTKT</Link> (Sản lượng đầu cực J157/J158 &amp; thương phẩm K157/K158 PMIS MWh, Than tiêu thụ &amp; tồn kho). Đã bỏ đồng bộ mục 2 này từ QLKT để tránh trùng lặp.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Sản lượng đầu cực, thương phẩm và than tiêu thụ tự liên kết từ <Link href="/ctktkt-report" className="font-semibold text-[#334785] underline">Chỉ tiêu KTKT</Link>. Riêng <b>than tồn kho 24h</b> nhập tay tại đây, dùng chung khi xuất BCSX S1, S2 và A0; không lấy từ tồn kho 06h00 của QLKT.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -893,29 +860,29 @@ export function BcsxReport() {
             onClick={() => void saveTotals()}
             className="rounded-lg bg-[#334785] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50"
           >
-            {saving ? "Đang lưu…" : "Lưu số liệu tổng ngày"}
+            {saving ? "Đang lưu…" : "Lưu than tồn kho 24h"}
           </button>
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <label className="flex flex-col text-xs font-semibold text-slate-500">
           Sản lượng đầu cực (MWh)
-          <input value={totals[unit].dauCuc} onChange={e => setTotal("dauCuc", e.target.value)} inputMode="decimal" placeholder="—" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right font-mono text-xs text-black outline-none focus:border-[#334785]"/>
+          <input disabled value={totals[unit].dauCuc} inputMode="decimal" placeholder="—" title="Tự liên kết từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">
           Sản lượng thương phẩm (MWh)
-          <input value={totals[unit].thuongPham} onChange={e => setTotal("thuongPham", e.target.value)} inputMode="decimal" placeholder="—" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right font-mono text-xs text-black outline-none focus:border-[#334785]"/>
+          <input disabled value={totals[unit].thuongPham} inputMode="decimal" placeholder="—" title="Tự liên kết từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">
           Than tiêu thụ (tấn)
-          <input value={totals[unit].thanTieuThu} onChange={e => setTotal("thanTieuThu", e.target.value)} inputMode="decimal" placeholder="—" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right font-mono text-xs text-black outline-none focus:border-[#334785]"/>
+          <input disabled value={totals[unit].thanTieuThu} inputMode="decimal" placeholder="—" title="Tự tính từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">
-          Than tồn kho (tấn, toàn nhà máy)
+          Than tồn kho 24h (tấn, toàn nhà máy)
           <input value={totals[unit].thanTonKho} onChange={e => setTotal("thanTonKho", e.target.value)} inputMode="decimal" placeholder="—" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right font-mono text-xs text-black outline-none focus:border-[#334785]"/>
         </label>
       </div>
-      <p className="mt-2 text-[11px] text-slate-400">Sản lượng tự dùng = đầu cực − thương phẩm, tự tính khi xuất file, không cần nhập.</p>
+      <p className="mt-2 text-[11px] text-slate-400">Ba ô màu xanh là dữ liệu liên kết, không nhập lại. Than tồn kho 24h là số nhập tay độc lập với than tồn kho 06h00 trên Dữ liệu các tháng.</p>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -22,10 +22,11 @@ const SOURCE_LABELS = {
   heatrate: "Cân bằng nhiệt",
   pmis_02pd: "Báo cáo 02-PĐ",
 };
-const DAILY_SOURCES = ["production", "fuel", "operation"];
+const DAILY_SOURCES = ["fuel", "operation"];
+const DAILY_FIELD_CODES = new Set(["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"]);
 const REQUIRED_FIELDS = {
   production: ["B", "C", "H", "I"],
-  fuel: ["X", "AE", "AF", "AJ", "AR", "AT", "CC", "CD"],
+  fuel: ["AR", "CC", "CD"],
   operation: ["F", "L", "CS", "CT", "CU", "CV"],
   // 8 mã của cả 2 tổ máy (S1+S2) — content.js tự đổi "Tổ máy" trên màn hình Cân bằng nhiệt và đọc
   // lần lượt cả 2 trong 1 lần gọi READ_QLKT_VALUES, nên chỉ cần 1 tab, không cần mở 2 lần như trước.
@@ -287,7 +288,9 @@ async function syncAll(operatingDate) {
     payloads.push(await readSource(source, urlFor(source), operatingDate));
   }
   const entries = new Map();
-  payloads.flatMap(payload => payload.entries || []).forEach(entry => entries.set(entry.fieldCode, entry));
+  payloads.flatMap(payload => payload.entries || [])
+    .filter(entry => DAILY_FIELD_CODES.has(entry.fieldCode))
+    .forEach(entry => entries.set(entry.fieldCode, entry));
   if (!entries.size) throw new Error("Không tìm thấy dữ liệu nào để đồng bộ.");
   return {
     version: 1,
@@ -433,18 +436,7 @@ async function syncUnified(operatingDate) {
   const ppa = await syncPpa(operatingDate);
   const heatRate = await syncHeatRate(operatingDate);
   const events = await syncBcsxEvents(operatingDate);
-  const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
-  const pmisReport = await readSource("pmis_02pd", qlktPages.pmis_02pd || DEFAULT_PMIS_02PD_URL, operatingDate);
-  const productionCodes = new Set(["J157", "K157", "J158", "K158"]);
-  const pmisEntries = new Map();
-  (daily.entries || []).filter(entry => productionCodes.has(entry.fieldCode)).forEach(entry => pmisEntries.set(entry.fieldCode, entry));
-  (pmisReport.entries || []).forEach(entry => pmisEntries.set(entry.fieldCode, entry));
-  const pmis02Pd = {
-    version: 1,
-    operatingDate,
-    sourcePage: "QLKT · PMIS 02-PĐ & Sản lượng",
-    entries: [...pmisEntries.values()],
-  };
+  const pmis02Pd = await syncPmis02Pd(operatingDate);
   return {
     version: 1,
     kind: "unified-sync",

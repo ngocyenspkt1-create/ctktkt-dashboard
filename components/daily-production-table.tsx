@@ -11,7 +11,8 @@ import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
-import { calculateNh3Summary, type CtktktDayEntries } from "@/lib/ctktkt-report";
+import { calculateNh3Summary, previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
+import { CTKTKT_LINKED_DAILY_CODES, deriveDailyValuesFromCtktkt, QLKT_DIRECT_DAILY_CODES } from "@/lib/daily-source-links";
 import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXTENSION_VERSION } from "@/lib/qlkt-extension-version";
 
 type Group = "production" | "environment" | "operation";
@@ -19,6 +20,10 @@ type Field = { code: string; label: string; unit?: string; input?: boolean; note
 type DailyRow = Record<string, string>;
 type LoadedEntry = { operatingDate: string; fieldCode: string; value: string; note: string };
 type CtktktLoadedEntry = { operatingDate: string; cell: string; value: string };
+
+function directQlktPayload(payload: QlktSyncPayload): QlktSyncPayload {
+  return { ...payload, entries: payload.entries.filter(entry => QLKT_DIRECT_DAILY_CODES.has(entry.fieldCode)) };
+}
 
 const groups: { key: Group; label: string; description: string }[] = [
   { key: "production", label: "Chỉ tiêu KTKT", description: "Điện năng, than và hiệu suất vận hành." },
@@ -34,7 +39,7 @@ const fields: Record<Group, Field[]> = {
     { code: "J", label: "Tự dùng S2", unit: "MWh" }, { code: "K", label: "% tự dùng S2", unit: "%" }, { code: "L", label: "Giờ phát S2", unit: "giờ", input: true }, { code: "M", label: "CS phát BQ S2", unit: "MW" },
     { code: "N", label: "Tổng SL đầu cực", unit: "MWh" }, { code: "O", label: "Tổng SL điểm bán", unit: "MWh" }, { code: "P", label: "Tổng SL tự dùng", unit: "MWh" }, { code: "Q", label: "% tự dùng", unit: "%" }, { code: "R", label: "Tổng giờ phát", unit: "giờ" }, { code: "S", label: "Tổng CS phát BQ", unit: "MW" },
     { code: "X", label: "Dầu FO tiêu thụ", unit: "tấn", input: true }, { code: "AE", label: "Than tiêu thụ S1", unit: "tấn", input: true }, { code: "AF", label: "Than tiêu thụ S2", unit: "tấn", input: true }, { code: "AJ", label: "Nhiệt trị", unit: "kJ/kg", input: true },
-    { code: "AR", label: "Than tồn kho", unit: "tấn", input: true }, { code: "AT", label: "Than nhập trong ngày", unit: "tấn", input: true }, { code: "CJ", label: "Độ ẩm TB ngày", unit: "%", input: true }, { code: "CX", label: "Nhiệt trị trước chỉnh", unit: "kJ/kg", input: true },
+    { code: "AR", label: "Than tồn kho 06h00", unit: "tấn", input: true }, { code: "AT", label: "Than nhập trong ngày", unit: "tấn", input: true }, { code: "CJ", label: "Độ ẩm TB ngày", unit: "%", input: true }, { code: "CX", label: "Nhiệt trị trước chỉnh", unit: "kJ/kg", input: true },
     { code: "T", label: "Tổng than tiêu thụ", unit: "tấn" }, { code: "U", label: "Suất hao than thô", unit: "g/kWh" }, { code: "V", label: "Suất hao nhiệt thô", unit: "kJ/kWh" }, { code: "W", label: "Suất hao nhiệt tinh", unit: "kJ/kWh" }, { code: "Y", label: "Suất hao than thô S1", unit: "g/kWh" }, { code: "Z", label: "Suất hao than thô S2", unit: "g/kWh" }, { code: "AA", label: "Suất hao than tinh NM", unit: "g/kWh" }, { code: "AG", label: "Suất hao than tinh S1", unit: "g/kWh" }, { code: "AH", label: "Suất hao than tinh S2", unit: "g/kWh" }, { code: "AK", label: "Nhiệt trị", unit: "kcal/kg" },
   ],
   environment: [
@@ -91,10 +96,16 @@ export function DailyProductionTable() {
       const body=await dailyResponse.json() as { entries?:LoadedEntry[]; error?:string }; if(!dailyResponse.ok) throw new Error(body.error||"Không tải được dữ liệu.");
       const next=Array.from({length:31},()=>({} as DailyRow)); for(const e of body.entries||[]){const d=Number(e.operatingDate.slice(8,10))-1; if(d>=0&&d<31){next[d][e.fieldCode]=e.value; if(e.note) next[d][`${e.fieldCode}_NOTE`]=e.note;}}
       const linked = new Set<string>();
+      for (let day = 0; day < 31; day += 1) {
+        for (const code of CTKTKT_LINKED_DAILY_CODES) {
+          delete next[day][code];
+          linked.add(`${day}:${code}`);
+        }
+      }
       if (ctktktResponse.ok) {
-        const ctktktBody = await ctktktResponse.json() as { entries?: CtktktLoadedEntry[] };
+        const ctktktBody = await ctktktResponse.json() as { entries?: CtktktLoadedEntry[]; linkedEntries?: CtktktLoadedEntry[] };
         const byDate = new Map<string, CtktktDayEntries>();
-        for (const entry of ctktktBody.entries || []) {
+        for (const entry of [...(ctktktBody.entries || []), ...(ctktktBody.linkedEntries || [])]) {
           const values = byDate.get(entry.operatingDate) || {};
           values[entry.cell] = entry.value;
           byDate.set(entry.operatingDate, values);
@@ -102,6 +113,11 @@ export function DailyProductionTable() {
         for (const [operatingDate, values] of byDate) {
           const day = Number(operatingDate.slice(8, 10)) - 1;
           if (day < 0 || day >= 31) continue;
+          const derived = deriveDailyValuesFromCtktkt(values, byDate.get(previousIsoDate(operatingDate)));
+          for (const [code, value] of Object.entries(derived)) {
+            next[day][code] = value;
+            linked.add(`${day}:${code}`);
+          }
           const nh3 = calculateNh3Summary(values, null, null);
           if (nh3.usedTonnes !== null) { next[day].BN = String(nh3.usedTonnes); linked.add(`${day}:BN`); }
           if (values.P72?.trim()) { next[day].CN = values.P72; linked.add(`${day}:CN`); }
@@ -113,8 +129,9 @@ export function DailyProductionTable() {
   useEffect(() => {
     const payload = decodeQlktSyncHash(window.location.hash);
     if (!payload) return;
-    setPendingSync(payload);
-    setSelectedSyncCodes(new Set(payload.entries.map(entry => entry.fieldCode)));
+    const directPayload = directQlktPayload(payload);
+    setPendingSync(directPayload);
+    setSelectedSyncCodes(new Set(directPayload.entries.map(entry => entry.fieldCode)));
     setPeriod(payload.operatingDate.slice(0, 7));
     window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
   }, []);
@@ -132,8 +149,9 @@ export function DailyProductionTable() {
       const payload=validateQlktSyncPayload(data.result.payload);
       if(!payload){setSyncingQlkt(false);setError("Dữ liệu ngày từ tiện ích chưa đủ hoặc không đúng ngày.");setSyncProgress("");return;}
       setPeriod(payload.operatingDate.slice(0,7));
-      setPendingSync(payload);
-      setSelectedSyncCodes(new Set(payload.entries.map(entry=>entry.fieldCode)));
+       const directPayload=directQlktPayload(payload);
+       setPendingSync(directPayload);
+       setSelectedSyncCodes(new Set(directPayload.entries.map(entry=>entry.fieldCode)));
       setMessage(`Đã nhận dữ liệu ngày ${payload.operatingDate.split("-").reverse().join("/")}. Kiểm tra và xác nhận các chỉ tiêu cần đưa vào bảng.`);
       setSyncProgress("");
       setSyncingQlkt(false);
@@ -171,7 +189,7 @@ export function DailyProductionTable() {
     if(!pendingSync)return;
     const day=Number(pendingSync.operatingDate.slice(8,10))-1;
     if(day<0||day>=days){setError("Ngày từ QLKT không thuộc tháng đang hiển thị.");return;}
-    const selected=pendingSync.entries.filter(entry=>selectedSyncCodes.has(entry.fieldCode));
+    const selected=pendingSync.entries.filter(entry=>QLKT_DIRECT_DAILY_CODES.has(entry.fieldCode)&&selectedSyncCodes.has(entry.fieldCode));
     setRows(old=>old.map((row,index)=>index===day?{...row,...Object.fromEntries(selected.map(entry=>[entry.fieldCode,normalizeQlktValue(entry.value)]))}:row));
     selected.forEach(entry=>dirty.current.add(`${day}:${entry.fieldCode}`));
     setPendingSync(null);
@@ -187,7 +205,7 @@ export function DailyProductionTable() {
     if(qlktRequestRef.current)window.clearTimeout(qlktRequestRef.current.timer);
     const requestId=crypto.randomUUID();
     const timer=window.setTimeout(()=>{if(qlktRequestRef.current?.id!==requestId)return;qlktRequestRef.current=null;setSyncingQlkt(false);setSyncProgress("");setError("QLKT phản hồi quá lâu. Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");},360000);
-    qlktRequestRef.current={id:requestId,timer};setSyncingQlkt(true);setSyncProgress("Đang đọc sản lượng, nhiên liệu và thời gian vận hành từ QLKT…");
+    qlktRequestRef.current={id:requestId,timer};setSyncingQlkt(true);setSyncProgress("Đang đọc tồn kho 06h00, nước và thời gian vận hành từ QLKT…");
     window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"SYNC_ALL",requestId,operatingDate:syncDate},window.location.origin);
   }
   function noteButton(day:number, field:Field){ const hasNote=Boolean(rows[day][`${field.code}_NOTE`]?.trim()); return <button type="button" onClick={event=>{event.stopPropagation();openNote(day,field);}} aria-label={`${hasNote?"Xem hoặc sửa":"Thêm"} ghi chú cho ${field.label}, ngày ${day+1}`} title={hasNote?rows[day][`${field.code}_NOTE`]:"Thêm ghi chú"} className={`absolute right-0 top-0 z-10 h-4 w-4 ${hasNote?"opacity-100":"opacity-0 group-hover:opacity-100 focus:opacity-100"}`}><span className={`absolute right-0 top-0 h-0 w-0 border-l-[10px] border-l-transparent ${hasNote?"border-t-[10px] border-t-orange-500":"border-t-[10px] border-t-slate-300"}`}/></button>; }

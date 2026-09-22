@@ -1,15 +1,21 @@
 import { getRawDb } from "@/db";
-import { buildBcsxWorkbook, deriveA0Readings, fileNameFor, SHIFT_METRICS, SHIFT_TIME_SLOTS, type ExportUnit, type OperatingEvent, type ShiftMetric, type UnitTotals } from "@/lib/bcsx";
+import { BCSX_COAL_STOCK_24H_CODE, buildBcsxWorkbook, deriveA0Readings, fileNameFor, SHIFT_METRICS, SHIFT_TIME_SLOTS, type ExportUnit, type OperatingEvent, type ShiftMetric, type UnitTotals } from "@/lib/bcsx";
+import { deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
+import { deriveDailyValuesFromCtktkt } from "@/lib/daily-source-links";
+import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const exportUnits = new Set(["S1", "S2", "A0"]);
 
 async function loadUnitData(date: string, unit: "S1" | "S2") {
   const db = getRawDb();
-  const [readingsRes, eventsRes, totalsRes] = await Promise.all([
+  const previousDate = previousIsoDate(date);
+  const [readingsRes, eventsRes, stockRes, ktktRes, ktktShiftRes] = await Promise.all([
     db.prepare("SELECT time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date = ? AND unit = ?").bind(date, unit).all(),
     db.prepare("SELECT start_at AS startAt, end_at AS endAt, event_type AS eventType, description FROM operating_events WHERE operating_date = ? AND unit = ? ORDER BY start_at").bind(date, unit).all(),
-    db.prepare("SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date = ? AND field_code IN ('B','C','AE','H','I','AF','AR','KTKT:J157','KTKT:K157','KTKT:J158','KTKT:K158','KTKT:N169','KTKT:N171','KTKT:I38','KTKT:B38')").bind(date).all(),
+    db.prepare("SELECT value FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(date, BCSX_COAL_STOCK_24H_CODE).all(),
+    db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date IN (?, ?) AND field_code LIKE 'KTKT:%'").bind(previousDate, date).all(),
+    db.prepare("SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date IN (?, ?)").bind(previousDate, date).all(),
   ]);
 
   const readings: Partial<Record<ShiftMetric, (number | null)[]>> = {};
@@ -22,33 +28,49 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
     if (arr) arr[idx] = Number(row.value);
   }
 
-  const byCode = new Map((totalsRes.results as { fieldCode: string; value: string }[]).map(r => [r.fieldCode, Number(r.value)]));
-  const toMwh = (val: number | undefined) => {
-    if (val === undefined || Number.isNaN(val)) return null;
-    return val > 0 && val < 100 ? val * 1000 : val;
+  const ktktByDate = new Map<string, CtktktDayEntries>();
+  for (const row of ktktRes.results as Array<{ operatingDate: string; cell: string; value: string }>) {
+    const values = ktktByDate.get(row.operatingDate) || {};
+    values[row.cell] = row.value;
+    ktktByDate.set(row.operatingDate, values);
+  }
+  const shiftsByDate = new Map<string, CtktktBcsxReading[]>();
+  for (const row of ktktShiftRes.results as CtktktBcsxReading[]) {
+    const operatingDate = row.operatingDate || "";
+    if (!operatingDate) continue;
+    const values = shiftsByDate.get(operatingDate) || [];
+    values.push(row);
+    shiftsByDate.set(operatingDate, values);
+  }
+  for (const operatingDate of [previousDate, date]) {
+    const values = ktktByDate.get(operatingDate) || {};
+    Object.assign(values, deriveCtktktCellsFromBcsx(shiftsByDate.get(operatingDate) || []).entries);
+    ktktByDate.set(operatingDate, values);
+  }
+  const linked = deriveDailyValuesFromCtktkt(ktktByDate.get(date) || {}, ktktByDate.get(previousDate));
+  const stockValue = Number((stockRes.results as Array<{ value: string }>)[0]?.value);
+  const stock24h = Number.isFinite(stockValue) ? stockValue : null;
+  const numeric = (value?: string) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   };
-
-  // Mục 2 BCSX lấy nguồn từ file Chỉ tiêu KTKT (J157, K157 cho S1; J158, K158 cho S2; Than tiêu thụ & tồn kho)
-  const ktktJ157 = byCode.get("KTKT:J157");
-  const ktktK157 = byCode.get("KTKT:K157");
-  const ktktJ158 = byCode.get("KTKT:J158");
-  const ktktK158 = byCode.get("KTKT:K158");
-  const ktktN169 = byCode.get("KTKT:N169");
-  const ktktN171 = byCode.get("KTKT:N171");
-  const ktktAR = byCode.get("KTKT:I38") ?? byCode.get("KTKT:B38");
+  const toMwh = (value?: string) => {
+    const parsed = numeric(value);
+    return parsed === null ? null : parsed * 1000;
+  };
 
   const totals: UnitTotals = unit === "S1"
     ? {
-        dauCuc: ktktJ157 !== undefined && !Number.isNaN(ktktJ157) ? ktktJ157 : toMwh(byCode.get("B")),
-        thuongPham: ktktK157 !== undefined && !Number.isNaN(ktktK157) ? ktktK157 : toMwh(byCode.get("C")),
-        thanTieuThu: ktktN169 !== undefined && !Number.isNaN(ktktN169) ? ktktN169 : (byCode.get("AE") ?? null),
-        thanTonKho: ktktAR !== undefined && !Number.isNaN(ktktAR) ? ktktAR : (byCode.get("AR") ?? null),
+        dauCuc: toMwh(linked.B),
+        thuongPham: toMwh(linked.C),
+        thanTieuThu: numeric(linked.AE),
+        thanTonKho: stock24h,
       }
     : {
-        dauCuc: ktktJ158 !== undefined && !Number.isNaN(ktktJ158) ? ktktJ158 : toMwh(byCode.get("H")),
-        thuongPham: ktktK158 !== undefined && !Number.isNaN(ktktK158) ? ktktK158 : toMwh(byCode.get("I")),
-        thanTieuThu: ktktN171 !== undefined && !Number.isNaN(ktktN171) ? ktktN171 : (byCode.get("AF") ?? null),
-        thanTonKho: ktktAR !== undefined && !Number.isNaN(ktktAR) ? ktktAR : (byCode.get("AR") ?? null),
+        dauCuc: toMwh(linked.H),
+        thuongPham: toMwh(linked.I),
+        thanTieuThu: numeric(linked.AF),
+        thanTonKho: stock24h,
       };
 
   const events = eventsRes.results as OperatingEvent[];

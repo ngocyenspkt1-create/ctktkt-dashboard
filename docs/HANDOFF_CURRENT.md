@@ -1,5 +1,12 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 22/09/2026 — tách tồn kho BCSX 24h và liên kết một nguồn dữ liệu
+
+- Mục 2 BCSX chỉ cho nhập tay **Than tồn kho 24h**, lưu bằng mã riêng `BCSX_COAL_STOCK_24H` và dùng chung khi xuất S1, S2, A0. Mã này không đọc hoặc ghi đè `AR` của QLKT.
+- Ba giá trị còn lại của Mục 2 BCSX (đầu cực, thương phẩm, than tiêu thụ) là dữ liệu chỉ đọc, tự lấy từ Báo cáo chỉ tiêu KTKT.
+- Trên Dữ liệu các tháng, `AR` đổi nhãn thành **Than tồn kho 06h00**. Các trường `B/C/H/I/X/AE/AF/AJ/AT` tự liên kết từ Báo cáo chỉ tiêu KTKT; không còn xuất hiện trong gói đồng bộ QLKT của trang này.
+- Tiện ích QLKT `0.4.29` cho Dữ liệu các tháng chỉ trả `F/L/AR/CC/CD/CS/CT/CU/CV`, giảm nguồn đọc hằng ngày từ ba màn hình xuống hai màn hình Nhiên liệu và Vận hành.
+
 ## Cập nhật 22/09/2026 — nhập lệnh điều độ trực tiếp cho Mục 3 BCSX
 
 - Mục 3 không còn nút đồng bộ sự kiện từ QLKT. Người dùng chọn một file DanhSachLenhKetThuc*.xlsx ngay trong Mục 3.

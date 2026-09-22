@@ -9,7 +9,7 @@ export const qlktFieldLabels: Record<string, string> = {
   AE: "Than tiêu thụ S1",
   AF: "Than tiêu thụ S2",
   AJ: "Nhiệt trị",
-  AR: "Than tồn kho",
+  AR: "Than tồn kho 06h00",
   AT: "Than nhập trong ngày",
   CC: "Nước bổ sung S1",
   CD: "Nước bổ sung S2",
@@ -192,7 +192,7 @@ export function validateQlktUnifiedSyncPayload(value: unknown): QlktUnifiedSyncP
     if (!daily || !ppa || !heatRate || !events || !pmis02Pd) return null;
     if ([daily.operatingDate, ppa.operatingDate, heatRate.operatingDate, pmis02Pd.operatingDate].some(date => date !== raw.operatingDate)) return null;
     const hasCodes = (payload: QlktSyncPayload, codes: string[]) => codes.every(code => payload.entries.some(entry => entry.fieldCode === code));
-    if (!hasCodes(daily, ["B", "C", "F", "H", "I", "L", "AE", "AF", "AR"])) return null;
+    if (!hasCodes(daily, ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"])) return null;
     if (!hasCodes(heatRate, ["DA", "DB", "DC", "DD", "DE", "DF", "DG", "DH"])) return null;
     if (!hasCodes(pmis02Pd, ["J157", "K157", "J158", "K158", "C181", "D181", "F181"])) return null;
     return { version: 1, kind: "unified-sync", operatingDate: raw.operatingDate, sourcePage: raw.sourcePage.slice(0, 500), daily, ppa, heatRate, events, pmis02Pd };

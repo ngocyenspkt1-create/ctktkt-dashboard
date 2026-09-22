@@ -112,6 +112,8 @@ export function validateOperatingEventDateRange(
 
 export type UnitTotals = { dauCuc: number | null; thuongPham: number | null; thanTieuThu: number | null; thanTonKho: number | null };
 
+export const BCSX_COAL_STOCK_24H_CODE = "BCSX_COAL_STOCK_24H";
+
 export type BcsxExportInput = {
   operatingDate: string; // YYYY-MM-DD
   unit: ExportUnit;
