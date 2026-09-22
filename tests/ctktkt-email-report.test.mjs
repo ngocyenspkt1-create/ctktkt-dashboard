@@ -132,3 +132,21 @@ test("generateEmailReportHtml applies Times New Roman font styling and HTML tags
   assert.ok(html.includes("<strong>- Tổ máy S2 vận hành:</strong>"));
   assert.ok(html.includes("<strong>2. Báo cáo bao gồm các file:</strong>"));
 });
+
+test("daily email always uses PMIS production instead of meter differences", () => {
+  const previous = {
+    AB8: "1000", AB9: "900", AB10: "100", AB11: "50",
+    AL8: "2000", AL9: "1800", AL10: "200", AL11: "100",
+  };
+  const current = {
+    AB8: "1100", AB9: "990", AB10: "106", AB11: "54",
+    AL8: "2120", AL9: "1900", AL10: "206", AL11: "104",
+    J157: "120", K157: "100", J158: "130", K158: "110",
+  };
+
+  const metrics = extractCtktktEmailMetrics(current, previous);
+  assert.equal(metrics.grossMwhS1, 120);
+  assert.equal(metrics.netMwhS1, 100);
+  assert.equal(metrics.grossMwhS2, 130);
+  assert.equal(metrics.netMwhS2, 110);
+});

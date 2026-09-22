@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calculateCtktktSummary, previousIsoDate } from "../lib/ctktkt-report.ts";
+import { calculateCtktktMeterSummary, calculateCtktktSummary, previousIsoDate } from "../lib/ctktkt-report.ts";
 
 function coalMeters(entries, columns, totals) {
   for (const column of columns) for (let row = 16; row <= 27; row += 1) entries[`${column}${row}`] = "0";
@@ -57,6 +57,27 @@ test("CTKTKT summary prefers complete PMIS production pairs for both units", () 
   assert.equal(result.plant.grossMwh, 250);
   assert.equal(result.plant.netMwh, 210);
   assert.equal(result.plant.auxiliaryMwh, 40);
+});
+
+test("CTKTKT keeps a separate meter-derived production summary for Excel comparison", () => {
+  const previous = { AB8: "1000", AB9: "900", AB10: "100", AB11: "50", AL8: "2000", AL9: "1800", AL10: "200", AL11: "100" };
+  const current = {
+    AB8: "1100", AB9: "990", AB10: "106", AB11: "54",
+    AL8: "2120", AL9: "1900", AL10: "206", AL11: "104",
+    J157: "120", K157: "100", J158: "130", K158: "110",
+  };
+
+  const pmis = calculateCtktktSummary(current, previous);
+  const meters = calculateCtktktMeterSummary(current, previous);
+
+  assert.equal(pmis.s1.grossMwh, 120);
+  assert.equal(pmis.s1.netMwh, 100);
+  assert.equal(meters.s1.grossMwh, 100);
+  assert.equal(meters.s1.netMwh, 90);
+  assert.equal(meters.s1.auxiliaryMwh, 10);
+  assert.equal(meters.s1.auxiliaryPercent, 10);
+  assert.equal(meters.s2.grossMwh, 120);
+  assert.equal(meters.plant.grossMwh, 220);
 });
 
 test("CTKTKT summary never falls back to meter differences when a QLKT pair is incomplete", () => {

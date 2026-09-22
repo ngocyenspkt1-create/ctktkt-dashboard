@@ -40,6 +40,7 @@ import { CTKTKT_BCSX_LINKED_CELLS, CTKTKT_BCSX_LINKS } from "@/lib/ctktkt-bcsx-l
 import { CTKTKT_WATER_LINKED_CELLS, CTKTKT_WATER_LINKS } from "@/lib/ctktkt-water-link";
 import {
   calculateCtktktSummary,
+  calculateCtktktMeterSummary,
   calculateTkdDcsSummary,
   calculateOilDifferences,
   calculateOilEventSummary,
@@ -156,6 +157,13 @@ const metricRows: Array<{ key: keyof CtktktKpis; label: string; unit: string }> 
   { key: "netCoalRate", label: "Suất hao than tinh", unit: "g/kWh" },
   { key: "netHeatRate", label: "Suất hao nhiệt tinh", unit: "kJ/kWh" },
 ];
+
+const meterComparisonKeys = new Set<keyof CtktktKpis>([
+  "grossMwh",
+  "netMwh",
+  "auxiliaryMwh",
+  "auxiliaryPercent",
+]);
 
 function format(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
@@ -436,6 +444,10 @@ export function CtktktReport() {
   // Tính toán chỉ tiêu tổng hợp toàn nhà máy
   const summary = useMemo(
     () => calculateCtktktSummary(current, previous),
+    [current, previous],
+  );
+  const meterSummary = useMemo(
+    () => calculateCtktktMeterSummary(current, previous),
     [current, previous],
   );
   const coalShiftDetails = useMemo(
@@ -1133,7 +1145,7 @@ export function CtktktReport() {
               Cụm 1 · Thống kê chỉ tiêu KTKT NMNĐ Duyên Hải 1
             </h2>
             <span className="text-[11px] text-slate-500">
-              (Sản lượng liên kết PMIS 02-PĐ · Công thức khóa tự tính · Nhập I35, I36)
+              (PMIS là số liệu chính · Công tơ chỉ đối chiếu · Nhập I35, I36)
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -1172,11 +1184,19 @@ export function CtktktReport() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b bg-[#e9f2fa] text-[#173b64]">
-                    <th className="p-2 text-left font-bold">Chỉ tiêu KTKT</th>
-                    <th className="p-2 text-right font-bold">Tổ máy S1</th>
-                    <th className="p-2 text-right font-bold">Tổ máy S2</th>
-                    <th className="p-2 text-right font-bold">Toàn Nhà máy</th>
-                    <th className="p-2 text-center font-bold">Đơn vị</th>
+                    <th rowSpan={2} className="p-2 text-left font-bold">Chỉ tiêu KTKT</th>
+                    <th colSpan={2} className="p-2 text-center font-bold">Tổ máy S1</th>
+                    <th colSpan={2} className="p-2 text-center font-bold">Tổ máy S2</th>
+                    <th colSpan={2} className="p-2 text-center font-bold">Toàn Nhà máy</th>
+                    <th rowSpan={2} className="p-2 text-center font-bold">Đơn vị</th>
+                  </tr>
+                  <tr className="border-b bg-[#f4f8fc] text-[10px] font-bold text-slate-600">
+                    <th className="p-1.5 text-right">PMIS/QLKT</th>
+                    <th className="p-1.5 text-right">Công tơ/Excel</th>
+                    <th className="p-1.5 text-right">PMIS/QLKT</th>
+                    <th className="p-1.5 text-right">Công tơ/Excel</th>
+                    <th className="p-1.5 text-right">PMIS/QLKT</th>
+                    <th className="p-1.5 text-right">Công tơ/Excel</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1186,11 +1206,20 @@ export function CtktktReport() {
                       <td className="bg-cyan-50/30 p-2 text-right font-bold font-mono tabular-nums text-[#173b64]">
                         {format(summary.s1[row.key])}
                       </td>
+                      <td className="bg-amber-50/40 p-2 text-right font-mono tabular-nums text-amber-900">
+                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s1[row.key]) : "—"}
+                      </td>
                       <td className="bg-cyan-50/30 p-2 text-right font-bold font-mono tabular-nums text-[#173b64]">
                         {format(summary.s2[row.key])}
                       </td>
+                      <td className="bg-amber-50/40 p-2 text-right font-mono tabular-nums text-amber-900">
+                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s2[row.key]) : "—"}
+                      </td>
                       <td className="bg-blue-50/40 p-2 text-right font-black font-mono tabular-nums text-indigo-900">
                         {format(summary.plant[row.key])}
+                      </td>
+                      <td className="bg-amber-50/40 p-2 text-right font-mono tabular-nums text-amber-900">
+                        {meterComparisonKeys.has(row.key) ? format(meterSummary.plant[row.key]) : "—"}
                       </td>
                       <td className="p-2 text-center font-medium text-slate-500">{row.unit}</td>
                     </tr>
@@ -1200,10 +1229,10 @@ export function CtktktReport() {
                     <td className="p-2 font-bold text-amber-950">
                       Suất hao bi nghiền than (Ô I35)
                     </td>
-                    <td colSpan={2} className="p-2 text-xs text-slate-500 italic">
+                    <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
                       Mặc định 150 g/tấn than (Trưởng kíp điện / Thống kê nhập)
                     </td>
-                    <td className="p-1.5 text-right w-36">
+                    <td colSpan={2} className="p-1.5 text-right w-36">
                       {renderCellInput("I35", {
                         placeholder: "150",
                         group: "kpi_summary",
@@ -1215,10 +1244,10 @@ export function CtktktReport() {
                     <td className="p-2 font-bold text-amber-950">
                       Lượng than nhập trong ngày (Ô I36)
                     </td>
-                    <td colSpan={2} className="p-2 text-xs text-slate-500 italic">
+                    <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
                       Cộng dồn vào lượng than tồn kho ngày D
                     </td>
-                    <td className="p-1.5 text-right w-36">
+                    <td colSpan={2} className="p-1.5 text-right w-36">
                       {renderCellInput("I36", {
                         placeholder: "0",
                         group: "kpi_summary",

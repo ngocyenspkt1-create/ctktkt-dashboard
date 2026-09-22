@@ -207,14 +207,40 @@ function unitKpis(
   };
 }
 
+function meterUnitKpis(
+  unit: "s1" | "s2",
+  current: CtktktDayEntries,
+  previous: CtktktDayEntries | undefined,
+  coal: CoalUnitResult,
+  hhvKjKg: number | null,
+): CtktktKpis {
+  const endColumn = unit === "s1" ? "AB" : "AL";
+  const grossMwh = difference(numberOf(current, `${endColumn}8`), numberOf(previous, `${endColumn}8`));
+  const netMwh = difference(numberOf(current, `${endColumn}9`), numberOf(previous, `${endColumn}9`));
+  const auxiliaryMwh = sum([
+    difference(numberOf(current, `${endColumn}10`), numberOf(previous, `${endColumn}10`)),
+    difference(numberOf(current, `${endColumn}11`), numberOf(previous, `${endColumn}11`)),
+  ]);
+  const { rawCoalTonnes, adjustedCoalTonnes } = coal;
+  const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
+  return {
+    grossMwh,
+    netMwh,
+    auxiliaryMwh,
+    auxiliaryPercent: divide(grossMwh === null || netMwh === null ? null : grossMwh - netMwh, grossMwh, 100),
+    rawCoalTonnes,
+    adjustedCoalTonnes,
+    netCoalRate,
+    netHeatRate: netCoalRate === null || hhvKjKg === null ? null : netCoalRate * hhvKjKg / 1000,
+    hhvKjKg,
+  };
+}
+
 function add(a: number | null, b: number | null) {
   return a === null || b === null ? null : a + b;
 }
 
-export function calculateCtktktSummary(current: CtktktDayEntries, previous?: CtktktDayEntries): CtktktSummary {
-  const coal = calculateCoalModel(current, previous);
-  const s1 = unitKpis("s1", current, previous, coal.s1, coal.hhvKjKg);
-  const s2 = unitKpis("s2", current, previous, coal.s2, coal.hhvKjKg);
+function combineUnitKpis(s1: CtktktKpis, s2: CtktktKpis, hhvKjKg: number | null): CtktktSummary {
   const grossMwh = add(s1.grossMwh, s2.grossMwh);
   const netMwh = add(s1.netMwh, s2.netMwh);
   const adjustedCoalTonnes = add(s1.adjustedCoalTonnes, s2.adjustedCoalTonnes);
@@ -232,9 +258,27 @@ export function calculateCtktktSummary(current: CtktktDayEntries, previous?: Ctk
     adjustedCoalTonnes,
     netCoalRate,
     netHeatRate: divide(heatNumerator, netMwh),
-    hhvKjKg: coal.hhvKjKg,
+    hhvKjKg,
   };
   return { s1, s2, plant };
+}
+
+export function calculateCtktktSummary(current: CtktktDayEntries, previous?: CtktktDayEntries): CtktktSummary {
+  const coal = calculateCoalModel(current, previous);
+  return combineUnitKpis(
+    unitKpis("s1", current, previous, coal.s1, coal.hhvKjKg),
+    unitKpis("s2", current, previous, coal.s2, coal.hhvKjKg),
+    coal.hhvKjKg,
+  );
+}
+
+export function calculateCtktktMeterSummary(current: CtktktDayEntries, previous?: CtktktDayEntries): CtktktSummary {
+  const coal = calculateCoalModel(current, previous);
+  return combineUnitKpis(
+    meterUnitKpis("s1", current, previous, coal.s1, coal.hhvKjKg),
+    meterUnitKpis("s2", current, previous, coal.s2, coal.hhvKjKg),
+    coal.hhvKjKg,
+  );
 }
 
 /** Mirrors Q69:Q71, P74, P75 and P77:Q77 in the source workbook. */

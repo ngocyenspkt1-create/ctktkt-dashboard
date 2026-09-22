@@ -10,6 +10,7 @@ import { CTKTKT_WATER_LINKED_CELLS } from "./ctktkt-water-link.ts";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "./ctktkt-defaults.ts";
 import {
   calculateCtktktSummary,
+  calculateCtktktMeterSummary,
   calculateNh3Summary,
   calculateOilDifferences,
   calculateSteamDifferences,
@@ -70,7 +71,8 @@ function auditDay(sheet: XLSX.WorkSheet, entries: CtktktDayEntries, previous?: C
     const expected = expectedNumber(sheet, sourceCell);
     checks.push({ name, sourceCell, expected, actual, passed: closeEnough(actual, expected) });
   };
-  const summary = calculateCtktktSummary(entries, previous);
+  const summary = calculateCtktktMeterSummary(entries, previous);
+  const pmisSummary = calculateCtktktSummary(entries, previous);
   const summaryMappings: Array<[string, string, number | null]> = [
     ["S1 sản lượng đầu cực", "E20", summary.s1.grossMwh], ["S2 sản lượng đầu cực", "H20", summary.s2.grossMwh], ["NM sản lượng đầu cực", "I20", summary.plant.grossMwh],
     ["S1 sản lượng phát lưới", "E21", summary.s1.netMwh], ["S2 sản lượng phát lưới", "H21", summary.s2.netMwh], ["NM sản lượng phát lưới", "I21", summary.plant.netMwh],
@@ -107,7 +109,7 @@ function auditDay(sheet: XLSX.WorkSheet, entries: CtktktDayEntries, previous?: C
   const steamResultRow = steamInputRow + 1;
   ["W", "X", "Y", "Z", "AA", "AB"].forEach((column, index) => add(`Hơi S1 ${steam1[index].label}`, `${column}${steamResultRow}`, steam1[index].consumption));
   ["AG", "AH", "AI", "AJ", "AK", "AL"].forEach((column, index) => add(`Hơi S2 ${steam2[index].label}`, `${column}${steamResultRow}`, steam2[index].consumption));
-  const nh3 = calculateNh3Summary(entries, summary.plant.grossMwh, summary.plant.netMwh);
+  const nh3 = calculateNh3Summary(entries, pmisSummary.plant.grossMwh, pmisSummary.plant.netMwh);
   [69, 70, 71].forEach((row, index) => add(`NH3 bồn ${index + 1} khả dụng 95%`, `Q${row}`, nh3.tankAvailable[index]));
   add("NH3 tồn 24h", "P74", nh3.stock24h); add("NH3 tiêu thụ", "P75", nh3.usedTonnes);
   add("Suất hao NH3 đầu cực", "P77", nh3.rateGross); add("Suất hao NH3 phát lưới", "Q77", nh3.rateNet);

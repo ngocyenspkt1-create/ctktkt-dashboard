@@ -10,7 +10,7 @@ function workbookBytes(sheets) {
     for (const [cell, value] of Object.entries(values)) {
       worksheet[cell] = typeof value === "number" ? { t: "n", v: value } : { t: "s", v: value };
     }
-    worksheet["!ref"] = "A1:W8";
+    worksheet["!ref"] = "A1:AV181";
     XLSX.utils.book_append_sheet(workbook, worksheet, name);
   }
   return XLSX.write(workbook, { type: "array", bookType: "xlsx" });
@@ -66,4 +66,20 @@ test("history import ignores draft cells that are not part of the day-03 referen
   assert.equal(importedCells.has("W8"), true);
   assert.equal(importedCells.has("G52"), false);
   assert.equal(result.days[0].manualEntries.find(entry => entry.cell === "C181")?.value, "1245");
+});
+
+test("history import audits Excel production formulas against meter differences, not PMIS", async () => {
+  const bytes = workbookBytes({
+    "Ngày 04": { AB8: 1000, AB9: 900, AB10: 100, AB11: 50 },
+    "Ngày 05": {
+      AB8: 1100, AB9: 990, AB10: 106, AB11: 54,
+      J157: 120, K157: 100,
+      E20: 100, E21: 90, E25: 10, E27: 10,
+    },
+  });
+
+  const result = await buildCtktktHistoryImportPackage("CHI_TIEU_KTKT_05.09.2026.xlsx", bytes, "2026-09-05");
+  const audit = result.audits[0];
+  const productionChecks = audit.failed.filter(item => ["E20", "E21", "E25", "E27"].includes(item.sourceCell));
+  assert.deepEqual(productionChecks, []);
 });

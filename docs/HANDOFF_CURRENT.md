@@ -1,5 +1,14 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 22/09/2026 — tách sản lượng PMIS và sản lượng tính theo công tơ
+
+- Cụm 1 hiển thị song song cột **PMIS/QLKT** và **Công tơ/Excel** cho bốn chỉ tiêu điện: đầu cực, phát lưới, điện tự dùng và tỷ lệ tự dùng của S1, S2, toàn nhà máy.
+- PMIS tại `J157/K157/J158/K158` tiếp tục là nguồn chính cho KPI trên web, Báo cáo gửi mail, BCSX và các suất hao. Sản lượng tính theo chênh công tơ chỉ dùng để đối chiếu và theo dõi công thức trong file Excel.
+- Nhập file lịch sử theo ngày đối chiếu các ô công thức Excel `E20:H27`, `AU86:AV88` bằng đúng sản lượng chênh công tơ như mẫu gốc, không còn báo sai giả do so với PMIS. Các sai lệch công thức khác vẫn bị chặn như trước.
+- File Excel xuất tháng vẫn giữ nguyên công thức công tơ, đồng thời ghi riêng sản lượng PMIS; cấu trúc, công thức, merge, style và thiết lập in không thay đổi.
+- Kiểm tra đạt 149/149 test, TypeScript, ESLint phạm vi sửa và build production; test riêng xác nhận mail luôn lấy PMIS khi PMIS khác công tơ và nhập lịch sử dùng công tơ để kiểm tra công thức. Thay đổi này chỉ ở web, không sửa tiện ích QLKT `0.4.29`.
+- `npm.cmd run storage:check` chưa truy cập được Turso vì môi trường local thiếu `TURSO_DATABASE_URL`; chưa có số liệu xác thực để kết luận tỷ lệ sử dụng.
+
 ## Cập nhật 22/09/2026 — sửa nhập lệnh điều độ ngày 21/09 cho S1
 
 - Nguyên nhân S1 không xuất hiện: bộ nhập trước đây chỉ nhận dòng có Nội dung lệnh `Thay đổi công suất`, nên dòng S1 `Ngừng tổ máy` đã hoàn thành bị bỏ qua. Hai dòng S1 thay đổi công suất 330,7 MW và 225,7 MW vẫn được bỏ đúng vì chưa hoàn thành/đã dừng.
