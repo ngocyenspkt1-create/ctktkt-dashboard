@@ -9,7 +9,7 @@
 - Đối chiếu file thật ngày 19/09/2026: 24/24 lệnh được nhận, S1 12 dòng, S2 12 dòng, đúng thời gian và thứ tự đến giây. Sáu khác biệt mô tả so với file mẫu đều do mẫu dùng câu sai kỹ thuật “Giảm tải S2 ... lên ...”; file mới dùng “về”.
 - Kiểm tra đạt: 138/138 test, TypeScript, ESLint phạm vi sửa và build production. File QA: .analysis/bcsx-operation-import/DH1_Thoi_gian_VH_generated.xlsx.
 - npm.cmd run storage:check chưa truy cập được Turso vì môi trường local thiếu TURSO_DATABASE_URL; chưa có số liệu để kết luận mức sử dụng. Vercel/Turso dashboard chưa được kiểm tra trong lượt local này.
-- Chưa commit, chưa push, chưa deploy. Bước nghiệm thu tiếp theo: đăng nhập bằng tài khoản có quyền sửa BCSX, chọn ngày 19/09/2026, nhập file thật, xác nhận Mục 3 S1/S2 và thử upload file vừa tải lên QLKT.
+- Đã commit, push lên github/main và triển khai Vercel production ngày 22/09/2026. Bước nghiệm thu nghiệp vụ tiếp theo: đăng nhập bằng tài khoản có quyền sửa BCSX, chọn ngày 19/09/2026, nhập file thật, xác nhận Mục 3 S1/S2 và thử upload file vừa tải lên QLKT.
 
 ## Cập nhật 22/09/2026 — QLKT bắt buộc, sửa đồng bộ PMIS và sự kiện đốt dầu
 
