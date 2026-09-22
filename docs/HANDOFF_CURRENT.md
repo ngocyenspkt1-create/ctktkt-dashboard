@@ -5,7 +5,9 @@
 - Nguyên nhân S1 không xuất hiện: bộ nhập trước đây chỉ nhận dòng có Nội dung lệnh `Thay đổi công suất`, nên dòng S1 `Ngừng tổ máy` đã hoàn thành bị bỏ qua. Hai dòng S1 thay đổi công suất 330,7 MW và 225,7 MW vẫn được bỏ đúng vì chưa hoàn thành/đã dừng.
 - Bộ nhập hiện phân loại theo **Nội dung lệnh**, không suy loại sự kiện từ Lý do lệnh hoặc ghi chú: thay đổi công suất = loại 1; đốt lò/khởi động/hòa lưới/ngừng tổ máy = loại 2; tách sửa chữa/đưa dự phòng sau sửa chữa = loại 3; bất thường/quá tải/điện áp/nhiệt độ = loại 4; ngừng sự cố/bảo vệ tác động = loại 5.
 - Nếu có lệnh `Ngừng tổ máy` đưa công suất về 0 MW, sự kiện được ghi loại 2 và suy công suất đầu là tải tối thiểu 435,7 MW. Nếu chỉ có lệnh thay đổi công suất giảm dưới tải tối thiểu rồi tăng lại, không có lệnh ngừng về 0 MW, các dòng đó vẫn là loại 1.
-- Đối chiếu file thật `DanhSachLenhKetThuc-20260922_203848685.xlsx` cho ngày 21/09/2026: nhận 3 dòng hoàn thành, bỏ 2 dòng chưa hoàn thành; S1 có 1 sự kiện loại 2 lúc 07:55–09:56; S2 có 2 sự kiện loại 1 lúc 14:32–15:03 và 15:04–15:28. Kiểm tra đạt: 143/143 test, TypeScript, ESLint phạm vi sửa và build production.
+- Ngoại lệ trip: nếu công suất trước sự kiện từ 435,7 MW trở lên, công suất hoàn thành bằng 0 MW và thời gian từ bắt đầu đến hoàn thành **nhỏ hơn 3 phút**, hệ thống tự chuyển thành loại 5 `Ngừng sự cố tổ máy do bảo vệ tác động`. Thời gian đúng 3 phút trở lên không thỏa điều kiện trip tự động và vẫn giữ loại theo Nội dung lệnh.
+- Lệnh khởi động hoặc hòa lưới thuộc loại 2. Lệnh tách sửa chữa theo kế hoạch hoặc đưa tổ máy vào dự phòng thuộc loại 3.
+- Đối chiếu file thật `DanhSachLenhKetThuc-20260922_203848685.xlsx` cho ngày 21/09/2026: nhận 3 dòng hoàn thành, bỏ 2 dòng chưa hoàn thành; S1 có 1 sự kiện loại 2 lúc 07:55–09:56; S2 có 2 sự kiện loại 1 lúc 14:32–15:03 và 15:04–15:28. Kiểm tra đạt: 146/146 test, TypeScript, ESLint phạm vi sửa và build production.
 - `npm.cmd run storage:check` chưa truy cập được Turso vì môi trường local thiếu `TURSO_DATABASE_URL`; chưa có số liệu xác thực để kết luận tỷ lệ sử dụng hoặc phát cảnh báo ngưỡng.
 
 ## Cập nhật 22/09/2026 — tách tồn kho BCSX 24h và liên kết một nguồn dữ liệu

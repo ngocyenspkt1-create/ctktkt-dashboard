@@ -60,7 +60,7 @@ export function classifyOperationCommand(value: unknown) {
   if (command === "thay doi cong suat") return 1;
   if (command.includes("ngung su co") || (command.includes("su co") && command.includes("bao ve"))) return 5;
   if (["bat thuong", "qua tai", "dien ap cao", "dien ap thap", "nhiet do cao"].some(term => command.includes(term))) return 4;
-  if (["tach sua chua", "dua vao du phong sau sua chua", "dua vao du phong"].some(term => command.includes(term))) return 3;
+  if ((command.includes("tach") && command.includes("sua chua")) || (command.includes("dua") && command.includes("vao du phong"))) return 3;
   if (["dot lo", "khoi dong", "hoa luoi", "ngung to may"].some(term => command.includes(term))) return 2;
   return null;
 }
@@ -121,7 +121,7 @@ function inferInitialPower(commands: SourceCommand[]) {
   const first = commands[0];
   const second = commands[1];
   if (!first) return minimumPowerMw;
-  if (first.eventType === 2 && first.completedPowerMw === 0) return minimumPowerMw;
+  if (first.completedPowerMw === 0) return minimumPowerMw;
   if (first.completedPowerMw <= minimumPowerMw) return maximumPowerMw;
   if (first.completedPowerMw >= maximumPowerMw) return minimumPowerMw;
   if (second) {
@@ -144,9 +144,22 @@ function buildDescription(unit: OperationUnit, fromPower: number, toPower: numbe
   return "Duy trì tải " + unit + " ở " + formatPower(toPower) + "MW";
 }
 
-function buildEventDescription(command: SourceCommand, fromPower: number) {
-  if (command.eventType === 1) return buildDescription(command.unit, fromPower, command.completedPowerMw);
-  if (command.eventType === 2 && command.completedPowerMw === 0) {
+function resolveEventType(command: SourceCommand, fromPower: number) {
+  const durationMs = command.endOrder - command.startOrder;
+  const isProtectionTrip = command.eventType === 2
+    && command.completedPowerMw === 0
+    && fromPower >= minimumPowerMw
+    && durationMs >= 0
+    && durationMs < 3 * 60 * 1000;
+  return isProtectionTrip ? 5 : command.eventType;
+}
+
+function buildEventDescription(command: SourceCommand, fromPower: number, eventType: number) {
+  if (eventType === 1) return buildDescription(command.unit, fromPower, command.completedPowerMw);
+  if (eventType === 5 && command.completedPowerMw === 0) {
+    return "Ngừng sự cố tổ máy " + command.unit + " do bảo vệ tác động (trip từ " + formatPower(fromPower) + "MW về 0MW trong thời gian dưới 3 phút)";
+  }
+  if (eventType === 2 && command.completedPowerMw === 0) {
     return "Ngừng tổ máy " + command.unit + " theo lệnh điều độ (giảm tải từ " + formatPower(fromPower) + "MW về 0MW)";
   }
   const powerDetail = command.completedPowerMw === fromPower
@@ -199,7 +212,8 @@ export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFi
     initialPowerMw[unit] = inferInitialPower(unitCommands);
     let currentPower = initialPowerMw[unit];
     for (const command of unitCommands) {
-      const event = { startAt: command.startAt, endAt: command.endAt, eventType: command.eventType, description: buildEventDescription(command, currentPower) };
+      const eventType = resolveEventType(command, currentPower);
+      const event = { startAt: command.startAt, endAt: command.endAt, eventType, description: buildEventDescription(command, currentPower, eventType) };
       events[unit].push(event);
       eventByRow.set(command.rowNumber, event);
       currentPower = command.completedPowerMw;

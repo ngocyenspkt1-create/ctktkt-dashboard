@@ -55,6 +55,14 @@ async function belowMinimumWithoutShutdownBytes() {
   return workbook.xlsx.writeBuffer();
 }
 
+async function shutdownDurationWorkbookBytes(durationMinutes, command = "Ngừng tổ máy") {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("All");
+  worksheet.addRow(headers);
+  worksheet.addRow(["1", "Duyên Hải 1", "S2", command, 0, 0, new Date(Date.UTC(2026, 6, 7, 9, 7)), new Date(Date.UTC(2026, 6, 7, 9, 7 + durationMinutes)), "NSMO", "DH1", false, null, null, null, null, 1]);
+  return workbook.xlsx.writeBuffer();
+}
+
 test("imports completed DH1 power commands into S1/S2 operating events", async () => {
   const result = await parseOperationCommandWorkbook(await sourceWorkbookBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-19");
   assert.equal(result.operatingDate, "2026-09-19");
@@ -81,7 +89,9 @@ test("classifies operation commands by the BCSX event-type regulation", () => {
   assert.equal(classifyOperationCommand("Thay đổi công suất"), 1);
   assert.equal(classifyOperationCommand("Ngừng tổ máy"), 2);
   assert.equal(classifyOperationCommand("Khởi động tổ máy"), 2);
-  assert.equal(classifyOperationCommand("Tách sửa chữa"), 3);
+  assert.equal(classifyOperationCommand("Hòa lưới tổ máy"), 2);
+  assert.equal(classifyOperationCommand("Tách ra sửa chữa theo kế hoạch"), 3);
+  assert.equal(classifyOperationCommand("Đưa tổ máy vào dự phòng"), 3);
   assert.equal(classifyOperationCommand("Bất thường điện áp cao"), 4);
   assert.equal(classifyOperationCommand("Ngừng sự cố do bảo vệ tác động"), 5);
 });
@@ -102,6 +112,23 @@ test("keeps below-minimum reduction and recovery as normal type-1 events when th
   assert.deepEqual(result.events.S1.map(event => event.eventType), [1, 1]);
   assert.equal(result.events.S1[0].description.includes("225.7MW"), true);
   assert.equal(result.events.S1[1].description.includes("435.7MW"), true);
+});
+
+test("classifies a shutdown from minimum load to zero in under three minutes as a type-5 protection trip", async () => {
+  const result = await parseOperationCommandWorkbook(await shutdownDurationWorkbookBytes(2), "DanhSachLenhKetThuc.xlsx", "2026-07-07");
+  assert.equal(result.events.S2[0].eventType, 5);
+  assert.equal(result.events.S2[0].description, "Ngừng sự cố tổ máy S2 do bảo vệ tác động (trip từ 435.7MW về 0MW trong thời gian dưới 3 phút)");
+});
+
+test("keeps a shutdown taking exactly three minutes as a type-2 dispatch shutdown", async () => {
+  const result = await parseOperationCommandWorkbook(await shutdownDurationWorkbookBytes(3), "DanhSachLenhKetThuc.xlsx", "2026-07-07");
+  assert.equal(result.events.S2[0].eventType, 2);
+  assert.equal(result.events.S2[0].description, "Ngừng tổ máy S2 theo lệnh điều độ (giảm tải từ 435.7MW về 0MW)");
+});
+
+test("keeps a rapid reserve command as type 3 instead of treating it as a protection trip", async () => {
+  const result = await parseOperationCommandWorkbook(await shutdownDurationWorkbookBytes(2, "Đưa tổ máy vào dự phòng"), "DanhSachLenhKetThuc.xlsx", "2026-07-07");
+  assert.equal(result.events.S2[0].eventType, 3);
 });
 
 test("builds the five-column QLKT upload workbook", async () => {
