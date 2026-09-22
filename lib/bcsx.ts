@@ -17,9 +17,10 @@
 // then these are plain editable inputs. "Tự dùng" = đầu cực - thương phẩm
 // (computed, matches the source workbook's own formula, never entered).
 //
-// "Tình hình vận hành" (operating-event log) is meant to come from QLKT too,
-// per the user — also pending the exact source; manual add/remove stays as
-// the interim/override UI.
+// "Tình hình vận hành" (operating-event log) is imported directly from the
+// completed-dispatch-command workbook. The web app saves S1/S2 immediately and
+// generates the five-column DH1 workbook for upload to QLKT; manual editing
+// remains available for review and exceptional events.
 //
 // A0 (tổng nhà máy) rules, per explicit user instruction (20/09/2026):
 //   - Mục 1 (48 điểm nửa giờ): P/Q/P điểm bán cộng S1+S2 tại từng ô.

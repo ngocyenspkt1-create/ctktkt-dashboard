@@ -73,7 +73,6 @@ function scaleDownToMillionKwh(valStr: string): string {
 export function BcsxReport() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_bcsx");
-  const canSyncQlkt = hasPermission(user, "sync_qlkt");
   const [operatingDate, setOperatingDate] = useState(defaultOperatingDate);
   const [unit, setUnit] = useState<Unit>("S1");
   const [grids, setGrids] = useState<Record<Unit, ReadingsGrid>>({ S1: emptyGrid(), S2: emptyGrid() });
@@ -85,106 +84,10 @@ export function BcsxReport() {
   const [exporting, setExporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [extensionVersion, setExtensionVersion] = useState("");
-  const [syncingAll, setSyncingAll] = useState(false);
   const [importingSection1, setImportingSection1] = useState(false);
-  const bcsxRequestRef = useRef<{ id: string; timer: number; operatingDate: string } | null>(null);
+  const [importingOperations, setImportingOperations] = useState(false);
   const section1ImportRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    const channel = "ctktkt-qlkt-sync";
-    const handleMessage = async (event: MessageEvent) => {
-      if (event.source !== window || event.origin !== window.location.origin) return;
-      const data = event.data as {
-        channel?: string;
-        sender?: string;
-        type?: string;
-        version?: string;
-        requestId?: string;
-        result?: {
-          ok?: boolean;
-          payload?: unknown;
-          error?: string;
-        };
-      };
-      if (!data || data.channel !== channel || data.sender !== "ctktkt-extension") return;
-      if (data.type === "READY") {
-        setExtensionVersion(String(data.version || "đã kết nối"));
-        return;
-      }
-      const request = bcsxRequestRef.current;
-      if (!request || data.requestId !== request.id) return;
-
-      if (data.type !== "SYNC_BCSX_EVENTS_RESULT" && data.type !== "SYNC_BCSX_RESULT") return;
-      window.clearTimeout(request.timer);
-      if (!data.result?.ok || !data.result.payload) {
-        bcsxRequestRef.current = null;
-        setSyncingAll(false);
-        setError(data.result?.error || "Không đồng bộ được nhật ký sự kiện từ QLKT.");
-        return;
-      }
-      const rawPayload = data.result.payload as {
-        operatingDate?: string;
-        s1?: unknown;
-        s2?: unknown;
-        events?: { S1?: unknown[]; S2?: unknown[] };
-      };
-      if (rawPayload.operatingDate && rawPayload.operatingDate !== request.operatingDate) {
-        bcsxRequestRef.current = null;
-        setSyncingAll(false);
-        setError("QLKT trả về sự kiện không đúng ngày đã chọn. Chưa ghi dữ liệu vào hệ thống.");
-        return;
-      }
-      const rawEventsS1 = Array.isArray(rawPayload.s1)
-        ? rawPayload.s1
-        : Array.isArray(rawPayload.events?.S1)
-          ? rawPayload.events.S1
-          : [];
-      const rawEventsS2 = Array.isArray(rawPayload.s2)
-        ? rawPayload.s2
-        : Array.isArray(rawPayload.events?.S2)
-          ? rawPayload.events.S2
-          : [];
-
-      const mapEvents = (items: unknown[]): OperatingEvent[] => items.map(item => {
-        const event = item as Partial<OperatingEvent>;
-        return {
-          startAt: String(event.startAt || ""),
-          endAt: String(event.endAt || ""),
-          eventType: Number(event.eventType || 1),
-          description: String(event.description || "")
-        };
-      });
-      const s1 = mapEvents(rawEventsS1);
-      const s2 = mapEvents(rawEventsS2);
-      setNotice("Đang lưu nhật ký sự kiện S1 và S2 từ QLKT…");
-      try {
-        const response = await fetch("/api/bcsx-sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date: request.operatingDate, events: { S1: s1, S2: s2 } }),
-        });
-        const body = await response.json() as { error?: string };
-        if (!response.ok || body.error) throw new Error(body.error || "Không lưu được dữ liệu nhật ký sự kiện.");
-        setEvents({ S1: s1, S2: s2 });
-        setNotice(`Đã đồng bộ và lưu nhật ký sự kiện ngày ${request.operatingDate.split("-").reverse().join("/")}: S1 (${s1.length} sự kiện), S2 (${s2.length} sự kiện). Số liệu Mục 2 được liên kết từ Chỉ tiêu KTKT.`);
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "Đã lấy dữ liệu nhưng không lưu được vào hệ thống.");
-      } finally {
-        if (bcsxRequestRef.current?.id === request.id) bcsxRequestRef.current = null;
-        setSyncingAll(false);
-      }
-    };
-    window.addEventListener("message", handleMessage);
-    window.postMessage({ channel, sender: "ctktkt-web", type: "PING" }, window.location.origin);
-    return () => {
-      window.removeEventListener("message", handleMessage);
-      if (bcsxRequestRef.current) {
-        window.clearTimeout(bcsxRequestRef.current.timer);
-        bcsxRequestRef.current = null;
-      }
-    };
-  }, [operatingDate]);
+  const operationImportRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,11 +160,6 @@ export function BcsxReport() {
   const unitEvents = events[unit];
 
   function changeOperatingDate(nextDate: string) {
-    if (bcsxRequestRef.current) {
-      window.clearTimeout(bcsxRequestRef.current.timer);
-      bcsxRequestRef.current = null;
-    }
-    setSyncingAll(false);
     setOperatingDate(nextDate);
   }
 
@@ -405,39 +303,53 @@ export function BcsxReport() {
     }
   }
 
-  function setTotal(field: keyof TotalsDraft, value: string) {
-    setTotals(old => ({ ...old, [unit]: { ...old[unit], [field]: value } }));
+  async function importOperationCommands(files: FileList | null) {
+    if (!files || isViewer) return;
+    setImportingOperations(true); setError(null); setNotice(null);
+    try {
+      if (files.length !== 1) throw new Error("Hãy chọn đúng 1 file DanhSachLenhKetThuc dạng .xlsx.");
+      const formData = new FormData();
+      formData.append("file", files[0]);
+      formData.append("date", operatingDate);
+      const response = await fetch("/api/bcsx-operation-import", { method: "POST", body: formData });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error || "Không nhập được file lệnh điều độ.");
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] || "DH1_Thoi_gian_VH.xlsx";
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(downloadUrl);
+
+      const eventsResponse = await fetch("/api/operating-events?date=" + encodeURIComponent(operatingDate), { cache: "no-store" });
+      const eventsBody = await eventsResponse.json() as { events?: (OperatingEvent & { unit: Unit })[]; error?: string };
+      if (!eventsResponse.ok || eventsBody.error) throw new Error(eventsBody.error || "Đã lưu và tải file QLKT nhưng không tải lại được Mục 3.");
+      const nextEvents: Record<Unit, OperatingEvent[]> = { S1: [], S2: [] };
+      for (const event of eventsBody.events || []) nextEvents[event.unit]?.push(event);
+      setEvents(nextEvents);
+
+      const s1Count = Number(response.headers.get("X-BCSX-S1-Events") || nextEvents.S1.length);
+      const s2Count = Number(response.headers.get("X-BCSX-S2-Events") || nextEvents.S2.length);
+      const ignoredRows = Number(response.headers.get("X-BCSX-Ignored-Rows") || 0);
+      setNotice("Đã tự lưu Mục 3: S1 (" + s1Count + " sự kiện), S2 (" + s2Count + " sự kiện) và tải file QLKT " + fileName + (ignoredRows ? ". Bỏ qua " + ignoredRows + " dòng không thuộc lệnh thay đổi công suất hoàn thành." : "."));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Không nhập được file lệnh điều độ.");
+    } finally {
+      setImportingOperations(false);
+      if (operationImportRef.current) operationImportRef.current.value = "";
+    }
   }
 
-  function syncAllFromQlkt() {
-    setError(null); setNotice(null);
-    if (!canSyncQlkt) {
-      setError("Tài khoản chưa được cấp quyền đồng bộ QLKT.");
-      return;
-    }
-    if (!extensionVersion) {
-      window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
-      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.27 rồi nhấn F5 trang này.");
-      return;
-    }
-    if (bcsxRequestRef.current) window.clearTimeout(bcsxRequestRef.current.timer);
-    const requestId = crypto.randomUUID();
-    const timer = window.setTimeout(() => {
-      if (bcsxRequestRef.current?.id !== requestId) return;
-      bcsxRequestRef.current = null;
-      setSyncingAll(false);
-      setError("QLKT phản hồi quá lâu. Chưa ghi dữ liệu; hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.");
-    }, 180000);
-    bcsxRequestRef.current = { id: requestId, timer, operatingDate };
-    setSyncingAll(true);
-    setNotice("Đang đọc nhật ký sự kiện từ QLKT cho S1 và S2…");
-    window.postMessage({
-      channel: "ctktkt-qlkt-sync",
-      sender: "ctktkt-web",
-      type: "SYNC_BCSX_EVENTS",
-      requestId,
-      operatingDate,
-    }, window.location.origin);
+  function setTotal(field: keyof TotalsDraft, value: string) {
+    setTotals(old => ({ ...old, [unit]: { ...old[unit], [field]: value } }));
   }
 
   async function reloadTotalsFromCtktkt() {
@@ -720,15 +632,8 @@ export function BcsxReport() {
           <p className="text-xs text-slate-500">Nhập 1 lần trên web, xuất lại đúng định dạng file BCSX gửi Điều độ NSMO cho cả 3 tổ máy A0/S1/S2.</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${extensionVersion ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${extensionVersion ? "bg-emerald-500" : "bg-amber-500"}`} />
-            {extensionVersion ? `Tiện ích v${extensionVersion}` : "Chưa kết nối tiện ích"}
-          </span>
           <span className="text-xs font-bold text-slate-600">Ngày:</span>
           <DateField value={operatingDate} onChange={changeOperatingDate} className="w-[145px] h-8 text-xs"/>
-          <button type="button" disabled={syncingAll || isViewer} onClick={syncAllFromQlkt} className="h-8 rounded-lg bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3 text-xs font-bold text-white shadow-sm disabled:opacity-50">
-            {syncingAll ? "Đang đồng bộ nhật ký…" : "⚡ Đồng bộ nhật ký S1 & S2"}
-          </button>
           <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
             {(["S1", "S2"] as const).map(u => (
               <button key={u} type="button" onClick={() => setUnit(u)} className={`rounded-md px-3 py-1 text-xs font-bold transition ${unit === u ? "bg-[#334785] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
@@ -1017,9 +922,25 @@ export function BcsxReport() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-extrabold text-[#173b64]">3. Tình hình vận hành (nhật ký sự kiện) — tổ máy {unit}</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Đồng bộ tự động từ màn hình &quot;Thời gian/tình hình vận hành&quot; trên QLKT (được phân loại cho S1 và S2) hoặc nhập tay bổ sung.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Chọn file DanhSachLenhKetThuc: hệ thống tự nhận diện lệnh S1/S2, lưu ngay vào Mục 3 và tải file DH1 Thời gian vận hành để nhập lên QLKT. Có thể sửa tay sau khi nhập.</p>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            ref={operationImportRef}
+            type="file"
+            accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx"
+            className="hidden"
+            onChange={event => void importOperationCommands(event.target.files)}
+          />
+          <button
+            type="button"
+            disabled={importingOperations || saving || isViewer}
+            title={isViewer ? "Tài khoản Chỉ xem không có quyền nhập dữ liệu." : "Chọn file DanhSachLenhKetThuc; hệ thống tự lưu S1/S2 và xuất file QLKT"}
+            onClick={() => operationImportRef.current?.click()}
+            className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+          >
+            {importingOperations ? "Đang nhận diện và xuất…" : "Nhập file lệnh & xuất QLKT"}
+          </button>
           <button
             type="button"
             disabled={saving || isViewer}
@@ -1064,7 +985,7 @@ export function BcsxReport() {
             {unitEvents.length === 0 && (
               <tr>
                 <td colSpan={5} className="p-3 text-center text-slate-400 italic">
-                  Chưa có sự kiện nào cho tổ máy {unit} trong ngày {operatingDate.split("-").reverse().join("/")}. Bấm &quot;⚡ Đồng bộ toàn bộ S1 &amp; S2&quot; ở đầu trang hoặc thêm dòng thủ công.
+                  Chưa có sự kiện nào cho tổ máy {unit} trong ngày {operatingDate.split("-").reverse().join("/")}. Bấm &quot;Nhập file lệnh &amp; xuất QLKT&quot; hoặc thêm dòng thủ công.
                 </td>
               </tr>
             )}

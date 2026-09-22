@@ -85,15 +85,16 @@ test('extension package 0.4.28 supports unified sync and operation-hour totals',
   assert.match(content, /Trang hiện tại: "\$\{document\.title/);
 });
 
-test('BCSX syncs operating events from QLKT and sources Section 2 totals from CTKTKT', () => {
+test('BCSX imports operating events from the dispatch workbook and sources Section 2 totals from CTKTKT', () => {
   const source = readFileSync(new URL('../components/bcsx-report.tsx', import.meta.url), 'utf8');
   const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
   const ctktktSource = readFileSync(new URL('../components/ctktkt-report.tsx', import.meta.url), 'utf8');
-  const saveRoute = readFileSync(new URL('../app/api/bcsx-sync/route.ts', import.meta.url), 'utf8');
+  const importRoute = readFileSync(new URL('../app/api/bcsx-operation-import/route.ts', import.meta.url), 'utf8');
   const background = readFileSync(new URL('../public/qlkt-sync-extension/background.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.match(source, /Đồng bộ nhật ký S1 & S2/);
-  assert.match(source, /type: "SYNC_BCSX_EVENTS"/);
+  assert.match(source, /Nhập file lệnh & xuất QLKT/);
+  assert.match(source, /\/api\/bcsx-operation-import/);
+  assert.doesNotMatch(source, /type: "SYNC_BCSX_EVENTS"/);
   assert.match(dailySource, /type:"SYNC_ALL"/);
   assert.doesNotMatch(dailySource, /type:"SYNC_UNIFIED"/);
   assert.match(source, /\/api\/ctktkt-report/);
@@ -104,11 +105,11 @@ test('BCSX syncs operating events from QLKT and sources Section 2 totals from CT
   assert.match(background, /cell: entry\.cell \|\| entry\.fieldCode/);
   assert.match(background, /missingProduction = \["J157", "K157", "J158", "K158"\]/);
   assert.match(webBridge, /SYNC_PMIS_02PD/);
-  assert.match(source, /fetch\("\/api\/bcsx-sync"/);
-  assert.match(saveRoute, /requirePermission\("edit_bcsx"\)/);
+  assert.match(importRoute, /parseOperationCommandWorkbook/);
+  assert.match(importRoute, /requirePermission\("edit_bcsx"\)/);
 });
 
-test('each report keeps its own sync action and NH3 overlaps link from CTKTKT', () => {
+test('each report keeps its intended data action and NH3 overlaps link from CTKTKT', () => {
   const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
   const bcsxSource = readFileSync(new URL('../components/bcsx-report.tsx', import.meta.url), 'utf8');
   const ppaSource = readFileSync(new URL('../components/ppa-heat-rate-comparison.tsx', import.meta.url), 'utf8');
@@ -120,7 +121,7 @@ test('each report keeps its own sync action and NH3 overlaps link from CTKTKT', 
   assert.match(dailySource, /SYNC_ALL_RESULT/);
   assert.match(dailySource, /Thời gian sửa chữa\/bảo dưỡng/);
   assert.match(dailySource, /Đồng bộ dữ liệu ngày/);
-  assert.match(bcsxSource, /Đồng bộ nhật ký S1 & S2/);
+  assert.match(bcsxSource, /Nhập file lệnh & xuất QLKT/);
   assert.match(ppaSource, /Đồng bộ PPA từ QLKT/);
   assert.match(pmisSource, /Đồng bộ ngày/);
   assert.match(ctktktSource, /Đồng bộ PMIS & 02-PĐ/);

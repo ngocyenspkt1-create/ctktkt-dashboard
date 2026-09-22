@@ -1,5 +1,16 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 22/09/2026 — nhập lệnh điều độ trực tiếp cho Mục 3 BCSX
+
+- Mục 3 không còn nút đồng bộ sự kiện từ QLKT. Người dùng chọn một file DanhSachLenhKetThuc*.xlsx ngay trong Mục 3.
+- Máy chủ chỉ nhận lệnh thay đổi công suất đã hoàn thành của Duyên Hải 1, tự phân S1/S2, bỏ giây, nối công suất hoàn thành trước–sau theo từng tổ máy và lưu thay toàn bộ nhật ký ngày trong một giao dịch.
+- Cùng thao tác đó tự tải file DH1_Thoi_gian_VH_DD.MM.YYYY.xlsx, sheet DH1 TGVH, đủ 5 cột BĐ, KT, Mã SK, Sự kiện, TM để nhập lên QLKT.
+- File nguồn mẫu không đọc được bằng MarkItDown do stylesheet XML không hợp lệ; ExcelJS đọc được và được dùng làm bộ phân tích cấu trúc chính.
+- Đối chiếu file thật ngày 19/09/2026: 24/24 lệnh được nhận, S1 12 dòng, S2 12 dòng, đúng thời gian và thứ tự đến giây. Sáu khác biệt mô tả so với file mẫu đều do mẫu dùng câu sai kỹ thuật “Giảm tải S2 ... lên ...”; file mới dùng “về”.
+- Kiểm tra đạt: 138/138 test, TypeScript, ESLint phạm vi sửa và build production. File QA: .analysis/bcsx-operation-import/DH1_Thoi_gian_VH_generated.xlsx.
+- npm.cmd run storage:check chưa truy cập được Turso vì môi trường local thiếu TURSO_DATABASE_URL; chưa có số liệu để kết luận mức sử dụng. Vercel/Turso dashboard chưa được kiểm tra trong lượt local này.
+- Chưa commit, chưa push, chưa deploy. Bước nghiệm thu tiếp theo: đăng nhập bằng tài khoản có quyền sửa BCSX, chọn ngày 19/09/2026, nhập file thật, xác nhận Mục 3 S1/S2 và thử upload file vừa tải lên QLKT.
+
 ## Cập nhật 22/09/2026 — QLKT bắt buộc, sửa đồng bộ PMIS và sự kiện đốt dầu
 
 - Cụm 1 chỉ dùng sản lượng QLKT tại `J157/K157/J158/K158`; thiếu ô nào thì để trống, không quay về chênh công tơ.
