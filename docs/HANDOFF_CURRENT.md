@@ -1,5 +1,12 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 22/09/2026 — QLKT bắt buộc, sửa đồng bộ PMIS và sự kiện đốt dầu
+
+- Cụm 1 chỉ dùng sản lượng QLKT tại `J157/K157/J158/K158`; thiếu ô nào thì để trống, không quay về chênh công tơ.
+- Sửa hợp đồng đồng bộ PMIS từ tiện ích: chuẩn hóa `fieldCode` thành `cell`, chặn lưu khi thiếu một trong bốn ô sản lượng và nâng tiện ích lên `0.4.28`.
+- Sự kiện đốt dầu lưu rõ tổ máy, giờ bắt đầu, giờ hòa lưới, giờ/tải tối thiểu; tính riêng dầu từ bắt đầu đến hòa lưới và từ hòa lưới đến tải tối thiểu theo công tơ cấp trừ công tơ hồi.
+- File Excel xuất ghi lại ba mốc, lượng dầu từng giai đoạn và tổng dầu sự kiện.
+
 ## Cập nhật 20/09/2026 — Chuẩn hóa nhãn ca 08h/16h/24h
 
 ### Đã làm

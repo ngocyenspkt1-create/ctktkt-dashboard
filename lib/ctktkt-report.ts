@@ -15,12 +15,33 @@ export type CtktktKpis = {
 export type CtktktSummary = { s1: CtktktKpis; s2: CtktktKpis; plant: CtktktKpis };
 
 export type Nh3Summary = {
+  tankMassTotal: number | null;
   tankAvailable: Array<number | null>;
+  tankAvailableTotal: number | null;
   stock24h: number | null;
   usedTonnes: number | null;
   rateGross: number | null;
   rateNet: number | null;
 };
+
+export const NH3_TANK_ROWS = [69, 70, 71] as const;
+export const NH3_START_LEVEL_CELLS = new Set(NH3_TANK_ROWS.map(row => `N${row}`));
+
+export function deriveNh3StartLevels(previous?: CtktktDayEntries): CtktktDayEntries {
+  const derived: CtktktDayEntries = {};
+  for (const row of NH3_TANK_ROWS) {
+    const previousEndLevel = previous?.[`O${row}`]?.trim();
+    if (previousEndLevel) derived[`N${row}`] = previousEndLevel;
+  }
+  return derived;
+}
+
+export function applyNh3StartLevelCarryover(
+  entries: CtktktDayEntries,
+  previous?: CtktktDayEntries,
+): CtktktDayEntries {
+  return { ...entries, ...deriveNh3StartLevels(previous) };
+}
 
 export type CoalShiftDetail = {
   unit: "S1" | "S2";
@@ -164,12 +185,9 @@ function unitKpis(
   hhvKjKg: number | null,
 ): CtktktKpis {
   const isS1 = unit === "s1";
-  const endColumn = isS1 ? "AB" : "AL";
-  const grossMwh = difference(numberOf(current, `${endColumn}8`), numberOf(previous, `${endColumn}8`));
-  const netMwh = difference(numberOf(current, `${endColumn}9`), numberOf(previous, `${endColumn}9`));
-  const auxiliary1 = difference(numberOf(current, `${endColumn}10`), numberOf(previous, `${endColumn}10`));
-  const auxiliary2 = difference(numberOf(current, `${endColumn}11`), numberOf(previous, `${endColumn}11`));
-  const auxiliaryMwh = sum([auxiliary1, auxiliary2]);
+  const grossMwh = numberOf(current, isS1 ? "J157" : "J158");
+  const netMwh = numberOf(current, isS1 ? "K157" : "K158");
+  const auxiliaryMwh = grossMwh === null || netMwh === null ? null : grossMwh - netMwh;
 
   const { rawCoalTonnes, adjustedCoalTonnes } = coal;
   const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
@@ -223,7 +241,10 @@ export function calculateNh3Summary(
   grossMwh: number | null,
   netMwh: number | null,
 ): Nh3Summary {
-  const tankMasses = [69, 70, 71].map(row => numberOf(entries, `P${row}`));
+  const tankMasses = NH3_TANK_ROWS.map(row => numberOf(entries, `P${row}`));
+  const tankMassTotal = tankMasses.some(value => value === null) ? null : sum(tankMasses);
+  const tankAvailable = tankMasses.map(value => value === null ? null : value * 0.95);
+  const tankAvailableTotal = tankAvailable.some(value => value === null) ? null : sum(tankAvailable);
   // P74 is a separately entered 24h total in the source workbook. P75 uses
   // that cell directly; it does not recalculate P74 from the three tank rows.
   const stock24h = numberOf(entries, "P74")
@@ -245,7 +266,9 @@ export function calculateNh3Summary(
   const rateGrossMwh = pmisGross ?? grossMwh;
   const rateNetMwh = pmisNet ?? netMwh;
   return {
-    tankAvailable: tankMasses.map(value => value === null ? null : value * 0.95),
+    tankMassTotal,
+    tankAvailable,
+    tankAvailableTotal,
     stock24h,
     usedTonnes,
     rateGross: divide(usedTonnes, rateGrossMwh, 1000),
@@ -337,6 +360,34 @@ export function calculateOilDifferences(
         : null,
     };
   });
+}
+
+export type IncidentOilSummary = {
+  startToGridTonnes: number | null;
+  gridToMinLoadTonnes: number | null;
+  totalTonnes: number | null;
+};
+
+function incidentOilPhase(entries: CtktktDayEntries, fromColumn: string, toColumn: string) {
+  const supplyFrom = numberOf(entries, `${fromColumn}87`);
+  const returnFrom = numberOf(entries, `${fromColumn}88`);
+  const supplyTo = numberOf(entries, `${toColumn}87`);
+  const returnTo = numberOf(entries, `${toColumn}88`);
+  if (supplyFrom === null || returnFrom === null || supplyTo === null || returnTo === null) return null;
+  return (supplyTo - supplyFrom) - (returnTo - returnFrom);
+}
+
+export function calculateIncidentOilSummary(entries: CtktktDayEntries): IncidentOilSummary {
+  // C = bắt đầu đốt dầu, E = hòa lưới, D = đạt tải tối thiểu / chốt công tơ.
+  const startToGridTonnes = incidentOilPhase(entries, "C", "E");
+  const gridToMinLoadTonnes = incidentOilPhase(entries, "E", "D");
+  return {
+    startToGridTonnes,
+    gridToMinLoadTonnes,
+    totalTonnes: startToGridTonnes === null || gridToMinLoadTonnes === null
+      ? null
+      : startToGridTonnes + gridToMinLoadTonnes,
+  };
 }
 
 export const STEAM_HOURS = [

@@ -412,11 +412,19 @@ async function syncPmis02Pd(operatingDate) {
   const entries = new Map();
   (production.entries || []).forEach(e => entries.set(e.fieldCode, e));
   (pmis02pd.entries || []).forEach(e => entries.set(e.fieldCode, e));
+  const normalizedEntries = [...entries.values()]
+    .map(entry => ({ cell: entry.cell || entry.fieldCode, value: String(entry.value ?? "") }))
+    .filter(entry => entry.cell && entry.value !== "");
+  const received = new Set(normalizedEntries.map(entry => entry.cell));
+  const missingProduction = ["J157", "K157", "J158", "K158"].filter(cell => !received.has(cell));
+  if (missingProduction.length) {
+    throw new Error(`Màn hình Sản lượng chưa đọc đủ ${missingProduction.join(", ")}. Tiện ích đã dừng để không ghi thiếu sản lượng QLKT.`);
+  }
   return {
     version: 1,
     operatingDate,
     sourcePage: "QLKT · PMIS 02-PĐ & Sản lượng",
-    entries: [...entries.values()],
+    entries: normalizedEntries,
   };
 }
 

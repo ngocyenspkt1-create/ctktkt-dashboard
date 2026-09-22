@@ -11,7 +11,10 @@ function coalMeters(entries, columns, totals) {
 
 test("CTKTKT uses full-precision meter differences and the 8.5% moisture basis", () => {
   const previous = { AB8: "1000", AB9: "900", AB10: "100", AB11: "50", AL8: "2000", AL9: "1800", AL10: "200", AL11: "100" };
-  const current = { AB8: "1100", AB9: "990", AB10: "106", AB11: "54", AL8: "2100", AL9: "1890", AL10: "206", AL11: "104" };
+  const current = {
+    AB8: "1100", AB9: "990", AB10: "106", AB11: "54", AL8: "2100", AL9: "1890", AL10: "206", AL11: "104",
+    J157: "100", K157: "90", J158: "100", K158: "90",
+  };
   coalMeters(previous, ["X", "Z", "AB"], [0, 0, 0]);
   coalMeters(previous, ["AH", "AJ", "AL"], [0, 0, 0]);
   coalMeters(current, ["X", "Z", "AB"], [10, 20, 30]);
@@ -27,6 +30,52 @@ test("CTKTKT uses full-precision meter differences and the 8.5% moisture basis",
   assert.ok(Math.abs(result.s1.netHeatRate - 6384.87) < 0.000001);
   assert.equal(result.plant.grossMwh, 200);
   assert.equal(result.plant.netMwh, 180);
+});
+
+test("CTKTKT summary prefers complete PMIS production pairs for both units", () => {
+  const previous = { AB8: "1000", AB9: "900", AB10: "100", AB11: "50", AL8: "2000", AL9: "1800", AL10: "200", AL11: "100" };
+  const current = {
+    AB8: "1100", AB9: "990", AB10: "106", AB11: "54",
+    AL8: "2100", AL9: "1890", AL10: "206", AL11: "104",
+    J157: "120", K157: "100", J158: "130", K158: "110",
+  };
+  coalMeters(previous, ["X", "Z", "AB"], [0, 0, 0]);
+  coalMeters(previous, ["AH", "AJ", "AL"], [0, 0, 0]);
+  coalMeters(current, ["X", "Z", "AB"], [10, 20, 30]);
+  coalMeters(current, ["AH", "AJ", "AL"], [10, 20, 30]);
+  for (const row of [87, 88, 89, 90, 91, 92]) { current[`AJ${row}`] = "8.5"; current[`AK${row}`] = "5000"; }
+
+  const result = calculateCtktktSummary(current, previous);
+  assert.equal(result.s1.grossMwh, 120);
+  assert.equal(result.s1.netMwh, 100);
+  assert.equal(result.s1.auxiliaryMwh, 20);
+  assert.ok(Math.abs(result.s1.auxiliaryPercent - 100 / 6) < 1e-12);
+  assert.equal(result.s1.netCoalRate, 300);
+  assert.equal(result.s2.grossMwh, 130);
+  assert.equal(result.s2.netMwh, 110);
+  assert.equal(result.s2.auxiliaryMwh, 20);
+  assert.equal(result.plant.grossMwh, 250);
+  assert.equal(result.plant.netMwh, 210);
+  assert.equal(result.plant.auxiliaryMwh, 40);
+});
+
+test("CTKTKT summary never falls back to meter differences when a QLKT pair is incomplete", () => {
+  const previous = { AB8: "1000", AB9: "900", AB10: "100", AB11: "50", AL8: "2000", AL9: "1800", AL10: "200", AL11: "100" };
+  const current = {
+    AB8: "1100", AB9: "990", AB10: "106", AB11: "54",
+    AL8: "2100", AL9: "1890", AL10: "206", AL11: "104",
+    J157: "120", J158: "130", K158: "110",
+  };
+
+  const result = calculateCtktktSummary(current, previous);
+  assert.equal(result.s1.grossMwh, 120);
+  assert.equal(result.s1.netMwh, null);
+  assert.equal(result.s1.auxiliaryMwh, null);
+  assert.equal(result.s2.grossMwh, 130);
+  assert.equal(result.s2.netMwh, 110);
+  assert.equal(result.s2.auxiliaryMwh, 20);
+  assert.equal(result.plant.grossMwh, 250);
+  assert.equal(result.plant.netMwh, null);
 });
 
 test("CTKTKT does not invent results when previous-day readings are missing", () => {
@@ -76,6 +125,18 @@ test("calculateOilDifferences follows Excel: delta F1 minus delta F2, with D-1 f
   assert.equal(s2[0].diff, 50);
 });
 
+test("incident oil consumption is split from oil start to grid and grid to minimum load", async () => {
+  const { calculateIncidentOilSummary } = await import("../lib/ctktkt-report.ts");
+  const result = calculateIncidentOilSummary({
+    C87: "100", C88: "20",
+    E87: "130", E88: "25",
+    D87: "150", D88: "27",
+  });
+  assert.equal(result.startToGridTonnes, 25);
+  assert.equal(result.gridToMinLoadTonnes, 18);
+  assert.equal(result.totalTonnes, 43);
+});
+
 test("CTKTKT ignores legacy Sub-bituminous fields and calculates 6A10 only", () => {
   const previous = { AB8: "1000", AB9: "900", AB10: "100", AB11: "50", AL8: "2000", AL9: "1800", AL10: "200", AL11: "100" };
   const current = { AB8: "1100", AB9: "990", AB10: "106", AB11: "54", AL8: "2100", AL9: "1890", AL10: "206", AL11: "104" };
@@ -117,12 +178,26 @@ test("calculateSteamDifferences computes step consumption correctly", async () =
 test("NH3 consumption follows Excel P75 and uses the manually entered P74 total", async () => {
   const { calculateNh3Summary } = await import("../lib/ctktkt-report.ts");
   const result = calculateNh3Summary({
-    P69: "46123", P70: "47.377", P71: "48.095",
+    P69: "46.123", P70: "47.377", P71: "48.095",
     P72: "42.21", P73: "117.891", P74: "141.595",
     J157: "12107", J158: "12117.5", K157: "11120", K158: "11210.9",
   }, null, null);
   assert.equal(result.stock24h, 141.595);
+  assert.equal(result.tankMassTotal, 141.595);
+  assert.ok(Math.abs(result.tankAvailableTotal - 134.51525) < 1e-9);
   assert.equal(result.usedTonnes, 18.506);
   assert.ok(Math.abs(result.rateGross - 0.763937336168) < 1e-12);
   assert.ok(Math.abs(result.rateNet - 0.828717158735) < 1e-12);
+});
+
+test("NH3 00h levels carry over from the previous day's 24h levels", async () => {
+  const { applyNh3StartLevelCarryover } = await import("../lib/ctktkt-report.ts");
+  const result = applyNh3StartLevelCarryover(
+    { N69: "old-a", N70: "old-b", N71: "old-c", O69: "1900" },
+    { O69: "640", O70: "1870", O71: "2540" },
+  );
+  assert.equal(result.N69, "640");
+  assert.equal(result.N70, "1870");
+  assert.equal(result.N71, "2540");
+  assert.equal(result.O69, "1900");
 });

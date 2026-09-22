@@ -6,19 +6,19 @@ import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXT
 import '../public/qlkt-sync-extension/meter-extract.js';
 
 test('web blocks old QLKT extensions and prefers reload over downloading again', () => {
-  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.27');
-  assert.equal(isQlktExtensionOutdated('0.4.26'), true);
-  assert.equal(isQlktExtensionOutdated('0.4.27'), false);
+  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.28');
+  assert.equal(isQlktExtensionOutdated('0.4.27'), true);
+  assert.equal(isQlktExtensionOutdated('0.4.28'), false);
   assert.equal(isQlktExtensionOutdated('0.4.28'), false);
   assert.equal(isQlktExtensionOutdated(''), false);
-  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.27/);
+  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.28/);
   const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
   assert.match(dailySource, /Ưu tiên Reload — không cần tải lại mỗi lần/);
   assert.match(dailySource, /Đã Reload — kiểm tra lại/);
   assert.doesNotMatch(dailySource, /document\.createElement\("a"\)/);
 });
 
-test('extension package 0.4.27 supports unified sync and operation-hour totals', () => {
+test('extension package 0.4.28 supports unified sync and operation-hour totals', () => {
   const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
@@ -30,7 +30,7 @@ test('extension package 0.4.27 supports unified sync and operation-hour totals',
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
   const popup = readFileSync(new URL('../public/qlkt-sync-extension/popup.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.27');
+  assert.equal(manifest.version, '0.4.28');
   assert.ok(manifest.host_permissions.includes('https://ctktkt-dashboard.vercel.app/*'));
   assert.ok(manifest.content_scripts.some(item => item.js.includes('web-bridge.js') && item.matches.includes('https://ctktkt-dashboard.vercel.app/*')));
   assert.match(webBridge, /\/bcsx-report/);
@@ -41,7 +41,7 @@ test('extension package 0.4.27 supports unified sync and operation-hour totals',
   assert.match(background, /SYNC_BCSX_EVENTS_QLKT/);
   assert.match(background, /SYNC_UNIFIED_QLKT/);
   assert.match(background, /async function syncUnified\(operatingDate\)/);
-  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.27"/);
+  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.28"/);
   assert.match(background, /operation: \["F", "L", "CS", "CT", "CU", "CV"\]/);
   assert.match(background, /source === "operation" \? DEFAULT_OPERATION_URL/);
   assert.match(content, /const firstUnit = originalUnit \|\| "1"/);
@@ -101,6 +101,8 @@ test('BCSX syncs operating events from QLKT and sources Section 2 totals from CT
   assert.match(ctktktSource, /SYNC_PMIS_02PD/);
   assert.match(background, /async function syncPmis02Pd\(operatingDate\)/);
   assert.match(background, /SYNC_PMIS_02PD_QLKT/);
+  assert.match(background, /cell: entry\.cell \|\| entry\.fieldCode/);
+  assert.match(background, /missingProduction = \["J157", "K157", "J158", "K158"\]/);
   assert.match(webBridge, /SYNC_PMIS_02PD/);
   assert.match(source, /fetch\("\/api\/bcsx-sync"/);
   assert.match(saveRoute, /requirePermission\("edit_bcsx"\)/);

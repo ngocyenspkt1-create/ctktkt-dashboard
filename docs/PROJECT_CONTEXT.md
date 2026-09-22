@@ -32,7 +32,7 @@
 | Cơ sở dữ liệu | Turso/libSQL qua `@libsql/client/http` |
 | Xác thực | Cookie JWT, khóa `AUTH_SECRET` từ biến môi trường |
 | Triển khai | Vercel |
-| Tiện ích QLKT | Chrome/Edge Manifest V3, phiên bản `0.4.27` |
+| Tiện ích QLKT | Chrome/Edge Manifest V3, phiên bản `0.4.28` |
 
 Biến môi trường quan trọng: `AUTH_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`. Không ghi token, mật khẩu hoặc URL Apps Script có mã bí mật vào Git.
 

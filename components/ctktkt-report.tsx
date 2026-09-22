@@ -42,9 +42,12 @@ import {
   calculateCtktktSummary,
   calculateTkdDcsSummary,
   calculateOilDifferences,
+  calculateIncidentOilSummary,
   calculateSteamDifferences,
   calculateNh3Summary,
   calculateCoalShiftDetails,
+  applyNh3StartLevelCarryover,
+  NH3_START_LEVEL_CELLS,
   previousIsoDate,
   TKD_HOURS,
   OIL_HOURS,
@@ -61,6 +64,7 @@ import {
 } from "@/lib/ctktkt-extra-fields";
 import { parseSpreadsheetClipboard } from "@/lib/spreadsheet-grid";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
+import { isQlktExtensionOutdated, REQUIRED_QLKT_EXTENSION_VERSION } from "@/lib/qlkt-extension-version";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
@@ -85,6 +89,32 @@ type MainTab =
   | "startup_shutdown"
   | "pmis_reports"
   | "all_fields";
+
+type StartupUnit = "S1" | "S2";
+type StartupEvent = "startup" | "shutdown" | "incident_oil";
+
+const STARTUP_UNITS: Array<{ value: StartupUnit; label: string }> = [
+  { value: "S1", label: "Tổ máy S1" },
+  { value: "S2", label: "Tổ máy S2" },
+];
+
+const STARTUP_EVENTS: Array<{ value: StartupEvent; label: string }> = [
+  { value: "startup", label: "Khởi động" },
+  { value: "shutdown", label: "Ngừng" },
+  { value: "incident_oil", label: "Đốt dầu do sự cố" },
+];
+
+const STARTUP_METER_COLUMNS = [
+  { column: "C", label: "Khởi động" },
+  { column: "D", label: "Ngừng đốt lò" },
+  { column: "E", label: "Hòa lưới I" },
+  { column: "F", label: "Tách lưới I" },
+  { column: "G", label: "Hòa lưới II" },
+  { column: "H", label: "Tách lưới II" },
+] as const;
+
+const PMIS_PRODUCTION_CELLS = ["J157", "K157", "J158", "K158"] as const;
+const QLKT_PRODUCTION_CELLS = new Set<string>(PMIS_PRODUCTION_CELLS);
 
 const editableFields = [
   ...CTKTKT_INPUT_FIELDS.filter(
@@ -224,6 +254,7 @@ export function CtktktReport() {
   const [allViewMode, setAllViewMode] = useState<"dense" | "matrix" | "cards">("dense");
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [extensionVersion, setExtensionVersion] = useState("");
+  const extensionOutdated = isQlktExtensionOutdated(extensionVersion);
   const [syncingPmis, setSyncingPmis] = useState(false);
   const pmisRequestRef = useRef<{ id: string; timer: number; operatingDate: string } | null>(null);
   const importFileRef = useRef<HTMLInputElement | null>(null);
@@ -267,6 +298,14 @@ export function CtktktReport() {
         pmisRequestRef.current = null;
         setSyncingPmis(false);
         setError("Dữ liệu QLKT trả về không đúng ngày hoặc cấu trúc không hợp lệ.");
+        return;
+      }
+      const receivedCells = new Set(payload.entries.map(entry => entry.cell));
+      const missingProduction = PMIS_PRODUCTION_CELLS.filter(cell => !receivedCells.has(cell));
+      if (missingProduction.length) {
+        pmisRequestRef.current = null;
+        setSyncingPmis(false);
+        setError(`QLKT chưa trả đủ sản lượng ${missingProduction.join(", ")}; hệ thống không lưu dữ liệu thiếu.`);
         return;
       }
       const updates: Record<string, string> = {};
@@ -354,6 +393,13 @@ export function CtktktReport() {
     return () => controller.abort();
   }, [period]);
 
+  const previousDate = previousIsoDate(date);
+  const previous = useMemo(() => {
+    const manual = byDate[previousDate];
+    const linked = linkedByDate[previousDate];
+    return manual || linked ? { ...(manual || {}), ...(linked || {}) } : undefined;
+  }, [byDate, linkedByDate, previousDate]);
+
   const current = useMemo(() => {
     const manual = byDate[date] || {};
     const linked = linkedByDate[date] || {};
@@ -372,15 +418,17 @@ export function CtktktReport() {
     // Công suất đặt DH1 là thông số cố định của nhà máy, dùng làm giá trị mặc định
     // bất kể file hoặc QLKT trả về giá trị nào cho ô C181.
     combined[CTKTKT_INSTALLED_CAPACITY_CELL] = CTKTKT_INSTALLED_CAPACITY_MW;
-    return combined;
-  }, [byDate, linkedByDate, date]);
+    return applyNh3StartLevelCarryover(combined, previous);
+  }, [byDate, linkedByDate, date, previous]);
 
-  const previousDate = previousIsoDate(date);
-  const previous = useMemo(() => {
-    const manual = byDate[previousDate];
-    const linked = linkedByDate[previousDate];
-    return manual || linked ? { ...(manual || {}), ...(linked || {}) } : undefined;
-  }, [byDate, linkedByDate, previousDate]);
+  const startupUnit: StartupUnit | "" = current.STARTUP_UNIT === "S1" || current.STARTUP_UNIT === "S2"
+    ? current.STARTUP_UNIT
+    : "";
+  const startupEvent: StartupEvent | "" = STARTUP_EVENTS.some(item => item.value === current.STARTUP_EVENT)
+    ? current.STARTUP_EVENT as StartupEvent
+    : "";
+  const incidentOilSummary = calculateIncidentOilSummary(current);
+  const canEditStartupMetadata = canEditCtktktField(user, "STARTUP_UNIT");
 
   const selectedWarnings = useMemo(
     () => linkWarnings.filter(item => item.operatingDate === date),
@@ -487,7 +535,11 @@ export function CtktktReport() {
     }
     if (!extensionVersion) {
       window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
-      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.27 rồi thử lại.");
+      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.28 rồi thử lại.");
+      return;
+    }
+    if (extensionOutdated) {
+      setError(`Tiện ích v${extensionVersion} đã cũ. Hãy Reload tiện ích v${REQUIRED_QLKT_EXTENSION_VERSION}, sau đó Ctrl+F5 trang web.`);
       return;
     }
     if (pmisRequestRef.current) window.clearTimeout(pmisRequestRef.current.timer);
@@ -851,8 +903,10 @@ export function CtktktReport() {
     },
   ) => {
     const isWaterLinked = CTKTKT_WATER_LINKED_CELLS.has(cell);
+    const isQlktProduction = QLKT_PRODUCTION_CELLS.has(cell);
     const isFixed = cell === CTKTKT_INSTALLED_CAPACITY_CELL;
-    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isFixed;
+    const isNh3Carryover = NH3_START_LEVEL_CELLS.has(cell);
+    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isQlktProduction || isFixed || isNh3Carryover;
     const canEditThis = !isLinked && canEditCtktktField(user, cell);
     const value = current[cell] || "";
 
@@ -860,7 +914,9 @@ export function CtktktReport() {
     const tooltip = isLinked
       ? isFixed
         ? `${cell}: Công suất đặt cố định của NMNĐ Duyên Hải 1 (${CTKTKT_INSTALLED_CAPACITY_MW} MW)`
-        : `${cell}: Liên kết tự động từ ${isWaterLinked ? "Theo dõi lượng nước" : "BCSX mục 1"}`
+        : isNh3Carryover
+          ? `${cell}: Tự động lấy từ mức 24h ngày D-1`
+          : `${cell}: Liên kết tự động từ ${isQlktProduction ? "QLKT · Sản lượng" : isWaterLinked ? "Theo dõi lượng nước" : "BCSX mục 1"}`
       : canEditThis
         ? `${cell}: Bạn có quyền nhập liệu (Phím mũi tên để chuyển ô, Ctrl+V để dán nhiều ô)`
         : `${cell}: Khóa (Chỉ ${groupMeta?.responsible || "cương vị được phân công"} nhập)`;
@@ -1081,7 +1137,7 @@ export function CtktktReport() {
               Cụm 1 · Thống kê chỉ tiêu KTKT NMNĐ Duyên Hải 1
             </h2>
             <span className="text-[11px] text-slate-500">
-              (Công thức khóa tự tính · Nhập I35, I36)
+              (Sản lượng liên kết PMIS 02-PĐ · Công thức khóa tự tính · Nhập I35, I36)
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -2631,6 +2687,17 @@ export function CtktktReport() {
                             {format(nh3.tankAvailable[2])}
                           </td>
                         </tr>
+                        <tr className="border-t-2 border-slate-300 bg-indigo-50/70">
+                          <td className="p-2 font-black text-[#173b64] font-sans" colSpan={3}>
+                            Tổng 3 bồn
+                          </td>
+                          <td className="p-2 text-right font-black text-[#173b64]">
+                            {format(nh3.tankMassTotal)}
+                          </td>
+                          <td className="p-2 text-right font-black text-indigo-900">
+                            {format(nh3.tankAvailableTotal)}
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
@@ -2793,11 +2860,10 @@ export function CtktktReport() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 pb-2 mb-3">
                   <div>
                     <h3 className="text-sm font-black text-amber-950">
-                      Cụm 11: Bảng công tơ dầu khi Khởi động / Ngừng tổ máy
+                      Cụm 11: Sự kiện tổ máy và công tơ dầu
                     </h3>
                     <p className="text-xs text-amber-900">
-                      Chỉ nhập khi có sự kiện khởi động hoặc ngừng tổ máy (Dầu cấp lò S2 & Lò hơi
-                      phụ).
+                      Chỉ nhập khi có sự kiện khởi động, ngừng tổ máy hoặc đốt dầu do sự cố.
                     </p>
                   </div>
                   <span className="rounded-md bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-900">
@@ -2805,102 +2871,175 @@ export function CtktktReport() {
                   </span>
                 </div>
 
+                <div className="mb-3 grid gap-3 rounded-lg border border-amber-200 bg-white p-3 sm:grid-cols-2">
+                  <div>
+                    <span className="mb-1.5 block text-xs font-bold text-amber-950">Tổ máy</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {STARTUP_UNITS.map(item => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          disabled={!canEditStartupMetadata || loading}
+                          onClick={() => update("STARTUP_UNIT", item.value)}
+                          className={`h-9 rounded-lg border text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${startupUnit === item.value
+                            ? "border-amber-700 bg-amber-700 text-white"
+                            : "border-amber-200 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="mb-1.5 block text-xs font-bold text-amber-950">Loại sự kiện</span>
+                    <div className="grid grid-cols-3 gap-2">
+                      {STARTUP_EVENTS.map(item => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          disabled={!canEditStartupMetadata || loading}
+                          onClick={() => update("STARTUP_EVENT", item.value)}
+                          className={`min-h-9 rounded-lg border px-2 text-xs font-bold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${startupEvent === item.value
+                            ? "border-amber-700 bg-amber-700 text-white"
+                            : "border-amber-200 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {(!startupUnit || !startupEvent) && (
+                  <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                    Hãy chọn rõ tổ máy S1/S2 và loại sự kiện trước khi nhập số liệu công tơ dầu.
+                  </div>
+                )}
+
+                {startupEvent === "incident_oil" ? (
+                  <div className="space-y-3">
+                    <div className="grid gap-3 rounded-lg border border-orange-200 bg-orange-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <label className="grid gap-1 text-xs font-bold text-orange-950">
+                        Giờ bắt đầu đốt dầu
+                        {renderCellInput("STARTUP_OIL_START_TIME", { group: "startup_shutdown", isNumber: false, placeholder: "HH:mm" })}
+                      </label>
+                      <label className="grid gap-1 text-xs font-bold text-orange-950">
+                        Giờ hòa lưới
+                        {renderCellInput("STARTUP_GRID_SYNC_TIME", { group: "startup_shutdown", isNumber: false, placeholder: "HH:mm" })}
+                      </label>
+                      <label className="grid gap-1 text-xs font-bold text-orange-950">
+                        Giờ đạt tải tối thiểu
+                        {renderCellInput("STARTUP_MIN_LOAD_TIME", { group: "startup_shutdown", isNumber: false, placeholder: "HH:mm" })}
+                      </label>
+                      <label className="grid gap-1 text-xs font-bold text-orange-950">
+                        Tải tối thiểu (MW)
+                        {renderCellInput("STARTUP_MIN_LOAD_MW", { group: "startup_shutdown", placeholder: "MW" })}
+                      </label>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-lg border bg-white">
+                      <table className="w-full min-w-[720px] text-xs">
+                        <thead>
+                          <tr className="bg-[#fef9f0] text-amber-950">
+                            <th className="w-64 p-2 text-left font-bold">Chỉ số công tơ dầu · {startupUnit || "chưa chọn tổ máy"}</th>
+                            <th className="p-2 text-center font-bold">Bắt đầu đốt dầu</th>
+                            <th className="p-2 text-center font-bold">Hòa lưới</th>
+                            <th className="p-2 text-center font-bold">Đạt tải tối thiểu / chốt dầu</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-mono">
+                          <tr>
+                            <td className="p-2 font-sans font-bold text-slate-800">Công tơ dầu cấp lò</td>
+                            {(["C", "E", "D"] as const).map(column => (
+                              <td key={column} className="p-1.5">{renderCellInput(`${column}87`, { group: "startup_shutdown" })}</td>
+                            ))}
+                          </tr>
+                          <tr>
+                            <td className="p-2 font-sans font-bold text-slate-800">Công tơ dầu hồi về</td>
+                            {(["C", "E", "D"] as const).map(column => (
+                              <td key={column} className="p-1.5">{renderCellInput(`${column}88`, { group: "startup_shutdown" })}</td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-lg border border-orange-200 bg-white p-3 text-center">
+                        <div className="text-[11px] font-semibold text-slate-500">Bắt đầu đốt dầu → hòa lưới</div>
+                        <div className="mt-1 text-base font-black text-orange-800">{format(incidentOilSummary.startToGridTonnes)} tấn</div>
+                      </div>
+                      <div className="rounded-lg border border-orange-200 bg-white p-3 text-center">
+                        <div className="text-[11px] font-semibold text-slate-500">Hòa lưới → đạt tải tối thiểu</div>
+                        <div className="mt-1 text-base font-black text-orange-800">{format(incidentOilSummary.gridToMinLoadTonnes)} tấn</div>
+                      </div>
+                      <div className="rounded-lg border border-orange-300 bg-orange-100 p-3 text-center">
+                        <div className="text-[11px] font-bold text-orange-900">Tổng dầu sự kiện</div>
+                        <div className="mt-1 text-base font-black text-orange-950">{format(incidentOilSummary.totalTonnes)} tấn</div>
+                      </div>
+                    </div>
+                    <p className="text-[11px] font-semibold text-orange-900">
+                      Công thức từng giai đoạn: (công tơ cấp cuối − công tơ cấp đầu) − (công tơ hồi cuối − công tơ hồi đầu).
+                    </p>
+                  </div>
+                ) : (
                 <div className="overflow-x-auto rounded-lg border bg-white">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-[#fef9f0] text-amber-950">
                         <th className="p-2 text-left font-bold w-64">Chỉ số công tơ dầu</th>
-                        <th className="p-2 text-center font-bold">Khởi động</th>
-                        <th className="p-2 text-center font-bold">Hòa lưới I</th>
-                        <th className="p-2 text-center font-bold">Tách lưới I</th>
-                        <th className="p-2 text-center font-bold">Hòa lưới II</th>
-                        <th className="p-2 text-center font-bold">Tách lưới II</th>
+                        {STARTUP_METER_COLUMNS.map(item => (
+                          <th key={item.column} className="p-2 text-center font-bold">{item.label}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono">
                       <tr>
                         <td className="p-2 font-bold text-slate-800 font-sans">
-                          Công tơ dầu cấp lò S2
+                          Công tơ dầu cấp lò {startupUnit || "chưa chọn tổ máy"}
                         </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("C87", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("D87", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("E87", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("F87", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("G87", { group: "startup_shutdown" })}
-                        </td>
+                        {STARTUP_METER_COLUMNS.map(item => (
+                          <td key={item.column} className="p-1.5 text-center">
+                            {renderCellInput(`${item.column}87`, { group: "startup_shutdown" })}
+                          </td>
+                        ))}
                       </tr>
                       <tr>
                         <td className="p-2 font-bold text-slate-800 font-sans">
-                          Công tơ dầu về lò S2
+                          Công tơ dầu về lò {startupUnit || "chưa chọn tổ máy"}
                         </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("C88", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("D88", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("E88", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("F88", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("G88", { group: "startup_shutdown" })}
-                        </td>
+                        {STARTUP_METER_COLUMNS.map(item => (
+                          <td key={item.column} className="p-1.5 text-center">
+                            {renderCellInput(`${item.column}88`, { group: "startup_shutdown" })}
+                          </td>
+                        ))}
                       </tr>
                       <tr>
                         <td className="p-2 font-bold text-slate-800 font-sans">
                           Công tơ cấp dầu lên lò hơi phụ
                         </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("C93", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("D93", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("E93", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("F93", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("G93", { group: "startup_shutdown" })}
-                        </td>
+                        {STARTUP_METER_COLUMNS.map(item => (
+                          <td key={item.column} className="p-1.5 text-center">
+                            {renderCellInput(`${item.column}93`, { group: "startup_shutdown" })}
+                          </td>
+                        ))}
                       </tr>
                       <tr>
                         <td className="p-2 font-bold text-slate-800 font-sans">
                           Công tơ cấp dầu về lò hơi phụ
                         </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("C94", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("D94", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("E94", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("F94", { group: "startup_shutdown" })}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {renderCellInput("G94", { group: "startup_shutdown" })}
-                        </td>
+                        {STARTUP_METER_COLUMNS.map(item => (
+                          <td key={item.column} className="p-1.5 text-center">
+                            {renderCellInput(`${item.column}94`, { group: "startup_shutdown" })}
+                          </td>
+                        ))}
                       </tr>
                     </tbody>
                   </table>
                 </div>
+                )}
               </div>
             </div>
           )}
@@ -2932,13 +3071,13 @@ export function CtktktReport() {
                       <h3 className="text-sm font-black text-[#173b64]">
                         Báo cáo PMIS 02-PĐ &amp; Đối chiếu ngày (Sản lượng &amp; Chỉ tiêu KTKT)
                       </h3>
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${extensionVersion ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${extensionVersion ? "bg-emerald-500" : "bg-amber-500"}`} />
-                        {extensionVersion ? `Tiện ích v${extensionVersion}` : "Chưa kết nối tiện ích"}
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${extensionOutdated ? "bg-red-50 text-red-700" : extensionVersion ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${extensionOutdated ? "bg-red-500" : extensionVersion ? "bg-emerald-500" : "bg-amber-500"}`} />
+                        {extensionOutdated ? `Cần Reload v${REQUIRED_QLKT_EXTENSION_VERSION}` : extensionVersion ? `Tiện ích v${extensionVersion}` : "Chưa kết nối tiện ích"}
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      Đồng bộ tự động từ QLKT (mục Sản lượng DH1_MF1/MF2 và mục 02-PĐ hàng Duyên Hải 1) hoặc nhập trực tiếp. Các số liệu này tự động liên kết sang Mục 2 của Báo cáo sản xuất (BCSX S1, S2, A0).
+                      Chỉ lấy tự động từ QLKT (mục Sản lượng DH1_MF1/MF2 và mục 02-PĐ hàng Duyên Hải 1), không dùng công tơ và không nhập tay. Các số liệu này tự động liên kết sang Cụm 1 và Mục 2 của BCSX S1, S2, A0.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2949,7 +3088,7 @@ export function CtktktReport() {
                       className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3.5 py-2 text-xs font-bold text-white shadow-xs disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <RefreshCw className={`size-3.5 ${syncingPmis ? "animate-spin" : ""}`} />
-                      {syncingPmis ? "Đang đồng bộ PMIS…" : "Đồng bộ PMIS & 02-PĐ"}
+                      {syncingPmis ? "Đang đồng bộ PMIS…" : extensionOutdated ? `Reload tiện ích ${REQUIRED_QLKT_EXTENSION_VERSION}` : "Đồng bộ PMIS & 02-PĐ"}
                     </button>
                     <button
                       type="button"
@@ -3065,7 +3204,7 @@ export function CtktktReport() {
 
                   <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-[11px] text-slate-600 flex flex-wrap items-center justify-between gap-2">
                     <span>
-                      💡 <b>Liên kết trực tiếp:</b> Số liệu Điện đầu cực (J157, J158) và Xuất tuyến (K157, K158) ở đây tự động làm nguồn cho <b>Mục 2 của Báo cáo sản xuất (BCSX)</b> cho cả 3 file S1, S2, A0.
+                      💡 <b>Liên kết trực tiếp:</b> Số liệu Điện đầu cực (J157, J158) và Xuất tuyến (K157, K158) ở đây tự động làm nguồn cho <b>Cụm 1 · Thống kê chỉ tiêu KTKT</b> và <b>Mục 2 của Báo cáo sản xuất (BCSX)</b> cho cả 3 file S1, S2, A0.
                     </span>
                     <span className="text-slate-500">Công thức: Tự dùng PMIS = Đầu cực − Xuất tuyến</span>
                   </div>

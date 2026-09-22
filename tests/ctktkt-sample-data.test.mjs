@@ -44,25 +44,24 @@ test("Day 17 calculates full KPIs when Day 16 is present as previous day", () =>
 
   const summary = calculateCtktktSummary(entries17, entries16);
 
-  // Power generation: S1: 11043 MWh, S2: 11020 MWh, Plant: 22063 MWh
-  assert.equal(summary.s1.grossMwh, 11043);
-  assert.equal(summary.s2.grossMwh, 11020);
-  assert.equal(summary.plant.grossMwh, 22063);
+  // Power generation comes only from QLKT J157/J158.
+  assert.equal(summary.s1.grossMwh, 11053.64);
+  assert.equal(summary.s2.grossMwh, 11030.56);
+  assert.ok(Math.abs(summary.plant.grossMwh - 22084.2) < 1e-9);
 
   // Net generation
-  assert.ok(Math.abs(summary.s1.netMwh - 10117.6) < 0.1);
-  assert.ok(Math.abs(summary.s2.netMwh - 10094.2) < 0.1);
-  assert.ok(Math.abs(summary.plant.netMwh - 20211.8) < 0.1);
+  assert.ok(Math.abs(summary.s1.netMwh - 10166.5842) < 1e-9);
+  assert.ok(Math.abs(summary.s2.netMwh - 10132.7348) < 1e-9);
+  assert.ok(Math.abs(summary.plant.netMwh - 20299.319) < 1e-9);
 
-  // Auxiliary power % (~8.39%)
-  assert.ok(Math.abs(summary.plant.auxiliaryPercent - 8.39) < 0.05);
+  assert.ok(Math.abs(summary.plant.auxiliaryPercent - 8.08216281323) < 1e-9);
 
   // Exact source-workbook results (sheet 17, calculation block AR/AT/AV).
   assert.ok(Math.abs(summary.s1.adjustedCoalTonnes - 5341.11098688518) < 1e-8);
   assert.ok(Math.abs(summary.s2.adjustedCoalTonnes - 5349.81764480845) < 1e-8);
   assert.ok(Math.abs(summary.plant.hhvKjKg - 20021.5934392878) < 1e-8);
-  assert.ok(Math.abs(summary.s1.netHeatRate - 10569.4584381209) < 1e-8);
-  assert.ok(Math.abs(summary.s2.netHeatRate - 10611.2296030078) < 1e-8);
+  assert.ok(Math.abs(summary.s1.netHeatRate - 10518.5331267436) < 1e-8);
+  assert.ok(Math.abs(summary.s2.netHeatRate - 10570.8750868209) < 1e-8);
 
   // TKD DCS calculation
   const tkd = calculateTkdDcsSummary(entries17);

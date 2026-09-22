@@ -96,6 +96,15 @@ export async function POST(request: Request) {
       const isText = CTKTKT_TEXT_INPUT_CELLS.has(cell) || cell === "T181";
       const value = normalizeCtktktInputValue(cell, applyCtktktFixedValue(cell, entry.value));
       if (!fieldCells.has(cell)) throw new Error(`Ô ${cell || "không rõ"} không nằm trong mẫu được phép nhập.`);
+      if (cell === "STARTUP_UNIT" && value && value !== "S1" && value !== "S2") {
+        throw new Error("Tổ máy sự kiện chỉ được chọn S1 hoặc S2.");
+      }
+      if (cell === "STARTUP_EVENT" && value && !["startup", "shutdown", "incident_oil"].includes(value)) {
+        throw new Error("Loại sự kiện khởi động/ngừng không hợp lệ.");
+      }
+      if (["STARTUP_OIL_START_TIME", "STARTUP_GRID_SYNC_TIME", "STARTUP_MIN_LOAD_TIME"].includes(cell) && value && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+        throw new Error(`Ô ${cell} phải nhập thời gian dạng HH:mm.`);
+      }
       if (value.length > (CTKTKT_TEXT_INPUT_CELLS.has(cell) ? 500 : 80)) throw new Error(`Giá trị ô ${cell} quá dài.`);
       if (value && !isText && !/^-?\d+(?:\.\d+)?$/.test(value)) throw new Error(`Ô ${cell} phải là số.`);
       return { cell, value };

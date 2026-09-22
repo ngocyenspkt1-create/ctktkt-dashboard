@@ -21,35 +21,35 @@ test("extractCtktktEmailMetrics accurately extracts all 22+ metrics from CTKTKT 
   const metrics = extractCtktktEmailMetrics(entries17, entries16);
 
   // S1 Power & Coal
-  assert.equal(metrics.grossMwhS1, 11043);
-  assert.ok(Math.abs(metrics.netMwhS1 - 10117.6) < 0.01);
-  assert.ok(Math.abs(metrics.auxMwhS1 - 887.7) < 0.01);
-  assert.ok(Math.abs(metrics.auxPercentS1 - 8.38) < 0.01);
+  assert.equal(metrics.grossMwhS1, 11053.64);
+  assert.ok(Math.abs(metrics.netMwhS1 - 10166.5842) < 0.01);
+  assert.ok(Math.abs(metrics.auxMwhS1 - 887.0558) < 0.01);
+  assert.ok(Math.abs(metrics.auxPercentS1 - 8.025) < 0.01);
   assert.ok(Math.abs(metrics.coalTonnesS1 - 5341.111) < 0.01);
-  assert.ok(Math.abs(metrics.netCoalRateS1 - 527.903) < 0.01);
+  assert.ok(Math.abs(metrics.netCoalRateS1 - 525.359) < 0.01);
   assert.ok(Math.abs(metrics.hhvKjKgS1 - 20021.5934392878) < 0.001);
-  assert.ok(Math.abs(metrics.netHeatRateS1 - 10569.4584381209) < 0.001);
+  assert.ok(Math.abs(metrics.netHeatRateS1 - 10518.5331267436) < 0.001);
 
   // S1 Steam & Water
   assert.equal(metrics.steamTonnesS1, 35582.55);
-  assert.ok(Math.abs(metrics.steamRateGrossS1 - 3222.18) < 0.05);
-  assert.ok(Math.abs(metrics.steamRateNetS1 - 3516.9) < 0.05);
+  assert.ok(Math.abs(metrics.steamRateGrossS1 - 3219.08) < 0.05);
+  assert.ok(Math.abs(metrics.steamRateNetS1 - 3499.95) < 0.05);
   assert.ok(Math.abs(metrics.deminWaterS1 - 792.41) < 0.01);
 
   // S2 Power & Coal
-  assert.equal(metrics.grossMwhS2, 11020);
-  assert.ok(Math.abs(metrics.netMwhS2 - 10094.2) < 0.01);
-  assert.ok(Math.abs(metrics.auxMwhS2 - 895.2) < 0.01);
-  assert.ok(Math.abs(metrics.auxPercentS2 - 8.4) < 0.01);
+  assert.equal(metrics.grossMwhS2, 11030.56);
+  assert.ok(Math.abs(metrics.netMwhS2 - 10132.7348) < 0.01);
+  assert.ok(Math.abs(metrics.auxMwhS2 - 897.8252) < 0.01);
+  assert.ok(Math.abs(metrics.auxPercentS2 - 8.139) < 0.01);
   assert.ok(Math.abs(metrics.coalTonnesS2 - 5349.81764480845) < 0.001);
-  assert.ok(Math.abs(metrics.netCoalRateS2 - 529.989) < 0.01);
+  assert.ok(Math.abs(metrics.netCoalRateS2 - 527.974) < 0.01);
   assert.ok(Math.abs(metrics.hhvKjKgS2 - 20021.5934392878) < 0.001);
-  assert.ok(Math.abs(metrics.netHeatRateS2 - 10611.2296030078) < 0.001);
+  assert.ok(Math.abs(metrics.netHeatRateS2 - 10570.8750868209) < 0.001);
 
   // S2 Steam & Water
   assert.equal(metrics.steamTonnesS2, 34544.72);
-  assert.ok(Math.abs(metrics.steamRateGrossS2 - 3134.73) < 0.05);
-  assert.ok(Math.abs(metrics.steamRateNetS2 - 3422.23) < 0.05);
+  assert.ok(Math.abs(metrics.steamRateGrossS2 - 3131.73) < 0.05);
+  assert.ok(Math.abs(metrics.steamRateNetS2 - 3409.22) < 0.05);
   assert.ok(Math.abs(metrics.deminWaterS2 - 926.5) < 0.01);
 
   // Common Plant Metrics
@@ -74,31 +74,31 @@ test("generateEmailReportText generates complete text report matching exact temp
   assert.ok(text.includes("Tổ C- PXVH1 xin gửi các anh (chị) báo cáo gồm:"));
   assert.ok(text.includes("1. Chỉ tiêu kinh tế kỹ thuật:"));
   assert.ok(text.includes("- Tổ máy S1 vận hành:"));
-  assert.ok(text.includes("+ Tổng sản lượng đầu cực máy phát S1: 11043.00 (MWh)"));
-  assert.ok(text.includes("+ Tổng sản lượng tại điểm mua bán điện S1: 10117.60 (MWh)"));
-  assert.ok(text.includes("+ Lượng điện tự dùng S1: 887.70 (MWh)"));
-  assert.ok(text.includes("+ Phần trăm điện tự dùng S1: 8.38 % (đã bao gồm tổn thất MBA)"));
+  assert.ok(text.includes("+ Tổng sản lượng đầu cực máy phát S1: 11053.64 (MWh)"));
+  assert.ok(text.includes("+ Tổng sản lượng tại điểm mua bán điện S1: 10166.58 (MWh)"));
+  assert.ok(text.includes("+ Lượng điện tự dùng S1: 887.06 (MWh)"));
+  assert.ok(text.includes("+ Phần trăm điện tự dùng S1: 8.03 % (đã bao gồm tổn thất MBA)"));
   assert.ok(text.includes("+ Tổng lượng than tiêu thụ S1: 5341.111 (tấn) - đã quy ẩm về 8.5%"));
-  assert.ok(text.includes("+ Suất tiêu hao than tinh S1: 527.903 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao than tinh S1: 525.359 (g/kWh)"));
   assert.ok(text.includes("+ Nhiệt trị than quy ẩm: 20021.59 (kJ/kg)"));
-  assert.ok(text.includes("+ Suất hao nhiệt tinh S1: 10569.458 (kJ/kWh)"));
+  assert.ok(text.includes("+ Suất hao nhiệt tinh S1: 10518.533 (kJ/kWh)"));
   assert.ok(text.includes("+ Tổng lượng hơi tiêu thụ S1: 35582.55 (tấn)"));
-  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S1: 3222.18 (g/kWh)"));
-  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S1: 3516.90 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S1: 3219.08 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S1: 3499.95 (g/kWh)"));
   assert.ok(text.includes("+ Lượng nước demin sử dụng S1: 792.41 (tấn)"));
 
   assert.ok(text.includes("- Tổ máy S2 vận hành:"));
-  assert.ok(text.includes("+ Tổng sản lượng đầu cực máy phát S2: 11020.00 (MWh)"));
-  assert.ok(text.includes("+ Tổng sản lượng tại điểm mua bán điện S2: 10094.20 (MWh)"));
-  assert.ok(text.includes("+ Lượng điện tự dùng S2: 895.20 (MWh)"));
-  assert.ok(text.includes("+ Phần trăm điện tự dùng S2: 8.40 % (đã bao gồm tổn thất MBA)"));
+  assert.ok(text.includes("+ Tổng sản lượng đầu cực máy phát S2: 11030.56 (MWh)"));
+  assert.ok(text.includes("+ Tổng sản lượng tại điểm mua bán điện S2: 10132.73 (MWh)"));
+  assert.ok(text.includes("+ Lượng điện tự dùng S2: 897.83 (MWh)"));
+  assert.ok(text.includes("+ Phần trăm điện tự dùng S2: 8.14 % (đã bao gồm tổn thất MBA)"));
   assert.ok(text.includes("+ Tổng lượng than tiêu thụ S2: 5349.818 (tấn) - đã quy ẩm về 8.5%"));
-  assert.ok(text.includes("+ Suất tiêu hao than tinh S2: 529.989 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao than tinh S2: 527.974 (g/kWh)"));
   assert.ok(text.includes("+ Nhiệt trị than quy ẩm: 20021.59 (kJ/kg)"));
-  assert.ok(text.includes("+ Suất hao nhiệt tinh S2: 10611.230 (kJ/kWh)"));
+  assert.ok(text.includes("+ Suất hao nhiệt tinh S2: 10570.875 (kJ/kWh)"));
   assert.ok(text.includes("+ Tổng lượng hơi tiêu thụ S2: 34544.72 (tấn)"));
-  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S2: 3134.73 (g/kWh)"));
-  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S2: 3422.23 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S2: 3131.73 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S2: 3409.22 (g/kWh)"));
   assert.ok(text.includes("+ Lượng nước demin sử dụng S2: 926.50 (tấn)"));
 
   assert.ok(text.includes("- Tổng lượng than nhập kho 24h theo số liệu từ PX nhiêu liệu: 0 (tấn)"));

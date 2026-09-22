@@ -8,6 +8,8 @@ import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, getCtktktCo
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
+import { deriveNh3StartLevels, type CtktktDayEntries } from "@/lib/ctktkt-report";
+import { applyCtktktStartupEventMetadata } from "@/lib/ctktkt-startup-event";
 
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 
@@ -28,6 +30,23 @@ function numeric(value: string | undefined) {
 
 function setNumber(sheet: ExcelJS.Worksheet, cell: string, value: number | null) {
   if (value !== null && Number.isFinite(value)) sheet.getCell(cell).value = value;
+}
+
+function ktktCells(row: Record<string, string> | undefined): CtktktDayEntries {
+  const entries: CtktktDayEntries = {};
+  for (const [code, value] of Object.entries(row || {})) {
+    if (code.startsWith("KTKT:")) entries[code.slice(5)] = value;
+  }
+  return entries;
+}
+
+function applyNh3StartLevelCarryover(
+  sheet: ExcelJS.Worksheet,
+  previousRow: Record<string, string> | undefined,
+) {
+  for (const [cell, value] of Object.entries(deriveNh3StartLevels(ktktCells(previousRow)))) {
+    setNumber(sheet, cell, numeric(value));
+  }
 }
 
 function applyCoalAdjustmentNotes(sheet: ExcelJS.Worksheet, row: Record<string, string>) {
@@ -182,6 +201,11 @@ export async function GET(request: Request) {
         const cell = code.slice(5);
         sheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
+      const previousDate = day === 1
+        ? previous
+        : `${period}-${String(day - 1).padStart(2, "0")}`;
+      applyNh3StartLevelCarryover(sheet, byDate.get(previousDate));
+      applyCtktktStartupEventMetadata(sheet, row);
       applyBcsxLinks(sheet, date);
       applyWaterLinks(sheet, date);
       applyWaterAdjustments(sheet, row);

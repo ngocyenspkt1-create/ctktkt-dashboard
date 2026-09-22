@@ -165,10 +165,11 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "M49", "O49", "Q49", "R49",
   ]),
   startup_shutdown: new Set([
-    "C87", "D87", "E87", "F87", "G87",
-    "C88", "D88", "E88", "F88", "G88",
-    "C93", "D93", "E93", "F93", "G93",
-    "C94", "D94", "E94", "F94", "G94",
+    "STARTUP_UNIT", "STARTUP_EVENT",
+    "C87", "D87", "E87", "F87", "G87", "H87",
+    "C88", "D88", "E88", "F88", "G88", "H88",
+    "C93", "D93", "E93", "F93", "G93", "H93",
+    "C94", "D94", "E94", "F94", "G94", "H94",
   ]),
   coal_blend_pmis: new Set([
     // Chỉ còn than 6A10: Ẩm toàn phần & Nhiệt trị khô theo 3 ca của S1/S2.
