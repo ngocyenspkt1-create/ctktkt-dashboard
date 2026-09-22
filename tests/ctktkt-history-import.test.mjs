@@ -70,7 +70,7 @@ test("history import ignores draft cells that are not part of the day-03 referen
 
 test("history import audits Excel production formulas against meter differences, not PMIS", async () => {
   const bytes = workbookBytes({
-    "Ngày 04": { AB8: 1000, AB9: 900, AB10: 100, AB11: 50 },
+    "Ngày 04": { AB8: 1000, AB9: 900, AB10: 100, AB11: 50, AL8: 2000, AL9: 1800, AL10: 200, AL11: 100 },
     "Ngày 05": {
       AB8: 1100, AB9: 990, AB10: 106, AB11: 54,
       J157: 120, K157: 100,
@@ -82,4 +82,19 @@ test("history import audits Excel production formulas against meter differences,
   const audit = result.audits[0];
   const productionChecks = audit.failed.filter(item => ["E20", "E21", "E25", "E27"].includes(item.sourceCell));
   assert.deepEqual(productionChecks, []);
+  assert.deepEqual(result.supportingDays, [{
+    date: "2026-09-04",
+    sheetName: "Ngày 04",
+    manualEntries: [
+      { cell: "AB8", value: "1000" },
+      { cell: "AB9", value: "900" },
+      { cell: "AB10", value: "100" },
+      { cell: "AB11", value: "50" },
+      { cell: "AL8", value: "2000" },
+      { cell: "AL9", value: "1800" },
+      { cell: "AL10", value: "200" },
+      { cell: "AL11", value: "100" },
+    ],
+  }]);
+  assert.equal(result.totals.supportingValues, 8);
 });

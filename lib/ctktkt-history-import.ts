@@ -31,10 +31,16 @@ export type CtktktHistoryImportPackage = {
   month: string;
   throughDay: number;
   days: Array<{ date: string; sheetName: string; manualEntries: CtktktImportEntry[] }>;
+  supportingDays: Array<{ date: string; sheetName: string; manualEntries: CtktktImportEntry[] }>;
   audits: Array<{ date: string; total: number; passed: number; failed: CtktktFormulaCheck[] }>;
-  totals: { dates: number; manualCellsPrepared: number; nonBlankManualValues: number; checks: number; passed: number; failed: number };
+  totals: { dates: number; manualCellsPrepared: number; nonBlankManualValues: number; supportingValues: number; checks: number; passed: number; failed: number };
   warnings: Array<{ date: string; sheetName: string; cell: string; message: string }>;
 };
+
+export const CTKTKT_PRIOR_DAY_METER_SUPPORT_CELLS = [
+  "AB8", "AB9", "AB10", "AB11",
+  "AL8", "AL9", "AL10", "AL11",
+] as const;
 
 function rawCellValue(sheet: XLSX.WorkSheet, address: string) {
   const cell = sheet[address];
@@ -214,6 +220,7 @@ export async function buildCtktktHistoryImportPackage(
   }
 
   const days: CtktktHistoryImportPackage["days"] = [];
+  const supportingDays: CtktktHistoryImportPackage["supportingDays"] = [];
   for (const item of sheets) {
     const actualSheetName = workbook.SheetNames.find(name => name === item.sheetName || name === String(Number(item.sheetName)));
     const sheet = actualSheetName ? workbook.Sheets[actualSheetName] : undefined;
@@ -257,6 +264,14 @@ export async function buildCtktktHistoryImportPackage(
     entriesByDate.set(item.date, entries);
     if (item.importDay) {
       days.push({ date: item.date, sheetName: actualSheetName!, manualEntries: manualCells.map(cell => ({ cell, value: entries[cell] ?? "" })) });
+    } else if (requested) {
+      supportingDays.push({
+        date: item.date,
+        sheetName: actualSheetName!,
+        manualEntries: CTKTKT_PRIOR_DAY_METER_SUPPORT_CELLS
+          .map(cell => ({ cell, value: entries[cell] ?? "" }))
+          .filter(entry => entry.value !== ""),
+      });
     }
   }
 
@@ -270,9 +285,10 @@ export async function buildCtktktHistoryImportPackage(
     dates: days.length,
     manualCellsPrepared: days.reduce((sum, day) => sum + day.manualEntries.length, 0),
     nonBlankManualValues: days.reduce((sum, day) => sum + day.manualEntries.filter(entry => entry.value !== "").length, 0),
+    supportingValues: supportingDays.reduce((sum, day) => sum + day.manualEntries.length, 0),
     checks: audits.reduce((sum, audit) => sum + audit.total, 0),
     passed: audits.reduce((sum, audit) => sum + audit.passed, 0),
     failed: audits.reduce((sum, audit) => sum + audit.failed.length, 0),
   };
-  return { fileName, month: period, throughDay, days, audits, totals, warnings };
+  return { fileName, month: period, throughDay, days, supportingDays, audits, totals, warnings };
 }

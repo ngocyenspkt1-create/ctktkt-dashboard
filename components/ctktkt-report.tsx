@@ -82,8 +82,9 @@ type ImportPackage = {
   month: string;
   throughDay: number;
   days: ImportDay[];
+  supportingDays?: ImportDay[];
   audits: Array<{ date: string; total: number; passed: number; failed: Array<{ name: string; sourceCell: string; expected: number | null; actual: number | null }> }>;
-  totals: { failed: number; checks: number; passed: number; nonBlankManualValues: number };
+  totals: { failed: number; checks: number; passed: number; nonBlankManualValues: number; supportingValues?: number };
   warnings: Array<{ date: string; cell: string; message: string }>;
 };
 
@@ -612,6 +613,12 @@ export function CtktktReport() {
           throw new Error(`Dữ liệu ngày ${day.date || "không rõ"} không hợp lệ.`);
         }
       }
+      const supportingDays = importPackage.supportingDays || [];
+      for (const day of supportingDays) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date) || !Array.isArray(day.manualEntries) || day.manualEntries.length > 8) {
+          throw new Error(`Dữ liệu công tơ hỗ trợ ngày ${day.date || "không rõ"} không hợp lệ.`);
+        }
+      }
 
       if (importPackage.totals.failed > 0 || importPackage.totals.checks !== importPackage.totals.passed) {
         const failures = importPackage.audits.flatMap(audit => audit.failed.map(item =>
@@ -620,14 +627,15 @@ export function CtktktReport() {
         throw new Error(`Chưa nhập ngày ${date.split("-").reverse().join("/")} vì có ${importPackage.totals.failed}/${importPackage.totals.checks} kết quả tự tính chưa khớp:\n${failures.slice(0, 12).join("\n")}${failures.length > 12 ? `\n… và ${failures.length - 12} sai lệch khác.` : ""}`);
       }
       const confirmed = window.confirm(
-        `Ngày ${date.split("-").reverse().join("/")} đã khớp 100% (${importPackage.totals.passed}/${importPackage.totals.checks} kết quả tự tính).\n\nChỉ ${importPackage.totals.nonBlankManualValues || importPackage.days[0].manualEntries.filter(entry => entry.value).length} ô nhập tay từ sheet ${importPackage.days[0].sheetName} sẽ được ghi. Các ô tự tính và ô liên kết không bị ghi đè.${importPackage.warnings.length ? `\nCó ${importPackage.warnings.length} ô trong vùng nhập tay chứa công thức nên đã bỏ qua.` : ""}\n\nTiếp tục nhập dữ liệu?`,
+        `Ngày ${date.split("-").reverse().join("/")} đã khớp 100% (${importPackage.totals.passed}/${importPackage.totals.checks} kết quả tự tính).\n\nChỉ ${importPackage.totals.nonBlankManualValues || importPackage.days[0].manualEntries.filter(entry => entry.value).length} ô nhập tay từ sheet ${importPackage.days[0].sheetName} sẽ được ghi.${supportingDays.length ? ` Ghi kèm ${importPackage.totals.supportingValues || supportingDays[0].manualEntries.length} chỉ số công tơ 24h từ sheet D-1 để tính cột Công tơ/Excel.` : ""} Các ô tự tính và ô liên kết không bị ghi đè.${importPackage.warnings.length ? `\nCó ${importPackage.warnings.length} ô trong vùng nhập tay chứa công thức nên đã bỏ qua.` : ""}\n\nTiếp tục nhập dữ liệu?`,
       );
       if (!confirmed) {
         setMessage(`Ngày ${date.split("-").reverse().join("/")} đã khớp 100%. Bạn đã chọn chưa ghi dữ liệu.`);
         return;
       }
 
-      const periods = [...new Set(importPackage.days.map(day => day.date.slice(0, 7)))];
+      const writeDays = [...supportingDays, ...importPackage.days];
+      const periods = [...new Set(writeDays.map(day => day.date.slice(0, 7)))];
       const reports: Record<string, { entries?: LoadedEntry[] }> = {};
       for (const backupPeriod of periods) {
         const response = await fetch(`/api/ctktkt-report?period=${encodeURIComponent(backupPeriod)}`, { cache: "no-store" });
@@ -644,7 +652,7 @@ export function CtktktReport() {
       backupLink.click();
       URL.revokeObjectURL(backupUrl);
 
-      for (const day of importPackage.days) {
+      for (const day of writeDays) {
         completed.push(day);
         await postJson("/api/ctktkt-report", { operatingDate: day.date, entries: day.manualEntries });
       }
@@ -660,7 +668,7 @@ export function CtktktReport() {
           verifiedByPeriod[verifyPeriod] = body;
         }
         readbackMismatch = findCtktktHistoryReadbackMismatch(
-          importPackage.days,
+          writeDays,
           Object.values(verifiedByPeriod).flatMap(body => body.entries || []),
         );
         if (!readbackMismatch) break;
