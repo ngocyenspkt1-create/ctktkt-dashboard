@@ -1,3 +1,5 @@
+import { CTKTKT_OIL_EVENT_CONFIG, type CtktktOilEventCode } from "./ctktkt-oil-event.ts";
+
 export type CtktktDayEntries = Record<string, string>;
 
 export type CtktktKpis = {
@@ -362,9 +364,8 @@ export function calculateOilDifferences(
   });
 }
 
-export type IncidentOilSummary = {
-  startToGridTonnes: number | null;
-  gridToMinLoadTonnes: number | null;
+export type OilEventSummary = {
+  phaseTonnes: Array<number | null>;
   totalTonnes: number | null;
 };
 
@@ -377,16 +378,20 @@ function incidentOilPhase(entries: CtktktDayEntries, fromColumn: string, toColum
   return (supplyTo - supplyFrom) - (returnTo - returnFrom);
 }
 
-export function calculateIncidentOilSummary(entries: CtktktDayEntries): IncidentOilSummary {
-  // C = bắt đầu đốt dầu, E = hòa lưới, D = đạt tải tối thiểu / chốt công tơ.
-  const startToGridTonnes = incidentOilPhase(entries, "C", "E");
-  const gridToMinLoadTonnes = incidentOilPhase(entries, "E", "D");
+export function calculateOilEventSummary(
+  entries: CtktktDayEntries,
+  eventCode: CtktktOilEventCode,
+): OilEventSummary {
+  const columns = CTKTKT_OIL_EVENT_CONFIG[eventCode].columns.map(item => item.column);
+  const phaseTonnes = columns.slice(1).map((column, index) =>
+    incidentOilPhase(entries, columns[index], column),
+  );
+  const hasAllPhases = phaseTonnes.every((value): value is number => value !== null);
   return {
-    startToGridTonnes,
-    gridToMinLoadTonnes,
-    totalTonnes: startToGridTonnes === null || gridToMinLoadTonnes === null
-      ? null
-      : startToGridTonnes + gridToMinLoadTonnes,
+    phaseTonnes,
+    totalTonnes: hasAllPhases
+      ? phaseTonnes.reduce((total, value) => total + value, 0)
+      : null,
   };
 }
 

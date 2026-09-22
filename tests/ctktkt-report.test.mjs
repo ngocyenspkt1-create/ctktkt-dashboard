@@ -125,16 +125,35 @@ test("calculateOilDifferences follows Excel: delta F1 minus delta F2, with D-1 f
   assert.equal(s2[0].diff, 50);
 });
 
-test("incident oil consumption is split from oil start to grid and grid to minimum load", async () => {
-  const { calculateIncidentOilSummary } = await import("../lib/ctktkt-report.ts");
-  const result = calculateIncidentOilSummary({
+test("startup oil consumption is split at grid synchronization and oil cut", async () => {
+  const { calculateOilEventSummary } = await import("../lib/ctktkt-report.ts");
+  const result = calculateOilEventSummary({
     C87: "100", C88: "20",
     E87: "130", E88: "25",
-    D87: "150", D88: "27",
-  });
-  assert.equal(result.startToGridTonnes, 25);
-  assert.equal(result.gridToMinLoadTonnes, 18);
+    G87: "150", G88: "27",
+  }, "startup");
+  assert.deepEqual(result.phaseTonnes, [25, 18]);
   assert.equal(result.totalTonnes, 43);
+});
+
+test("shutdown oil consumption uses oil-start and grid-disconnect meters only", async () => {
+  const { calculateOilEventSummary } = await import("../lib/ctktkt-report.ts");
+  const result = calculateOilEventSummary({
+    C87: "100", C88: "20",
+    F87: "125", F88: "24",
+  }, "shutdown");
+  assert.deepEqual(result.phaseTonnes, [21]);
+  assert.equal(result.totalTonnes, 21);
+});
+
+test("incident oil consumption uses oil-start and oil-cut meters only", async () => {
+  const { calculateOilEventSummary } = await import("../lib/ctktkt-report.ts");
+  const result = calculateOilEventSummary({
+    C87: "100", C88: "20",
+    D87: "140", D88: "26",
+  }, "incident_oil");
+  assert.deepEqual(result.phaseTonnes, [34]);
+  assert.equal(result.totalTonnes, 34);
 });
 
 test("CTKTKT ignores legacy Sub-bituminous fields and calculates 6A10 only", () => {

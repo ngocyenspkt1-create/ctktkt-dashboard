@@ -42,7 +42,7 @@ import {
   calculateCtktktSummary,
   calculateTkdDcsSummary,
   calculateOilDifferences,
-  calculateIncidentOilSummary,
+  calculateOilEventSummary,
   calculateSteamDifferences,
   calculateNh3Summary,
   calculateCoalShiftDetails,
@@ -65,6 +65,10 @@ import {
 import { parseSpreadsheetClipboard } from "@/lib/spreadsheet-grid";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
 import { isQlktExtensionOutdated, REQUIRED_QLKT_EXTENSION_VERSION } from "@/lib/qlkt-extension-version";
+import {
+  CTKTKT_OIL_EVENT_CONFIG,
+  type CtktktOilEventCode,
+} from "@/lib/ctktkt-oil-event";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
@@ -91,7 +95,7 @@ type MainTab =
   | "all_fields";
 
 type StartupUnit = "S1" | "S2";
-type StartupEvent = "startup" | "shutdown" | "incident_oil";
+type StartupEvent = CtktktOilEventCode;
 
 const STARTUP_UNITS: Array<{ value: StartupUnit; label: string }> = [
   { value: "S1", label: "Tổ máy S1" },
@@ -99,19 +103,10 @@ const STARTUP_UNITS: Array<{ value: StartupUnit; label: string }> = [
 ];
 
 const STARTUP_EVENTS: Array<{ value: StartupEvent; label: string }> = [
-  { value: "startup", label: "Khởi động" },
-  { value: "shutdown", label: "Ngừng" },
-  { value: "incident_oil", label: "Đốt dầu do sự cố" },
+  { value: "startup", label: CTKTKT_OIL_EVENT_CONFIG.startup.label },
+  { value: "shutdown", label: CTKTKT_OIL_EVENT_CONFIG.shutdown.label },
+  { value: "incident_oil", label: CTKTKT_OIL_EVENT_CONFIG.incident_oil.label },
 ];
-
-const STARTUP_METER_COLUMNS = [
-  { column: "C", label: "Khởi động" },
-  { column: "D", label: "Ngừng đốt lò" },
-  { column: "E", label: "Hòa lưới I" },
-  { column: "F", label: "Tách lưới I" },
-  { column: "G", label: "Hòa lưới II" },
-  { column: "H", label: "Tách lưới II" },
-] as const;
 
 const PMIS_PRODUCTION_CELLS = ["J157", "K157", "J158", "K158"] as const;
 const QLKT_PRODUCTION_CELLS = new Set<string>(PMIS_PRODUCTION_CELLS);
@@ -427,7 +422,8 @@ export function CtktktReport() {
   const startupEvent: StartupEvent | "" = STARTUP_EVENTS.some(item => item.value === current.STARTUP_EVENT)
     ? current.STARTUP_EVENT as StartupEvent
     : "";
-  const incidentOilSummary = calculateIncidentOilSummary(current);
+  const oilEventConfig = startupEvent ? CTKTKT_OIL_EVENT_CONFIG[startupEvent] : null;
+  const oilEventSummary = startupEvent ? calculateOilEventSummary(current, startupEvent) : null;
   const canEditStartupMetadata = canEditCtktktField(user, "STARTUP_UNIT");
 
   const selectedWarnings = useMemo(
@@ -2918,25 +2914,21 @@ export function CtktktReport() {
                   </div>
                 )}
 
-                {startupEvent === "incident_oil" ? (
+                {oilEventConfig ? (
                   <div className="space-y-3">
                     <div className="grid gap-3 rounded-lg border border-orange-200 bg-orange-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <label className="grid gap-1 text-xs font-bold text-orange-950">
-                        Giờ bắt đầu đốt dầu
-                        {renderCellInput("STARTUP_OIL_START_TIME", { group: "startup_shutdown", isNumber: false, placeholder: "HH:mm" })}
-                      </label>
-                      <label className="grid gap-1 text-xs font-bold text-orange-950">
-                        Giờ hòa lưới
-                        {renderCellInput("STARTUP_GRID_SYNC_TIME", { group: "startup_shutdown", isNumber: false, placeholder: "HH:mm" })}
-                      </label>
-                      <label className="grid gap-1 text-xs font-bold text-orange-950">
-                        Giờ đạt tải tối thiểu
-                        {renderCellInput("STARTUP_MIN_LOAD_TIME", { group: "startup_shutdown", isNumber: false, placeholder: "HH:mm" })}
-                      </label>
-                      <label className="grid gap-1 text-xs font-bold text-orange-950">
-                        Tải tối thiểu (MW)
-                        {renderCellInput("STARTUP_MIN_LOAD_MW", { group: "startup_shutdown", placeholder: "MW" })}
-                      </label>
+                      {oilEventConfig.columns.map(item => (
+                        <label key={item.timeCell} className="grid gap-1 text-xs font-bold text-orange-950">
+                          {item.timeLabel}
+                          {renderCellInput(item.timeCell, { group: "startup_shutdown", isNumber: false, placeholder: "HH:mm" })}
+                        </label>
+                      ))}
+                      {startupEvent === "startup" && (
+                        <label className="grid gap-1 text-xs font-bold text-orange-950">
+                          Tải tối thiểu khi cắt dầu (MW)
+                          {renderCellInput("STARTUP_MIN_LOAD_MW", { group: "startup_shutdown", placeholder: "MW" })}
+                        </label>
+                      )}
                     </div>
 
                     <div className="overflow-x-auto rounded-lg border bg-white">
@@ -2944,40 +2936,38 @@ export function CtktktReport() {
                         <thead>
                           <tr className="bg-[#fef9f0] text-amber-950">
                             <th className="w-64 p-2 text-left font-bold">Chỉ số công tơ dầu · {startupUnit || "chưa chọn tổ máy"}</th>
-                            <th className="p-2 text-center font-bold">Bắt đầu đốt dầu</th>
-                            <th className="p-2 text-center font-bold">Hòa lưới</th>
-                            <th className="p-2 text-center font-bold">Đạt tải tối thiểu / chốt dầu</th>
+                            {oilEventConfig.columns.map(item => (
+                              <th key={item.column} className="p-2 text-center font-bold">{item.label}</th>
+                            ))}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-mono">
                           <tr>
                             <td className="p-2 font-sans font-bold text-slate-800">Công tơ dầu cấp lò</td>
-                            {(["C", "E", "D"] as const).map(column => (
-                              <td key={column} className="p-1.5">{renderCellInput(`${column}87`, { group: "startup_shutdown" })}</td>
+                            {oilEventConfig.columns.map(item => (
+                              <td key={item.column} className="p-1.5">{renderCellInput(`${item.column}87`, { group: "startup_shutdown" })}</td>
                             ))}
                           </tr>
                           <tr>
                             <td className="p-2 font-sans font-bold text-slate-800">Công tơ dầu hồi về</td>
-                            {(["C", "E", "D"] as const).map(column => (
-                              <td key={column} className="p-1.5">{renderCellInput(`${column}88`, { group: "startup_shutdown" })}</td>
+                            {oilEventConfig.columns.map(item => (
+                              <td key={item.column} className="p-1.5">{renderCellInput(`${item.column}88`, { group: "startup_shutdown" })}</td>
                             ))}
                           </tr>
                         </tbody>
                       </table>
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      <div className="rounded-lg border border-orange-200 bg-white p-3 text-center">
-                        <div className="text-[11px] font-semibold text-slate-500">Bắt đầu đốt dầu → hòa lưới</div>
-                        <div className="mt-1 text-base font-black text-orange-800">{format(incidentOilSummary.startToGridTonnes)} tấn</div>
-                      </div>
-                      <div className="rounded-lg border border-orange-200 bg-white p-3 text-center">
-                        <div className="text-[11px] font-semibold text-slate-500">Hòa lưới → đạt tải tối thiểu</div>
-                        <div className="mt-1 text-base font-black text-orange-800">{format(incidentOilSummary.gridToMinLoadTonnes)} tấn</div>
-                      </div>
+                    <div className={`grid gap-2 ${oilEventConfig.phaseLabels.length > 1 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+                      {oilEventConfig.phaseLabels.map((label, index) => (
+                        <div key={label} className="rounded-lg border border-orange-200 bg-white p-3 text-center">
+                          <div className="text-[11px] font-semibold text-slate-500">{label}</div>
+                          <div className="mt-1 text-base font-black text-orange-800">{format(oilEventSummary?.phaseTonnes[index] ?? null)} tấn</div>
+                        </div>
+                      ))}
                       <div className="rounded-lg border border-orange-300 bg-orange-100 p-3 text-center">
                         <div className="text-[11px] font-bold text-orange-900">Tổng dầu sự kiện</div>
-                        <div className="mt-1 text-base font-black text-orange-950">{format(incidentOilSummary.totalTonnes)} tấn</div>
+                        <div className="mt-1 text-base font-black text-orange-950">{format(oilEventSummary?.totalTonnes ?? null)} tấn</div>
                       </div>
                     </div>
                     <p className="text-[11px] font-semibold text-orange-900">
@@ -2985,60 +2975,9 @@ export function CtktktReport() {
                     </p>
                   </div>
                 ) : (
-                <div className="overflow-x-auto rounded-lg border bg-white">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-[#fef9f0] text-amber-950">
-                        <th className="p-2 text-left font-bold w-64">Chỉ số công tơ dầu</th>
-                        {STARTUP_METER_COLUMNS.map(item => (
-                          <th key={item.column} className="p-2 text-center font-bold">{item.label}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-mono">
-                      <tr>
-                        <td className="p-2 font-bold text-slate-800 font-sans">
-                          Công tơ dầu cấp lò {startupUnit || "chưa chọn tổ máy"}
-                        </td>
-                        {STARTUP_METER_COLUMNS.map(item => (
-                          <td key={item.column} className="p-1.5 text-center">
-                            {renderCellInput(`${item.column}87`, { group: "startup_shutdown" })}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <td className="p-2 font-bold text-slate-800 font-sans">
-                          Công tơ dầu về lò {startupUnit || "chưa chọn tổ máy"}
-                        </td>
-                        {STARTUP_METER_COLUMNS.map(item => (
-                          <td key={item.column} className="p-1.5 text-center">
-                            {renderCellInput(`${item.column}88`, { group: "startup_shutdown" })}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <td className="p-2 font-bold text-slate-800 font-sans">
-                          Công tơ cấp dầu lên lò hơi phụ
-                        </td>
-                        {STARTUP_METER_COLUMNS.map(item => (
-                          <td key={item.column} className="p-1.5 text-center">
-                            {renderCellInput(`${item.column}93`, { group: "startup_shutdown" })}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <td className="p-2 font-bold text-slate-800 font-sans">
-                          Công tơ cấp dầu về lò hơi phụ
-                        </td>
-                        {STARTUP_METER_COLUMNS.map(item => (
-                          <td key={item.column} className="p-1.5 text-center">
-                            {renderCellInput(`${item.column}94`, { group: "startup_shutdown" })}
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs font-semibold text-slate-600">
+                    Chọn loại sự kiện để hệ thống chỉ hiện đúng các mốc công tơ cần nhập.
+                  </div>
                 )}
               </div>
             </div>
