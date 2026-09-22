@@ -5,13 +5,17 @@ import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload, validateQlktUnifiedS
 import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXTENSION_VERSION } from '../lib/qlkt-extension-version.ts';
 import '../public/qlkt-sync-extension/meter-extract.js';
 
-test('web blocks old QLKT extensions and downloads the current package', () => {
+test('web blocks old QLKT extensions and prefers reload over downloading again', () => {
   assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.27');
   assert.equal(isQlktExtensionOutdated('0.4.26'), true);
   assert.equal(isQlktExtensionOutdated('0.4.27'), false);
   assert.equal(isQlktExtensionOutdated('0.4.28'), false);
   assert.equal(isQlktExtensionOutdated(''), false);
   assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.27/);
+  const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
+  assert.match(dailySource, /Ưu tiên Reload — không cần tải lại mỗi lần/);
+  assert.match(dailySource, /Đã Reload — kiểm tra lại/);
+  assert.doesNotMatch(dailySource, /document\.createElement\("a"\)/);
 });
 
 test('extension package 0.4.27 supports unified sync and operation-hour totals', () => {
