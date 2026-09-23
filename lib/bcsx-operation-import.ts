@@ -189,19 +189,21 @@ export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFi
     if (!plant.includes("duyen hai 1") || !units.has(unitValue) || eventType === null || !isCompleted(row.getCell(column("completed")).value)) continue;
     const location = worksheet.name + "!" + rowNumber;
     const startValue = row.getCell(column("startAt")).value;
-    const endValue = row.getCell(column("endAt")).value;
     const startAt = readTimestamp(startValue, location);
+    if (expectedDate && startAt.slice(0, 10) !== expectedDate) continue;
+    const endValue = row.getCell(column("endAt")).value;
     const endAt = readTimestamp(endValue, location);
     if (endAt < startAt) throw new Error(location + ": thời điểm hoàn thành trước thời điểm bắt đầu.");
     commands.push({ rowNumber, unit: unitValue, commandLabel, eventType, startAt, endAt, startOrder: readTimestampOrder(startValue, startAt), endOrder: readTimestampOrder(endValue, endAt), completedPowerMw: readNumber(row.getCell(column("completedPower")).value, location) });
   }
 
-  if (!commands.length) throw new Error("File không có lệnh thay đổi công suất đã hoàn thành của Duyên Hải 1 cho S1/S2.");
+  if (!commands.length) {
+    const dateDetail = expectedDate ? " trong ngày " + expectedDate.split("-").reverse().join("/") : "";
+    throw new Error("File không có lệnh thay đổi công suất đã hoàn thành của Duyên Hải 1 cho S1/S2" + dateDetail + ".");
+  }
   const operatingDates = new Set(commands.map(command => command.startAt.slice(0, 10)));
   if (operatingDates.size !== 1) throw new Error("File chứa lệnh của nhiều ngày; hãy xuất riêng từng ngày trước khi nhập.");
-  const operatingDate = [...operatingDates][0];
-  if (commands.some(command => command.endAt.slice(0, 10) !== operatingDate)) throw new Error("File có lệnh kết thúc khác ngày bắt đầu; chưa thể tự đưa vào Mục 3.");
-  if (expectedDate && expectedDate !== operatingDate) throw new Error("File là ngày " + operatingDate.split("-").reverse().join("/") + ", không phải ngày đang chọn " + expectedDate.split("-").reverse().join("/") + ".");
+  const operatingDate = expectedDate || [...operatingDates][0];
 
   commands.sort((left, right) => left.startOrder - right.startOrder || left.endOrder - right.endOrder || left.rowNumber - right.rowNumber);
   const initialPowerMw: Record<OperationUnit, number> = { S1: minimumPowerMw, S2: minimumPowerMw };

@@ -327,7 +327,7 @@ export function BcsxReport() {
       const s1Count = Number(response.headers.get("X-BCSX-S1-Events") || nextEvents.S1.length);
       const s2Count = Number(response.headers.get("X-BCSX-S2-Events") || nextEvents.S2.length);
       const ignoredRows = Number(response.headers.get("X-BCSX-Ignored-Rows") || 0);
-      setNotice("Đã tự lưu Mục 3: S1 (" + s1Count + " sự kiện), S2 (" + s2Count + " sự kiện) và tải file QLKT " + fileName + (ignoredRows ? ". Bỏ qua " + ignoredRows + " dòng không thuộc lệnh thay đổi công suất hoàn thành." : "."));
+      setNotice("Đã tự lưu Mục 3: S1 (" + s1Count + " sự kiện), S2 (" + s2Count + " sự kiện) và tải file QLKT " + fileName + (ignoredRows ? ". Bỏ qua " + ignoredRows + " dòng không thuộc ngày đang chọn hoặc không đủ điều kiện nhập." : "."));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không nhập được file lệnh điều độ.");
     } finally {

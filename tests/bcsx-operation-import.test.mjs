@@ -63,6 +63,20 @@ async function shutdownDurationWorkbookBytes(durationMinutes, command = "Ngừng
   return workbook.xlsx.writeBuffer();
 }
 
+async function multiDateMidnightWorkbookBytes() {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("All");
+  worksheet.addRow(headers);
+  const add = (id, startAt, endAt, completedPower) => worksheet.addRow([
+    id, "Duyên Hải 1", "S1", "Thay đổi công suất", completedPower, completedPower,
+    startAt, endAt, "NSMO", "DH1", false, null, null, null, null, 1,
+  ]);
+  add("20", new Date(Date.UTC(2026, 8, 20, 22, 0)), new Date(Date.UTC(2026, 8, 20, 22, 15)), 622.5);
+  add("21", new Date(Date.UTC(2026, 8, 21, 23, 30)), new Date(Date.UTC(2026, 8, 22, 0, 15)), 435.7);
+  add("22", new Date(Date.UTC(2026, 8, 22, 1, 0)), new Date(Date.UTC(2026, 8, 22, 1, 20)), 500);
+  return workbook.xlsx.writeBuffer();
+}
+
 test("imports completed DH1 power commands into S1/S2 operating events", async () => {
   const result = await parseOperationCommandWorkbook(await sourceWorkbookBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-19");
   assert.equal(result.operatingDate, "2026-09-19");
@@ -131,6 +145,17 @@ test("keeps a rapid reserve command as type 3 instead of treating it as a protec
   assert.equal(result.events.S2[0].eventType, 3);
 });
 
+test("imports only commands starting on the selected date and keeps midnight completion", async () => {
+  const result = await parseOperationCommandWorkbook(await multiDateMidnightWorkbookBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-21");
+  assert.equal(result.operatingDate, "2026-09-21");
+  assert.equal(result.sourceRows, 1);
+  assert.equal(result.ignoredRows, 2);
+  assert.equal(result.events.S1.length, 1);
+  assert.equal(result.events.S1[0].startAt, "2026-09-21 23:30");
+  assert.equal(result.events.S1[0].endAt, "2026-09-22 00:15");
+  assert.equal(result.events.S1[0].description, "Giảm tải S1 từ 622.5MW về 435.7MW");
+});
+
 test("builds the five-column QLKT upload workbook", async () => {
   const result = await parseOperationCommandWorkbook(await sourceWorkbookBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-19");
   const bytes = await buildQlktOperationWorkbook(result);
@@ -147,10 +172,10 @@ test("builds the five-column QLKT upload workbook", async () => {
   assert.equal(qlktOperationFileName("2026-09-19"), "DH1_Thoi_gian_VH_19.09.2026.xlsx");
 });
 
-test("rejects a source workbook that does not match the selected operating date", async () => {
+test("rejects a source workbook with no commands starting on the selected operating date", async () => {
   const bytes = await sourceWorkbookBytes();
   await assert.rejects(
     () => parseOperationCommandWorkbook(bytes, "DanhSachLenhKetThuc.xlsx", "2026-09-20"),
-    /không phải ngày đang chọn/,
+    /trong ngày 20\/09\/2026/,
   );
 });

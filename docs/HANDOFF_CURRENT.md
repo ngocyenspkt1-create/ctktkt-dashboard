@@ -442,3 +442,9 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Van tinh tong HFO bang chenh lech cong to 24h ngay D va ngay D-1 cua S1, S2.
 - Neu tong chenh lech am do cong to dau ve bon tang nhieu hon cong to cap lo, chi tieu `X` tra ve 0 vi luong dau tieu thu vat ly khong the am.
 - Gia tri duong trong ngay co dot dau van duoc giu nguyen; khong lay tri tuyet doi va khong dao dau.
+
+# Cap nhat 23/09/2026 - nhap file lenh dieu do co nhieu ngay
+
+- Khi chon ngay bao cao, bo nhap chi lay cac lenh co thoi diem bat dau trong ngay dang chon.
+- Lenh bat dau truoc 24h va hoan thanh sau 0h ngay ke tiep van duoc giu nguyen trong ngay bat dau.
+- Cac dong thuoc ngay khac trong cung file duoc bo qua de nguoi dung tu nhap tay khi can; khong con chan ca file vi co nhieu ngay.
