@@ -73,8 +73,9 @@ function closeEnough(actual: number | null, expected: number | null) {
 
 function auditDay(sheet: XLSX.WorkSheet, entries: CtktktDayEntries, previous?: CtktktDayEntries) {
   const checks: CtktktFormulaCheck[] = [];
-  const add = (name: string, sourceCell: string, actual: number | null) => {
-    const expected = expectedNumber(sheet, sourceCell);
+  const add = (name: string, sourceCell: string, actual: number | null, expectedDivisor = 1) => {
+    const rawExpected = expectedNumber(sheet, sourceCell);
+    const expected = rawExpected === null ? null : rawExpected / expectedDivisor;
     checks.push({ name, sourceCell, expected, actual, passed: closeEnough(actual, expected) });
   };
   const summary = calculateCtktktMeterSummary(entries, previous);
@@ -108,7 +109,7 @@ function auditDay(sheet: XLSX.WorkSheet, entries: CtktktDayEntries, previous?: C
   const oil1 = calculateOilDifferences(entries, "s1", previous);
   const oil2 = calculateOilDifferences(entries, "s2", previous);
   ["W", "X", "Y", "Z", "AA", "AB"].forEach((column, index) => add(`Dầu S1 ${oil1[index].label}`, `${column}15`, oil1[index].diff));
-  ["AG", "AH", "AI", "AJ", "AK", "AL"].forEach((column, index) => add(`Dầu S2 ${oil2[index].label}`, `${column}15`, oil2[index].diff));
+  ["AG", "AH", "AI", "AJ", "AK", "AL"].forEach((column, index) => add(`Dầu S2 ${oil2[index].label}`, `${column}15`, oil2[index].diff, 1000));
   const steam1 = calculateSteamDifferences(entries, "s1");
   const steam2 = calculateSteamDifferences(entries, "s2");
   const steamInputRow = Array.from({ length: 12 }, (_, index) => 50 + index).find(row => String(sheet[`V${row}`]?.v || "").trim() === "Tổng lưu lượng hơi") ?? 54;

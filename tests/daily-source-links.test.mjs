@@ -47,7 +47,7 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.AE, "360");
   assert.equal(linked.AF, "360");
   assert.equal(linked.AT, "456.7");
-  assert.equal(linked.X, "96");
+  assert.equal(linked.X, "48.048");
   assert.ok(Number(linked.AJ) > 0);
 });
 

@@ -1,5 +1,12 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — sửa đơn vị dầu FO S2 khi liên kết Dữ liệu các tháng
+
+- Công tơ dầu S1 (`W:AB`, hàng 13–14) có đơn vị tấn; công tơ dầu S2 (`AG:AL`, hàng 13–14) có đơn vị kg. Trước đây web cộng trực tiếp kết quả S1 và S2 nên phần S2 bị phóng đại 1.000 lần trong cột `Dầu FO tiêu thụ`.
+- `calculateOilDifferences` nay luôn trả về tấn: giữ nguyên S1 và chia kết quả S2 cho 1.000. Công thức vật lý vẫn là `ΔF1 − ΔF2`, không lấy trị tuyệt đối và không tự đảo dấu.
+- Với dữ liệu 01–19/09/2026 đã nhập, giá trị sau sửa còn khoảng `-1,835` đến `-5,063 t/ngày` thay vì hàng trăm tấn âm. Dấu âm còn lại phản ánh `ΔF2 > ΔF1`, cần kiểm tra sai lệch/đảo kênh công tơ cấp lò và dầu về bồn; hệ thống không che giấu bằng cách ép về 0.
+- Kiểm tra đạt 153/153 test, TypeScript, ESLint phạm vi sửa và build production; bộ nhập lịch sử vẫn đối chiếu đúng kết quả Excel S2 sau khi quy đổi kg sang tấn.
+
 ## Cập nhật 23/09/2026 — không còn phụ thuộc Reload để sửa payload PMIS cũ
 
 - Reload Chrome/Edge chỉ nạp lại mã trong đúng thư mục tiện ích đang cài, không tự tải bản mới từ website. Nếu tiện ích đang trỏ tới thư mục giải nén cũ, bấm Reload vẫn giữ nguyên mã cũ.

@@ -77,8 +77,9 @@ function closeEnough(actual, expected) {
 
 function auditDay(sheet, entries, previousEntries) {
   const checks = [];
-  const add = (name, sourceCell, actual) => {
-    const expected = expectedNumber(sheet, sourceCell);
+  const add = (name, sourceCell, actual, expectedDivisor = 1) => {
+    const rawExpected = expectedNumber(sheet, sourceCell);
+    const expected = rawExpected === null ? null : rawExpected / expectedDivisor;
     checks.push({ name, sourceCell, expected, actual, passed: closeEnough(actual, expected) });
   };
 
@@ -135,7 +136,7 @@ function auditDay(sheet, entries, previousEntries) {
   const oil1 = calculateOilDifferences(entries, "s1", previousEntries);
   const oil2 = calculateOilDifferences(entries, "s2", previousEntries);
   ["W", "X", "Y", "Z", "AA", "AB"].forEach((column, index) => add(`Dầu S1 ${oil1[index].label}`, `${column}15`, oil1[index].diff));
-  ["AG", "AH", "AI", "AJ", "AK", "AL"].forEach((column, index) => add(`Dầu S2 ${oil2[index].label}`, `${column}15`, oil2[index].diff));
+  ["AG", "AH", "AI", "AJ", "AK", "AL"].forEach((column, index) => add(`Dầu S2 ${oil2[index].label}`, `${column}15`, oil2[index].diff, 1000));
 
   const steam1 = calculateSteamDifferences(entries, "s1");
   const steam2 = calculateSteamDifferences(entries, "s2");

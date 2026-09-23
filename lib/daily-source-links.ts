@@ -26,7 +26,9 @@ function sumComplete(values: Array<number | null>) {
 }
 
 function setNumber(result: Record<string, string>, code: string, value: number | null | undefined) {
-  if (value !== null && Number.isFinite(value)) result[code] = String(value);
+  if (value !== null && value !== undefined && Number.isFinite(value)) {
+    result[code] = String(Number(value.toPrecision(15)));
+  }
 }
 
 export function deriveDailyValuesFromCtktkt(

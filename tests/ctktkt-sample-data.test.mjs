@@ -73,7 +73,7 @@ test("Day 17 calculates full KPIs when Day 16 is present as previous day", () =>
   const oil1 = calculateOilDifferences(entries17, "s1", entries16);
   const oil2 = calculateOilDifferences(entries17, "s2", entries16);
   assert.deepEqual(oil1.map(item => Math.round((item.diff ?? 0) * 100) / 100), [-1.1, 0, -1, 0, -0.7, 0]);
-  assert.deepEqual(oil2.map(item => Math.round((item.diff ?? 0) * 100) / 100), [-183.1, 0, -195.8, 0, -199.12, 0]);
+  assert.deepEqual(oil2.map(item => Math.round((item.diff ?? 0) * 100000) / 100000), [-0.1831, 0, -0.1958, 0, -0.19912, 0]);
 
   // Steam consumption calculation
   const steam1 = calculateSteamDifferences(entries17, "s1");

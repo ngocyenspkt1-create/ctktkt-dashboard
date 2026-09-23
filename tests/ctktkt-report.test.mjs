@@ -127,7 +127,7 @@ test("calculateTkdDcsSummary sums auxiliary power and plant totals correctly", a
   assert.equal(summary.M.qSumS1S2, 15);
 });
 
-test("calculateOilDifferences follows Excel: delta F1 minus delta F2, with D-1 for 06h", async () => {
+test("calculateOilDifferences returns tonnes for both units and uses D-1 for 06h", async () => {
   const { calculateOilDifferences } = await import("../lib/ctktkt-report.ts");
   const entries = {
     W13: "1010.5", W14: "402.2", // S1 06h
@@ -143,7 +143,7 @@ test("calculateOilDifferences follows Excel: delta F1 minus delta F2, with D-1 f
   assert.equal(s1[1].diff, 10);
 
   const s2 = calculateOilDifferences(entries, "s2", previous);
-  assert.equal(s2[0].diff, 50);
+  assert.equal(s2[0].diff, 0.05);
 });
 
 test("startup oil consumption is split at grid synchronization and oil cut", async () => {

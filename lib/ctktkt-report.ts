@@ -387,6 +387,7 @@ export function calculateOilDifferences(
 ) {
   const isS1 = unit === "s1";
   const previousEndColumn = isS1 ? "AB" : "AL";
+  const unitDivisor = isS1 ? 1 : 1000;
   return OIL_HOURS.map(({ colS1, colS2, label }, index) => {
     const col = isS1 ? colS1 : colS2;
     const f1 = numberOf(entries, `${col}13`);
@@ -402,7 +403,7 @@ export function calculateOilDifferences(
       f1,
       f2,
       diff: f1 !== null && f2 !== null && priorF1 !== null && priorF2 !== null
-        ? (f1 - priorF1) - (f2 - priorF2)
+        ? ((f1 - priorF1) - (f2 - priorF2)) / unitDivisor
         : null,
     };
   });
