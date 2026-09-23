@@ -80,6 +80,7 @@ export function BcsxReport() {
   const [importingOperations, setImportingOperations] = useState(false);
   const section1ImportRef = useRef<HTMLInputElement | null>(null);
   const operationImportRef = useRef<HTMLInputElement | null>(null);
+  const dirtyReadingsRef = useRef(new Set<string>());
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +108,7 @@ export function BcsxReport() {
           nextGrids[entry.unit][entry.metric][idx] = entry.value;
         }
         setGrids(nextGrids);
+        dirtyReadingsRef.current.clear();
 
         const nextEvents: Record<Unit, OperatingEvent[]> = { S1: [], S2: [] };
         for (const e of eventsJson.events || []) nextEvents[e.unit]?.push(e);
@@ -153,16 +155,25 @@ export function BcsxReport() {
 
   function setCell(metric: ShiftMetric, index: number, value: string) {
     setGrids(old => ({ ...old, [unit]: { ...old[unit], [metric]: old[unit][metric].map((v, i) => i === index ? value : v) } }));
+    dirtyReadingsRef.current.add(`${unit}|${metric}|${index}`);
   }
 
   async function saveReadings() {
     setSaving(true); setError(null); setNotice(null);
     try {
-      const entries = SHIFT_METRICS.flatMap(m => SHIFT_TIME_SLOTS.map((slot, i) => ({ unit, timeSlot: slot, metric: m.key, value: grid[m.key][i].trim() })));
+      const dirtyKeys = [...dirtyReadingsRef.current].filter(key => key.startsWith(`${unit}|`));
+      const entries = dirtyKeys.map(key => {
+        const [, metricText, indexText] = key.split("|");
+        const metric = metricText as ShiftMetric;
+        const index = Number(indexText);
+        return { unit, timeSlot: SHIFT_TIME_SLOTS[index], metric, value: grid[metric][index].trim() };
+      });
+      if (!entries.length) throw new Error(`Không có ô nào của tổ máy ${unit} vừa thay đổi để lưu.`);
       const res = await fetch("/api/shift-readings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: operatingDate, entries }) });
       const json = await res.json() as { saved?: number; error?: string };
       if (!res.ok || json.error) throw new Error(json.error || "Không lưu được số liệu.");
-      setNotice(`Đã lưu số liệu tổ máy ${unit}.`);
+      for (const key of dirtyKeys) dirtyReadingsRef.current.delete(key);
+      setNotice(`Đã lưu ${json.saved ?? entries.length} ô vừa thay đổi của tổ máy ${unit}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không lưu được số liệu.");
     } finally {
@@ -266,6 +277,7 @@ export function BcsxReport() {
         if (index !== undefined) nextGrids[entry.unit][entry.metric][index] = entry.value;
       }
       setGrids(nextGrids);
+      dirtyReadingsRef.current.clear();
       setOperatingDate(lastDay.date);
       setNotice(`Đã nhập và đọc lại xác nhận ${importPackage.totals.entries.toLocaleString("vi-VN")} giá trị Mục 1 cho ${importPackage.days.length} ngày. Mục 2 và nhật ký sự kiện không thay đổi.`);
     } catch (caught) {
@@ -482,6 +494,7 @@ export function BcsxReport() {
           const metricKey = metricKeys[targetMetricIdx];
           const val = rowValues[c].trim();
           newGrid[metricKey][targetRowIdx] = val;
+          dirtyReadingsRef.current.add(`${unit}|${metricKey}|${targetRowIdx}`);
           count++;
         }
       }

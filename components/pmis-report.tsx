@@ -9,8 +9,10 @@ import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSy
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
+import { mergeDailyInputsWithCtktkt } from "@/lib/daily-source-links";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
+type CtktktInput = { operatingDate: string; cell: string; value: string };
 type Unit = "s1" | "s2";
 
 // 5 chỉ tiêu của báo cáo "THEO PMIS" lấy từ QLKT, tách theo tổ máy S1/S2. 4 chỉ tiêu đầu là số liệu
@@ -107,8 +109,22 @@ export function PmisReport() {
     setLoading(true); setError("");
     try {
       const periods = periodsBetween(from, to);
-      const responses = await Promise.all(periods.map(period => fetch(`/api/daily-inputs?period=${period}`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: DailyInput[]; error?: string }>)));
-      const all = responses.flatMap(body => body.entries || []);
+      const responses = await Promise.all(periods.map(async period => {
+        const [dailyResponse, ctktktResponse] = await Promise.all([
+          fetch(`/api/daily-inputs?period=${period}`, { cache: "no-store" }),
+          fetch(`/api/ctktkt-report?period=${period}`, { cache: "no-store" }),
+        ]);
+        const dailyBody = await dailyResponse.json() as { entries?: DailyInput[]; error?: string };
+        const ctktktBody = await ctktktResponse.json() as { entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string };
+        if (!dailyResponse.ok) throw new Error(dailyBody.error || "Không tải được dữ liệu PMIS.");
+        if (!ctktktResponse.ok) throw new Error(ctktktBody.error || "Không tải được dữ liệu Chỉ tiêu KTKT.");
+        return mergeDailyInputsWithCtktkt(
+          dailyBody.entries || [],
+          [...(ctktktBody.entries || []), ...(ctktktBody.linkedEntries || [])],
+          period,
+        );
+      }));
+      const all = responses.flat();
       setDailyInputs(all);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu."); }
     finally { setLoading(false); }
@@ -131,6 +147,7 @@ export function PmisReport() {
   useEffect(() => {
     const payload = decodeQlktSyncHash(window.location.hash);
     if (!payload) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPendingSync(payload);
     setSelectedSyncCodes(new Set(payload.entries.map(entry => entry.fieldCode)));
     window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);

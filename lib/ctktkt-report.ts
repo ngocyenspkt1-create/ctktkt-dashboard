@@ -45,6 +45,7 @@ export type Nh3DcsSummary = {
 
 export const NH3_TANK_ROWS = [69, 70, 71] as const;
 export const NH3_START_LEVEL_CELLS = new Set(NH3_TANK_ROWS.map(row => `N${row}`));
+export const NH3_DCS_START_METER_CELLS = new Set(["M81", "M82"]);
 
 export function deriveNh3StartLevels(previous?: CtktktDayEntries): CtktktDayEntries {
   const derived: CtktktDayEntries = {};
@@ -52,6 +53,10 @@ export function deriveNh3StartLevels(previous?: CtktktDayEntries): CtktktDayEntr
     const previousEndLevel = previous?.[`O${row}`]?.trim();
     if (previousEndLevel) derived[`N${row}`] = previousEndLevel;
   }
+  const previousS1Dcs = previous?.N81?.trim();
+  const previousS2Dcs = previous?.N82?.trim();
+  if (previousS1Dcs) derived.M81 = previousS1Dcs;
+  if (previousS2Dcs) derived.M82 = previousS2Dcs;
   return derived;
 }
 
@@ -355,14 +360,16 @@ export function calculateNh3Summary(
   };
 }
 
-export function calculateNh3DcsSummary(entries: CtktktDayEntries): Nh3DcsSummary {
+export function calculateNh3DcsSummary(
+  entries: CtktktDayEntries,
+  previous?: CtktktDayEntries,
+): Nh3DcsSummary {
   const unitSummary = (
-    startCell: string,
     endCell: string,
     grossCell: string,
     netCell: string,
   ): Nh3DcsUnitSummary | null => {
-    const startTonnes = numberOf(entries, startCell);
+    const startTonnes = numberOf(previous, endCell);
     const endTonnes = numberOf(entries, endCell);
     const grossMwh = numberOf(entries, grossCell);
     const netMwh = numberOf(entries, netCell);
@@ -384,8 +391,8 @@ export function calculateNh3DcsSummary(entries: CtktktDayEntries): Nh3DcsSummary
     };
   };
 
-  const s1 = unitSummary("M81", "N81", "J157", "K157");
-  const s2 = unitSummary("M82", "N82", "J158", "K158");
+  const s1 = unitSummary("N81", "J157", "K157");
+  const s2 = unitSummary("N82", "J158", "K158");
   return {
     s1,
     s2,

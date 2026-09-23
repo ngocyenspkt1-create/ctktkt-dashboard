@@ -3,16 +3,20 @@ import {
   calculateDailyAverageMoisture,
   calculateDailyOilConsumption,
   calculateNh3DcsSummary,
+  calculateNh3Summary,
   type CtktktDayEntries,
 } from "./ctktkt-report.ts";
 
 export const CTKTKT_LINKED_DAILY_CODES = new Set([
-  "B", "C", "H", "I", "X", "AE", "AF", "AJ", "AT", "BQ", "BR", "CJ",
+  "B", "C", "H", "I", "X", "AE", "AF", "AJ", "AT", "BN", "BQ", "BR", "CJ", "CN",
 ]);
 
 export const QLKT_DIRECT_DAILY_CODES = new Set([
   "F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV",
 ]);
+
+type DailyInputEntry = { operatingDate: string; fieldCode: string; value: string };
+type CtktktInputEntry = { operatingDate: string; cell: string; value: string };
 
 function numberOf(entries: CtktktDayEntries, cell: string) {
   const raw = entries[cell];
@@ -52,9 +56,54 @@ export function deriveDailyValuesFromCtktkt(
   const oilS2 = calculateDailyOilConsumption(current, "s2", previous);
   setNumber(result, "X", oilS1 === null || oilS2 === null ? null : Math.max(0, oilS1 + oilS2));
 
-  const nh3Dcs = calculateNh3DcsSummary(current);
+  const nh3 = calculateNh3Summary(current, null, null);
+  setNumber(result, "BN", nh3.usedTonnes);
+  setNumber(result, "CN", numberOf(current, "P72"));
+
+  const nh3Dcs = calculateNh3DcsSummary(current, previous);
   setNumber(result, "BQ", nh3Dcs.s1?.usedTonnes);
   setNumber(result, "BR", nh3Dcs.s2?.usedTonnes);
 
   return result;
+}
+
+export function mergeDailyInputsWithCtktkt(
+  dailyEntries: DailyInputEntry[],
+  ctktktEntries: CtktktInputEntry[],
+  period: string,
+) {
+  const ctktktByDate = new Map<string, CtktktDayEntries>();
+  for (const entry of ctktktEntries) {
+    const values = ctktktByDate.get(entry.operatingDate) || {};
+    values[entry.cell] = entry.value;
+    ctktktByDate.set(entry.operatingDate, values);
+  }
+
+  const merged = new Map<string, DailyInputEntry>();
+  for (const entry of dailyEntries) {
+    if (!CTKTKT_LINKED_DAILY_CODES.has(entry.fieldCode)) {
+      merged.set(`${entry.operatingDate}|${entry.fieldCode}`, entry);
+    }
+  }
+
+  for (const [operatingDate, current] of ctktktByDate) {
+    if (!operatingDate.startsWith(`${period}-`)) continue;
+    const previousDate = new Date(`${operatingDate}T12:00:00+07:00`);
+    previousDate.setDate(previousDate.getDate() - 1);
+    const previousIso = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(previousDate);
+    const linked = deriveDailyValuesFromCtktkt(current, ctktktByDate.get(previousIso));
+    for (const [fieldCode, value] of Object.entries(linked)) {
+      merged.set(`${operatingDate}|${fieldCode}`, { operatingDate, fieldCode, value });
+    }
+  }
+
+  return [...merged.values()].sort((left, right) =>
+    left.operatingDate.localeCompare(right.operatingDate)
+      || left.fieldCode.localeCompare(right.fieldCode),
+  );
 }

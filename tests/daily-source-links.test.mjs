@@ -4,6 +4,7 @@ import {
   CTKTKT_LINKED_DAILY_CODES,
   QLKT_DIRECT_DAILY_CODES,
   deriveDailyValuesFromCtktkt,
+  mergeDailyInputsWithCtktkt,
 } from "../lib/daily-source-links.ts";
 
 function fillRange(target, column, value) {
@@ -11,13 +12,13 @@ function fillRange(target, column, value) {
 }
 
 test("monthly data derives duplicated production values from CTKTKT", () => {
-  const previous = { AB13: "100", AB14: "20", AL13: "200", AL14: "40" };
+  const previous = { AB13: "100", AB14: "20", AL13: "200", AL14: "40", N81: "103.84", N82: "479.43" };
   fillRange(previous, "AB", 0);
   fillRange(previous, "AL", 0);
 
   const current = {
     J157: "12100", K157: "11200", J158: "12200", K158: "11300", I36: "456.7",
-    M81: "103.84", N81: "111.84", M82: "479.43", N82: "486.25",
+    N81: "111.84", N82: "486.25", P72: "42.21", P73: "117.891", P74: "141.595",
   };
   fillRange(current, "X", 10);
   fillRange(current, "Z", 20);
@@ -45,6 +46,8 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.X, "48.048");
   assert.equal(linked.BQ, "8");
   assert.equal(linked.BR, "6.82");
+  assert.equal(linked.BN, "18.506");
+  assert.equal(linked.CN, "42.21");
   assert.equal(linked.CJ, "10");
   assert.ok(Number(linked.AJ) > 0);
 });
@@ -70,5 +73,25 @@ test("QLKT monthly synchronization excludes fields already linked from CTKTKT", 
   assert.deepEqual([...QLKT_DIRECT_DAILY_CODES], ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"]);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BQ"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BR"), true);
+  assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BN"), true);
+  assert.equal(CTKTKT_LINKED_DAILY_CODES.has("CN"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("CJ"), true);
+});
+
+test("PPA actual data prefers CTKTKT links and keeps QLKT-only fields", () => {
+  const dailyEntries = [
+    { operatingDate: "2026-09-21", fieldCode: "C", value: "999" },
+    { operatingDate: "2026-09-21", fieldCode: "I", value: "999" },
+    { operatingDate: "2026-09-21", fieldCode: "F", value: "12.5" },
+  ];
+  const ctktktEntries = [
+    { operatingDate: "2026-09-21", cell: "K157", value: "11200" },
+    { operatingDate: "2026-09-21", cell: "K158", value: "11300" },
+  ];
+
+  const merged = mergeDailyInputsWithCtktkt(dailyEntries, ctktktEntries, "2026-09");
+  const values = Object.fromEntries(merged.map(entry => [entry.fieldCode, entry.value]));
+  assert.equal(values.C, "11.2");
+  assert.equal(values.I, "11.3");
+  assert.equal(values.F, "12.5");
 });

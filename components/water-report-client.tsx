@@ -49,6 +49,7 @@ export function WaterReportClient() {
   const [editingShift, setEditingShift] = useState<Partial<WaterShiftLog> | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [savingShift, setSavingShift] = useState(false);
+  const dirtyShiftFieldsRef = useRef(new Set<keyof WaterShiftLog>());
 
 
   // Modal quản lý Trưởng ca (Admin)
@@ -145,6 +146,7 @@ export function WaterReportClient() {
       }
     }
 
+    dirtyShiftFieldsRef.current.clear();
     setEditingShift({
       logDate: nextDate,
       shiftTime: nextTime,
@@ -165,8 +167,14 @@ export function WaterReportClient() {
 
   // Mở modal sửa ca đã chọn
   function handleOpenEditModal(shift: WaterShiftLog) {
+    dirtyShiftFieldsRef.current.clear();
     setEditingShift({ ...shift });
     setIsModalOpen(true);
+  }
+
+  function updateEditingShift<K extends keyof WaterShiftLog>(field: K, value: WaterShiftLog[K]) {
+    dirtyShiftFieldsRef.current.add(field);
+    setEditingShift(current => current ? { ...current, [field]: value } : current);
   }
 
   // Tìm ca trước ca đang sửa để tính toán thử
@@ -228,12 +236,19 @@ export function WaterReportClient() {
   async function handleSaveShift(e: React.FormEvent) {
     e.preventDefault();
     if (!editingShift) return;
+    if (editingShift.id && dirtyShiftFieldsRef.current.size === 0) {
+      setError("Không có ô dữ liệu nào vừa thay đổi để lưu.");
+      return;
+    }
     setSavingShift(true);
     try {
       const res = await fetch("/api/water-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shift: editingShift }),
+        body: JSON.stringify({
+          shift: editingShift,
+          changedFields: editingShift.id ? [...dirtyShiftFieldsRef.current] : undefined,
+        }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Không thể lưu ca.");
@@ -241,6 +256,7 @@ export function WaterReportClient() {
       showSuccess(`Đã lưu thành công ca ${editingShift.shiftTime} ngày ${formatIsoToDmy(editingShift.logDate || "")}`);
       setIsModalOpen(false);
       setEditingShift(null);
+      dirtyShiftFieldsRef.current.clear();
       // Tải lại dữ liệu tháng của ca đó
       if (editingShift.logDate && !editingShift.logDate.startsWith(month)) {
         setMonth(editingShift.logDate.slice(0, 7));
@@ -1002,9 +1018,9 @@ export function WaterReportClient() {
                     <input
                       type="date"
                       required
-                      disabled={!canEditMeta}
+                      disabled={!canEditMeta || Boolean(editingShift.id)}
                       value={editingShift.logDate || ""}
-                      onChange={e => setEditingShift(s => ({ ...s, logDate: e.target.value }))}
+                      onChange={e => updateEditingShift("logDate", e.target.value)}
                       className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-emerald-500"
                     />
                   </div>
@@ -1012,9 +1028,9 @@ export function WaterReportClient() {
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">GIỜ GIAO CA</label>
                     <select
-                      disabled={!canEditMeta}
+                      disabled={!canEditMeta || Boolean(editingShift.id)}
                       value={editingShift.shiftTime || "06h00"}
-                      onChange={e => setEditingShift(s => ({ ...s, shiftTime: e.target.value as "06h00" }))}
+                      onChange={e => updateEditingShift("shiftTime", e.target.value)}
                       className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold outline-none focus:border-emerald-500"
                     >
                       {SHIFT_TIMES.map(t => (
@@ -1030,7 +1046,7 @@ export function WaterReportClient() {
                     <select
                       disabled={!canEditMeta}
                       value={editingShift.shiftTeam || "A"}
-                      onChange={e => setEditingShift(s => ({ ...s, shiftTeam: e.target.value }))}
+                      onChange={e => updateEditingShift("shiftTeam", e.target.value)}
                       className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-extrabold outline-none focus:border-emerald-500 text-center"
                     >
                       {SHIFT_TEAMS.map(team => (
@@ -1046,7 +1062,7 @@ export function WaterReportClient() {
                     <select
                       disabled={!canEditMeta}
                       value={editingShift.shiftLeader || leaders[0]}
-                      onChange={e => setEditingShift(s => ({ ...s, shiftLeader: e.target.value }))}
+                      onChange={e => updateEditingShift("shiftLeader", e.target.value)}
                       className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold outline-none focus:border-emerald-500"
                     >
                       {leaders.map(name => (
@@ -1078,7 +1094,7 @@ export function WaterReportClient() {
                         step="0.1"
                         disabled={!canEditElec}
                         value={editingShift.elecRecS1 ?? ""}
-                        onChange={e => setEditingShift(s => ({ ...s, elecRecS1: Number(e.target.value) }))}
+                        onChange={e => updateEditingShift("elecRecS1", Number(e.target.value))}
                         className={`w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs font-bold outline-none focus:border-emerald-500 ${
                           canEditElec ? "border-slate-300 bg-white" : "border-slate-200 bg-slate-100 cursor-not-allowed"
                         }`}
@@ -1092,7 +1108,7 @@ export function WaterReportClient() {
                         step="0.1"
                         disabled={!canEditElec}
                         value={editingShift.elecRecS2 ?? ""}
-                        onChange={e => setEditingShift(s => ({ ...s, elecRecS2: Number(e.target.value) }))}
+                        onChange={e => updateEditingShift("elecRecS2", Number(e.target.value))}
                         className={`w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs font-bold outline-none focus:border-emerald-500 ${
                           canEditElec ? "border-slate-300 bg-white" : "border-slate-200 bg-slate-100 cursor-not-allowed"
                         }`}
@@ -1119,7 +1135,7 @@ export function WaterReportClient() {
                         step="0.01"
                         disabled={!canEditIntake}
                         value={editingShift.waterRecS1 ?? ""}
-                        onChange={e => setEditingShift(s => ({ ...s, waterRecS1: Number(e.target.value) }))}
+                        onChange={e => updateEditingShift("waterRecS1", Number(e.target.value))}
                         className={`w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs font-bold outline-none focus:border-emerald-500 ${
                           canEditIntake ? "border-slate-300 bg-white" : "border-slate-200 bg-slate-100 cursor-not-allowed"
                         }`}
@@ -1133,7 +1149,7 @@ export function WaterReportClient() {
                         step="0.01"
                         disabled={!canEditIntake}
                         value={editingShift.waterRecS2 ?? ""}
-                        onChange={e => setEditingShift(s => ({ ...s, waterRecS2: Number(e.target.value) }))}
+                        onChange={e => updateEditingShift("waterRecS2", Number(e.target.value))}
                         className={`w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs font-bold outline-none focus:border-emerald-500 ${
                           canEditIntake ? "border-slate-300 bg-white" : "border-slate-200 bg-slate-100 cursor-not-allowed"
                         }`}
@@ -1160,7 +1176,7 @@ export function WaterReportClient() {
                         step="0.01"
                         disabled={!canEditIntake}
                         value={editingShift.condenserRecS1 ?? ""}
-                        onChange={e => setEditingShift(s => ({ ...s, condenserRecS1: Number(e.target.value) }))}
+                        onChange={e => updateEditingShift("condenserRecS1", Number(e.target.value))}
                         className={`w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs font-bold outline-none focus:border-emerald-500 ${
                           canEditIntake ? "border-slate-300 bg-white" : "border-slate-200 bg-slate-100 cursor-not-allowed"
                         }`}
@@ -1174,7 +1190,7 @@ export function WaterReportClient() {
                         step="0.01"
                         disabled={!canEditIntake}
                         value={editingShift.condenserRecS2 ?? ""}
-                        onChange={e => setEditingShift(s => ({ ...s, condenserRecS2: Number(e.target.value) }))}
+                        onChange={e => updateEditingShift("condenserRecS2", Number(e.target.value))}
                         className={`w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs font-bold outline-none focus:border-emerald-500 ${
                           canEditIntake ? "border-slate-300 bg-white" : "border-slate-200 bg-slate-100 cursor-not-allowed"
                         }`}
@@ -1201,7 +1217,7 @@ export function WaterReportClient() {
                         step="1"
                         disabled={!canEditResin}
                         value={editingShift.resinWaterS1_24h ?? ""}
-                        onChange={e => setEditingShift(s => ({ ...s, resinWaterS1_24h: Number(e.target.value) }))}
+                        onChange={e => updateEditingShift("resinWaterS1_24h", Number(e.target.value))}
                         className={`w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs font-bold outline-none focus:border-emerald-500 ${
                           canEditResin ? "border-slate-300 bg-white" : "border-slate-200 bg-slate-100 cursor-not-allowed"
                         }`}
@@ -1215,7 +1231,7 @@ export function WaterReportClient() {
                         step="1"
                         disabled={!canEditResin}
                         value={editingShift.resinWaterS2_24h ?? ""}
-                        onChange={e => setEditingShift(s => ({ ...s, resinWaterS2_24h: Number(e.target.value) }))}
+                        onChange={e => updateEditingShift("resinWaterS2_24h", Number(e.target.value))}
                         className={`w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs font-bold outline-none focus:border-emerald-500 ${
                           canEditResin ? "border-slate-300 bg-white" : "border-slate-200 bg-slate-100 cursor-not-allowed"
                         }`}

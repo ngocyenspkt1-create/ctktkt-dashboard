@@ -24,7 +24,7 @@ test("Cell group mapping identifies key cells correctly", () => {
   assert.equal(getCtktktFieldGroup("W54"), "steam_flow");
   assert.equal(getCtktktFieldGroup("N69"), "nh3_tank");
   assert.equal(getCtktktFieldGroup("P72"), "nh3_tank");
-  assert.equal(getCtktktFieldGroup("M81"), "nh3_dcs");
+  assert.equal(getCtktktFieldGroup("M81"), null);
   assert.equal(getCtktktFieldGroup("N82"), "nh3_dcs");
   assert.equal(getCtktktFieldGroup("M49"), "td21");
   assert.equal(getCtktktFieldGroup("AJ87"), "coal_blend_pmis");
@@ -117,6 +117,7 @@ test("Lò trưởng can enter NH3 DCS but Lò phó cannot", () => {
   const loPho = { id: 52, username: "lopho2", displayName: "Lò phó", role: "viewer", position: "Lò phó", permissions: ["view_all"] };
 
   assert.equal(canEditCtktktGroup(loTruong, "nh3_dcs"), true);
+  assert.equal(canEditCtktktField(loTruong, "M81"), false);
   assert.equal(canEditCtktktField(loTruong, "N82"), true);
   assert.equal(canEditCtktktGroup(loPho, "nh3_dcs"), false);
   assert.equal(canEditCtktktField(loPho, "N82"), false);

@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
 import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource, type MeterReading, type PpaResult } from "@/lib/ppa-heat-rate";
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from "@/lib/qlkt-sync";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
+import { mergeDailyInputsWithCtktkt } from "@/lib/daily-source-links";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
+type CtktktInput = { operatingDate: string; cell: string; value: string };
 type StoredPpa = PpaResult & { operatingDate: string; sourceFiles: string; noteS1: string; noteS2: string; updatedAt: string };
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -33,32 +35,59 @@ export function PpaHeatRateComparison() {
   const [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const qlktRequestRef = useRef<{ id: string; timer: number } | null>(null);
+  const loadPeriodControllerRef = useRef<AbortController | null>(null);
   const period = operatingDate.slice(0, 7);
 
-  async function loadPeriod() {
+  const loadPeriod = useCallback(async () => {
+    loadPeriodControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadPeriodControllerRef.current = controller;
     setLoading(true); setError("");
     try {
-      const [dailyResponse, ppaResponse] = await Promise.all([fetch(`/api/daily-inputs?period=${period}`, { cache: "no-store" }), fetch(`/api/ppa-heat-rate?period=${period}`, { cache: "no-store" })]);
-      const dailyBody = await dailyResponse.json() as { entries?: DailyInput[]; error?: string }, ppaBody = await ppaResponse.json() as { entries?: StoredPpa[]; error?: string };
+      const [dailyResponse, ctktktResponse, ppaResponse] = await Promise.all([
+        fetch(`/api/daily-inputs?period=${period}`, { cache: "no-store", signal: controller.signal }),
+        fetch(`/api/ctktkt-report?period=${period}`, { cache: "no-store", signal: controller.signal }),
+        fetch(`/api/ppa-heat-rate?period=${period}`, { cache: "no-store", signal: controller.signal }),
+      ]);
+      const dailyBody = await dailyResponse.json() as { entries?: DailyInput[]; error?: string };
+      const ctktktBody = await ctktktResponse.json() as { entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string };
+      const ppaBody = await ppaResponse.json() as { entries?: StoredPpa[]; error?: string };
       if (!dailyResponse.ok) throw new Error(dailyBody.error || "Không tải được dữ liệu KTKT.");
+      if (!ctktktResponse.ok) throw new Error(ctktktBody.error || "Không tải được dữ liệu Chỉ tiêu KTKT.");
       if (!ppaResponse.ok) throw new Error(ppaBody.error || "Không tải được lịch sử PPA.");
-      setDailyInputs(dailyBody.entries || []); setHistory(ppaBody.entries || []);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu."); }
-    finally { setLoading(false); }
-  }
+      if (loadPeriodControllerRef.current !== controller) return;
+      setDailyInputs(mergeDailyInputsWithCtktkt(
+        dailyBody.entries || [],
+        [...(ctktktBody.entries || []), ...(ctktktBody.linkedEntries || [])],
+        period,
+      ));
+      setHistory(ppaBody.entries || []);
+    } catch (caught) {
+      if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu.");
+    } finally {
+      if (loadPeriodControllerRef.current === controller) {
+        loadPeriodControllerRef.current = null;
+        setLoading(false);
+      }
+    }
+  }, [period]);
 
-  useEffect(() => { void loadPeriod(); }, [period]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadPeriod(), 0);
+    return () => {
+      window.clearTimeout(timer);
+      loadPeriodControllerRef.current?.abort();
+    };
+  }, [loadPeriod]);
 
   // Tự động điền nhận xét đã lưu của ngày đang chọn khi đổi ngày hoặc khi history tải xong
   useEffect(() => {
-    const existing = history.find(entry => entry.operatingDate === operatingDate);
-    if (existing) {
-      setNoteS1(existing.noteS1 || "");
-      setNoteS2(existing.noteS2 || "");
-    } else {
-      setNoteS1("");
-      setNoteS2("");
-    }
+    const timer = window.setTimeout(() => {
+      const existing = history.find(entry => entry.operatingDate === operatingDate);
+      setNoteS1(existing?.noteS1 || "");
+      setNoteS2(existing?.noteS2 || "");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [operatingDate, history]);
 
   useEffect(() => {
@@ -72,7 +101,7 @@ export function PpaHeatRateComparison() {
         setSourceFiles(["QLKT · Số liệu đo đếm công tơ"]);
         setOperatingDate(payload.operatingDate);
         setError("");
-        setMessage("Đã nhận đủ 4 điểm đo và 48 chu kỳ từ QLKT. Hãy kiểm tra kết quả trước khi lưu.");
+        setMessage("Đã nhận 4 công tơ PPA × 48 chu kỳ từ QLKT. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
         window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Không đọc được dữ liệu công tơ từ QLKT.");
@@ -111,7 +140,7 @@ export function PpaHeatRateComparison() {
         setSourceFiles(["QLKT · Số liệu đo đếm công tơ"]);
         setOperatingDate(payload.operatingDate);
         setError("");
-        setMessage("Đồng bộ QLKT thành công: đã nhận đủ 4 điểm đo và 48 chu kỳ. Hãy kiểm tra kết quả trước khi lưu.");
+        setMessage("Đồng bộ QLKT thành công: đã nhận 4 công tơ PPA × 48 chu kỳ. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Không đọc được dữ liệu công tơ từ QLKT.");
       }
@@ -131,11 +160,19 @@ export function PpaHeatRateComparison() {
   }, [dailyInputs]);
   const actual = actualByDate.get(operatingDate) || null;
   const selected = useMemo(() => selectPpaSource(mergeMeterReadings([readings])), [readings]);
-  const calculation = useMemo(() => {
-    if (!selected.source) return null;
-    try { return calculatePpaHeatRate(selected.source, Number(operatingDate.slice(0, 4))); }
-    catch { return null; }
+  const calculationState = useMemo(() => {
+    if (!selected.source) return { calculation: null, error: "" };
+    try {
+      return { calculation: calculatePpaHeatRate(selected.source, Number(operatingDate.slice(0, 4))), error: "" };
+    } catch (caught) {
+      return { calculation: null, error: caught instanceof Error ? caught.message : "Dữ liệu công tơ PPA không hợp lệ." };
+    }
   }, [selected.source, operatingDate]);
+  const calculation = calculationState.calculation;
+  const selectedDailyValues = useMemo(() => Object.fromEntries(
+    dailyInputs.filter(entry => entry.operatingDate === operatingDate).map(entry => [entry.fieldCode, entry.value]),
+  ), [dailyInputs, operatingDate]);
+  const missingActualCodes = ["C", "I", "AE", "AF", "AJ"].filter(code => !selectedDailyValues[code]?.trim());
 
   function addParsed(next: MeterReading[], name: string) {
     const merged = mergeMeterReadings([readings, next]);
@@ -249,7 +286,7 @@ export function PpaHeatRateComparison() {
         <span className="text-xs font-bold text-slate-600">Ngày:</span>
         <DateField value={operatingDate} onChange={value => { setOperatingDate(value); clearImport(); }} className="w-[145px]" />
         <button type="button" disabled={syncingQlkt || isViewer} onClick={syncFromQlkt} className="rounded-lg bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3 py-1.5 text-xs font-bold text-white shadow-sm disabled:opacity-50">
-          {syncingQlkt ? "Đang đồng bộ PPA…" : "⚡ Đồng bộ PPA từ QLKT"}
+          {syncingQlkt ? "Đang lấy công tơ PPA…" : "⚡ Lấy công tơ PPA từ QLKT"}
         </button>
       </div>
     </div>
@@ -264,6 +301,8 @@ export function PpaHeatRateComparison() {
           <span className="font-medium text-slate-500">Nguồn PPA:</span>
           {calculation ? (
             <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">✓ Đủ 4 điểm đo (48 chu kỳ)</span>
+          ) : calculationState.error ? (
+            <span className="rounded-md bg-red-100 px-2 py-0.5 font-semibold text-red-800">Đủ 4 điểm đo nhưng số liệu chưa hợp lệ</span>
           ) : (
             <span className="rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">
               {selected.found.filter(item => item.found).length}/4 điểm đo
@@ -273,9 +312,11 @@ export function PpaHeatRateComparison() {
         <div className="flex items-center gap-1.5">
           <span className="font-medium text-slate-500">Thực tế:</span>
           {actual ? (
-            <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">✓ Đã có dữ liệu KTKT</span>
+            <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">✓ Liên kết từ Chỉ tiêu KTKT</span>
           ) : (
-            <span className="rounded-md bg-slate-200 px-2 py-0.5 font-semibold text-slate-600">Chưa có số liệu KTKT</span>
+            <span className="rounded-md bg-slate-200 px-2 py-0.5 font-semibold text-slate-600">
+              {missingActualCodes.length ? `Thiếu KTKT: ${missingActualCodes.join(", ")}` : "Số liệu KTKT chưa hợp lệ"}
+            </span>
           )}
         </div>
       </div>
@@ -295,7 +336,13 @@ export function PpaHeatRateComparison() {
         <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#20345f]">Kết quả so sánh suất hao nhiệt (kJ/kWh)</h2>
       </div>
       {!calculation ? (
-        <div className="p-3 text-xs text-slate-500">Chưa có dữ liệu PPA cho ngày {operatingDate.split("-").reverse().join("/")}. Hãy dùng nút <b>Đồng bộ PPA từ QLKT</b> ở đầu trang này.</div>
+        <div className={`p-3 text-xs ${calculationState.error ? "bg-red-50 text-red-800" : "text-slate-500"}`}>
+          {calculationState.error ? (
+            <>Đã nhận đủ 4 điểm đo nhưng chưa tính được PPA: <b>{calculationState.error}</b></>
+          ) : (
+            <>Chưa có dữ liệu PPA cho ngày {operatingDate.split("-").reverse().join("/")}. Hãy dùng nút <b>Lấy công tơ PPA từ QLKT</b> ở đầu trang này.</>
+          )}
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-xs">

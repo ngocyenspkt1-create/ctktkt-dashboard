@@ -1,5 +1,30 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — làm rõ lỗi PPA “đủ 4 điểm đo nhưng chưa tính được”
+
+- Ảnh production ngày 22/09/2026 cho thấy tiện ích đã nhận đủ tên 4 công tơ và 48 chu kỳ, nhưng phép tính PPA bị loại; nguyên nhân kỹ thuật có thể là tổng sản lượng điểm bán S1 hoặc S2 bằng 0. Giao diện cũ nuốt lỗi này rồi hiển thị chung “Chưa có dữ liệu PPA”.
+- Màn hình mới giữ trạng thái 4/4 điểm đo nhưng báo chính xác tổ máy có tổng điểm bán bằng 0 hoặc dữ liệu chu kỳ không hợp lệ. Phần thực tế đồng thời liệt kê các mã Chỉ tiêu KTKT còn thiếu trong `C, I, AE, AF, AJ`.
+- Bổ sung kiểm thử trường hợp tổng điểm bán S2 bằng 0. Kiểm tra đạt: 173/173 test, TypeScript, ESLint phạm vi sửa, build production và `git diff --check`.
+- Ảnh người dùng đang dùng bản production cũ (`Đồng bộ PPA từ QLKT` và thông báo “Hãy kiểm tra kết quả trước khi lưu”); thay đổi mới hiện chỉ ở working tree, chưa commit/push/deploy.
+- `npm.cmd run storage:check` bị chặn vì giá trị `TURSO_DATABASE_URL` trong `.env.local` không có định dạng URL hợp lệ; token đã có nhưng chưa thể kết nối để xác minh dung lượng Turso/Vercel.
+
+## Cập nhật 23/09/2026 — NH3 DCS D−D-1, lưu đúng ô và liên kết một nguồn
+
+- NH3 DCS ngày D chỉ nhập công tơ 24h tại `N81/N82`; công tơ đầu ngày `M81/M82` là chỉ đọc và tự lấy từ `N81/N82` ngày D-1. Lượng dùng S1/S2 được tính bằng công tơ 24h ngày D trừ công tơ 24h ngày D-1 và tự liên kết sang `BQ/BR`.
+- Nguồn liên kết chung từ Chỉ tiêu KTKT sang Dữ liệu các tháng/PMIS gồm `B, C, H, I, X, AE, AF, AJ, AT, BN, BQ, BR, CJ, CN`. API không cho lưu lần hai các mã này; BCSX chỉ lưu riêng dữ liệu không trùng nguồn.
+- Lưu tay đã được thu hẹp theo thay đổi thực tế: Chỉ tiêu KTKT chỉ gửi các ô bẩn; bảng BCSX chỉ gửi các điểm đo vừa gõ/dán; báo cáo Nước gửi `changedFields` và API giữ nguyên mọi trường không sửa. Các luồng nhập file, đồng bộ nhiều mã và thay danh sách sự kiện vẫn là thao tác hàng loạt có chủ đích.
+- Kiểm tra đạt: 172/172 test, `npx.cmd tsc --noEmit`, build production và `git diff --check`. ESLint riêng `components/pmis-report.tsx` không còn lỗi; lint phạm vi rộng vẫn còn lỗi/cảnh báo hiện hữu ở các màn hình cũ nên chưa thể ghi nhận lint toàn dự án đạt.
+- `npm.cmd run storage:check` hiện bị chặn vì `TURSO_DATABASE_URL` trong `.env.local` không có định dạng URL hợp lệ; chưa có số liệu xác thực để kết luận tỷ lệ sử dụng Turso/Vercel. Chưa nghiệm thu thao tác bằng trình duyệt với tài khoản thật trong lượt local này.
+
+## Cập nhật 23/09/2026 — bảo toàn dữ liệu khi đồng bộ và thống nhất nguồn PPA thực tế
+
+- Trang Chỉ tiêu KTKT chỉ gửi các ô người dùng vừa sửa thay vì gửi lại toàn bộ ô được phân quyền; đọc lại CSDL sau khi lưu vẫn được giữ. Đồng bộ PMIS/02-PĐ không còn xóa trạng thái các ô nhập tay khác, và khóa đổi ngày trong lúc đang lưu/nhập lịch sử/đồng bộ để tránh lẫn dữ liệu giữa hai ngày.
+- Hai luồng nhập lệnh vận hành BCSX chỉ thay thế sự kiện của tổ máy khi file hoặc tiện ích thực sự trả về sự kiện cho tổ đó. Nếu S1 hoặc S2 không có sự kiện đầu vào, dữ liệu đã lưu của tổ tương ứng được giữ nguyên thay vì bị xóa.
+- Trang PPA lấy các trường sản lượng, than và nhiệt trị dùng tính suất hao nhiệt thực tế từ Chỉ tiêu KTKT; chỉ giữ các trường QLKT không trùng nguồn. Yêu cầu tải tháng cũ bị hủy khi người dùng chuyển tháng để phản hồi đến muộn không ghi đè màn hình hiện tại.
+- Nhãn nút PPA đổi thành `Lấy công tơ PPA từ QLKT` để phân biệt rõ: QLKT chỉ cấp bốn công tơ PPA, còn suất hao nhiệt thực tế liên kết từ Chỉ tiêu KTKT.
+- Kiểm tra đạt: 169/169 test, `npx.cmd tsc --noEmit`, ESLint phạm vi sửa không có lỗi, `git diff --check` và build production. `npm.cmd run lint` toàn dự án vẫn không đạt do 14 lỗi/22 cảnh báo tồn tại ở các file ngoài phạm vi; các file sửa trong lượt này không phát sinh lỗi lint mới.
+- `npm.cmd run storage:check` bị chặn chính xác vì môi trường local thiếu `TURSO_DATABASE_URL`; chưa có số liệu xác thực để kết luận tỷ lệ sử dụng Turso hoặc Vercel.
+
 ## Cập nhật 23/09/2026 — sửa đẩy Google Sheet khi một tổ có sản lượng bằng 0
 
 - Nguyên nhân lỗi “Thiếu dữ liệu Đầu cực S1”: giao diện đã lấy sản lượng liên kết từ Chỉ tiêu KTKT, nhưng API Google Sheet vẫn chỉ đọc trường cũ trong `daily_inputs` nên không thấy mã `B`.

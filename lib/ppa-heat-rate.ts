@@ -183,8 +183,10 @@ export type IntervalDetail = { grossKwh: number; netKwh: number; rate: number; h
 export type UnitDetail = { heat: number; netTotal: number; grossTotal: number; ppa: number; intervals: IntervalDetail[] };
 export type PpaDetailedResult = { s1: UnitDetail; s2: UnitDetail; ppaPlant: number };
 
-function calculateUnit(gross: number[], net: number[], year: number): UnitDetail {
-  if (gross.length !== 48 || net.length !== 48 || [...gross, ...net].some(value => !Number.isFinite(value) || value < 0)) throw new Error("Mỗi điểm đo phải có đủ 48 giá trị nửa giờ hợp lệ.");
+function calculateUnit(gross: number[], net: number[], year: number, unitLabel: "S1" | "S2"): UnitDetail {
+  if (gross.length !== 48 || net.length !== 48 || [...gross, ...net].some(value => !Number.isFinite(value) || value < 0)) {
+    throw new Error(`Dữ liệu ${unitLabel} phải có đủ 48 giá trị nửa giờ không âm.`);
+  }
   const curve = ppaCurveForYear(year);
   let heat = 0, netTotal = 0;
   const intervals: IntervalDetail[] = [];
@@ -198,12 +200,12 @@ function calculateUnit(gross: number[], net: number[], year: number): UnitDetail
     netTotal += net[index];
     intervals.push({ grossKwh: gross[index], netKwh: net[index], rate, heatKj });
   }
-  if (netTotal <= 0) throw new Error("Sản lượng điểm bán phải lớn hơn 0.");
+  if (netTotal <= 0) throw new Error(`Tổng sản lượng điểm bán ${unitLabel} đang bằng 0. Hãy kiểm tra công tơ ${unitLabel} trên QLKT.`);
   return { heat, netTotal, grossTotal: gross.reduce((sum, value) => sum + value, 0), ppa: heat / netTotal, intervals };
 }
 
 export function calculatePpaHeatRate(source: PpaSourceData, year: number): PpaResult {
-  const s1 = calculateUnit(source.grossS1, source.netS1, year), s2 = calculateUnit(source.grossS2, source.netS2, year);
+  const s1 = calculateUnit(source.grossS1, source.netS1, year, "S1"), s2 = calculateUnit(source.grossS2, source.netS2, year, "S2");
   return { ppaPlant: (s1.heat + s2.heat) / (s1.netTotal + s2.netTotal), ppaS1: s1.ppa, ppaS2: s2.ppa, grossS1Kwh: s1.grossTotal, netS1Kwh: s1.netTotal, grossS2Kwh: s2.grossTotal, netS2Kwh: s2.netTotal };
 }
 
@@ -211,7 +213,7 @@ export function calculatePpaHeatRate(source: PpaSourceData, year: number): PpaRe
 // tái tạo các sheet "S1"/"S2" giống file mẫu gốc khi xuất Excel (không đổi kết quả
 // calculatePpaHeatRate ở trên, chỉ bổ sung thêm chi tiết nội bộ từng chu kỳ).
 export function calculatePpaHeatRateDetailed(source: PpaSourceData, year: number): PpaDetailedResult {
-  const s1 = calculateUnit(source.grossS1, source.netS1, year), s2 = calculateUnit(source.grossS2, source.netS2, year);
+  const s1 = calculateUnit(source.grossS1, source.netS1, year, "S1"), s2 = calculateUnit(source.grossS2, source.netS2, year, "S2");
   return { s1, s2, ppaPlant: (s1.heat + s2.heat) / (s1.netTotal + s2.netTotal) };
 }
 

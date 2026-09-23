@@ -11,7 +11,7 @@ import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
-import { calculateNh3Summary, previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
+import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { CTKTKT_LINKED_DAILY_CODES, deriveDailyValuesFromCtktkt, QLKT_DIRECT_DAILY_CODES } from "@/lib/daily-source-links";
 import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXTENSION_VERSION } from "@/lib/qlkt-extension-version";
 
@@ -118,9 +118,6 @@ export function DailyProductionTable() {
             next[day][code] = value;
             linked.add(`${day}:${code}`);
           }
-          const nh3 = calculateNh3Summary(values, null, null);
-          if (nh3.usedTonnes !== null) { next[day].BN = String(nh3.usedTonnes); linked.add(`${day}:BN`); }
-          if (values.P72?.trim()) { next[day].CN = values.P72; linked.add(`${day}:CN`); }
         }
       }
       setCtktktLinkedCells(linked); setRows(next);

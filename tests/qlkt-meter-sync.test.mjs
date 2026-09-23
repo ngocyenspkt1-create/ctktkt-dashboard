@@ -126,6 +126,7 @@ test('each report keeps its intended data action and NH3 overlaps link from CTKT
   const ppaSource = readFileSync(new URL('../components/ppa-heat-rate-comparison.tsx', import.meta.url), 'utf8');
   const pmisSource = readFileSync(new URL('../components/pmis-report.tsx', import.meta.url), 'utf8');
   const ctktktSource = readFileSync(new URL('../components/ctktkt-report.tsx', import.meta.url), 'utf8');
+  const linkSource = readFileSync(new URL('../lib/daily-source-links.ts', import.meta.url), 'utf8');
 
   assert.doesNotMatch(dailySource, /SYNC_UNIFIED/);
   assert.match(dailySource, /type:"SYNC_ALL"/);
@@ -133,16 +134,15 @@ test('each report keeps its intended data action and NH3 overlaps link from CTKT
   assert.match(dailySource, /Thời gian sửa chữa\/bảo dưỡng/);
   assert.match(dailySource, /Đồng bộ dữ liệu ngày/);
   assert.match(bcsxSource, /Nhập file lệnh & xuất QLKT/);
-  assert.match(ppaSource, /Đồng bộ PPA từ QLKT/);
+  assert.match(ppaSource, /Lấy công tơ PPA từ QLKT/);
   assert.match(pmisSource, /Đồng bộ ngày/);
   assert.match(ctktktSource, /Đồng bộ PMIS & 02-PĐ/);
 
   assert.match(dailySource, /fetch\(`\/api\/ctktkt-report\?period=/);
-  assert.match(dailySource, /calculateNh3Summary\(values, null, null\)/);
   assert.match(dailySource, /deriveDailyValuesFromCtktkt/);
   assert.match(dailySource, /Than tồn kho 06h00/);
-  assert.match(dailySource, /next\[day\]\.BN = String\(nh3\.usedTonnes\)/);
-  assert.match(dailySource, /next\[day\]\.CN = values\.P72/);
+  assert.match(linkSource, /setNumber\(result, "BN", nh3\.usedTonnes\)/);
+  assert.match(linkSource, /setNumber\(result, "CN", numberOf\(current, "P72"\)\)/);
   assert.match(dailySource, /disabled=\{isLinked\}/);
   assert.match(ctktktSource, /combined\[CTKTKT_INSTALLED_CAPACITY_CELL\] = CTKTKT_INSTALLED_CAPACITY_MW/);
   assert.match(ctktktSource, /parseLocaleNumber\(entries\[cell\] \|\| ""\)/);

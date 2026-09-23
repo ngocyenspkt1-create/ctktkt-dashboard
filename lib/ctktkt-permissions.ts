@@ -168,7 +168,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "N71", "O71", "P71",
     "P72", "P73", "P74",
   ]),
-  nh3_dcs: new Set(["M81", "N81", "M82", "N82"]),
+  nh3_dcs: new Set(["N81", "N82"]),
   td21: new Set([
     "M49", "O49", "Q49", "R49",
   ]),

@@ -49,6 +49,7 @@ import {
   calculateNh3DcsSummary,
   calculateCoalShiftDetails,
   applyNh3StartLevelCarryover,
+  NH3_DCS_START_METER_CELLS,
   NH3_START_LEVEL_CELLS,
   previousIsoDate,
   TKD_HOURS,
@@ -122,6 +123,7 @@ const editableFields = [
   ...CTKTKT_INPUT_FIELDS.filter(
     field => !CTKTKT_BCSX_LINKED_CELLS.has(field.cell)
       && !CTKTKT_WATER_LINKED_CELLS.has(field.cell)
+      && !NH3_DCS_START_METER_CELLS.has(field.cell)
       && !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(field.cell),
   ),
   ...CTKTKT_EXTRA_INPUT_FIELDS,
@@ -267,6 +269,7 @@ export function CtktktReport() {
   const [syncingPmis, setSyncingPmis] = useState(false);
   const pmisRequestRef = useRef<{ id: string; timer: number; operatingDate: string } | null>(null);
   const importFileRef = useRef<HTMLInputElement | null>(null);
+  const dirtyCellsRef = useRef(new Set<string>());
 
   useEffect(() => {
     const channel = "ctktkt-qlkt-sync";
@@ -329,7 +332,6 @@ export function CtktktReport() {
           ...updates,
         },
       }));
-      setDirty(false);
       try {
         const res = await fetch("/api/ctktkt-report", {
           method: "POST",
@@ -343,6 +345,8 @@ export function CtktktReport() {
         if (!res.ok || resJson.error) {
           throw new Error(resJson.error || "Không lưu được dữ liệu đồng bộ.");
         }
+        for (const entry of safeEntries) dirtyCellsRef.current.delete(entry.cell);
+        setDirty(dirtyCellsRef.current.size > 0);
         setMessage(`Đã đồng bộ và lưu thành công ${safeEntries.length} chỉ tiêu PMIS Sản lượng & 02-PĐ (hàng Duyên Hải 1) từ QLKT cho ngày ${request.operatingDate.split("-").reverse().join("/")}!`);
         setError("");
       } catch (err) {
@@ -476,13 +480,14 @@ export function CtktktReport() {
     () => calculateNh3Summary(current, summary.plant.grossMwh, summary.plant.netMwh),
     [current, summary.plant.grossMwh, summary.plant.netMwh],
   );
-  const nh3Dcs = useMemo(() => calculateNh3DcsSummary(current), [current]);
+  const nh3Dcs = useMemo(() => calculateNh3DcsSummary(current, previous), [current, previous]);
 
   const update = (cell: string, value: string) => {
     setByDate(old => ({
       ...old,
       [date]: { ...(old[date] || {}), [cell]: value },
     }));
+    dirtyCellsRef.current.add(cell);
     setDirty(true);
     setMessage("");
     setError("");
@@ -494,13 +499,11 @@ export function CtktktReport() {
     setError("");
     setMessage("");
     try {
-      // Gửi các ô được phép nhập
-      const toSend = editableFields
-        .filter(field => canEditCtktktField(user, field.cell))
-        .map(field => ({
-          cell: field.cell,
-          value: current[field.cell] || "",
-        }));
+      const dirtyCells = [...dirtyCellsRef.current];
+      const toSend = dirtyCells
+        .filter(cell => canEditCtktktField(user, cell))
+        .map(cell => ({ cell, value: current[cell] || "" }));
+      if (!toSend.length) throw new Error("Không có ô dữ liệu nào vừa thay đổi để lưu.");
 
       const response = await fetch("/api/ctktkt-report", {
         method: "POST",
@@ -531,7 +534,8 @@ export function CtktktReport() {
         throw new Error(`CSDL chưa giữ đúng ${mismatches.length} ô (${mismatches.slice(0, 6).map(entry => entry.cell).join(", ")}). Chưa xác nhận lưu thành công.`);
       }
       setByDate(old => ({ ...old, [date]: persisted }));
-      setDirty(false);
+      for (const entry of toSend) dirtyCellsRef.current.delete(entry.cell);
+      setDirty(dirtyCellsRef.current.size > 0);
       setMessage(
         `Đã lưu thành công ${body.saved || 0} ô dữ liệu ngày ${date.split("-").reverse().join("/")}.`,
       );
@@ -698,6 +702,7 @@ export function CtktktReport() {
       setLinkedByDate(nextLinked);
       setLinkWarnings(verified.warnings || []);
       setDate(importPackage.days[0].date);
+      dirtyCellsRef.current.clear();
       setDirty(false);
       setMessage(`Đã nhập ngày ${date.split("-").reverse().join("/")} từ sheet ${importPackage.days[0].sheetName}; chỉ ghi ô nhập tay; dữ liệu tự tính trên web và file đã khớp 100% (${importPackage.totals.passed}/${importPackage.totals.checks}).`);
     } catch (reason) {
@@ -908,6 +913,7 @@ export function CtktktReport() {
         ...old,
         [date]: { ...(old[date] || {}), ...updates },
       }));
+      for (const cell of Object.keys(updates)) dirtyCellsRef.current.add(cell);
       setDirty(true);
       setMessage(`Đã dán thành công ${count} ô từ bảng tính vào ngày ${date.split("-").reverse().join("/")}.`);
       setError("");
@@ -950,7 +956,7 @@ export function CtktktReport() {
         <input
           data-cell={cell}
           data-editable={canEditThis ? "true" : "false"}
-          disabled={!canEditThis || loading}
+          disabled={!canEditThis || loading || saving}
           inputMode={options?.isNumber === false ? "text" : "decimal"}
           maxLength={options?.maxLength}
           value={value}
@@ -1026,9 +1032,11 @@ export function CtktktReport() {
               <span>Ngày báo cáo / nhập file:</span>
               <DateField
                 value={date}
+                disabled={saving || importingHistory || syncingPmis}
                 onChange={value => {
                   if (value.slice(0, 7) !== period) setLoading(true);
                   setDate(value);
+                  dirtyCellsRef.current.clear();
                   setDirty(false);
                   setMessage("");
                   setError("");
@@ -2803,7 +2811,7 @@ export function CtktktReport() {
                     <thead>
                       <tr className="bg-[#f0f4f9] text-[#173b64]">
                         <th className="p-2 text-left font-bold">Tổ máy</th>
-                        <th className="p-2 text-center font-bold">Công tơ 00h ngày {previousDate.split("-").reverse().join("/")} (tấn)</th>
+                        <th className="p-2 text-center font-bold">Công tơ 24h ngày {previousDate.split("-").reverse().join("/")} · tự lấy (tấn)</th>
                         <th className="p-2 text-center font-bold">Công tơ 24h ngày {date.split("-").reverse().join("/")} (tấn)</th>
                         <th className="p-2 text-center font-bold">Đã dùng (tấn)</th>
                         <th className="p-2 text-center font-bold">Đầu cực MF (MWh)</th>
@@ -2815,12 +2823,14 @@ export function CtktktReport() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono">
                       {([
-                        { label: "S1", startCell: "M81", endCell: "N81", data: nh3Dcs.s1 },
-                        { label: "S2", startCell: "M82", endCell: "N82", data: nh3Dcs.s2 },
+                        { label: "S1", endCell: "N81", data: nh3Dcs.s1 },
+                        { label: "S2", endCell: "N82", data: nh3Dcs.s2 },
                       ] as const).map(row => (
                         <tr key={row.label}>
                           <td className="p-2 font-bold text-slate-800 font-sans">Tổ máy {row.label}</td>
-                          <td className="p-1.5 text-center">{renderCellInput(row.startCell, { group: "nh3_dcs" })}</td>
+                          <td className="bg-blue-50 p-2 text-right font-semibold text-blue-800" title="Tự lấy từ công tơ 24h ngày D-1">
+                            {format(row.data?.startTonnes ?? null)}
+                          </td>
                           <td className="p-1.5 text-center">{renderCellInput(row.endCell, { group: "nh3_dcs" })}</td>
                           <td className="p-2 text-right font-bold text-emerald-800">{format(row.data?.usedTonnes ?? null)}</td>
                           <td className="p-2 text-right">{format(row.data?.grossMwh ?? null)}</td>

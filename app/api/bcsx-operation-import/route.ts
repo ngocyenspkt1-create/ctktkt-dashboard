@@ -25,10 +25,14 @@ export async function POST(request: Request) {
     const output = await buildQlktOperationWorkbook(importResult);
     const db = getRawDb();
     await db.batch([
-      db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S1'").bind(operatingDate),
-      ...importResult.events.S1.map(event => db.prepare("INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S1', ?, ?, ?, ?, CURRENT_TIMESTAMP)").bind(operatingDate, event.startAt, event.endAt, event.eventType, event.description)),
-      db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S2'").bind(operatingDate),
-      ...importResult.events.S2.map(event => db.prepare("INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S2', ?, ?, ?, ?, CURRENT_TIMESTAMP)").bind(operatingDate, event.startAt, event.endAt, event.eventType, event.description)),
+      ...(importResult.events.S1.length ? [
+        db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S1'").bind(operatingDate),
+        ...importResult.events.S1.map(event => db.prepare("INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S1', ?, ?, ?, ?, CURRENT_TIMESTAMP)").bind(operatingDate, event.startAt, event.endAt, event.eventType, event.description)),
+      ] : []),
+      ...(importResult.events.S2.length ? [
+        db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S2'").bind(operatingDate),
+        ...importResult.events.S2.map(event => db.prepare("INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S2', ?, ?, ?, ?, CURRENT_TIMESTAMP)").bind(operatingDate, event.startAt, event.endAt, event.eventType, event.description)),
+      ] : []),
     ]);
 
     const fileName = qlktOperationFileName(operatingDate);
@@ -39,6 +43,8 @@ export async function POST(request: Request) {
         "Cache-Control": "no-store",
         "X-BCSX-S1-Events": String(importResult.events.S1.length),
         "X-BCSX-S2-Events": String(importResult.events.S2.length),
+        "X-BCSX-S1-Preserved": String(importResult.events.S1.length === 0),
+        "X-BCSX-S2-Preserved": String(importResult.events.S2.length === 0),
         "X-BCSX-Ignored-Rows": String(importResult.ignoredRows),
       },
     });

@@ -135,9 +135,17 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       shift?: Partial<WaterShiftLog>;
       shifts?: Partial<WaterShiftLog>[];
+      changedFields?: unknown;
     };
 
     const inputList = body.shifts && Array.isArray(body.shifts) ? body.shifts : body.shift ? [body.shift] : [];
+    const allowedChangedFields = new Set<keyof WaterShiftLog>([
+      "shiftTeam", "shiftLeader", "elecRecS1", "elecRecS2", "waterRecS1", "waterRecS2",
+      "condenserRecS1", "condenserRecS2", "resinWaterS1_24h", "resinWaterS2_24h", "note",
+    ]);
+    const changedFields = Array.isArray(body.changedFields)
+      ? new Set(body.changedFields.map(String).filter((field): field is keyof WaterShiftLog => allowedChangedFields.has(field as keyof WaterShiftLog)))
+      : null;
 
     if (inputList.length === 0) {
       return Response.json({ error: "Không có dữ liệu ca trực để lưu." }, { status: 400 });
@@ -171,33 +179,34 @@ export async function POST(request: Request) {
         .first()) as Record<string, unknown> | null;
 
       const prevLog = existing ? rowToLog(existing) : null;
+      const shouldUpdate = (field: keyof WaterShiftLog) => !prevLog || !changedFields || changedFields.has(field);
 
-      const shiftTeam = canEditMeta ? String(item.shiftTeam || prevLog?.shiftTeam || "") : prevLog?.shiftTeam || "";
+      const shiftTeam = canEditMeta && shouldUpdate("shiftTeam") ? String(item.shiftTeam || prevLog?.shiftTeam || "") : prevLog?.shiftTeam || "";
       const shiftLeader = canEditMeta
-        ? String(item.shiftLeader || prevLog?.shiftLeader || "")
+        && shouldUpdate("shiftLeader") ? String(item.shiftLeader || prevLog?.shiftLeader || "")
         : prevLog?.shiftLeader || "";
 
-      const elecRecS1 = canEditElec ? Number(item.elecRecS1 ?? prevLog?.elecRecS1 ?? 0) : prevLog?.elecRecS1 ?? 0;
-      const elecRecS2 = canEditElec ? Number(item.elecRecS2 ?? prevLog?.elecRecS2 ?? 0) : prevLog?.elecRecS2 ?? 0;
+      const elecRecS1 = canEditElec && shouldUpdate("elecRecS1") ? Number(item.elecRecS1 ?? prevLog?.elecRecS1 ?? 0) : prevLog?.elecRecS1 ?? 0;
+      const elecRecS2 = canEditElec && shouldUpdate("elecRecS2") ? Number(item.elecRecS2 ?? prevLog?.elecRecS2 ?? 0) : prevLog?.elecRecS2 ?? 0;
 
-      const waterRecS1 = canEditIntake ? Number(item.waterRecS1 ?? prevLog?.waterRecS1 ?? 0) : prevLog?.waterRecS1 ?? 0;
-      const waterRecS2 = canEditIntake ? Number(item.waterRecS2 ?? prevLog?.waterRecS2 ?? 0) : prevLog?.waterRecS2 ?? 0;
+      const waterRecS1 = canEditIntake && shouldUpdate("waterRecS1") ? Number(item.waterRecS1 ?? prevLog?.waterRecS1 ?? 0) : prevLog?.waterRecS1 ?? 0;
+      const waterRecS2 = canEditIntake && shouldUpdate("waterRecS2") ? Number(item.waterRecS2 ?? prevLog?.waterRecS2 ?? 0) : prevLog?.waterRecS2 ?? 0;
 
-      const condenserRecS1 = canEditIntake
+      const condenserRecS1 = canEditIntake && shouldUpdate("condenserRecS1")
         ? Number(item.condenserRecS1 ?? prevLog?.condenserRecS1 ?? 0)
         : prevLog?.condenserRecS1 ?? 0;
-      const condenserRecS2 = canEditIntake
+      const condenserRecS2 = canEditIntake && shouldUpdate("condenserRecS2")
         ? Number(item.condenserRecS2 ?? prevLog?.condenserRecS2 ?? 0)
         : prevLog?.condenserRecS2 ?? 0;
 
-      const resinWaterS1_24h = canEditResin
+      const resinWaterS1_24h = canEditResin && shouldUpdate("resinWaterS1_24h")
         ? Number(item.resinWaterS1_24h ?? prevLog?.resinWaterS1_24h ?? 0)
         : prevLog?.resinWaterS1_24h ?? 0;
-      const resinWaterS2_24h = canEditResin
+      const resinWaterS2_24h = canEditResin && shouldUpdate("resinWaterS2_24h")
         ? Number(item.resinWaterS2_24h ?? prevLog?.resinWaterS2_24h ?? 0)
         : prevLog?.resinWaterS2_24h ?? 0;
 
-      const note = String(item.note ?? prevLog?.note ?? "").slice(0, 500);
+      const note = shouldUpdate("note") ? String(item.note ?? prevLog?.note ?? "").slice(0, 500) : prevLog?.note || "";
 
       // Lưu thô các giá trị nhận ca
       await rawDb
@@ -355,4 +364,3 @@ export async function DELETE(request: Request) {
     return Response.json({ error: "Không thể xoá ca." }, { status: 500 });
   }
 }
-

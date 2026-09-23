@@ -276,8 +276,10 @@ test("NH3 consumption follows Excel P75 and uses the manually entered P74 total"
 
 test("NH3 DCS follows the original workbook meter and production formulas", () => {
   const result = calculateNh3DcsSummary({
-    M81: "103.84", N81: "111.84", M82: "479.43", N82: "486.25",
+    N81: "111.84", N82: "486.25",
     J157: "11325.76", K157: "10415.012", J158: "11311.4", K158: "10396.0237",
+  }, {
+    N81: "103.84", N82: "479.43",
   });
 
   assert.equal(result.s1?.usedTonnes, 8);
@@ -293,13 +295,25 @@ test("NH3 DCS follows the original workbook meter and production formulas", () =
 
 test("NH3 DCS leaves a unit incomplete when any required reading is missing", () => {
   const result = calculateNh3DcsSummary({
-    M81: "103.84", N81: "111.84", J157: "11325.76",
-    M82: "479.43", N82: "486.25", J158: "11311.4", K158: "10396.0237",
+    N81: "111.84", J157: "11325.76",
+    N82: "486.25", J158: "11311.4", K158: "10396.0237",
+  }, {
+    N82: "479.43",
   });
 
   assert.equal(result.s1, null);
   assert.notEqual(result.s2, null);
   assert.equal(result.totalUsedTonnes, null);
+});
+
+test("NH3 DCS start meters carry over from the previous day's 24h meters", async () => {
+  const { applyNh3StartLevelCarryover } = await import("../lib/ctktkt-report.ts");
+  const result = applyNh3StartLevelCarryover(
+    { M81: "stale-s1", N81: "111.84", M82: "stale-s2", N82: "486.25" },
+    { N81: "103.84", N82: "479.43" },
+  );
+  assert.equal(result.M81, "103.84");
+  assert.equal(result.M82, "479.43");
 });
 
 test("NH3 00h levels carry over from the previous day's 24h levels", async () => {

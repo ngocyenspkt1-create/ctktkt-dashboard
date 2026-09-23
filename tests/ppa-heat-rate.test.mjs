@@ -20,6 +20,11 @@ test('14/09/2026 reproduces the supplied workbook PPA results', () => {
   assert.ok(Math.abs(result.netS1Kwh - 10689226.07) < 1e-6);
 });
 
+test('PPA reports the exact unit whose point-of-sale total is zero', () => {
+  const source = { ...source1409, netS2: Array(48).fill(0) };
+  assert.throws(() => calculatePpaHeatRate(source, 2026), /Tổng sản lượng điểm bán S2 đang bằng 0/);
+});
+
 test('actual heat rate matches day 13 in the supplied workbook', () => {
   const result = calculateActualHeatRate({ C:'9.8225493', I:'9.8288261', AE:'5107.331', AF:'5248.583', AJ:'20142.988' });
   assert.ok(result);

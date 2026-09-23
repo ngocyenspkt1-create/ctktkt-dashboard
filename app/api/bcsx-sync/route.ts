@@ -1,6 +1,7 @@
 import { getRawDb } from "@/db";
 import { EVENT_TYPES, validateOperatingEventDateRange, type OperatingEvent } from "@/lib/bcsx";
 import { requirePermission } from "@/lib/auth/server";
+import { CTKTKT_LINKED_DAILY_CODES } from "@/lib/daily-source-links";
 
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const timestampPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01]) ([01]\d|2[0-3]):[0-5]\d$/;
@@ -68,21 +69,32 @@ export async function POST(request: Request) {
     const s2Events = cleanEvents(body.events?.S2, date);
 
     const db = getRawDb();
+    const entriesToPersist = entries.filter(entry => !CTKTKT_LINKED_DAILY_CODES.has(entry.fieldCode));
     const statements = [
-      ...entries.map(entry => db.prepare(
+      ...entriesToPersist.map(entry => db.prepare(
         "INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
       ).bind(entry.operatingDate, entry.fieldCode, entry.value)),
-      db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S1'").bind(date),
-      ...s1Events.map(event => db.prepare(
-        "INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S1', ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-      ).bind(date, event.startAt, event.endAt, event.eventType, event.description)),
-      db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S2'").bind(date),
-      ...s2Events.map(event => db.prepare(
-        "INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S2', ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-      ).bind(date, event.startAt, event.endAt, event.eventType, event.description)),
+      ...(s1Events.length ? [
+        db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S1'").bind(date),
+        ...s1Events.map(event => db.prepare(
+          "INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S1', ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+        ).bind(date, event.startAt, event.endAt, event.eventType, event.description)),
+      ] : []),
+      ...(s2Events.length ? [
+        db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S2'").bind(date),
+        ...s2Events.map(event => db.prepare(
+          "INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S2', ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+        ).bind(date, event.startAt, event.endAt, event.eventType, event.description)),
+      ] : []),
     ];
     await db.batch(statements);
-    return Response.json({ savedTotals: entries.length, savedS1Events: s1Events.length, savedS2Events: s2Events.length });
+    return Response.json({
+      savedTotals: entriesToPersist.length,
+      savedS1Events: s1Events.length,
+      savedS2Events: s2Events.length,
+      preservedS1Events: s1Events.length === 0,
+      preservedS2Events: s2Events.length === 0,
+    });
   } catch (error) {
     return Response.json({ error: error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Không lưu được dữ liệu đồng bộ BCSX." }, { status: 400 });
   }

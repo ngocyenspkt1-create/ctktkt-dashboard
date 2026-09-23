@@ -6,12 +6,15 @@ import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFrom
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_TEXT_INPUT_CELLS, normalizeCtktktInputValue } from "@/lib/ctktkt-extra-fields";
 import { applyCtktktFixedValue } from "@/lib/ctktkt-defaults";
+import { NH3_DCS_START_METER_CELLS } from "@/lib/ctktkt-report";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 
 const fieldCells = new Set<string>([
   ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
   ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
-].filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell) && !CTKTKT_WATER_LINKED_CELLS.has(cell)));
+].filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell)
+  && !CTKTKT_WATER_LINKED_CELLS.has(cell)
+  && !NH3_DCS_START_METER_CELLS.has(cell)));
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
@@ -55,7 +58,8 @@ export async function GET(request: Request) {
       for (const [cell, value] of Object.entries(derived.entries)) linkedEntries.push({ operatingDate, cell, value });
       for (const warning of derived.warnings) warnings.push({ operatingDate, ...warning });
     }
-    const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry => !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell));
+    const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry =>
+      !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell) && !CTKTKT_WATER_LINKED_CELLS.has(entry.cell));
     const nonEmptyManualKeys = new Set(manualEntries.filter(e => e.value !== "" && e.value !== null && e.value !== undefined).map(e => `${e.operatingDate}|${e.cell}`));
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
     for (const operatingDate of new Set(waterLogs.map(log => log.logDate))) {
@@ -120,8 +124,6 @@ export async function POST(request: Request) {
     const statements = authorizedEntries.map(entry => entry.value === ""
       ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${entry.cell}`)
       : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(body.operatingDate, `KTKT:${entry.cell}`, entry.value));
-    for (const cell of CTKTKT_BCSX_LINKED_CELLS) statements.push(db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${cell}`));
-    for (const cell of CTKTKT_WATER_LINKED_CELLS) statements.push(db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${cell}`));
     if (statements.length) await db.batch(statements);
     return Response.json({ saved: authorizedEntries.filter(entry => entry.value !== "").length });
   } catch (error) {
