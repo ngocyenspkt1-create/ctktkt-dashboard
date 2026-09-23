@@ -146,6 +146,16 @@ test("calculateOilDifferences returns tonnes for both units and uses D-1 for 06h
   assert.equal(s2[0].diff, 0.05);
 });
 
+test("calculateDailyOilConsumption uses only D and D-1 24h readings", async () => {
+  const { calculateDailyOilConsumption } = await import("../lib/ctktkt-report.ts");
+  const previous = { AB13: "100", AB14: "20", AL13: "200", AL14: "40" };
+  const current = { AB13: "160", AB14: "32", AL13: "260", AL14: "52" };
+
+  assert.equal(calculateDailyOilConsumption(current, "s1", previous), 48);
+  assert.equal(calculateDailyOilConsumption(current, "s2", previous), 0.048);
+  assert.equal(calculateDailyOilConsumption({ ...current, AL14: "" }, "s2", previous), null);
+});
+
 test("startup oil consumption is split at grid synchronization and oil cut", async () => {
   const { calculateOilEventSummary } = await import("../lib/ctktkt-report.ts");
   const result = calculateOilEventSummary({

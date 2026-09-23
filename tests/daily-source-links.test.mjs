@@ -28,16 +28,10 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
     current[`AJ${row}`] = "10";
     current[`AK${row}`] = "5000";
   }
-  const s1OilColumns = ["W", "X", "Y", "Z", "AA", "AB"];
-  const s2OilColumns = ["AG", "AH", "AI", "AJ", "AK", "AL"];
-  s1OilColumns.forEach((column, index) => {
-    current[`${column}13`] = String(110 + index * 10);
-    current[`${column}14`] = String(22 + index * 2);
-  });
-  s2OilColumns.forEach((column, index) => {
-    current[`${column}13`] = String(210 + index * 10);
-    current[`${column}14`] = String(42 + index * 2);
-  });
+  current.AB13 = "160";
+  current.AB14 = "32";
+  current.AL13 = "260";
+  current.AL14 = "52";
 
   const linked = deriveDailyValuesFromCtktkt(current, previous);
   assert.equal(linked.B, "12.1");
@@ -49,6 +43,14 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.AT, "456.7");
   assert.equal(linked.X, "48.048");
   assert.ok(Number(linked.AJ) > 0);
+});
+
+test("daily HFO requires complete 24h readings for both units", () => {
+  const previous = { AB13: "100", AB14: "20", AL13: "200", AL14: "40" };
+  const current = { AB13: "160", AB14: "32", AL13: "260" };
+
+  const linked = deriveDailyValuesFromCtktkt(current, previous);
+  assert.equal(linked.X, undefined);
 });
 
 test("QLKT monthly synchronization excludes fields already linked from CTKTKT", () => {

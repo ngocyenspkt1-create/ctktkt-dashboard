@@ -409,6 +409,25 @@ export function calculateOilDifferences(
   });
 }
 
+export function calculateDailyOilConsumption(
+  entries: CtktktDayEntries,
+  unit: "s1" | "s2",
+  previous?: CtktktDayEntries,
+) {
+  const endColumn = unit === "s1" ? "AB" : "AL";
+  const unitDivisor = unit === "s1" ? 1 : 1000;
+  const currentF1 = numberOf(entries, `${endColumn}13`);
+  const currentF2 = numberOf(entries, `${endColumn}14`);
+  const previousF1 = numberOf(previous, `${endColumn}13`);
+  const previousF2 = numberOf(previous, `${endColumn}14`);
+
+  if (currentF1 === null || currentF2 === null || previousF1 === null || previousF2 === null) {
+    return null;
+  }
+
+  return ((currentF1 - previousF1) - (currentF2 - previousF2)) / unitDivisor;
+}
+
 export type OilEventSummary = {
   phaseTonnes: Array<number | null>;
   totalTonnes: number | null;

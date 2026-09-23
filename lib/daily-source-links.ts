@@ -1,6 +1,6 @@
 import {
   calculateCtktktSummary,
-  calculateOilDifferences,
+  calculateDailyOilConsumption,
   type CtktktDayEntries,
 } from "./ctktkt-report.ts";
 
@@ -17,12 +17,6 @@ function numberOf(entries: CtktktDayEntries, cell: string) {
   if (!raw?.trim()) return null;
   const value = Number(raw.trim().replace(",", "."));
   return Number.isFinite(value) ? value : null;
-}
-
-function sumComplete(values: Array<number | null>) {
-  return values.every((value): value is number => value !== null)
-    ? values.reduce((total, value) => total + value, 0)
-    : null;
 }
 
 function setNumber(result: Record<string, string>, code: string, value: number | null | undefined) {
@@ -51,9 +45,9 @@ export function deriveDailyValuesFromCtktkt(
   setNumber(result, "AJ", summary.plant.hhvKjKg);
   setNumber(result, "AT", numberOf(current, "I36"));
 
-  const oilS1 = calculateOilDifferences(current, "s1", previous);
-  const oilS2 = calculateOilDifferences(current, "s2", previous);
-  setNumber(result, "X", sumComplete([...oilS1, ...oilS2].map(item => item.diff)));
+  const oilS1 = calculateDailyOilConsumption(current, "s1", previous);
+  const oilS2 = calculateDailyOilConsumption(current, "s2", previous);
+  setNumber(result, "X", oilS1 === null || oilS2 === null ? null : oilS1 + oilS2);
 
   return result;
 }

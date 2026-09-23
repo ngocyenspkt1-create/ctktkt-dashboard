@@ -430,3 +430,9 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - Giao diện báo chi tiết mọi công thức chưa khớp; chỉ ghi khi kết quả Excel và web khớp 100%, sau đó đọc lại xác nhận dữ liệu nhập tay.
 - Thanh chuyển cụm dùng màu nâu nhạt và lưới responsive 1/2/4/7 cột để dành thêm không gian cho bảng dữ liệu.
 - Test mới: `tests/ctktkt-history-import.test.mjs` bao phủ tên sheet tiếng Việt, tên sheet ngày đầy đủ và lỗi thiếu sheet ngày trước.
+# Cap nhat 23/09/2026 - HFO ngay theo chi so 24h
+
+- Chi tieu `X - Dau FO tieu thu` lay truc tiep chenh lech chi so 24h ngay D va ngay D-1.
+- S1: `(AB13_D - AB13_D-1) - (AB14_D - AB14_D-1)`; don vi tan.
+- S2: `[(AL13_D - AL13_D-1) - (AL14_D - AL14_D-1)] / 1000`; doi tu kg sang tan.
+- Khong yeu cau du cac moc 06h-22h de tinh chi tieu ngay; cac moc nay van duoc giu cho bang chi tiet va doi chieu Excel.
