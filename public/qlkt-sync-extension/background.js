@@ -24,6 +24,7 @@ const SOURCE_LABELS = {
 };
 const DAILY_SOURCES = ["fuel", "operation"];
 const DAILY_FIELD_CODES = new Set(["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"]);
+const PMIS_PRODUCTION_CELLS = new Set(["J157", "K157", "J158", "K158"]);
 const REQUIRED_FIELDS = {
   production: ["B", "C", "H", "I"],
   fuel: ["AR", "CC", "CD"],
@@ -413,13 +414,16 @@ async function syncPmis02Pd(operatingDate) {
   const production = await readSource("production", DEFAULT_PRODUCTION_URL, operatingDate);
   const pmis02pd = await readSource("pmis_02pd", url02pd, operatingDate);
   const entries = new Map();
-  (production.entries || []).forEach(e => entries.set(e.fieldCode, e));
-  (pmis02pd.entries || []).forEach(e => entries.set(e.fieldCode, e));
+  (production.entries || []).forEach(entry => {
+    const cell = entry.cell || entry.fieldCode;
+    if (PMIS_PRODUCTION_CELLS.has(cell)) entries.set(cell, entry);
+  });
+  (pmis02pd.entries || []).forEach(entry => entries.set(entry.cell || entry.fieldCode, entry));
   const normalizedEntries = [...entries.values()]
     .map(entry => ({ cell: entry.cell || entry.fieldCode, value: String(entry.value ?? "") }))
     .filter(entry => entry.cell && entry.value !== "");
   const received = new Set(normalizedEntries.map(entry => entry.cell));
-  const missingProduction = ["J157", "K157", "J158", "K158"].filter(cell => !received.has(cell));
+  const missingProduction = [...PMIS_PRODUCTION_CELLS].filter(cell => !received.has(cell));
   if (missingProduction.length) {
     throw new Error(`Màn hình Sản lượng chưa đọc đủ ${missingProduction.join(", ")}. Tiện ích đã dừng để không ghi thiếu sản lượng QLKT.`);
   }

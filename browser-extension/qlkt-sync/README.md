@@ -2,7 +2,7 @@
 
 Tiện ích đọc dữ liệu trên màn hình QLKT đang mở và chuyển sang web Chỉ tiêu KTKT bằng dữ liệu tạm trong phần `#` của địa chỉ. Web xóa phần dữ liệu tạm này ngay sau khi đọc và luôn yêu cầu người dùng kiểm tra trước khi lưu.
 
-## Phạm vi phiên bản 0.4.29
+## Phạm vi phiên bản 0.4.30
 
 - Riêng trang **Dữ liệu các tháng** chỉ đọc trực tiếp từ QLKT các trường còn nguồn riêng: giờ phát S1/S2, than tồn kho 06h00, nước bổ sung S1/S2 và các khoảng thời gian vận hành.
 - Sản lượng, điểm bán, dầu FO, than tiêu thụ, nhiệt trị và than nhập trên **Dữ liệu các tháng** tự liên kết từ **Báo cáo chỉ tiêu KTKT**, không đồng bộ QLKT lần hai.
@@ -25,7 +25,7 @@ Tiện ích không đọc trường mật khẩu, không lưu thông tin đăng 
 ### Đồng bộ PPA bằng một nút trên web
 
 1. Chỉ lần đầu, mở **Vận hành → Số liệu đo đếm công tơ**, chờ bảng hiện đủ dữ liệu rồi mở tiện ích để dòng **Công tơ PPA** báo **Đã ghi nhớ**.
-2. Mở `https://ctktkt-dashboard.vercel.app/` và nhấn F5. Trang phải báo **Tiện ích v0.4.29 đã kết nối**.
+2. Mở `https://ctktkt-dashboard.vercel.app/` và nhấn F5. Trang phải báo **Tiện ích v0.4.30 đã kết nối**.
 3. Hằng ngày vào **Dữ liệu các tháng**, chọn ngày và bấm **Đồng bộ toàn bộ QLKT**. Tiện ích lần lượt lấy dữ liệu ngày, công tơ PPA, PMIS, nhật ký BCSX và báo cáo 02-PĐ rồi web tự lưu các nhóm hợp lệ.
 
 Khi phiên QLKT hết hạn, đăng nhập QLKT lại rồi bấm đồng bộ. Tiện ích chỉ trả kết quả khi tất cả nguồn bắt buộc đúng ngày và đủ cấu trúc; web tự lưu từng nhóm và báo rõ nhóm nào thành công hoặc lỗi.

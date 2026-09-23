@@ -1,5 +1,13 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — sửa lỗi đồng bộ PMIS báo ô B không được phép nhập
+
+- Nguyên nhân: tiện ích QLKT trộn các mã dùng cho bảng Dữ liệu các tháng (`B/C/H/I/...`) từ màn hình Sản lượng vào payload lưu ô Excel của Báo cáo Chỉ tiêu KTKT, nên API chặn đúng tại mã `B`.
+- Luồng `Đồng bộ PMIS & 02-PĐ` nay chỉ nhận bốn ô sản lượng `J157/K157/J158/K158` từ màn hình Sản lượng; các ô báo cáo 02-PĐ tiếp tục lấy từ hàng Duyên Hải 1 như trước.
+- Nâng tiện ích lên `0.4.30` để web nhận diện và yêu cầu Reload bản đã sửa; hai cây nguồn và bản phát hành được giữ đồng nhất.
+- Kiểm tra đạt 151/151 test, TypeScript, ESLint phạm vi sửa và build production. ZIP phát hành chứa đúng manifest `0.4.30` và bộ lọc bốn ô sản lượng; SHA-256 `1A784D61A9552EB55486686935FFE50B57C174C57403913799F1E3796A339CAA`.
+- `npm.cmd run storage:check` chưa truy cập được Turso vì môi trường local thiếu `TURSO_DATABASE_URL`; chưa có số liệu xác thực để kết luận tỷ lệ sử dụng.
+
 ## Cập nhật 22/09/2026 — tách sản lượng PMIS và sản lượng tính theo công tơ
 
 - Cụm 1 hiển thị song song cột **PMIS/QLKT** và **Công tơ/Excel** cho bốn chỉ tiêu điện: đầu cực, phát lưới, điện tự dùng và tỷ lệ tự dùng của S1, S2, toàn nhà máy.
