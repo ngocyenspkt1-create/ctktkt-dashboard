@@ -45,6 +45,7 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.X, "48.048");
   assert.equal(linked.BQ, "8");
   assert.equal(linked.BR, "6.82");
+  assert.equal(linked.CJ, "10");
   assert.ok(Number(linked.AJ) > 0);
 });
 
@@ -69,4 +70,5 @@ test("QLKT monthly synchronization excludes fields already linked from CTKTKT", 
   assert.deepEqual([...QLKT_DIRECT_DAILY_CODES], ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"]);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BQ"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BR"), true);
+  assert.equal(CTKTKT_LINKED_DAILY_CODES.has("CJ"), true);
 });

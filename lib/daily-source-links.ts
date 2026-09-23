@@ -1,12 +1,13 @@
 import {
   calculateCtktktSummary,
+  calculateDailyAverageMoisture,
   calculateDailyOilConsumption,
   calculateNh3DcsSummary,
   type CtktktDayEntries,
 } from "./ctktkt-report.ts";
 
 export const CTKTKT_LINKED_DAILY_CODES = new Set([
-  "B", "C", "H", "I", "X", "AE", "AF", "AJ", "AT", "BQ", "BR",
+  "B", "C", "H", "I", "X", "AE", "AF", "AJ", "AT", "BQ", "BR", "CJ",
 ]);
 
 export const QLKT_DIRECT_DAILY_CODES = new Set([
@@ -45,6 +46,7 @@ export function deriveDailyValuesFromCtktkt(
   setNumber(result, "AF", summary.s2.rawCoalTonnes);
   setNumber(result, "AJ", summary.plant.hhvKjKg);
   setNumber(result, "AT", numberOf(current, "I36"));
+  setNumber(result, "CJ", calculateDailyAverageMoisture(current, previous));
 
   const oilS1 = calculateDailyOilConsumption(current, "s1", previous);
   const oilS2 = calculateDailyOilConsumption(current, "s2", previous);

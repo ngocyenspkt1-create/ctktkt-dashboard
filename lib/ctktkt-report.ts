@@ -167,6 +167,25 @@ export function calculateCoalShiftDetails(
   });
 }
 
+export function calculateDailyAverageMoisture(
+  current: CtktktDayEntries,
+  previous?: CtktktDayEntries,
+) {
+  const details = calculateCoalShiftDetails(current, previous);
+  if (details.some(item => item.rawCoalTonnes === null || item.moisturePercent === null)) {
+    return null;
+  }
+
+  const totalRawCoal = details.reduce((total, item) => total + (item.rawCoalTonnes ?? 0), 0);
+  if (totalRawCoal === 0) return null;
+
+  const weightedMoisture = details.reduce(
+    (total, item) => total + (item.rawCoalTonnes ?? 0) * (item.moisturePercent ?? 0),
+    0,
+  );
+  return weightedMoisture / totalRawCoal;
+}
+
 function calculateCoalModel(
   current: CtktktDayEntries,
   previous: CtktktDayEntries | undefined,

@@ -1,5 +1,12 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — liên kết độ ẩm trung bình ngày từ Chỉ tiêu KTKT
+
+- Cột `CJ` — Độ ẩm TB ngày tại Dữ liệu các tháng tự lấy từ Chỉ tiêu KTKT, không nhập lặp.
+- Công thức web khớp ô Excel `AJ86`: tổng `than chưa quy ẩm × Wtp` của 6 ca S1/S2 chia tổng than chưa quy ẩm trong ngày.
+- Kiểm tra đạt: 161/161 test, TypeScript, ESLint phạm vi sửa và build production.
+- `npm.cmd run storage:check` chưa truy cập được Turso vì môi trường local thiếu `TURSO_DATABASE_URL`; chưa có số liệu xác thực để kết luận tỷ lệ sử dụng.
+
 ## Cập nhật 23/09/2026 — bổ sung công tơ NH3 DCS và liên kết Dữ liệu các tháng
 
 - Bổ sung bảng nhập công tơ NH3 DCS S1/S2 theo đúng vùng `M81:N82` của file Excel gốc; lượng dùng bằng công tơ 24h trừ công tơ 00h.

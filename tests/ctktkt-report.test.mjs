@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calculateCtktktMeterSummary, calculateCtktktSummary, calculateNh3DcsSummary, previousIsoDate } from "../lib/ctktkt-report.ts";
+import { calculateCtktktMeterSummary, calculateCtktktSummary, calculateDailyAverageMoisture, calculateNh3DcsSummary, previousIsoDate } from "../lib/ctktkt-report.ts";
 
 function coalMeters(entries, columns, totals) {
   for (const column of columns) for (let row = 16; row <= 27; row += 1) entries[`${column}${row}`] = "0";
@@ -210,6 +210,22 @@ test("CTKTKT ignores legacy Sub-bituminous fields and calculates 6A10 only", () 
   assert.ok(Math.abs(result.s1.hhvKjKg - expectedHhv) < 1e-9);
   assert.equal(result.s1.hhvKjKg, result.s2.hhvKjKg);
   assert.equal(result.plant.hhvKjKg, result.s1.hhvKjKg);
+});
+
+test("daily average moisture matches Excel AJ86 weighted SUMPRODUCT formula", () => {
+  const previous = {};
+  const current = {};
+  coalMeters(previous, ["AB"], [0]);
+  coalMeters(previous, ["AL"], [0]);
+  coalMeters(current, ["X", "Z", "AB"], [1750.04, 1970.57, 1970.57]);
+  coalMeters(current, ["AH", "AJ", "AL"], [1727.44, 3508.3, 5815.58]);
+  for (const [row, moisture] of [[87, 8.78], [88, 8.5], [89, 9.12], [90, 8.78], [91, 8.5], [92, 9.12]]) {
+    current[`AJ${row}`] = String(moisture);
+    current[`AK${row}`] = "5000";
+  }
+
+  const result = calculateDailyAverageMoisture(current, previous);
+  assert.ok(Math.abs(result - 8.808780077445206) < 1e-12);
 });
 
 test("calculateSteamDifferences computes step consumption correctly", async () => {
