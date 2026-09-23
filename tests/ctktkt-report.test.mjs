@@ -59,6 +59,24 @@ test("CTKTKT summary prefers complete PMIS production pairs for both units", () 
   assert.equal(result.plant.auxiliaryMwh, 40);
 });
 
+test("whole-plant net heat rate remains available when one unit has zero generation", () => {
+  const previous = {};
+  const current = { J157: "0", K157: "0", J158: "100", K158: "90" };
+  coalMeters(previous, ["AB"], [0]);
+  coalMeters(previous, ["AL"], [0]);
+  coalMeters(current, ["X", "Z", "AB"], [0, 0, 0]);
+  coalMeters(current, ["AH", "AJ", "AL"], [20, 40, 60]);
+  for (const row of [87, 88, 89, 90, 91, 92]) {
+    current[`AJ${row}`] = "8.5";
+    current[`AK${row}`] = "5000";
+  }
+
+  const result = calculateCtktktSummary(current, previous);
+  assert.equal(result.s1.netHeatRate, null);
+  assert.notEqual(result.s2.netHeatRate, null);
+  assert.equal(result.plant.netHeatRate, result.s2.netHeatRate);
+});
+
 test("CTKTKT keeps a separate meter-derived production summary for Excel comparison", () => {
   const previous = { AB8: "1000", AB9: "900", AB10: "100", AB11: "50", AL8: "2000", AL9: "1800", AL10: "200", AL11: "100" };
   const current = {

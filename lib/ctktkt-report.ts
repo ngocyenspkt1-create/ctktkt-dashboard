@@ -282,9 +282,6 @@ function combineUnitKpis(s1: CtktktKpis, s2: CtktktKpis, hhvKjKg: number | null)
   const adjustedCoalTonnes = add(s1.adjustedCoalTonnes, s2.adjustedCoalTonnes);
   const rawCoalTonnes = add(s1.rawCoalTonnes, s2.rawCoalTonnes);
   const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
-  const heatNumerator = s1.netHeatRate === null || s1.netMwh === null || s2.netHeatRate === null || s2.netMwh === null
-    ? null
-    : s1.netHeatRate * s1.netMwh + s2.netHeatRate * s2.netMwh;
   const plant: CtktktKpis = {
     grossMwh,
     netMwh,
@@ -293,7 +290,7 @@ function combineUnitKpis(s1: CtktktKpis, s2: CtktktKpis, hhvKjKg: number | null)
     rawCoalTonnes,
     adjustedCoalTonnes,
     netCoalRate,
-    netHeatRate: divide(heatNumerator, netMwh),
+    netHeatRate: netCoalRate === null || hhvKjKg === null ? null : netCoalRate * hhvKjKg / 1000,
     hhvKjKg,
   };
   return { s1, s2, plant };

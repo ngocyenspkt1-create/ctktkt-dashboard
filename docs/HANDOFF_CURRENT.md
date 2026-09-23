@@ -1,5 +1,12 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — sửa suất hao nhiệt tinh toàn nhà máy khi một tổ dừng
+
+- Nguyên nhân ô toàn nhà máy trống: công thức cũ yêu cầu cả S1 và S2 đều có suất hao nhiệt; khi một tổ có điện giao bằng 0, suất hao nhiệt tổ đó không xác định và làm kết quả toàn nhà máy thành trống.
+- Công thức mới tính trực tiếp từ tổng than quy ẩm, nhiệt trị chung và tổng điện giao toàn nhà máy; nếu một tổ dừng nhưng tổ còn lại có đủ dữ liệu thì kết quả toàn nhà máy vẫn hiển thị.
+- Kiểm tra đạt: 162/162 test, TypeScript, ESLint phạm vi sửa và build production.
+- `npm.cmd run storage:check` chưa truy cập được Turso vì môi trường local thiếu `TURSO_DATABASE_URL`; chưa có số liệu xác thực để kết luận tỷ lệ sử dụng.
+
 ## Cập nhật 23/09/2026 — liên kết độ ẩm trung bình ngày từ Chỉ tiêu KTKT
 
 - Cột `CJ` — Độ ẩm TB ngày tại Dữ liệu các tháng tự lấy từ Chỉ tiêu KTKT, không nhập lặp.
