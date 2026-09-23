@@ -5,7 +5,7 @@
 - Ảnh production ngày 22/09/2026 cho thấy tiện ích đã nhận đủ tên 4 công tơ và 48 chu kỳ, nhưng phép tính PPA bị loại; nguyên nhân kỹ thuật có thể là tổng sản lượng điểm bán S1 hoặc S2 bằng 0. Giao diện cũ nuốt lỗi này rồi hiển thị chung “Chưa có dữ liệu PPA”.
 - Màn hình mới giữ trạng thái 4/4 điểm đo nhưng báo chính xác tổ máy có tổng điểm bán bằng 0 hoặc dữ liệu chu kỳ không hợp lệ. Phần thực tế đồng thời liệt kê các mã Chỉ tiêu KTKT còn thiếu trong `C, I, AE, AF, AJ`.
 - Bổ sung kiểm thử trường hợp tổng điểm bán S2 bằng 0. Kiểm tra đạt: 173/173 test, TypeScript, ESLint phạm vi sửa, build production và `git diff --check`.
-- Ảnh người dùng đang dùng bản production cũ (`Đồng bộ PPA từ QLKT` và thông báo “Hãy kiểm tra kết quả trước khi lưu”); thay đổi mới hiện chỉ ở working tree, chưa commit/push/deploy.
+- Ảnh người dùng ban đầu dùng bản production cũ (`Đồng bộ PPA từ QLKT` và thông báo “Hãy kiểm tra kết quả trước khi lưu”). Bản chức năng mới đã được commit/push lên `github/main`; GitHub báo trạng thái `Vercel: success` và `https://ctktkt-dashboard.vercel.app/ppa-heat-rate` trả HTTP 200 qua trang đăng nhập.
 - `npm.cmd run storage:check` bị chặn vì giá trị `TURSO_DATABASE_URL` trong `.env.local` không có định dạng URL hợp lệ; token đã có nhưng chưa thể kết nối để xác minh dung lượng Turso/Vercel.
 
 ## Cập nhật 23/09/2026 — NH3 DCS D−D-1, lưu đúng ô và liên kết một nguồn
