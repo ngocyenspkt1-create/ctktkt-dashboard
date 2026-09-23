@@ -114,7 +114,9 @@ export function buildGoogleSheetDayPayload(
   const read = (code: string, label: string) => required(numeric(values.get(code)), label);
   const grossS1 = read("B", "Đầu cực S1"), netS1 = read("C", "Điểm bán S1"), hoursS1 = read("F", "Giờ phát S1");
   const grossS2 = read("H", "Đầu cực S2"), netS2 = read("I", "Điểm bán S2"), hoursS2 = read("L", "Giờ phát S2");
-  const coalS1 = read("AE", "Than tiêu thụ S1"), coalS2 = read("AF", "Than tiêu thụ S2"), heatingValue = read("AJ", "Nhiệt trị");
+  const rawCoalS1 = read("AE", "Than tiêu thụ S1"), rawCoalS2 = read("AF", "Than tiêu thụ S2"), heatingValue = read("AJ", "Nhiệt trị");
+  const coalS1 = numeric(values.get("AE_ADJ")) ?? rawCoalS1;
+  const coalS2 = numeric(values.get("AF_ADJ")) ?? rawCoalS2;
   const availableCapacityS1 = required(parseAvailableCapacity(values.get(PPA_AVAILABLE_CAPACITY_S1_CODE), "Công suất khả dụng S1"), "Công suất khả dụng S1");
   const availableCapacityS2 = required(parseAvailableCapacity(values.get(PPA_AVAILABLE_CAPACITY_S2_CODE), "Công suất khả dụng S2"), "Công suất khả dụng S2");
   const ppaS1 = required(numeric(ppa.ppaS1), "SHN PPA S1"), ppaS2 = required(numeric(ppa.ppaS2), "SHN PPA S2"), ppaPlant = required(numeric(ppa.ppaPlant), "SHN PPA NMNĐ");

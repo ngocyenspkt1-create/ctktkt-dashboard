@@ -42,6 +42,8 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.I, "11.3");
   assert.equal(linked.AE, "360");
   assert.equal(linked.AF, "360");
+  assert.ok(Number(linked.AE_ADJ) > 0);
+  assert.ok(Number(linked.AF_ADJ) > 0);
   assert.equal(linked.AT, "456.7");
   assert.equal(linked.X, "48.048");
   assert.equal(linked.BQ, "8");
@@ -78,6 +80,8 @@ test("QLKT monthly synchronization excludes fields already linked from CTKTKT", 
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("CN"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("CJ"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("Q181"), true);
+  assert.equal(CTKTKT_LINKED_DAILY_CODES.has("AE_ADJ"), true);
+  assert.equal(CTKTKT_LINKED_DAILY_CODES.has("AF_ADJ"), true);
 });
 
 test("PPA actual data prefers CTKTKT links and keeps QLKT-only fields", () => {

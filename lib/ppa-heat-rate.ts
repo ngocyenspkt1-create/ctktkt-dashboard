@@ -227,7 +227,8 @@ export function calculatePpaHeatRateDetailed(source: PpaSourceData, year: number
 
 export function calculateActualHeatRate(values: Record<string, string>) {
   const read = (code: string) => parseLocaleNumber(values[code] || "");
-  const netS1 = read("C"), netS2 = read("I"), coalS1 = read("AE"), coalS2 = read("AF"), heatingValue = read("AJ");
+  const netS1 = read("C"), netS2 = read("I");
+  const coalS1 = read("AE_ADJ") ?? read("AE"), coalS2 = read("AF_ADJ") ?? read("AF"), heatingValue = read("AJ");
   if ([netS1, netS2, coalS1, coalS2, heatingValue].some(value => value === null)) return null;
   // Reproduce QLKT report 02-PD: its "suất hao nhiệt thô/tinh" is coal heat
   // input only (coal mass × coal HHV). QLKT does not add HFO/DO heat to this

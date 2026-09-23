@@ -1,5 +1,12 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — xác định nguyên nhân 10.494,57 và sửa than quy ẩm
+
+- Ngày 22/09/2026, điện S2 `I=10,3966124 triệu kWh` lấy từ PMIS/02-PĐ (`K158/F181`), không lấy từ 4 công tơ PPA 48 chu kỳ. Giá trị này khớp QLKT.
+- Kết quả cũ `10.494,5656 kJ/kWh` do dùng than nguyên trạng `AF=5.445,67 tấn` nhân nhiệt trị `AJ=20.035,72206 kJ/kg` rồi chia điện giao. QLKT dùng than quy ẩm S2 `5.428,223084 tấn`, cho `10.460,9429 kJ/kWh`, khớp `Q181=10.460,9417` sau làm tròn/độ chính xác nội bộ.
+- Bổ sung liên kết một lần `AE_ADJ/AF_ADJ` cho than quy ẩm; PPA comparison và Google Sheet không còn dùng nhầm `AE/AF` than nguyên trạng để tính SHN thực tế. `Q181` vẫn là kết quả chính thức cho toàn nhà máy và trường hợp chỉ một tổ chạy.
+- Kiểm tra đạt: 177/177 test, TypeScript, ESLint phạm vi sửa, build production và `git diff --check`. Turso `OK`: 1,93 MiB/5.120 MiB, 0,0376%, 9 bảng, 16.140 dòng.
+
 ## Cập nhật 23/09/2026 — PPA actual ưu tiên SHN tinh chính thức QLKT 02-PĐ
 
 - Đối chiếu Turso ngày 22/09/2026: công thức dựng lại của web dùng `AF=5445,67 t`, `AJ=20035,72206 kJ/kg`, `I=10,3966124 triệu kWh`, cho `10494,5656 kJ/kWh`; trong khi báo cáo QLKT 02-PĐ lưu trực tiếp `Q181=10460,9417 kJ/kWh`, chênh `33,6239 kJ/kWh`.

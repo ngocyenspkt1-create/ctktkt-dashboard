@@ -43,6 +43,17 @@ test('actual heat rate keeps S2 and plant result when S1 is stopped', () => {
   assert.equal(result.actualPlant, 10460.9417);
 });
 
+test('actual heat rate uses moisture-adjusted coal instead of raw coal', () => {
+  const result = calculateActualHeatRate({
+    C: '0', I: '10.3966124', AE: '0', AF: '5445.67',
+    AE_ADJ: '0', AF_ADJ: '5428.22308415293', AJ: '20035.72206',
+  });
+  assert.ok(result);
+  assert.equal(result.actualS1, null);
+  assert.ok(Math.abs(result.actualS2 - 10460.942931157468) < 1e-9);
+  assert.ok(Math.abs(result.actualPlant - 10460.942931157468) < 1e-9);
+});
+
 test('official QLKT 02-PD Q181 overrides only the plant result when both units run', () => {
   const result = calculateActualHeatRate({ C: '10', I: '10', AE: '5000', AF: '5000', AJ: '20000', Q181: '10321.45' });
   assert.ok(result);

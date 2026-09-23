@@ -8,7 +8,7 @@ import {
 } from "./ctktkt-report.ts";
 
 export const CTKTKT_LINKED_DAILY_CODES = new Set([
-  "B", "C", "H", "I", "X", "AE", "AF", "AJ", "AT", "BN", "BQ", "BR", "CJ", "CN", "Q181",
+  "B", "C", "H", "I", "X", "AE", "AF", "AE_ADJ", "AF_ADJ", "AJ", "AT", "BN", "BQ", "BR", "CJ", "CN", "Q181",
 ]);
 
 export const QLKT_DIRECT_DAILY_CODES = new Set([
@@ -48,6 +48,8 @@ export function deriveDailyValuesFromCtktkt(
   setNumber(result, "I", netS2 === null ? null : netS2 / 1000);
   setNumber(result, "AE", summary.s1.rawCoalTonnes);
   setNumber(result, "AF", summary.s2.rawCoalTonnes);
+  setNumber(result, "AE_ADJ", summary.s1.adjustedCoalTonnes);
+  setNumber(result, "AF_ADJ", summary.s2.adjustedCoalTonnes);
   setNumber(result, "AJ", summary.plant.hhvKjKg);
   setNumber(result, "Q181", numberOf(current, "Q181"));
   setNumber(result, "AT", numberOf(current, "I36"));
