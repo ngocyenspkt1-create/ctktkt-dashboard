@@ -25,7 +25,10 @@ function divide(a: number | null, b: number | null, multiplier = 1) {
 export function calculateDailyProduction(row: DailyProductionRow): Record<string, number | null> {
   const n = (code: string) => decimal(row[code]);
   const B = n("B"), C = n("C"), F = n("F"), H = n("H"), I = n("I"), L = n("L");
-  const AE = n("AE"), AF = n("AF"), AJ = n("AJ"), BN = n("BN"), BQ = n("BQ"), BR = n("BR");
+  const AE = n("AE"), AF = n("AF"), AE_ADJ = n("AE_ADJ"), AF_ADJ = n("AF_ADJ"), AJ = n("AJ"), CJ = n("CJ"), CX = n("CX"), BN = n("BN"), BQ = n("BQ"), BR = n("BR");
+  const adjustedCoal = (raw: number | null, linkedAdjusted: number | null) => linkedAdjusted ?? (raw === null || CJ === null ? null : raw * (1 - CJ / 100) / (1 - 0.085));
+  const adjustedAE = adjustedCoal(AE, AE_ADJ);
+  const adjustedAF = adjustedCoal(AF, AF_ADJ);
   const D = B === null || C === null ? null : (B - C) * 1000;
   const J = H === null || I === null ? null : (H - I) * 1000;
   const N = B === null || H === null ? null : (B + H) * 1000;
@@ -33,7 +36,10 @@ export function calculateDailyProduction(row: DailyProductionRow): Record<string
   const T = AE === null || AF === null ? null : AE + AF;
   const BS = BQ === null || BR === null ? null : BQ + BR;
   const shTho = divide(T, N, 1000);
-  const shTinh = divide(T, O, 1000);
+  const adjustedTotal = adjustedAE === null || adjustedAF === null ? null : adjustedAE + adjustedAF;
+  const shTinh = divide(adjustedTotal, O, 1000);
+  const shTinhS1 = divide(adjustedAE, C);
+  const shTinhS2 = divide(adjustedAF, I);
 
   return {
     D, E: divide(D, B, 0.1), G: divide(B, F, 1000),
@@ -51,7 +57,15 @@ export function calculateDailyProduction(row: DailyProductionRow): Record<string
     V: shTho === null || AJ === null ? null : shTho * AJ / 1000,
     W: shTinh === null || AJ === null ? null : shTinh * AJ / 1000,
     Y: divide(AE, B), Z: divide(AF, H), AA: shTinh,
-    AG: divide(AE, C), AH: divide(AF, I),
+    AG: shTinhS1, AH: shTinhS2,
+    AI: shTinh,
+    AL: shTinhS1 === null || AJ === null ? null : shTinhS1 * AJ / 1000,
+    AM: shTinhS2 === null || AJ === null ? null : shTinhS2 * AJ / 1000,
+    AN: divide(AE, B) === null || AJ === null ? null : divide(AE, B)! * AJ / 1000,
+    AO: divide(AF, H) === null || AJ === null ? null : divide(AF, H)! * AJ / 1000,
+    AP: shTinhS1 === null || CX === null ? null : shTinhS1 * CX / 1000,
+    AQ: shTinhS2 === null || CX === null ? null : shTinhS2 * CX / 1000,
+    AE_ADJ: adjustedAE, AF_ADJ: adjustedAF,
     AK: AJ === null ? null : AJ / 4.1868,
     BO: divide(BN, N, 1000),
     BP: divide(BN, O === null ? null : O / 1000),

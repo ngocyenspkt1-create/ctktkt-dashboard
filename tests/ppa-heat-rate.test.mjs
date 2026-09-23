@@ -85,7 +85,7 @@ test('06/08/2026 matches QLKT 02-PD and excludes HFO from its coal heat rate', (
   const values = {
     B: '6.48144', C: '5.950515', AE: '3143.891',
     H: '12.7798', I: '11.7849275', AF: '6263.388',
-    AJ: '20192.79', X: '206.3441',
+    AJ: '20192.79', CJ: '8.5', X: '206.3441',
   };
   const result = calculateActualHeatRate(values);
   assert.ok(result);
@@ -94,6 +94,21 @@ test('06/08/2026 matches QLKT 02-PD and excludes HFO from its coal heat rate', (
   assert.ok(Math.abs(result.actualPlant - 10710.711577588774) < 1e-9);
   assert.ok(Math.abs(calculateDailyProduction(values).V - 9862.25234296494) < 1e-9);
   assert.ok(Math.abs(calculateDailyProduction(values).W - 10710.711577588774) < 1e-9);
+});
+
+test('daily heat-rate columns use moisture-adjusted coal for each unit', () => {
+  const result = calculateDailyProduction({
+    B: '10', C: '9', H: '10', I: '9',
+    AE: '1100', AF: '1200', AE_ADJ: '1000', AF_ADJ: '1100', AJ: '20000',
+  });
+  assert.ok(Math.abs(result.AG - 111.11111111111111) < 1e-12);
+  assert.ok(Math.abs(result.AH - 122.22222222222223) < 1e-12);
+  assert.ok(Math.abs(result.AI - 116.66666666666667) < 1e-12);
+  assert.ok(Math.abs(result.AL - 2222.222222222222) < 1e-9);
+  assert.ok(Math.abs(result.AM - 2444.4444444444446) < 1e-9);
+  assert.ok(Math.abs(result.AN - 2200) < 1e-12);
+  assert.ok(Math.abs(result.AO - 2400) < 1e-12);
+  assert.ok(Math.abs(result.W - 2333.3333333333335) < 1e-9);
 });
 
 test('QLKT synchronization preserves source precision used by heat-rate calculations', () => {
@@ -106,7 +121,7 @@ test('daily web formulas use full QLKT precision and only the UI may round', () 
   const result = calculateDailyProduction({
     B: '11.05364', C: '10.1665842', F: '24',
     H: '11.03056', I: '10.1327348', L: '24',
-    AE: '5341.111', AF: '5349.818', AJ: '20021.593',
+    AE: '5341.111', AF: '5349.818', AJ: '20021.593', CJ: '8.5',
   });
   assert.ok(Math.abs(result.AG - 525.3594417680621) < 1e-9);
   assert.ok(Math.abs(result.AH - 527.9737509758965) < 1e-9);
