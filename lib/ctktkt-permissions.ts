@@ -9,6 +9,7 @@ export type CtktktFieldGroup =
   | "may_nghien_coal_s2"  // 12 cân than S2 (A1..F2)
   | "steam_flow"          // Tổng lưu lượng hơi S1 & S2
   | "nh3_tank"            // Tổng lượng NH3 (mức bồn & lượng nhập)
+  | "nh3_dcs"             // Công tơ NH3 trên DCS S1 & S2
   | "td21"                // Công tơ điện tự dùng TD21
   | "startup_shutdown"    // Khởi động / Ngừng tổ máy
   | "coal_blend_pmis"     // Than trộn PMIS (Wtp, Qk, tỷ lệ trộn)
@@ -65,6 +66,12 @@ export const CTKTKT_GROUP_META: Record<
     shortLabel: "Bồn NH3",
     responsible: "VHV NH3 - Lò hơi phụ / Trưởng kíp điện",
     description: "Nhập mức bồn NH3 A, B, C (00h và 24h) và lượng NH3 nhập",
+  },
+  nh3_dcs: {
+    label: "Tổng lượng NH3 dùng trong ngày theo công tơ DCS",
+    shortLabel: "NH3 DCS",
+    responsible: "Lò trưởng / Trưởng kíp điện",
+    description: "Nhập chỉ số công tơ NH3 DCS lúc 00h và 24h cho S1, S2",
   },
   td21: {
     label: "Công tơ điện tự dùng - TD21",
@@ -161,6 +168,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "N71", "O71", "P71",
     "P72", "P73", "P74",
   ]),
+  nh3_dcs: new Set(["M81", "N81", "M82", "N82"]),
   td21: new Set([
     "M49", "O49", "Q49", "R49",
   ]),
@@ -307,6 +315,12 @@ export function canEditCtktktGroup(
         pos.includes("trưởng kíp điện")
       );
 
+    case "nh3_dcs":
+      return (
+        pos.includes("lò trưởng") ||
+        pos.includes("trưởng kíp điện")
+      );
+
     case "td21":
       return (
         pos.includes("trực phụ điện") ||
@@ -385,6 +399,7 @@ export function canEditAnyCtktktField(user: SessionUser | null | undefined): boo
     "may_nghien_coal_s2",
     "steam_flow",
     "nh3_tank",
+    "nh3_dcs",
     "td21",
     "startup_shutdown",
     "coal_blend_pmis",
@@ -406,6 +421,7 @@ export function getEditableCtktktGroups(user: SessionUser | null | undefined): C
     "may_nghien_coal_s2",
     "steam_flow",
     "nh3_tank",
+    "nh3_dcs",
     "td21",
     "startup_shutdown",
     "coal_blend_pmis",

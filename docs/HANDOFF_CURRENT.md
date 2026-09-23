@@ -1,5 +1,14 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — bổ sung công tơ NH3 DCS và liên kết Dữ liệu các tháng
+
+- Bổ sung bảng nhập công tơ NH3 DCS S1/S2 theo đúng vùng `M81:N82` của file Excel gốc; lượng dùng bằng công tơ 24h trừ công tơ 00h.
+- Chỉ Lò trưởng và Trưởng kíp điện được nhập nhóm `nh3_dcs`; nhóm mức bồn NH3 hiện hữu giữ nguyên quyền riêng.
+- Sản lượng đầu cực/MBA lấy từ PMIS `J157:K158`; tự tính kg và suất tiêu hao g/kWh.
+- Lượng NH3 DCS S1/S2 tự liên kết sang mã `BQ`/`BR` tại Dữ liệu các tháng.
+- Kiểm tra đạt: 160/160 test, `npx.cmd tsc --noEmit`, ESLint không có lỗi và `npm.cmd run build` thành công.
+- `npm.cmd run storage:check` chưa truy cập được Turso vì môi trường local thiếu `TURSO_DATABASE_URL`; chưa có số liệu xác thực để kết luận tỷ lệ sử dụng.
+
 ## Cập nhật 23/09/2026 — sửa đơn vị dầu FO S2 khi liên kết Dữ liệu các tháng
 
 - Công tơ dầu S1 (`W:AB`, hàng 13–14) có đơn vị tấn; công tơ dầu S2 (`AG:AL`, hàng 13–14) có đơn vị kg. Trước đây web cộng trực tiếp kết quả S1 và S2 nên phần S2 bị phóng đại 1.000 lần trong cột `Dầu FO tiêu thụ`.

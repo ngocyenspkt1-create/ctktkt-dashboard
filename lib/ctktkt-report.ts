@@ -26,6 +26,23 @@ export type Nh3Summary = {
   rateNet: number | null;
 };
 
+export type Nh3DcsUnitSummary = {
+  startTonnes: number;
+  endTonnes: number;
+  usedTonnes: number;
+  grossMwh: number;
+  netMwh: number;
+  usedKg: number;
+  rateGross: number | null;
+  rateNet: number | null;
+};
+
+export type Nh3DcsSummary = {
+  s1: Nh3DcsUnitSummary | null;
+  s2: Nh3DcsUnitSummary | null;
+  totalUsedTonnes: number | null;
+};
+
 export const NH3_TANK_ROWS = [69, 70, 71] as const;
 export const NH3_START_LEVEL_CELLS = new Set(NH3_TANK_ROWS.map(row => `N${row}`));
 
@@ -319,6 +336,44 @@ export function calculateNh3Summary(
     usedTonnes,
     rateGross: divide(usedTonnes, rateGrossMwh, 1000),
     rateNet: divide(usedTonnes, rateNetMwh, 1000),
+  };
+}
+
+export function calculateNh3DcsSummary(entries: CtktktDayEntries): Nh3DcsSummary {
+  const unitSummary = (
+    startCell: string,
+    endCell: string,
+    grossCell: string,
+    netCell: string,
+  ): Nh3DcsUnitSummary | null => {
+    const startTonnes = numberOf(entries, startCell);
+    const endTonnes = numberOf(entries, endCell);
+    const grossMwh = numberOf(entries, grossCell);
+    const netMwh = numberOf(entries, netCell);
+    if (startTonnes === null || endTonnes === null || grossMwh === null || netMwh === null) {
+      return null;
+    }
+
+    const usedTonnes = Number((endTonnes - startTonnes).toFixed(12));
+    const usedKg = usedTonnes * 1000;
+    return {
+      startTonnes,
+      endTonnes,
+      usedTonnes,
+      grossMwh,
+      netMwh,
+      usedKg,
+      rateGross: divide(usedKg, grossMwh),
+      rateNet: divide(usedKg, netMwh),
+    };
+  };
+
+  const s1 = unitSummary("M81", "N81", "J157", "K157");
+  const s2 = unitSummary("M82", "N82", "J158", "K158");
+  return {
+    s1,
+    s2,
+    totalUsedTonnes: s1 === null || s2 === null ? null : s1.usedTonnes + s2.usedTonnes,
   };
 }
 

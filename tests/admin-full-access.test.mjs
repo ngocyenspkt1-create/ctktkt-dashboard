@@ -36,6 +36,7 @@ test("Admin can edit every CTKTKT input field and field group", () => {
     "lo_pho_oil",
     "may_nghien_coal_s1",
     "may_nghien_coal_s2",
+    "nh3_dcs",
     "nh3_tank",
     "startup_shutdown",
     "steam_flow",

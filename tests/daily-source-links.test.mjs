@@ -17,6 +17,7 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
 
   const current = {
     J157: "12100", K157: "11200", J158: "12200", K158: "11300", I36: "456.7",
+    M81: "103.84", N81: "111.84", M82: "479.43", N82: "486.25",
   };
   fillRange(current, "X", 10);
   fillRange(current, "Z", 20);
@@ -42,6 +43,8 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.AF, "360");
   assert.equal(linked.AT, "456.7");
   assert.equal(linked.X, "48.048");
+  assert.equal(linked.BQ, "8");
+  assert.equal(linked.BR, "6.82");
   assert.ok(Number(linked.AJ) > 0);
 });
 
@@ -64,4 +67,6 @@ test("daily HFO cannot be negative when return-meter drift exceeds supply", () =
 test("QLKT monthly synchronization excludes fields already linked from CTKTKT", () => {
   for (const code of CTKTKT_LINKED_DAILY_CODES) assert.equal(QLKT_DIRECT_DAILY_CODES.has(code), false, code);
   assert.deepEqual([...QLKT_DIRECT_DAILY_CODES], ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"]);
+  assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BQ"), true);
+  assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BR"), true);
 });

@@ -15,6 +15,7 @@ const groups = [
   "may_nghien_coal_s2",
   "steam_flow",
   "nh3_tank",
+  "nh3_dcs",
   "td21",
   "startup_shutdown",
   "coal_blend_pmis",

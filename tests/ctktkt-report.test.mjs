@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calculateCtktktMeterSummary, calculateCtktktSummary, previousIsoDate } from "../lib/ctktkt-report.ts";
+import { calculateCtktktMeterSummary, calculateCtktktSummary, calculateNh3DcsSummary, previousIsoDate } from "../lib/ctktkt-report.ts";
 
 function coalMeters(entries, columns, totals) {
   for (const column of columns) for (let row = 16; row <= 27; row += 1) entries[`${column}${row}`] = "0";
@@ -238,6 +238,34 @@ test("NH3 consumption follows Excel P75 and uses the manually entered P74 total"
   assert.equal(result.usedTonnes, 18.506);
   assert.ok(Math.abs(result.rateGross - 0.763937336168) < 1e-12);
   assert.ok(Math.abs(result.rateNet - 0.828717158735) < 1e-12);
+});
+
+test("NH3 DCS follows the original workbook meter and production formulas", () => {
+  const result = calculateNh3DcsSummary({
+    M81: "103.84", N81: "111.84", M82: "479.43", N82: "486.25",
+    J157: "11325.76", K157: "10415.012", J158: "11311.4", K158: "10396.0237",
+  });
+
+  assert.equal(result.s1?.usedTonnes, 8);
+  assert.equal(result.s1?.usedKg, 8000);
+  assert.ok(Math.abs(result.s1.rateGross - 0.7063543638572599) < 1e-12);
+  assert.ok(Math.abs(result.s1.rateNet - 0.7681220146457824) < 1e-12);
+  assert.ok(Math.abs(result.s2.usedTonnes - 6.82) < 1e-12);
+  assert.equal(result.s2.usedKg, 6820);
+  assert.ok(Math.abs(result.s2.rateGross - 0.6029315557755892) < 1e-12);
+  assert.ok(Math.abs(result.s2.rateNet - 0.6560200512047698) < 1e-12);
+  assert.ok(Math.abs(result.totalUsedTonnes - 14.82) < 1e-12);
+});
+
+test("NH3 DCS leaves a unit incomplete when any required reading is missing", () => {
+  const result = calculateNh3DcsSummary({
+    M81: "103.84", N81: "111.84", J157: "11325.76",
+    M82: "479.43", N82: "486.25", J158: "11311.4", K158: "10396.0237",
+  });
+
+  assert.equal(result.s1, null);
+  assert.notEqual(result.s2, null);
+  assert.equal(result.totalUsedTonnes, null);
 });
 
 test("NH3 00h levels carry over from the previous day's 24h levels", async () => {

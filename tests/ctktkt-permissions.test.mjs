@@ -24,6 +24,8 @@ test("Cell group mapping identifies key cells correctly", () => {
   assert.equal(getCtktktFieldGroup("W54"), "steam_flow");
   assert.equal(getCtktktFieldGroup("N69"), "nh3_tank");
   assert.equal(getCtktktFieldGroup("P72"), "nh3_tank");
+  assert.equal(getCtktktFieldGroup("M81"), "nh3_dcs");
+  assert.equal(getCtktktFieldGroup("N82"), "nh3_dcs");
   assert.equal(getCtktktFieldGroup("M49"), "td21");
   assert.equal(getCtktktFieldGroup("AJ87"), "coal_blend_pmis");
 });
@@ -48,6 +50,7 @@ test("Trưởng kíp điện has rights for TKD DCS, Steam, NH3, Coal Blend, Pow
   assert.equal(canEditCtktktGroup(tkd, "tkd_trend"), true);
   assert.equal(canEditCtktktGroup(tkd, "steam_flow"), true);
   assert.equal(canEditCtktktGroup(tkd, "nh3_tank"), true);
+  assert.equal(canEditCtktktGroup(tkd, "nh3_dcs"), true);
   assert.equal(canEditCtktktGroup(tkd, "coal_blend_pmis"), true);
   assert.equal(canEditCtktktGroup(tkd, "tpd_tcd_power"), true);
   assert.equal(canEditCtktktGroup(tkd, "td21"), true);
@@ -105,4 +108,16 @@ test("NH3 - Lò hơi phụ has rights for NH3 tank", () => {
   assert.equal(canEditCtktktGroup(vhvNh3, "tpd_tcd_power"), false);
   assert.equal(canEditCtktktField(vhvNh3, "N69"), true);
   assert.equal(canEditCtktktField(vhvNh3, "P72"), true);
+  assert.equal(canEditCtktktGroup(vhvNh3, "nh3_dcs"), false);
+  assert.equal(canEditCtktktField(vhvNh3, "M81"), false);
+});
+
+test("Lò trưởng can enter NH3 DCS but Lò phó cannot", () => {
+  const loTruong = { id: 51, username: "lotruong", displayName: "Lò trưởng", role: "viewer", position: "Lò trưởng", permissions: ["view_all"] };
+  const loPho = { id: 52, username: "lopho2", displayName: "Lò phó", role: "viewer", position: "Lò phó", permissions: ["view_all"] };
+
+  assert.equal(canEditCtktktGroup(loTruong, "nh3_dcs"), true);
+  assert.equal(canEditCtktktField(loTruong, "N82"), true);
+  assert.equal(canEditCtktktGroup(loPho, "nh3_dcs"), false);
+  assert.equal(canEditCtktktField(loPho, "N82"), false);
 });

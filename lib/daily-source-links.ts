@@ -1,11 +1,12 @@
 import {
   calculateCtktktSummary,
   calculateDailyOilConsumption,
+  calculateNh3DcsSummary,
   type CtktktDayEntries,
 } from "./ctktkt-report.ts";
 
 export const CTKTKT_LINKED_DAILY_CODES = new Set([
-  "B", "C", "H", "I", "X", "AE", "AF", "AJ", "AT",
+  "B", "C", "H", "I", "X", "AE", "AF", "AJ", "AT", "BQ", "BR",
 ]);
 
 export const QLKT_DIRECT_DAILY_CODES = new Set([
@@ -48,6 +49,10 @@ export function deriveDailyValuesFromCtktkt(
   const oilS1 = calculateDailyOilConsumption(current, "s1", previous);
   const oilS2 = calculateDailyOilConsumption(current, "s2", previous);
   setNumber(result, "X", oilS1 === null || oilS2 === null ? null : Math.max(0, oilS1 + oilS2));
+
+  const nh3Dcs = calculateNh3DcsSummary(current);
+  setNumber(result, "BQ", nh3Dcs.s1?.usedTonnes);
+  setNumber(result, "BR", nh3Dcs.s2?.usedTonnes);
 
   return result;
 }

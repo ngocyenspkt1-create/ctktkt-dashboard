@@ -46,6 +46,7 @@ import {
   calculateOilEventSummary,
   calculateSteamDifferences,
   calculateNh3Summary,
+  calculateNh3DcsSummary,
   calculateCoalShiftDetails,
   applyNh3StartLevelCarryover,
   NH3_START_LEVEL_CELLS,
@@ -475,6 +476,7 @@ export function CtktktReport() {
     () => calculateNh3Summary(current, summary.plant.grossMwh, summary.plant.netMwh),
     [current, summary.plant.grossMwh, summary.plant.netMwh],
   );
+  const nh3Dcs = useMemo(() => calculateNh3DcsSummary(current), [current]);
 
   const update = (cell: string, value: string) => {
     setByDate(old => ({
@@ -2778,6 +2780,63 @@ export function CtktktReport() {
                       </b>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 mb-3">
+                  <div>
+                    <h3 className="text-sm font-black text-[#173b64]">
+                      Tổng lượng NH3 dùng trong ngày tính theo công tơ trên DCS
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Lò trưởng hoặc Trưởng kíp điện nhập chỉ số 00h và 24h. Kết quả S1, S2 tự liên kết sang Dữ liệu các tháng.
+                    </p>
+                  </div>
+                  <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                    Lò trưởng / Trưởng kíp điện
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full min-w-[1080px] text-xs">
+                    <thead>
+                      <tr className="bg-[#f0f4f9] text-[#173b64]">
+                        <th className="p-2 text-left font-bold">Tổ máy</th>
+                        <th className="p-2 text-center font-bold">Công tơ 00h ngày {previousDate.split("-").reverse().join("/")} (tấn)</th>
+                        <th className="p-2 text-center font-bold">Công tơ 24h ngày {date.split("-").reverse().join("/")} (tấn)</th>
+                        <th className="p-2 text-center font-bold">Đã dùng (tấn)</th>
+                        <th className="p-2 text-center font-bold">Đầu cực MF (MWh)</th>
+                        <th className="p-2 text-center font-bold">MBA (MWh)</th>
+                        <th className="p-2 text-center font-bold">NH3 tiêu thụ (kg)</th>
+                        <th className="p-2 text-center font-bold">Suất hao đầu cực (g/kWh)</th>
+                        <th className="p-2 text-center font-bold">Suất hao trên lưới (g/kWh)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-mono">
+                      {([
+                        { label: "S1", startCell: "M81", endCell: "N81", data: nh3Dcs.s1 },
+                        { label: "S2", startCell: "M82", endCell: "N82", data: nh3Dcs.s2 },
+                      ] as const).map(row => (
+                        <tr key={row.label}>
+                          <td className="p-2 font-bold text-slate-800 font-sans">Tổ máy {row.label}</td>
+                          <td className="p-1.5 text-center">{renderCellInput(row.startCell, { group: "nh3_dcs" })}</td>
+                          <td className="p-1.5 text-center">{renderCellInput(row.endCell, { group: "nh3_dcs" })}</td>
+                          <td className="p-2 text-right font-bold text-emerald-800">{format(row.data?.usedTonnes ?? null)}</td>
+                          <td className="p-2 text-right">{format(row.data?.grossMwh ?? null)}</td>
+                          <td className="p-2 text-right">{format(row.data?.netMwh ?? null)}</td>
+                          <td className="p-2 text-right">{format(row.data?.usedKg ?? null)}</td>
+                          <td className="p-2 text-right">{format(row.data?.rateGross ?? null)}</td>
+                          <td className="p-2 text-right">{format(row.data?.rateNet ?? null)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-slate-300 bg-emerald-50/70">
+                        <td className="p-2 font-black text-[#173b64] font-sans" colSpan={3}>Tổng NH3 DCS S1 + S2</td>
+                        <td className="p-2 text-right font-black text-emerald-900">{format(nh3Dcs.totalUsedTonnes)}</td>
+                        <td className="p-2" colSpan={5}></td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
