@@ -1,5 +1,13 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — PPA vẫn tính khi một tổ máy dừng và Turso đã truy cập được
+
+- Nếu một tổ máy có cả 48 chu kỳ đầu cực và điểm bán đều bằng 0, hệ thống xác định tổ đó đang dừng: PPA của tổ dừng là 0 để biểu thị không đánh giá, còn PPA tổ đang chạy và PPA toàn nhà máy vẫn được tính theo tổ đang chạy.
+- Nếu điểm bán bằng 0 nhưng đầu cực vẫn có sản lượng, hệ thống tiếp tục chặn và báo sai lệch công tơ. Nếu cả S1 và S2 đều bằng 0, không tạo kết quả PPA ngày.
+- Suất hao nhiệt thực tế áp dụng cùng nguyên tắc: tổ dừng không đánh giá riêng, nhưng tổ đang chạy và toàn nhà máy vẫn có kết quả.
+- Kiểm tra đạt: 175/175 test, TypeScript, ESLint phạm vi sửa, build production và `git diff --check`.
+- `npm.cmd run storage:check` kết nối Turso thành công: trạng thái `OK`, cấp phát/ước tính dùng 1,93 MiB trên giới hạn tham chiếu 5.120 MiB, tương đương 0,0376%; 9 bảng và 16.140 dòng. Không có cảnh báo ngưỡng 70%/85%/95%.
+
 ## Cập nhật 23/09/2026 — làm rõ lỗi PPA “đủ 4 điểm đo nhưng chưa tính được”
 
 - Ảnh production ngày 22/09/2026 cho thấy tiện ích đã nhận đủ tên 4 công tơ và 48 chu kỳ, nhưng phép tính PPA bị loại; nguyên nhân kỹ thuật có thể là tổng sản lượng điểm bán S1 hoặc S2 bằng 0. Giao diện cũ nuốt lỗi này rồi hiển thị chung “Chưa có dữ liệu PPA”.

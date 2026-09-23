@@ -200,13 +200,19 @@ function calculateUnit(gross: number[], net: number[], year: number, unitLabel: 
     netTotal += net[index];
     intervals.push({ grossKwh: gross[index], netKwh: net[index], rate, heatKj });
   }
-  if (netTotal <= 0) throw new Error(`Tổng sản lượng điểm bán ${unitLabel} đang bằng 0. Hãy kiểm tra công tơ ${unitLabel} trên QLKT.`);
-  return { heat, netTotal, grossTotal: gross.reduce((sum, value) => sum + value, 0), ppa: heat / netTotal, intervals };
+  const grossTotal = gross.reduce((sum, value) => sum + value, 0);
+  if (netTotal <= 0) {
+    if (grossTotal <= 0) return { heat: 0, netTotal: 0, grossTotal: 0, ppa: 0, intervals };
+    throw new Error(`Tổng sản lượng điểm bán ${unitLabel} đang bằng 0 trong khi đầu cực vẫn có dữ liệu. Hãy kiểm tra công tơ ${unitLabel} trên QLKT.`);
+  }
+  return { heat, netTotal, grossTotal, ppa: heat / netTotal, intervals };
 }
 
 export function calculatePpaHeatRate(source: PpaSourceData, year: number): PpaResult {
   const s1 = calculateUnit(source.grossS1, source.netS1, year, "S1"), s2 = calculateUnit(source.grossS2, source.netS2, year, "S2");
-  return { ppaPlant: (s1.heat + s2.heat) / (s1.netTotal + s2.netTotal), ppaS1: s1.ppa, ppaS2: s2.ppa, grossS1Kwh: s1.grossTotal, netS1Kwh: s1.netTotal, grossS2Kwh: s2.grossTotal, netS2Kwh: s2.netTotal };
+  const plantNetTotal = s1.netTotal + s2.netTotal;
+  if (plantNetTotal <= 0) throw new Error("Tổng sản lượng điểm bán của cả S1 và S2 đang bằng 0.");
+  return { ppaPlant: (s1.heat + s2.heat) / plantNetTotal, ppaS1: s1.ppa, ppaS2: s2.ppa, grossS1Kwh: s1.grossTotal, netS1Kwh: s1.netTotal, grossS2Kwh: s2.grossTotal, netS2Kwh: s2.netTotal };
 }
 
 // Bản chi tiết theo từng chu kỳ 30 phút (48 chu kỳ/ngày) của tổ máy S1/S2 — dùng để
@@ -214,7 +220,9 @@ export function calculatePpaHeatRate(source: PpaSourceData, year: number): PpaRe
 // calculatePpaHeatRate ở trên, chỉ bổ sung thêm chi tiết nội bộ từng chu kỳ).
 export function calculatePpaHeatRateDetailed(source: PpaSourceData, year: number): PpaDetailedResult {
   const s1 = calculateUnit(source.grossS1, source.netS1, year, "S1"), s2 = calculateUnit(source.grossS2, source.netS2, year, "S2");
-  return { s1, s2, ppaPlant: (s1.heat + s2.heat) / (s1.netTotal + s2.netTotal) };
+  const plantNetTotal = s1.netTotal + s2.netTotal;
+  if (plantNetTotal <= 0) throw new Error("Tổng sản lượng điểm bán của cả S1 và S2 đang bằng 0.");
+  return { s1, s2, ppaPlant: (s1.heat + s2.heat) / plantNetTotal };
 }
 
 export function calculateActualHeatRate(values: Record<string, string>) {
@@ -226,8 +234,11 @@ export function calculateActualHeatRate(values: Record<string, string>) {
   // indicator, including on 06/08/2026 when S1 recorded 206.3441 t HFO.
   // Oil remains a separately tracked consumption input and must not be mixed
   // into the QLKT-comparable heat-rate result.
-  const s1 = coalS1! * heatingValue! / (netS1! * 1000), s2 = coalS2! * heatingValue! / (netS2! * 1000);
-  return { actualPlant: (coalS1! + coalS2!) * heatingValue! / ((netS1! + netS2!) * 1000), actualS1: s1, actualS2: s2 };
+  const plantNet = netS1! + netS2!;
+  if (plantNet <= 0) return null;
+  const s1 = netS1! > 0 ? coalS1! * heatingValue! / (netS1! * 1000) : null;
+  const s2 = netS2! > 0 ? coalS2! * heatingValue! / (netS2! * 1000) : null;
+  return { actualPlant: (coalS1! + coalS2!) * heatingValue! / (plantNet * 1000), actualS1: s1, actualS2: s2 };
 }
 
 export function compareHeatRate(actual: number | null, ppa: number | null) {

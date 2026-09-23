@@ -25,6 +25,24 @@ test('PPA reports the exact unit whose point-of-sale total is zero', () => {
   assert.throws(() => calculatePpaHeatRate(source, 2026), /Tổng sản lượng điểm bán S2 đang bằng 0/);
 });
 
+test('PPA keeps the running unit and plant result when S1 is stopped', () => {
+  const source = { ...source1409, grossS1: Array(48).fill(0), netS1: Array(48).fill(0) };
+  const result = calculatePpaHeatRate(source, 2026);
+  assert.equal(result.ppaS1, 0);
+  assert.equal(result.grossS1Kwh, 0);
+  assert.equal(result.netS1Kwh, 0);
+  assert.ok(Math.abs(result.ppaS2 - 10439.710781024767) < 1e-8);
+  assert.ok(Math.abs(result.ppaPlant - result.ppaS2) < 1e-12);
+});
+
+test('actual heat rate keeps S2 and plant result when S1 is stopped', () => {
+  const result = calculateActualHeatRate({ C: '0', I: '10', AE: '0', AF: '5000', AJ: '20000' });
+  assert.ok(result);
+  assert.equal(result.actualS1, null);
+  assert.equal(result.actualS2, 10000);
+  assert.equal(result.actualPlant, 10000);
+});
+
 test('actual heat rate matches day 13 in the supplied workbook', () => {
   const result = calculateActualHeatRate({ C:'9.8225493', I:'9.8288261', AE:'5107.331', AF:'5248.583', AJ:'20142.988' });
   assert.ok(result);
