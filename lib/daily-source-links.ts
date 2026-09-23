@@ -8,7 +8,7 @@ import {
 } from "./ctktkt-report.ts";
 
 export const CTKTKT_LINKED_DAILY_CODES = new Set([
-  "B", "C", "H", "I", "X", "AE", "AF", "AJ", "AT", "BN", "BQ", "BR", "CJ", "CN",
+  "B", "C", "H", "I", "X", "AE", "AF", "AJ", "AT", "BN", "BQ", "BR", "CJ", "CN", "Q181",
 ]);
 
 export const QLKT_DIRECT_DAILY_CODES = new Set([
@@ -49,6 +49,7 @@ export function deriveDailyValuesFromCtktkt(
   setNumber(result, "AE", summary.s1.rawCoalTonnes);
   setNumber(result, "AF", summary.s2.rawCoalTonnes);
   setNumber(result, "AJ", summary.plant.hhvKjKg);
+  setNumber(result, "Q181", numberOf(current, "Q181"));
   setNumber(result, "AT", numberOf(current, "I36"));
   setNumber(result, "CJ", calculateDailyAverageMoisture(current, previous));
 

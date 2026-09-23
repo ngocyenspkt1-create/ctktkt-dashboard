@@ -36,11 +36,19 @@ test('PPA keeps the running unit and plant result when S1 is stopped', () => {
 });
 
 test('actual heat rate keeps S2 and plant result when S1 is stopped', () => {
-  const result = calculateActualHeatRate({ C: '0', I: '10', AE: '0', AF: '5000', AJ: '20000' });
+  const result = calculateActualHeatRate({ C: '0', I: '10.3966124', AE: '0', AF: '5445.67', AJ: '20035.72206', Q181: '10460.9417' });
   assert.ok(result);
   assert.equal(result.actualS1, null);
+  assert.equal(result.actualS2, 10460.9417);
+  assert.equal(result.actualPlant, 10460.9417);
+});
+
+test('official QLKT 02-PD Q181 overrides only the plant result when both units run', () => {
+  const result = calculateActualHeatRate({ C: '10', I: '10', AE: '5000', AF: '5000', AJ: '20000', Q181: '10321.45' });
+  assert.ok(result);
+  assert.equal(result.actualS1, 10000);
   assert.equal(result.actualS2, 10000);
-  assert.equal(result.actualPlant, 10000);
+  assert.equal(result.actualPlant, 10321.45);
 });
 
 test('actual heat rate matches day 13 in the supplied workbook', () => {

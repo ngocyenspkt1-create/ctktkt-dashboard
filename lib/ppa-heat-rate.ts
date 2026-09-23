@@ -236,9 +236,15 @@ export function calculateActualHeatRate(values: Record<string, string>) {
   // into the QLKT-comparable heat-rate result.
   const plantNet = netS1! + netS2!;
   if (plantNet <= 0) return null;
-  const s1 = netS1! > 0 ? coalS1! * heatingValue! / (netS1! * 1000) : null;
-  const s2 = netS2! > 0 ? coalS2! * heatingValue! / (netS2! * 1000) : null;
-  return { actualPlant: (coalS1! + coalS2!) * heatingValue! / (plantNet * 1000), actualS1: s1, actualS2: s2 };
+  const officialPlant = read("Q181");
+  const calculatedPlant = (coalS1! + coalS2!) * heatingValue! / (plantNet * 1000);
+  let s1 = netS1! > 0 ? coalS1! * heatingValue! / (netS1! * 1000) : null;
+  let s2 = netS2! > 0 ? coalS2! * heatingValue! / (netS2! * 1000) : null;
+  if (officialPlant !== null && officialPlant > 0) {
+    if (netS1! <= 0 && netS2! > 0) s2 = officialPlant;
+    if (netS2! <= 0 && netS1! > 0) s1 = officialPlant;
+  }
+  return { actualPlant: officialPlant !== null && officialPlant > 0 ? officialPlant : calculatedPlant, actualS1: s1, actualS2: s2 };
 }
 
 export function compareHeatRate(actual: number | null, ppa: number | null) {

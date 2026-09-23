@@ -1,5 +1,12 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — PPA actual ưu tiên SHN tinh chính thức QLKT 02-PĐ
+
+- Đối chiếu Turso ngày 22/09/2026: công thức dựng lại của web dùng `AF=5445,67 t`, `AJ=20035,72206 kJ/kg`, `I=10,3966124 triệu kWh`, cho `10494,5656 kJ/kWh`; trong khi báo cáo QLKT 02-PĐ lưu trực tiếp `Q181=10460,9417 kJ/kWh`, chênh `33,6239 kJ/kWh`.
+- Nguyên nhân là web trước đây tái tính từ than chưa quy ẩm và nhiệt trị chung, không dùng kết quả SHN tinh chính thức đã đồng bộ từ 02-PĐ. Các nguồn này có thể khác do quy đổi nhiên liệu/nhiệt trị và độ chính xác nội bộ của QLKT.
+- PPA comparison nay liên kết `Q181` một lần từ Chỉ tiêu KTKT. `actualPlant` luôn ưu tiên `Q181`; khi chỉ một tổ chạy, giá trị actual của tổ đang chạy cũng dùng `Q181`. Khi cả hai tổ chạy, actual từng tổ vẫn tính từ nguồn theo tổ vì 02-PĐ chỉ có dòng tổng Duyên Hải 1.
+- Kiểm tra đạt: 176/176 test, TypeScript, ESLint phạm vi sửa, build production và `git diff --check`. Turso `OK`: 1,93 MiB/5.120 MiB, 0,0376%, 9 bảng, 16.140 dòng.
+
 ## Cập nhật 23/09/2026 — PPA vẫn tính khi một tổ máy dừng và Turso đã truy cập được
 
 - Nếu một tổ máy có cả 48 chu kỳ đầu cực và điểm bán đều bằng 0, hệ thống xác định tổ đó đang dừng: PPA của tổ dừng là 0 để biểu thị không đánh giá, còn PPA tổ đang chạy và PPA toàn nhà máy vẫn được tính theo tổ đang chạy.

@@ -18,7 +18,7 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
 
   const current = {
     J157: "12100", K157: "11200", J158: "12200", K158: "11300", I36: "456.7",
-    N81: "111.84", N82: "486.25", P72: "42.21", P73: "117.891", P74: "141.595",
+    N81: "111.84", N82: "486.25", P72: "42.21", P73: "117.891", P74: "141.595", Q181: "10460.9417",
   };
   fillRange(current, "X", 10);
   fillRange(current, "Z", 20);
@@ -49,6 +49,7 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.BN, "18.506");
   assert.equal(linked.CN, "42.21");
   assert.equal(linked.CJ, "10");
+  assert.equal(linked.Q181, "10460.9417");
   assert.ok(Number(linked.AJ) > 0);
 });
 
@@ -76,6 +77,7 @@ test("QLKT monthly synchronization excludes fields already linked from CTKTKT", 
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BN"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("CN"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("CJ"), true);
+  assert.equal(CTKTKT_LINKED_DAILY_CODES.has("Q181"), true);
 });
 
 test("PPA actual data prefers CTKTKT links and keeps QLKT-only fields", () => {
@@ -87,6 +89,7 @@ test("PPA actual data prefers CTKTKT links and keeps QLKT-only fields", () => {
   const ctktktEntries = [
     { operatingDate: "2026-09-21", cell: "K157", value: "11200" },
     { operatingDate: "2026-09-21", cell: "K158", value: "11300" },
+    { operatingDate: "2026-09-21", cell: "Q181", value: "10460.9417" },
   ];
 
   const merged = mergeDailyInputsWithCtktkt(dailyEntries, ctktktEntries, "2026-09");
@@ -94,4 +97,5 @@ test("PPA actual data prefers CTKTKT links and keeps QLKT-only fields", () => {
   assert.equal(values.C, "11.2");
   assert.equal(values.I, "11.3");
   assert.equal(values.F, "12.5");
+  assert.equal(values.Q181, "10460.9417");
 });
