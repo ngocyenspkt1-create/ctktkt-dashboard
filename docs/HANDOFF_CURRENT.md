@@ -1,5 +1,12 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — sửa đẩy Google Sheet khi một tổ có sản lượng bằng 0
+
+- Nguyên nhân lỗi “Thiếu dữ liệu Đầu cực S1”: giao diện đã lấy sản lượng liên kết từ Chỉ tiêu KTKT, nhưng API Google Sheet vẫn chỉ đọc trường cũ trong `daily_inputs` nên không thấy mã `B`.
+- API Google Sheet nay ghép cùng nguồn CTKTKT như Dữ liệu các tháng; giá trị `0` của tổ dừng là dữ liệu hợp lệ và vẫn cho phép đẩy ngày lên Google Sheet.
+- Kiểm tra đạt: 163/163 test, TypeScript, ESLint phạm vi sửa và build production.
+- `npm.cmd run storage:check` chưa truy cập được Turso vì môi trường local thiếu `TURSO_DATABASE_URL`; chưa có số liệu xác thực để kết luận tỷ lệ sử dụng.
+
 ## Cập nhật 23/09/2026 — sửa suất hao nhiệt tinh toàn nhà máy khi một tổ dừng
 
 - Nguyên nhân ô toàn nhà máy trống: công thức cũ yêu cầu cả S1 và S2 đều có suất hao nhiệt; khi một tổ có điện giao bằng 0, suất hao nhiệt tổ đó không xác định và làm kết quả toàn nhà máy thành trống.

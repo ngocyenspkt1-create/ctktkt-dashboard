@@ -1,3 +1,6 @@
+import { deriveDailyValuesFromCtktkt } from "./daily-source-links.ts";
+import type { CtktktDayEntries } from "./ctktkt-report.ts";
+
 export type DailyInputEntry = { fieldCode: string; value: string };
 
 export type StoredPpaEntry = {
@@ -37,6 +40,22 @@ export type GoogleSheetAssessmentEntry = {
 
 export const PPA_AVAILABLE_CAPACITY_S1_CODE = "PPA_CSKD_S1";
 export const PPA_AVAILABLE_CAPACITY_S2_CODE = "PPA_CSKD_S2";
+
+export function mergeCtktktLinkedDailyEntries(
+  entries: DailyInputEntry[],
+  current: CtktktDayEntries,
+  previous?: CtktktDayEntries,
+) {
+  const merged = new Map(
+    entries
+      .filter(entry => !entry.fieldCode.startsWith("KTKT:"))
+      .map(entry => [entry.fieldCode, entry.value]),
+  );
+  for (const [fieldCode, value] of Object.entries(deriveDailyValuesFromCtktkt(current, previous))) {
+    merged.set(fieldCode, value);
+  }
+  return [...merged].map(([fieldCode, value]) => ({ fieldCode, value }));
+}
 
 export function parseAvailableCapacity(value: unknown, label: string) {
   if (value === null || value === undefined || String(value).trim() === "") return null;

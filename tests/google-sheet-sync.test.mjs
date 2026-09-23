@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildGoogleSheetDayPayload,
+  mergeCtktktLinkedDailyEntries,
   parseGoogleSheetAssessmentRows,
   parseAvailableCapacity,
   PPA_AVAILABLE_CAPACITY_S1_CODE,
@@ -51,6 +52,21 @@ test("xuất Google Sheet giữ đủ độ chính xác QLKT ngày 17/09", () =>
   assert.ok(Math.abs(payload.S2.shnThucTe - 10570.875556722753) < 1e-9);
   assert.ok(Math.abs(payload.NMND.shnThucTe - 10544.660598214996) < 1e-9);
   assert.match(payload.NMND.chenhLech, /\+44,66 kJ\/kWh/);
+});
+
+test("Google Sheet nhận sản lượng liên kết từ CTKTKT và chấp nhận S1 bằng 0", () => {
+  const directEntries = entries.filter(entry => !["B", "C", "H", "I"].includes(entry.fieldCode));
+  const merged = mergeCtktktLinkedDailyEntries(directEntries, {
+    J157: "0", K157: "0", J158: "11286.8", K158: "10396.6124",
+  });
+  const payload = buildGoogleSheetDayPayload("2026-09-22", merged, {
+    ppaPlant: 10_500, ppaS1: 10_500, ppaS2: 10_500,
+  });
+
+  assert.equal(payload.S1.sanLuong, 0);
+  assert.equal(payload.S2.sanLuong, 11.2868);
+  assert.equal(payload.S1.shnThucTe, null);
+  assert.notEqual(payload.S2.shnThucTe, null);
 });
 
 test("từ chối URL không phải bản triển khai Google Apps Script", () => {

@@ -2,11 +2,13 @@ import { getRawDb } from "@/db";
 import {
   buildGoogleSheetDayPayload,
   confirmsGoogleSheetWrite,
+  mergeCtktktLinkedDailyEntries,
   resolveGoogleSheetRow,
   type DailyInputEntry,
   type StoredPpaEntry,
   validateGoogleAppsScriptUrl,
 } from "@/lib/google-sheet-sync";
+import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { requirePermission } from "@/lib/auth/server";
 
 const datePattern = /^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -51,13 +53,26 @@ export async function POST(request: Request) {
     if (!datePattern.test(operatingDate)) throw new Error("Ngày đồng bộ không hợp lệ.");
 
     const db = getRawDb();
-    const [dailyResult, ppaResult] = await Promise.all([
+    const previousDate = previousIsoDate(operatingDate);
+    const [dailyResult, ppaResult, ctktktResult] = await Promise.all([
       db.prepare("SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date = ? ORDER BY field_code").bind(operatingDate).all(),
       db.prepare("SELECT ppa_plant AS ppaPlant, ppa_s1 AS ppaS1, ppa_s2 AS ppaS2, note_s1 AS noteS1, note_s2 AS noteS2 FROM ppa_heat_rate_daily WHERE operating_date = ? LIMIT 1").bind(operatingDate).first(),
+      db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date IN (?, ?) AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code").bind(previousDate, operatingDate).all(),
     ]);
+    const ctktktByDate = new Map<string, CtktktDayEntries>();
+    for (const entry of ctktktResult.results as Array<{ operatingDate: string; cell: string; value: string }>) {
+      const values = ctktktByDate.get(entry.operatingDate) || {};
+      values[entry.cell] = entry.value;
+      ctktktByDate.set(entry.operatingDate, values);
+    }
+    const dailyEntries = mergeCtktktLinkedDailyEntries(
+      dailyResult.results as unknown as DailyInputEntry[],
+      ctktktByDate.get(operatingDate) || {},
+      ctktktByDate.get(previousDate),
+    );
     const preview = buildGoogleSheetDayPayload(
       operatingDate,
-      dailyResult.results as unknown as DailyInputEntry[],
+      dailyEntries,
       (ppaResult || null) as StoredPpaEntry | null,
     );
     const config = getServerConfig();
