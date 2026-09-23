@@ -105,6 +105,9 @@ test('BCSX imports operating events from the dispatch workbook and sources Secti
   assert.match(source, /BCSX_COAL_STOCK_24H_CODE/);
   assert.doesNotMatch(source, /byCode\.get\("AR"\)/);
   assert.match(ctktktSource, /SYNC_PMIS_02PD/);
+  assert.match(ctktktSource, /sanitizeCtktktPmisSyncEntries\(payload\.entries\)/);
+  assert.match(ctktktSource, /entries: safeEntries/);
+  assert.doesNotMatch(ctktktSource, /if \(extensionOutdated\) \{[\s\S]{0,300}return;/);
   assert.match(background, /async function syncPmis02Pd\(operatingDate\)/);
   assert.match(background, /SYNC_PMIS_02PD_QLKT/);
   assert.match(background, /cell: entry\.cell \|\| entry\.fieldCode/);

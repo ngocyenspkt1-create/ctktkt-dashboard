@@ -1,5 +1,12 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 23/09/2026 — không còn phụ thuộc Reload để sửa payload PMIS cũ
+
+- Reload Chrome/Edge chỉ nạp lại mã trong đúng thư mục tiện ích đang cài, không tự tải bản mới từ website. Nếu tiện ích đang trỏ tới thư mục giải nén cũ, bấm Reload vẫn giữ nguyên mã cũ.
+- Web nay tự lọc lần cuối trước khi hiển thị và lưu: chỉ chấp nhận `J157/K157/J158/K158` cùng `C181:T181`; các mã Dữ liệu các tháng như `B/C/H/I` từ tiện ích cũ bị loại bỏ hoàn toàn.
+- Trang Chỉ tiêu KTKT không còn chặn nút đồng bộ chỉ vì tiện ích thấp hơn `0.4.30`. Tiện ích `0.4.29` vẫn dùng được an toàn cho riêng luồng `Đồng bộ PMIS & 02-PĐ`; các trang khác vẫn giữ kiểm tra phiên bản theo yêu cầu riêng.
+- Kiểm tra đạt 153/153 test, TypeScript, ESLint phạm vi sửa và build production; kiểm thử hồi quy mô phỏng trực tiếp payload của tiện ích cũ có `B/C/H/I`.
+
 ## Cập nhật 23/09/2026 — sửa lỗi đồng bộ PMIS báo ô B không được phép nhập
 
 - Nguyên nhân: tiện ích QLKT trộn các mã dùng cho bảng Dữ liệu các tháng (`B/C/H/I/...`) từ màn hình Sản lượng vào payload lưu ô Excel của Báo cáo Chỉ tiêu KTKT, nên API chặn đúng tại mã `B`.

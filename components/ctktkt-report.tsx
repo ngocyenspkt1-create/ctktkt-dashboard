@@ -66,7 +66,11 @@ import {
 import { parseSpreadsheetClipboard } from "@/lib/spreadsheet-grid";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
 import { findCtktktHistoryReadbackMismatch } from "@/lib/ctktkt-history-readback";
-import { isQlktExtensionOutdated, REQUIRED_QLKT_EXTENSION_VERSION } from "@/lib/qlkt-extension-version";
+import { isQlktExtensionOutdated } from "@/lib/qlkt-extension-version";
+import {
+  PMIS_PRODUCTION_CELLS,
+  sanitizeCtktktPmisSyncEntries,
+} from "@/lib/ctktkt-pmis-sync";
 import {
   CTKTKT_OIL_EVENT_CONFIG,
   type CtktktOilEventCode,
@@ -111,7 +115,6 @@ const STARTUP_EVENTS: Array<{ value: StartupEvent; label: string }> = [
   { value: "incident_oil", label: CTKTKT_OIL_EVENT_CONFIG.incident_oil.label },
 ];
 
-const PMIS_PRODUCTION_CELLS = ["J157", "K157", "J158", "K158"] as const;
 const QLKT_PRODUCTION_CELLS = new Set<string>(PMIS_PRODUCTION_CELLS);
 
 const editableFields = [
@@ -305,7 +308,8 @@ export function CtktktReport() {
         setError("Dữ liệu QLKT trả về không đúng ngày hoặc cấu trúc không hợp lệ.");
         return;
       }
-      const receivedCells = new Set(payload.entries.map(entry => entry.cell));
+      const safeEntries = sanitizeCtktktPmisSyncEntries(payload.entries);
+      const receivedCells = new Set(safeEntries.map(entry => entry.cell));
       const missingProduction = PMIS_PRODUCTION_CELLS.filter(cell => !receivedCells.has(cell));
       if (missingProduction.length) {
         pmisRequestRef.current = null;
@@ -314,7 +318,7 @@ export function CtktktReport() {
         return;
       }
       const updates: Record<string, string> = {};
-      for (const entry of payload.entries) {
+      for (const entry of safeEntries) {
         updates[entry.cell] = entry.value;
       }
       setByDate(old => ({
@@ -331,14 +335,14 @@ export function CtktktReport() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             operatingDate: request.operatingDate,
-            entries: payload.entries,
+            entries: safeEntries,
           }),
         });
         const resJson = (await res.json()) as { error?: string; saved?: number };
         if (!res.ok || resJson.error) {
           throw new Error(resJson.error || "Không lưu được dữ liệu đồng bộ.");
         }
-        setMessage(`Đã đồng bộ và lưu thành công ${payload.entries.length} chỉ tiêu PMIS Sản lượng & 02-PĐ (hàng Duyên Hải 1) từ QLKT cho ngày ${request.operatingDate.split("-").reverse().join("/")}!`);
+        setMessage(`Đã đồng bộ và lưu thành công ${safeEntries.length} chỉ tiêu PMIS Sản lượng & 02-PĐ (hàng Duyên Hải 1) từ QLKT cho ngày ${request.operatingDate.split("-").reverse().join("/")}!`);
         setError("");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Đã lấy dữ liệu nhưng không lưu được vào CSDL.");
@@ -545,11 +549,7 @@ export function CtktktReport() {
     }
     if (!extensionVersion) {
       window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
-      setError("Chưa kết nối tiện ích QLKT. Hãy Reload tiện ích phiên bản 0.4.28 rồi thử lại.");
-      return;
-    }
-    if (extensionOutdated) {
-      setError(`Tiện ích v${extensionVersion} đã cũ. Hãy Reload tiện ích v${REQUIRED_QLKT_EXTENSION_VERSION}, sau đó Ctrl+F5 trang web.`);
+      setError(`Chưa kết nối tiện ích QLKT. Hãy mở trang quản lý tiện ích, kiểm tra tiện ích đang bật rồi Ctrl+F5 trang web.`);
       return;
     }
     if (pmisRequestRef.current) window.clearTimeout(pmisRequestRef.current.timer);
@@ -3053,9 +3053,9 @@ export function CtktktReport() {
                       <h3 className="text-sm font-black text-[#173b64]">
                         Báo cáo PMIS 02-PĐ &amp; Đối chiếu ngày (Sản lượng &amp; Chỉ tiêu KTKT)
                       </h3>
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${extensionOutdated ? "bg-red-50 text-red-700" : extensionVersion ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${extensionOutdated ? "bg-red-500" : extensionVersion ? "bg-emerald-500" : "bg-amber-500"}`} />
-                        {extensionOutdated ? `Cần Reload v${REQUIRED_QLKT_EXTENSION_VERSION}` : extensionVersion ? `Tiện ích v${extensionVersion}` : "Chưa kết nối tiện ích"}
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${extensionOutdated ? "bg-amber-50 text-amber-700" : extensionVersion ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${extensionOutdated ? "bg-amber-500" : extensionVersion ? "bg-emerald-500" : "bg-amber-500"}`} />
+                        {extensionOutdated ? `Tiện ích v${extensionVersion} · web tự tương thích` : extensionVersion ? `Tiện ích v${extensionVersion}` : "Chưa kết nối tiện ích"}
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">
@@ -3070,7 +3070,7 @@ export function CtktktReport() {
                       className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3.5 py-2 text-xs font-bold text-white shadow-xs disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <RefreshCw className={`size-3.5 ${syncingPmis ? "animate-spin" : ""}`} />
-                      {syncingPmis ? "Đang đồng bộ PMIS…" : extensionOutdated ? `Reload tiện ích ${REQUIRED_QLKT_EXTENSION_VERSION}` : "Đồng bộ PMIS & 02-PĐ"}
+                      {syncingPmis ? "Đang đồng bộ PMIS…" : "Đồng bộ PMIS & 02-PĐ"}
                     </button>
                     <button
                       type="button"
