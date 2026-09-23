@@ -124,6 +124,7 @@ test('each report keeps its intended data action and NH3 overlaps link from CTKT
   const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
   const bcsxSource = readFileSync(new URL('../components/bcsx-report.tsx', import.meta.url), 'utf8');
   const ppaSource = readFileSync(new URL('../components/ppa-heat-rate-comparison.tsx', import.meta.url), 'utf8');
+  const ppaDashboardSource = readFileSync(new URL('../components/ppa-heat-rate-dashboard.tsx', import.meta.url), 'utf8');
   const pmisSource = readFileSync(new URL('../components/pmis-report.tsx', import.meta.url), 'utf8');
   const ctktktSource = readFileSync(new URL('../components/ctktkt-report.tsx', import.meta.url), 'utf8');
   const linkSource = readFileSync(new URL('../lib/daily-source-links.ts', import.meta.url), 'utf8');
@@ -135,6 +136,8 @@ test('each report keeps its intended data action and NH3 overlaps link from CTKT
   assert.match(dailySource, /Đồng bộ dữ liệu ngày/);
   assert.match(bcsxSource, /Nhập file lệnh & xuất QLKT/);
   assert.match(ppaSource, /Lấy công tơ PPA từ QLKT/);
+  assert.match(ppaDashboardSource, /api\/ctktkt-report\?period/);
+  assert.match(ppaDashboardSource, /mergeDailyInputsWithCtktkt/);
   assert.match(pmisSource, /Đồng bộ ngày/);
   assert.match(ctktktSource, /Đồng bộ PMIS & 02-PĐ/);
 

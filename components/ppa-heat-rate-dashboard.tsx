@@ -10,8 +10,10 @@ import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE } from "@/lib/google-sheet-sync";
 import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
+import { mergeDailyInputsWithCtktkt } from "@/lib/daily-source-links";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
+type CtktktInput = { operatingDate: string; cell: string; value: string };
 type StoredPpa = {
   operatingDate: string;
   ppaPlant: string | number;
@@ -319,9 +321,14 @@ export function PpaHeatRateDashboard() {
       const responses = await Promise.all(periods.map(period => Promise.all([
         fetch(`/api/ppa-heat-rate?period=${period}`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: StoredPpa[]; error?: string }>),
         fetch(`/api/daily-inputs?period=${period}`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: DailyInput[]; error?: string }>),
+        fetch(`/api/ctktkt-report?period=${period}`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string }>),
       ])));
       const allPpa = responses.flatMap(([ppaBody]) => ppaBody.entries || []);
-      const allDaily = responses.flatMap(([, dailyBody]) => dailyBody.entries || []);
+      const allDaily = responses.flatMap(([, dailyBody, ctktktBody], index) => mergeDailyInputsWithCtktkt(
+        dailyBody.entries || [],
+        [...(ctktktBody.entries || []), ...(ctktktBody.linkedEntries || [])],
+        periods[index],
+      ));
       if (clampToData && allPpa.length) {
         const dates = allPpa.map(entry => entry.operatingDate).sort();
         from = dates[0]; to = dates[dates.length - 1];
@@ -341,7 +348,7 @@ export function PpaHeatRateDashboard() {
   }
 
   // Chỉ tải một lần khi mở trang; các thao tác đổi khoảng ngày sau đó tự gọi loadRange qua sự kiện người dùng.
-  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadRange(fromDate, toDate, false); }, []);
 
   function applyQuick(kind: "last15" | "all") {
