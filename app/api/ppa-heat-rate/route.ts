@@ -1,5 +1,6 @@
 import { getRawDb } from "@/db";
 import { calculatePpaHeatRate, type PpaSourceData } from "@/lib/ppa-heat-rate";
+import { PPA_HEAT_RATE_UPSERT_SQL } from "@/lib/ppa-heat-rate-persistence";
 import { requireEditor } from "@/lib/auth/server";
 
 const datePattern = /^(20\d{2})-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
     const sourceFiles = Array.isArray(body.sourceFiles) ? body.sourceFiles.map(value => String(value).slice(0, 150)).slice(0, 8) : [];
     const noteS1 = String(body.noteS1 || "").trim().slice(0, 1000), noteS2 = String(body.noteS2 || "").trim().slice(0, 1000);
     const result = calculatePpaHeatRate(source, Number(operatingDate.slice(0, 4)));
-    await getRawDb().prepare("INSERT INTO ppa_heat_rate_daily (operating_date, source_data, source_files, gross_s1_kwh, net_s1_kwh, gross_s2_kwh, net_s2_kwh, ppa_plant, ppa_s1, ppa_s2, note_s1, note_s2, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(operating_date) DO UPDATE SET source_data = excluded.source_data, source_files = excluded.source_files, gross_s1_kwh = excluded.gross_s1_kwh, net_s1_kwh = excluded.net_s1_kwh, gross_s2_kwh = excluded.gross_s2_kwh, net_s2_kwh = excluded.net_s2_kwh, ppa_plant = excluded.ppa_plant, ppa_s1 = excluded.ppa_s1, ppa_s2 = excluded.ppa_s2, note_s1 = excluded.note_s1, note_s2 = excluded.note_s2, updated_at = CURRENT_TIMESTAMP").bind(operatingDate, JSON.stringify(source), JSON.stringify(sourceFiles), String(result.grossS1Kwh), String(result.netS1Kwh), String(result.grossS2Kwh), String(result.netS2Kwh), String(result.ppaPlant), String(result.ppaS1), String(result.ppaS2), noteS1, noteS2).run();
+    await getRawDb().prepare(PPA_HEAT_RATE_UPSERT_SQL).bind(operatingDate, JSON.stringify(source), JSON.stringify(sourceFiles), String(result.grossS1Kwh), String(result.netS1Kwh), String(result.grossS2Kwh), String(result.netS2Kwh), String(result.ppaPlant), String(result.ppaS1), String(result.ppaS2), noteS1, noteS2).run();
     return Response.json({ result });
   } catch (error) {
     return Response.json({ error: error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ." }, { status: 400 });

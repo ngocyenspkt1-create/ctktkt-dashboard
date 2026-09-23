@@ -45,7 +45,7 @@ export function PpaHeatRateBulkImport() {
           const response = await fetch("/api/ppa-heat-rate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ operatingDate, source: selected.source, sourceFiles: [`Excel · ${sheetName}`], noteS1: "", noteS2: "" }),
+            body: JSON.stringify({ operatingDate, source: selected.source, sourceFiles: [`Excel · ${sheetName}`] }),
           });
           const body = await response.json() as { error?: string };
           if (!response.ok) throw new Error(body.error || "Chưa lưu được.");
