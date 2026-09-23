@@ -47,7 +47,7 @@ export function deriveDailyValuesFromCtktkt(
 
   const oilS1 = calculateDailyOilConsumption(current, "s1", previous);
   const oilS2 = calculateDailyOilConsumption(current, "s2", previous);
-  setNumber(result, "X", oilS1 === null || oilS2 === null ? null : oilS1 + oilS2);
+  setNumber(result, "X", oilS1 === null || oilS2 === null ? null : Math.max(0, oilS1 + oilS2));
 
   return result;
 }

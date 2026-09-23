@@ -53,6 +53,14 @@ test("daily HFO requires complete 24h readings for both units", () => {
   assert.equal(linked.X, undefined);
 });
 
+test("daily HFO cannot be negative when return-meter drift exceeds supply", () => {
+  const previous = { AB13: "1618075.8", AB14: "1595617.6", AL13: "40984097.7", AL14: "875373788.5" };
+  const current = { AB13: "1618473.1", AB14: "1596017", AL13: "41337029", AL14: "875726692" };
+
+  const linked = deriveDailyValuesFromCtktkt(current, previous);
+  assert.equal(linked.X, "0");
+});
+
 test("QLKT monthly synchronization excludes fields already linked from CTKTKT", () => {
   for (const code of CTKTKT_LINKED_DAILY_CODES) assert.equal(QLKT_DIRECT_DAILY_CODES.has(code), false, code);
   assert.deepEqual([...QLKT_DIRECT_DAILY_CODES], ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"]);

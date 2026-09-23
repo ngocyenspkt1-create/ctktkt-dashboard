@@ -436,3 +436,9 @@ Còn cần: nhập hai giá trị thật cho ngày cần báo cáo, bấm một 
 - S1: `(AB13_D - AB13_D-1) - (AB14_D - AB14_D-1)`; don vi tan.
 - S2: `[(AL13_D - AL13_D-1) - (AL14_D - AL14_D-1)] / 1000`; doi tu kg sang tan.
 - Khong yeu cau du cac moc 06h-22h de tinh chi tieu ngay; cac moc nay van duoc giu cho bang chi tiet va doi chieu Excel.
+
+# Cap nhat 23/09/2026 - khong hien thi tieu thu HFO am
+
+- Van tinh tong HFO bang chenh lech cong to 24h ngay D va ngay D-1 cua S1, S2.
+- Neu tong chenh lech am do cong to dau ve bon tang nhieu hon cong to cap lo, chi tieu `X` tra ve 0 vi luong dau tieu thu vat ly khong the am.
+- Gia tri duong trong ngay co dot dau van duoc giu nguyen; khong lay tri tuyet doi va khong dao dau.
