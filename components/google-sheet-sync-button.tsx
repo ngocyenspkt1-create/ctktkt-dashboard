@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { confirmsGoogleSheetWrite, parseGoogleSheetAssessmentRows, resolveGoogleSheetRow, validateGoogleAppsScriptUrl, type GoogleSheetAssessmentEntry, type GoogleSheetDayPayload } from "@/lib/google-sheet-sync";
+import { confirmsGoogleSheetWrite, GOOGLE_SHEET_VIEW_URL, parseGoogleSheetAssessmentRows, resolveGoogleSheetRow, validateGoogleAppsScriptUrl, type GoogleSheetAssessmentEntry, type GoogleSheetDayPayload } from "@/lib/google-sheet-sync";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 
@@ -151,10 +151,11 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
     <div className="flex flex-col items-end gap-1">
       <div className="flex gap-1">
         <button type="button" disabled={loading || disabled} onClick={() => void pushGoogleSheet()} title={disabled ? disabledReason : `Đẩy ngay dữ liệu ngày ${displayDate} lên Google Sheet`} className="h-10 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80">{loading ? "Đang đẩy…" : `Đẩy Google Sheet · ${displayDate}`}</button>
+        <a href={GOOGLE_SHEET_VIEW_URL} target="_blank" rel="noopener noreferrer" title="Mở bảng Google Sheet trong tab mới" className="inline-flex h-10 items-center whitespace-nowrap rounded-xl border border-blue-300 bg-blue-50 px-3 text-sm font-bold text-blue-800 shadow-sm hover:bg-blue-100">Mở Google Sheet</a>
         <button type="button" disabled={loading || disabled} onClick={startHistoricalImport} title={disabled ? disabledReason : "Nhập một lần các đánh giá S1/S2 cũ từ Google Sheet về web"} className="h-10 whitespace-nowrap rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-bold text-amber-800 shadow-sm disabled:opacity-60">Nhập đánh giá cũ</button>
         {!serverConfigured && <button type="button" onClick={() => { setError(""); setSettingsOpen(true); }} aria-label="Cài đặt đồng bộ Google Sheet" title="Cài đặt Google Sheet dự phòng" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">⚙</button>}
       </div>
-      {serverConfigured && <p className="max-w-sm text-right text-[11px] font-semibold text-emerald-700">Đã dùng cấu hình Google Sheet của máy chủ.</p>}
+      {serverConfigured && <p className="max-w-sm text-right text-[11px] font-semibold text-emerald-700">Đã ghi qua cấu hình Apps Script của chủ sở hữu trên máy chủ; máy người dùng không cần quyền chỉnh sửa Sheet.</p>}
       {disabled && disabledReason && <p className="max-w-sm text-right text-[11px] font-semibold text-amber-700">{disabledReason}</p>}
       {message && <p role="status" className="max-w-sm text-right text-[11px] font-semibold text-emerald-700">{message}</p>}
       {error && <p role="alert" className="max-w-sm text-right text-[11px] font-semibold text-red-700">{error}</p>}

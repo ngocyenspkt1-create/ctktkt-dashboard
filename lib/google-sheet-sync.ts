@@ -40,6 +40,7 @@ export type GoogleSheetAssessmentEntry = {
 
 export const PPA_AVAILABLE_CAPACITY_S1_CODE = "PPA_CSKD_S1";
 export const PPA_AVAILABLE_CAPACITY_S2_CODE = "PPA_CSKD_S2";
+export const GOOGLE_SHEET_VIEW_URL = "https://docs.google.com/spreadsheets/d/1L0NtMse98j0QBR2kjcK4E1Iob2XLDdrfNM99pBDBcyo/edit";
 
 export function mergeCtktktLinkedDailyEntries(
   entries: DailyInputEntry[],

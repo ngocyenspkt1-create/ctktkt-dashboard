@@ -77,6 +77,9 @@ export async function POST(request: Request) {
     );
     const config = getServerConfig();
     if (!config) {
+      if (action === "sync") {
+        return Response.json({ error: "Máy chủ chưa được cấu hình Google Sheet. Hãy liên hệ quản trị viên; không nhập tài khoản Gmail hoặc mã kết nối trên máy người dùng." }, { status: 503 });
+      }
       return Response.json({ configured: false, preview }, { headers: { "Cache-Control": "no-store" } });
     }
 

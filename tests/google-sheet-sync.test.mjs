@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildGoogleSheetDayPayload,
+  GOOGLE_SHEET_VIEW_URL,
   mergeCtktktLinkedDailyEntries,
   parseGoogleSheetAssessmentRows,
   parseAvailableCapacity,
@@ -16,6 +17,13 @@ const entries = Object.entries({
   AE: "5.107,33", AF: "5.248,58", AJ: "20.142,99",
   [PPA_AVAILABLE_CAPACITY_S1_CODE]: "622,5", [PPA_AVAILABLE_CAPACITY_S2_CODE]: "615,2",
 }).map(([fieldCode, value]) => ({ fieldCode, value }));
+
+test("link xem Google Sheet mở đúng bảng tính DH1", () => {
+  const url = new URL(GOOGLE_SHEET_VIEW_URL);
+  assert.equal(url.protocol, "https:");
+  assert.equal(url.hostname, "docs.google.com");
+  assert.match(url.pathname, /^\/spreadsheets\/d\/[^/]+\/edit$/);
+});
 
 test("lập đúng dữ liệu Google Sheet cho S1, S2 và toàn nhà máy", () => {
   const payload = buildGoogleSheetDayPayload("2026-09-13", entries, {
