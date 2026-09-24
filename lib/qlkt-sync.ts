@@ -17,6 +17,8 @@ export const qlktFieldLabels: Record<string, string> = {
   CT: "Thời gian sự cố",
   CU: "Thời gian sửa chữa, bảo dưỡng",
   CV: "Thời gian khởi động",
+  GRID_RECEIVE_S1: "Điện nhận lưới S1 · xuất tuyến 285",
+  GRID_RECEIVE_S2: "Điện nhận lưới S2 · xuất tuyến 283",
   DA: "Công suất đầu cực BQ S1",
   DB: "Công suất đầu cực BQ S2",
   DC: "Tổn thất khói khô BQ S1",
@@ -145,17 +147,17 @@ export function validateQlktPpaSyncPayload(value: unknown): QlktPpaSyncPayload |
   try {
     const raw = value as Partial<QlktPpaSyncPayload>;
     if (raw.version !== 1 || raw.kind !== "ppa-meter" || typeof raw.operatingDate !== "string" || !datePattern.test(raw.operatingDate) || typeof raw.sourcePage !== "string" || !Array.isArray(raw.readings)) return null;
-    const allowedMeters = new Set(["DHA_S1", "DH1_285M", "DHA_S2", "DH1_283M"]), seen = new Set<string>();
+    const requiredReadings = new Set(["DHA_S1|kwhgiao", "DH1_285M|kwhgiao", "DH1_285M|kwhnhan", "DHA_S2|kwhgiao", "DH1_283M|kwhgiao", "DH1_283M|kwhnhan"]), seen = new Set<string>();
     const readings = raw.readings.flatMap(item => {
       if (!item || typeof item !== "object") return [];
-      const meter = String(item.meter || "").toUpperCase(), channel = String(item.channel || "");
-      if (!allowedMeters.has(meter) || seen.has(meter) || channel.toLowerCase() !== "kwhgiao" || item.operatingDate !== raw.operatingDate || !Array.isArray(item.intervals) || item.intervals.length !== 48) return [];
+      const meter = String(item.meter || "").toUpperCase(), channelKey = String(item.channel || "").toLowerCase(), key = [meter, channelKey].join("|");
+      if (!requiredReadings.has(key) || seen.has(key) || item.operatingDate !== raw.operatingDate || !Array.isArray(item.intervals) || item.intervals.length !== 48) return [];
       const intervals = item.intervals.map(Number), total = Number(item.total);
       if (!Number.isFinite(total) || total < 0 || intervals.some(value => !Number.isFinite(value) || value < 0)) return [];
-      seen.add(meter);
-      return [{ meter, channel: "kWhGiao", operatingDate: raw.operatingDate, total, intervals, sourceName: String(item.sourceName || "QLKT · Số liệu đo đếm công tơ").slice(0, 500) }];
+      seen.add(key);
+      return [{ meter, channel: channelKey === "kwhnhan" ? "kWhNhan" : "kWhGiao", operatingDate: raw.operatingDate, total, intervals, sourceName: String(item.sourceName || "QLKT · Số liệu đo đếm công tơ").slice(0, 500) }];
     });
-    return readings.length === 4 ? { version: 1, kind: "ppa-meter", operatingDate: raw.operatingDate, sourcePage: raw.sourcePage.slice(0, 500), readings } : null;
+    return readings.length === requiredReadings.size ? { version: 1, kind: "ppa-meter", operatingDate: raw.operatingDate, sourcePage: raw.sourcePage.slice(0, 500), readings } : null;
   } catch {
     return null;
   }

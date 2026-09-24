@@ -23,7 +23,7 @@ const SOURCE_LABELS = {
   pmis_02pd: "Báo cáo 02-PĐ",
 };
 const DAILY_SOURCES = ["fuel", "operation"];
-const DAILY_FIELD_CODES = new Set(["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"]);
+const DAILY_FIELD_CODES = new Set(["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV", "GRID_RECEIVE_S1", "GRID_RECEIVE_S2"]);
 const PMIS_PRODUCTION_CELLS = new Set(["J157", "K157", "J158", "K158"]);
 const REQUIRED_FIELDS = {
   production: ["B", "C", "H", "I"],
@@ -252,8 +252,8 @@ async function readSource(source, url, operatingDate) {
     } else result = await readValuesWithRetry(tabId, operatingDate);
     if (!result?.ok) throw new Error(`Màn hình ${SOURCE_LABELS[source]}: ${result?.error || "không đọc được dữ liệu."}`);
     if (source === "meter") {
-      if (result.payload?.kind !== "ppa-meter" || result.payload?.readings?.length !== 4) {
-        throw new Error("Màn hình Công tơ PPA chưa đọc đủ 4 điểm đo bắt buộc.");
+      if (result.payload?.kind !== "ppa-meter" || result.payload?.readings?.length !== 6) {
+        throw new Error("Màn hình Công tơ PPA chưa đọc đủ 4 kênh giao và 2 kênh nhận bắt buộc.");
       }
     } else {
       const received = new Set((result.payload?.entries || []).map(entry => entry.fieldCode));
@@ -274,7 +274,7 @@ async function readSource(source, url, operatingDate) {
   }
 }
 
-async function syncAll(operatingDate) {
+async function syncAll(operatingDate, providedMeterPayload = null) {
   const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
   const urlFor = source => source === "production" ? DEFAULT_PRODUCTION_URL
     : source === "operation" ? DEFAULT_OPERATION_URL
@@ -288,10 +288,20 @@ async function syncAll(operatingDate) {
   for (const source of DAILY_SOURCES) {
     payloads.push(await readSource(source, urlFor(source), operatingDate));
   }
+  const meterPayload = providedMeterPayload || await syncPpa(operatingDate);
   const entries = new Map();
   payloads.flatMap(payload => payload.entries || [])
     .filter(entry => DAILY_FIELD_CODES.has(entry.fieldCode))
     .forEach(entry => entries.set(entry.fieldCode, entry));
+  const receivedMeters = [
+    { fieldCode: "GRID_RECEIVE_S1", meter: "DH1_285M", label: "Điện nhận lưới S1 · xuất tuyến 285" },
+    { fieldCode: "GRID_RECEIVE_S2", meter: "DH1_283M", label: "Điện nhận lưới S2 · xuất tuyến 283" },
+  ];
+  for (const target of receivedMeters) {
+    const reading = meterPayload.readings.find(item => item.meter === target.meter && String(item.channel).toLowerCase() === "kwhnhan");
+    if (!reading) throw new Error(`Không tìm thấy ${target.meter} / kWhNhan để tính điện tự dùng.`);
+    entries.set(target.fieldCode, { fieldCode: target.fieldCode, value: String(reading.total / 1000), sourceLabel: target.label });
+  }
   if (!entries.size) throw new Error("Không tìm thấy dữ liệu nào để đồng bộ.");
   return {
     version: 1,
@@ -436,8 +446,8 @@ async function syncPmis02Pd(operatingDate) {
 }
 
 async function syncUnified(operatingDate) {
-  const daily = await syncAll(operatingDate);
   const ppa = await syncPpa(operatingDate);
+  const daily = await syncAll(operatingDate, ppa);
   const heatRate = await syncHeatRate(operatingDate);
   const events = await syncBcsxEvents(operatingDate);
   const pmis02Pd = await syncPmis02Pd(operatingDate);

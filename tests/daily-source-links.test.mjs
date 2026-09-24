@@ -73,7 +73,7 @@ test("daily HFO cannot be negative when return-meter drift exceeds supply", () =
 
 test("QLKT monthly synchronization excludes fields already linked from CTKTKT", () => {
   for (const code of CTKTKT_LINKED_DAILY_CODES) assert.equal(QLKT_DIRECT_DAILY_CODES.has(code), false, code);
-  assert.deepEqual([...QLKT_DIRECT_DAILY_CODES], ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"]);
+  assert.deepEqual([...QLKT_DIRECT_DAILY_CODES], ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV", "GRID_RECEIVE_S1", "GRID_RECEIVE_S2"]);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BQ"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BR"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BN"), true);

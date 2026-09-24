@@ -101,7 +101,7 @@ export function PpaHeatRateComparison() {
         setSourceFiles(["QLKT · Số liệu đo đếm công tơ"]);
         setOperatingDate(payload.operatingDate);
         setError("");
-        setMessage("Đã nhận 4 công tơ PPA × 48 chu kỳ từ QLKT. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
+        setMessage("Đã nhận 4 kênh giao PPA và 2 kênh nhận lưới × 48 chu kỳ từ QLKT. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
         window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Không đọc được dữ liệu công tơ từ QLKT.");
@@ -130,7 +130,7 @@ export function PpaHeatRateComparison() {
       }
       const payload = validateQlktPpaSyncPayload(data.result.payload);
       if (!payload) {
-        setError("Dữ liệu tiện ích trả về chưa đủ 4 điểm đo và 48 chu kỳ.");
+        setError("Dữ liệu tiện ích trả về chưa đủ 4 kênh giao, 2 kênh nhận lưới và 48 chu kỳ.");
         return;
       }
       try {
@@ -140,7 +140,7 @@ export function PpaHeatRateComparison() {
         setSourceFiles(["QLKT · Số liệu đo đếm công tơ"]);
         setOperatingDate(payload.operatingDate);
         setError("");
-        setMessage("Đồng bộ QLKT thành công: đã nhận 4 công tơ PPA × 48 chu kỳ. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
+        setMessage("Đồng bộ QLKT thành công: đã nhận 4 kênh giao PPA và 2 kênh nhận lưới × 48 chu kỳ. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Không đọc được dữ liệu công tơ từ QLKT.");
       }

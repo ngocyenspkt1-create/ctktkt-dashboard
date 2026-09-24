@@ -150,3 +150,16 @@ test("daily email always uses PMIS production instead of meter differences", () 
   assert.equal(metrics.grossMwhS2, 130);
   assert.equal(metrics.netMwhS2, 110);
 });
+
+test("daily email adds received grid electricity without changing the normal auxiliary percentage", () => {
+  const current = { J157: "0", K157: "0", J158: "100", K158: "90" };
+  const metrics = extractCtktktEmailMetrics(current, undefined, {
+    gridReceivedMwhS1: 173.145,
+    gridReceivedMwhS2: 5,
+  });
+
+  assert.equal(metrics.auxMwhS1, 173.145);
+  assert.equal(metrics.auxPercentS1, null);
+  assert.equal(metrics.auxMwhS2, 15);
+  assert.equal(metrics.auxPercentS2, 10);
+});

@@ -12,7 +12,7 @@ export const CTKTKT_LINKED_DAILY_CODES = new Set([
 ]);
 
 export const QLKT_DIRECT_DAILY_CODES = new Set([
-  "F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV",
+  "F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV", "GRID_RECEIVE_S1", "GRID_RECEIVE_S2",
 ]);
 
 type DailyInputEntry = { operatingDate: string; fieldCode: string; value: string };

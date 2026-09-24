@@ -16,10 +16,12 @@
     return match ? `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}` : "";
   };
   const required = [
-    { meter: "DHA_S1", label: "Đầu cực S1" },
-    { meter: "DH1_285M", label: "Điểm bán S1" },
-    { meter: "DHA_S2", label: "Đầu cực S2" },
-    { meter: "DH1_283M", label: "Điểm bán S2" },
+    { meter: "DHA_S1", channel: "kWhGiao", label: "Đầu cực S1" },
+    { meter: "DH1_285M", channel: "kWhGiao", label: "Điểm bán S1" },
+    { meter: "DH1_285M", channel: "kWhNhan", label: "Điện nhận lưới S1" },
+    { meter: "DHA_S2", channel: "kWhGiao", label: "Đầu cực S2" },
+    { meter: "DH1_283M", channel: "kWhGiao", label: "Điểm bán S2" },
+    { meter: "DH1_283M", channel: "kWhNhan", label: "Điện nhận lưới S2" },
   ];
 
   // --- Cách 1 (dự phòng): dò bảng HTML đã hiển thị đủ cột H1–H48 trong DOM.
@@ -54,10 +56,10 @@
       const row = dataRows.find(candidate => {
         const actualMeterIndex = candidate.findIndex(cell => normalized(cell) === normalized(target.meter));
         const offset = actualMeterIndex - meterIndex;
-        return actualMeterIndex >= 0 && normalized(candidate[channelIndex + offset]) === "kwhgiao"
+        return actualMeterIndex >= 0 && normalized(candidate[channelIndex + offset]) === normalized(target.channel)
           && (dateIndex < 0 || normalizeDate(candidate[dateIndex + offset]) === operatingDate);
       });
-      if (!row) throw new Error(`Không tìm thấy ${target.meter} / kWhGiao cho ngày đã chọn.`);
+      if (!row) throw new Error(`Không tìm thấy ${target.meter} / ${target.channel} cho ngày đã chọn.`);
       const offset = row.findIndex(cell => normalized(cell) === normalized(target.meter)) - meterIndex;
       const intervals = hourIndexes.map(index => parseNumber(row[index + offset]));
       if (intervals.some(value => value === null || value < 0)) throw new Error(`${target.meter}: thiếu hoặc sai giá trị trong H1–H48.`);
@@ -67,7 +69,7 @@
       if (reportedTotal === null) throw new Error(`${target.meter}: không đọc được cột Tổng.`);
       const tolerance = Math.max(50, Math.abs(reportedTotal) * 0.000005);
       if (Math.abs(intervalTotal - reportedTotal) > tolerance) throw new Error(`${target.meter}: tổng H1–H48 không khớp cột Tổng.`);
-      return { meter: target.meter, channel: "kWhGiao", operatingDate, total: reportedTotal, intervals: numericIntervals, sourceName: sourcePage };
+      return { meter: target.meter, channel: target.channel, operatingDate, total: reportedTotal, intervals: numericIntervals, sourceName: sourcePage };
     });
     return { version: 1, kind: "ppa-meter", operatingDate, sourcePage, readings };
   }
@@ -131,7 +133,7 @@
 
     const readings = required.map(target => {
       const row = rows.find(candidate => {
-        if (normalized(candidate[1]) !== "kwhgiao") return false;
+        if (normalized(candidate[1]) !== normalized(target.channel)) return false;
         if (normalized(candidate[0]) !== normalized(target.meter)) return false;
         const rowDate = normalizeDate(candidate[2]);
         if (rowDate && rowDate !== operatingDate) return false;
@@ -141,7 +143,7 @@
         const meterRowsAnyChannel = rows.filter(candidate => normalized(candidate[0]) === normalized(target.meter));
         const channelsFound = [...new Set(meterRowsAnyChannel.map(candidate => candidate[1]))];
         const datesFound = [...new Set(meterRowsAnyChannel.map(candidate => candidate[2]))];
-        throw new Error(`Không tìm thấy ${target.meter} / kWhGiao cho ngày đã chọn. (Tìm thấy ${meterRowsAnyChannel.length} dòng của ${target.meter}, kênh: ${channelsFound.join(", ") || "không có"}; ngày: ${datesFound.join(", ") || "không có"}.)`);
+        throw new Error(`Không tìm thấy ${target.meter} / ${target.channel} cho ngày đã chọn. (Tìm thấy ${meterRowsAnyChannel.length} dòng của ${target.meter}, kênh: ${channelsFound.join(", ") || "không có"}; ngày: ${datesFound.join(", ") || "không có"}.)`);
       }
       const intervals = row.slice(row.length - 48).map(parseNumber);
       if (intervals.some(value => value === null || value < 0)) throw new Error(`${target.meter}: thiếu hoặc sai giá trị trong H1–H48.`);
@@ -150,7 +152,7 @@
       if (reportedTotal === null) throw new Error(`${target.meter}: không đọc được cột Tổng.`);
       const tolerance = Math.max(50, Math.abs(reportedTotal) * 0.000005);
       if (Math.abs(intervalTotal - reportedTotal) > tolerance) throw new Error(`${target.meter}: tổng H1–H48 không khớp cột Tổng.`);
-      return { meter: target.meter, channel: "kWhGiao", operatingDate, total: reportedTotal, intervals, sourceName: sourcePage };
+      return { meter: target.meter, channel: target.channel, operatingDate, total: reportedTotal, intervals, sourceName: sourcePage };
     });
     return { version: 1, kind: "ppa-meter", operatingDate, sourcePage, readings };
   }

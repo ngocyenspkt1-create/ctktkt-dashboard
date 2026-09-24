@@ -6,19 +6,19 @@ import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXT
 import '../public/qlkt-sync-extension/meter-extract.js';
 
 test('web blocks old QLKT extensions and prefers reload over downloading again', () => {
-  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.30');
-  assert.equal(isQlktExtensionOutdated('0.4.29'), true);
-  assert.equal(isQlktExtensionOutdated('0.4.30'), false);
+  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.31');
+  assert.equal(isQlktExtensionOutdated('0.4.30'), true);
+  assert.equal(isQlktExtensionOutdated('0.4.31'), false);
   assert.equal(isQlktExtensionOutdated('0.4.31'), false);
   assert.equal(isQlktExtensionOutdated(''), false);
-  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.30/);
+  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.31/);
   const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
   assert.match(dailySource, /Ưu tiên Reload — không cần tải lại mỗi lần/);
   assert.match(dailySource, /Đã Reload — kiểm tra lại/);
   assert.doesNotMatch(dailySource, /document\.createElement\("a"\)/);
 });
 
-test('extension package 0.4.30 keeps PMIS cells separate from monthly QLKT codes', () => {
+test('extension package 0.4.31 keeps PMIS cells separate from monthly QLKT codes', () => {
   const files = ['background.js', 'content.js', 'manifest.json', 'meter-extract.js', 'popup.css', 'popup.html', 'popup.js', 'README.md', 'web-bridge.js'];
   for (const file of files) {
     const source = readFileSync(new URL(`../browser-extension/qlkt-sync/${file}`, import.meta.url), 'utf8');
@@ -30,7 +30,7 @@ test('extension package 0.4.30 keeps PMIS cells separate from monthly QLKT codes
   const content = readFileSync(new URL('../public/qlkt-sync-extension/content.js', import.meta.url), 'utf8');
   const popup = readFileSync(new URL('../public/qlkt-sync-extension/popup.js', import.meta.url), 'utf8');
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
-  assert.equal(manifest.version, '0.4.30');
+  assert.equal(manifest.version, '0.4.31');
   assert.ok(manifest.host_permissions.includes('https://ctktkt-dashboard.vercel.app/*'));
   assert.ok(manifest.content_scripts.some(item => item.js.includes('web-bridge.js') && item.matches.includes('https://ctktkt-dashboard.vercel.app/*')));
   assert.match(webBridge, /\/bcsx-report/);
@@ -41,9 +41,11 @@ test('extension package 0.4.30 keeps PMIS cells separate from monthly QLKT codes
   assert.match(background, /SYNC_BCSX_EVENTS_QLKT/);
   assert.match(background, /SYNC_UNIFIED_QLKT/);
   assert.match(background, /async function syncUnified\(operatingDate\)/);
-  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.30"/);
+  assert.match(content, /CONTENT_SCRIPT_VERSION = "0\.4\.31"/);
   assert.match(background, /DAILY_SOURCES = \["fuel", "operation"\]/);
-  assert.match(background, /DAILY_FIELD_CODES = new Set\(\["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"\]\)/);
+  assert.match(background, /DAILY_FIELD_CODES = new Set\(\["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV", "GRID_RECEIVE_S1", "GRID_RECEIVE_S2"\]\)/);
+  assert.match(background, /const meterPayload = providedMeterPayload \|\| await syncPpa\(operatingDate\)/);
+  assert.match(background, /const daily = await syncAll\(operatingDate, ppa\)/);
   assert.match(background, /fuel: \["AR", "CC", "CD"\]/);
   assert.match(background, /operation: \["F", "L", "CS", "CT", "CU", "CV"\]/);
   assert.match(background, /source === "operation" \? DEFAULT_OPERATION_URL/);
@@ -154,16 +156,24 @@ test('each report keeps its intended data action and NH3 overlaps link from CTKT
 });
 
 const headers = ['', 'Tên điểm đo', 'Kênh', 'Ngày', 'Nguồn dữ liệu', 'Tổng', ...Array.from({ length: 48 }, (_, index) => `H${index + 1}`)];
-const meterRows = ['DHA_S1', 'DH1_285M', 'DHA_S2', 'DH1_283M'].map((meter, meterIndex) => {
-  const intervals = Array.from({ length: 48 }, (_, index) => 200000 + meterIndex * 1000 + index);
-  return ['', meter, 'kWhGiao', '14/09/2026', 'File CSV', String(intervals.reduce((sum, value) => sum + value, 0)), ...intervals.map(String)];
+const requiredMeterChannels = [
+  ['DHA_S1', 'kWhGiao'],
+  ['DH1_285M', 'kWhGiao'],
+  ['DH1_285M', 'kWhNhan'],
+  ['DHA_S2', 'kWhGiao'],
+  ['DH1_283M', 'kWhGiao'],
+  ['DH1_283M', 'kWhNhan'],
+];
+const meterRows = requiredMeterChannels.map(([meter, channel], readingIndex) => {
+  const intervals = Array.from({ length: 48 }, (_, index) => 200000 + readingIndex * 1000 + index);
+  return ['', meter, channel, '14/09/2026', 'File CSV', String(intervals.reduce((sum, value) => sum + value, 0)), ...intervals.map(String)];
 });
 
-test('extracts the four PPA meters and all 48 intervals from the QLKT table', () => {
+test('extracts four PPA delivery channels, two received-grid channels and all 48 intervals from the QLKT table', () => {
   const payload = globalThis.QlktMeterExtractor.extractPpaMeterReadings([[headers], meterRows.map(row => row.slice(1))], '2026-09-14', 'http://qlkt/example');
   assert.equal(payload.kind, 'ppa-meter');
-  assert.equal(payload.readings.length, 4);
-  assert.deepEqual(payload.readings.map(item => item.meter), ['DHA_S1', 'DH1_285M', 'DHA_S2', 'DH1_283M']);
+  assert.equal(payload.readings.length, 6);
+  assert.deepEqual(payload.readings.map(item => [item.meter, item.channel]), requiredMeterChannels);
   assert.ok(payload.readings.every(item => item.intervals.length === 48));
 });
 
@@ -173,7 +183,7 @@ test('rejects a QLKT table whose interval sum does not match Total', () => {
   assert.throws(() => globalThis.QlktMeterExtractor.extractPpaMeterReadings([[headers, ...broken]], '2026-09-14'), /không khớp cột Tổng/);
 });
 
-test('extracts the four PPA meters from the ExtSheet <script> data QLKT embeds in the page (real page shape)', () => {
+test('extracts the six required meter channels from the ExtSheet <script> data QLKT embeds in the page (real page shape)', () => {
   // Mô phỏng đúng cấu trúc thật của QLKT: dữ liệu nằm trong thẻ <script> khởi
   // tạo widget "ExtSheet", mỗi điểm đo có 4 dòng (kWhGiao/kWhNhan/kVarhGiao/
   // kVarhNhan), tên điểm đo có thể có khoảng trắng đệm ở cuối, và bảng hiển
@@ -183,7 +193,8 @@ test('extracts the four PPA meters from the ExtSheet <script> data QLKT embeds i
   const rows = [['Điểm đo giao nhận', '', '', '', '', ...Array.from({ length: 48 }, () => '')]];
   meters.forEach((meter, meterIndex) => {
     channels.forEach(channel => {
-      if (channel !== 'kWhGiao') {
+      const isRequired = channel === 'kWhGiao' || (channel === 'kWhNhan' && ['DH1_285M', 'DH1_283M'].includes(meter));
+      if (!isRequired) {
         rows.push([meter.padEnd(50, ' '), channel, '14/09/2026', 'File CSV', '0', ...Array.from({ length: 48 }, () => '0')]);
         return;
       }
@@ -196,9 +207,9 @@ test('extracts the four PPA meters from the ExtSheet <script> data QLKT embeds i
 
   const payload = globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromScripts([scriptText], '2026-09-14', 'http://qlkt/example');
   assert.equal(payload.kind, 'ppa-meter');
-  assert.equal(payload.readings.length, 4);
-  assert.deepEqual(payload.readings.map(item => item.meter), ['DHA_S1', 'DH1_285M', 'DHA_S2', 'DH1_283M']);
-  assert.ok(payload.readings.every(item => item.intervals.length === 48 && item.channel === 'kWhGiao'));
+  assert.equal(payload.readings.length, 6);
+  assert.deepEqual(payload.readings.map(item => [item.meter, item.channel]), requiredMeterChannels);
+  assert.ok(payload.readings.every(item => item.intervals.length === 48));
   const widgetPayload = globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays([rows], '2026-09-14', 'http://qlkt/example');
   assert.deepEqual(widgetPayload.readings, payload.readings);
 });
@@ -214,9 +225,9 @@ test('web app decodes a complete PPA payload and rejects missing meters', () => 
   const payload = globalThis.QlktMeterExtractor.extractPpaMeterReadings([[headers, ...meterRows]], '2026-09-14', 'http://qlkt/example');
   const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
   const decoded = decodeQlktPpaSyncHash(`#qlkt-sync=${encoded}`);
-  assert.equal(decoded?.readings.length, 4);
-  assert.equal(validateQlktPpaSyncPayload(payload)?.readings.length, 4);
-  const incomplete = { ...payload, readings: payload.readings.slice(0, 3) };
+  assert.equal(decoded?.readings.length, 6);
+  assert.equal(validateQlktPpaSyncPayload(payload)?.readings.length, 6);
+  const incomplete = { ...payload, readings: payload.readings.slice(0, 5) };
   assert.equal(decodeQlktPpaSyncHash(`#qlkt-sync=${Buffer.from(JSON.stringify(incomplete)).toString('base64url')}`), null);
 });
 
@@ -224,7 +235,7 @@ test('web app accepts only a complete same-date unified QLKT payload', () => {
   const operatingDate = '2026-09-14';
   const ppa = globalThis.QlktMeterExtractor.extractPpaMeterReadings([[headers, ...meterRows]], operatingDate, 'http://qlkt/example');
   const entry = fieldCode => ({ fieldCode, value: '1', sourceLabel: 'QLKT' });
-  const dailyCodes = ['F', 'L', 'AR', 'CC', 'CD', 'CS', 'CT', 'CU', 'CV'];
+  const dailyCodes = ['F', 'L', 'AR', 'CC', 'CD', 'CS', 'CT', 'CU', 'CV', 'GRID_RECEIVE_S1', 'GRID_RECEIVE_S2'];
   const heatRateCodes = ['DA', 'DB', 'DC', 'DD', 'DE', 'DF', 'DG', 'DH'];
   const pmisCodes = ['J157', 'K157', 'J158', 'K158', 'C181', 'D181', 'F181'];
   const payload = {
