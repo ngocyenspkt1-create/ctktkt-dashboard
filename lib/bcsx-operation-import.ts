@@ -3,6 +3,8 @@ import type { OperatingEvent } from "@/lib/bcsx";
 
 export type OperationUnit = "S1" | "S2";
 
+export type InitialPowerMw = Partial<Record<OperationUnit, number>>;
+
 export type OperationImportResult = {
   kind: "BCSX_OPERATION_IMPORT";
   version: 1;
@@ -134,13 +136,32 @@ function inferInitialPower(commands: SourceCommand[]) {
   return minimumPowerMw;
 }
 
-function resolveInitialPower(commands: SourceCommand[], unit: OperationUnit, unitCommands: SourceCommand[], operatingDate: string) {
+function resolveInitialPower(commands: SourceCommand[], unit: OperationUnit, unitCommands: SourceCommand[], operatingDate: string, knownInitialPowerMw: InitialPowerMw) {
   const dayStartOrder = Date.UTC(Number(operatingDate.slice(0, 4)), Number(operatingDate.slice(5, 7)) - 1, Number(operatingDate.slice(8, 10)));
   const cutoffOrder = unitCommands[0]?.startOrder ?? dayStartOrder;
   const previousCommand = commands
     .filter(command => command.unit === unit && command.startAt.slice(0, 10) < operatingDate && command.endOrder <= cutoffOrder)
     .sort((left, right) => right.endOrder - left.endOrder || right.startOrder - left.startOrder || right.rowNumber - left.rowNumber)[0];
-  return previousCommand?.completedPowerMw ?? inferInitialPower(unitCommands);
+  const knownPower = knownInitialPowerMw[unit];
+  return previousCommand?.completedPowerMw ?? (Number.isFinite(knownPower) ? knownPower as number : inferInitialPower(unitCommands));
+}
+
+export function extractCompletedPowerMw(description: unknown) {
+  const matches = [...String(description ?? "").matchAll(/(-?\d+(?:[.,]\d+)?)\s*MW\b/gi)];
+  if (!matches.length) return null;
+  const value = Number(matches[matches.length - 1][1].replace(",", "."));
+  return Number.isFinite(value) ? value : null;
+}
+
+export function derivePreviousCompletedPowerMw(rows: Array<{ unit?: unknown; description?: unknown }>): InitialPowerMw {
+  const result: InitialPowerMw = {};
+  for (const row of rows) {
+    const unit = String(row.unit ?? "").toUpperCase() as OperationUnit;
+    if (!units.has(unit) || result[unit] !== undefined) continue;
+    const completedPowerMw = extractCompletedPowerMw(row.description);
+    if (completedPowerMw !== null) result[unit] = completedPowerMw;
+  }
+  return result;
 }
 
 function formatPower(value: number) {
@@ -177,7 +198,7 @@ function buildEventDescription(command: SourceCommand, fromPower: number, eventT
   return command.commandLabel + " " + command.unit + powerDetail;
 }
 
-export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFileName: string, expectedDate?: string): Promise<OperationImportResult> {
+export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFileName: string, expectedDate?: string, knownInitialPowerMw: InitialPowerMw = {}): Promise<OperationImportResult> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(bytes);
   const { worksheet, rowNumber: headerRowNumber, headers } = findSourceSheet(workbook);
@@ -226,7 +247,7 @@ export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFi
   const eventByRow = new Map<number, OperatingEvent>();
   for (const unit of ["S1", "S2"] as const) {
     const unitCommands = selectedCommands.filter(command => command.unit === unit);
-    initialPowerMw[unit] = resolveInitialPower(commands, unit, unitCommands, operatingDate);
+    initialPowerMw[unit] = resolveInitialPower(commands, unit, unitCommands, operatingDate, knownInitialPowerMw);
     let currentPower = initialPowerMw[unit];
     for (const command of unitCommands) {
       const eventType = resolveEventType(command, currentPower);

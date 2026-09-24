@@ -1,6 +1,7 @@
 import { getRawDb } from "@/db";
 import { requirePermission } from "@/lib/auth/server";
-import { buildQlktOperationWorkbook, parseOperationCommandWorkbook, qlktOperationFileName } from "@/lib/bcsx-operation-import";
+import { buildQlktOperationWorkbook, derivePreviousCompletedPowerMw, parseOperationCommandWorkbook, qlktOperationFileName } from "@/lib/bcsx-operation-import";
+import { previousIsoDate } from "@/lib/ctktkt-report";
 
 const maxFileBytes = 4 * 1024 * 1024;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -21,9 +22,13 @@ export async function POST(request: Request) {
     if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error("Chỉ chấp nhận file .xlsx.");
     if (file.size <= 0 || file.size > maxFileBytes) throw new Error("File rỗng hoặc vượt quá 4 MB.");
 
-    const importResult = await parseOperationCommandWorkbook(await file.arrayBuffer(), file.name, operatingDate);
-    const output = await buildQlktOperationWorkbook(importResult);
     const db = getRawDb();
+    const previousEvents = await db.prepare(
+      "SELECT unit, description FROM operating_events WHERE operating_date = ? ORDER BY COALESCE(NULLIF(end_at, ''), start_at) DESC, id DESC",
+    ).bind(previousIsoDate(operatingDate)).all();
+    const previousCompletedPowerMw = derivePreviousCompletedPowerMw(previousEvents.results);
+    const importResult = await parseOperationCommandWorkbook(await file.arrayBuffer(), file.name, operatingDate, previousCompletedPowerMw);
+    const output = await buildQlktOperationWorkbook(importResult);
     await db.batch([
       ...(importResult.events.S1.length ? [
         db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S1'").bind(operatingDate),

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
-import { buildQlktOperationWorkbook, classifyOperationCommand, parseOperationCommandWorkbook, qlktOperationFileName } from "../lib/bcsx-operation-import.ts";
+import { buildQlktOperationWorkbook, classifyOperationCommand, derivePreviousCompletedPowerMw, extractCompletedPowerMw, parseOperationCommandWorkbook, qlktOperationFileName } from "../lib/bcsx-operation-import.ts";
 
 const headers = ["ID Lệnh", "Nhà máy", "Tổ máy", "Nội dung lệnh", "CS ra lệnh (MW)", "CS hoàn thành (MW)", "Thời điểm BĐTH", "Thời điểm hoàn thành", "Người ra lệnh", "Người thực hiện", "AGC", "Nhiên liệu", "Lý do lệnh", "Ghi chú ra lệnh", "Ghi chú hoàn thành", "Hoàn thành"];
 
@@ -91,6 +91,19 @@ async function previousDayS2PowerWorkbookBytes() {
   return workbook.xlsx.writeBuffer();
 }
 
+async function currentDayOnlyS2PowerWorkbookBytes() {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("All");
+  worksheet.addRow(headers);
+  const add = (id, startAt, endAt, orderedPower, completedPower) => worksheet.addRow([
+    id, "Duyên Hải 1", "S2", "Thay đổi công suất", orderedPower, completedPower,
+    startAt, endAt, "NSMO", "DH1", false, null, null, null, null, 1,
+  ]);
+  add("23-second", new Date(Date.UTC(2026, 8, 23, 8, 16)), new Date(Date.UTC(2026, 8, 23, 8, 30)), 435.7, 435.7);
+  add("23-first", new Date(Date.UTC(2026, 8, 23, 7, 52)), new Date(Date.UTC(2026, 8, 23, 8, 5)), 622.5, 480);
+  return workbook.xlsx.writeBuffer();
+}
+
 test("imports completed DH1 power commands into S1/S2 operating events", async () => {
   const result = await parseOperationCommandWorkbook(await sourceWorkbookBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-19");
   assert.equal(result.operatingDate, "2026-09-19");
@@ -176,6 +189,30 @@ test("uses the last completed S2 power from the previous day for the first comma
   assert.equal(result.ignoredRows, 2);
   assert.equal(result.initialPowerMw.S2, 435.7);
   assert.equal(result.events.S2[0].description, "Tăng tải S2 từ 435.7MW lên 480MW");
+});
+
+test("uses stored previous-day power when the uploaded workbook contains only the current day", async () => {
+  const result = await parseOperationCommandWorkbook(
+    await currentDayOnlyS2PowerWorkbookBytes(),
+    "DanhSachLenhKetThuc.xlsx",
+    "2026-09-23",
+    { S2: 435.7 },
+  );
+  assert.equal(result.initialPowerMw.S2, 435.7);
+  assert.deepEqual(result.events.S2.map(event => event.description), [
+    "Tăng tải S2 từ 435.7MW lên 480MW",
+    "Giảm tải S2 từ 480MW về 435.7MW",
+  ]);
+});
+
+test("derives the latest completed power for each unit from stored event descriptions", () => {
+  assert.equal(extractCompletedPowerMw("Giảm tải S2 từ 517.5MW về 435,7MW"), 435.7);
+  assert.deepEqual(derivePreviousCompletedPowerMw([
+    { unit: "S2", description: "Ghi chú vận hành không có công suất" },
+    { unit: "S2", description: "Giảm tải S2 từ 517.5MW về 435.7MW" },
+    { unit: "S2", description: "Tăng tải S2 từ 435.7MW lên 622.5MW" },
+    { unit: "S1", description: "Ngừng tổ máy S1 theo lệnh điều độ (giảm tải từ 435.7MW về 0MW)" },
+  ]), { S1: 0, S2: 435.7 });
 });
 
 test("builds the five-column QLKT upload workbook", async () => {

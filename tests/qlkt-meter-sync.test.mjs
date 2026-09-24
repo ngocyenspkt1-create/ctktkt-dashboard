@@ -97,6 +97,8 @@ test('BCSX imports operating events from the dispatch workbook and sources Secti
   const webBridge = readFileSync(new URL('../public/qlkt-sync-extension/web-bridge.js', import.meta.url), 'utf8');
   assert.match(source, /Nhập file lệnh & xuất QLKT/);
   assert.match(source, /\/api\/bcsx-operation-import/);
+  assert.match(importRoute, /previousIsoDate\(operatingDate\)/);
+  assert.match(importRoute, /derivePreviousCompletedPowerMw\(previousEvents\.results\)/);
   assert.doesNotMatch(source, /type: "SYNC_BCSX_EVENTS"/);
   assert.match(dailySource, /type:"SYNC_ALL"/);
   assert.doesNotMatch(dailySource, /type:"SYNC_UNIFIED"/);
