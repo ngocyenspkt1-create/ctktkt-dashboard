@@ -52,6 +52,22 @@ export function isAdminUser(user: SessionUser | null | undefined): boolean {
   return Boolean(user && (user.role === "admin" || user.permissions?.includes("manage_users")));
 }
 
+const PRE_ADJUSTMENT_HEAT_RATE_POSITIONS = new Set([
+  "trưởng kíp điện",
+  "tk lò máy",
+  "trưởng kíp lò - máy",
+  "trưởng kíp lò máy",
+  "trưởng ca",
+  "kỹ thuật viên",
+  "lãnh đạo phân xưởng",
+]);
+
+export function canViewPreAdjustmentHeatRate(user: SessionUser | null | undefined): boolean {
+  if (!user) return false;
+  if (isAdminUser(user)) return true;
+  return PRE_ADJUSTMENT_HEAT_RATE_POSITIONS.has((user.position || "").trim().toLocaleLowerCase("vi-VN"));
+}
+
 export function hasPermission(user: SessionUser | null | undefined, permission: Permission): boolean {
   if (!user) return false;
   if (isAdminUser(user)) return true;

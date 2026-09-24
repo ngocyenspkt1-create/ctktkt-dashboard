@@ -5,6 +5,18 @@ import {
   canEditCtktktField,
   getCtktktFieldGroup,
 } from "../lib/ctktkt-permissions.ts";
+import { canViewPreAdjustmentHeatRate } from "../lib/auth/session.ts";
+
+test("Nhiệt trị trước chỉnh chỉ hiển thị cho nhóm cương vị được phép", () => {
+  const allowedPositions = ["Trưởng kíp điện", "TK Lò máy", "Trưởng ca", "Kỹ thuật viên", "Lãnh đạo phân xưởng"];
+  for (const position of allowedPositions) {
+    assert.equal(canViewPreAdjustmentHeatRate({ role: "viewer", position, permissions: ["view_all"] }), true, position);
+  }
+  assert.equal(canViewPreAdjustmentHeatRate({ role: "admin", permissions: [] }), true);
+  assert.equal(canViewPreAdjustmentHeatRate({ role: "viewer", position: "Thống kê", permissions: ["view_all"] }), false);
+  assert.equal(canViewPreAdjustmentHeatRate({ role: "viewer", position: "Lò phó", permissions: ["view_all"] }), false);
+  assert.equal(canViewPreAdjustmentHeatRate(null), false);
+});
 
 test("Cell group mapping identifies key cells correctly", () => {
   assert.equal(getCtktktFieldGroup("I35"), "kpi_summary");

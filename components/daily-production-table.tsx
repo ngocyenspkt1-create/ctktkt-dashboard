@@ -9,7 +9,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { useSessionUser } from "@/components/session-context";
-import { hasPermission } from "@/lib/auth/session";
+import { canViewPreAdjustmentHeatRate, hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
 import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { CTKTKT_LINKED_DAILY_CODES, deriveDailyValuesFromCtktkt, QLKT_DIRECT_DAILY_CODES } from "@/lib/daily-source-links";
@@ -174,7 +174,9 @@ export function DailyProductionTable() {
     return [Math.floor(min - pad), Math.ceil(max + pad)];
   }
 
-  const visibleFields = fields[group].filter(f => showCalculated ? !f.input && !f.noteFor : f.input || f.noteFor);
+  const visibleFields = fields[group]
+    .filter(f => f.code !== "CX" || canViewPreAdjustmentHeatRate(user))
+    .filter(f => showCalculated ? !f.input && !f.noteFor : f.input || f.noteFor);
   const tableSections = [{ label: "", items: visibleFields }];
   const displayedRows = rows.slice(0, days);
   const daysWithData = rows.slice(0, days).filter(row => Object.values(row).some(Boolean)).length;
