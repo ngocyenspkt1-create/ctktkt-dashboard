@@ -1,4 +1,5 @@
 import { CTKTKT_OIL_EVENT_CONFIG, type CtktktOilEventCode } from "./ctktkt-oil-event.ts";
+import { calculateAuxiliaryElectricity } from "./auxiliary-electricity.ts";
 
 export type CtktktDayEntries = Record<string, string>;
 
@@ -258,7 +259,11 @@ function unitKpis(
   const isS1 = unit === "s1";
   const grossMwh = numberOf(current, isS1 ? "J157" : "J158");
   const netMwh = numberOf(current, isS1 ? "K157" : "K158");
-  const auxiliaryMwh = grossMwh === null || netMwh === null ? null : grossMwh - netMwh;
+  const auxiliary = calculateAuxiliaryElectricity(
+    grossMwh,
+    netMwh,
+    numberOf(current, isS1 ? "GRID_RECEIVE_S1" : "GRID_RECEIVE_S2"),
+  );
 
   const { rawCoalTonnes, adjustedCoalTonnes } = coal;
   const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
@@ -266,8 +271,8 @@ function unitKpis(
   return {
     grossMwh,
     netMwh,
-    auxiliaryMwh,
-    auxiliaryPercent: divide(grossMwh === null || netMwh === null ? null : grossMwh - netMwh, grossMwh, 100),
+    auxiliaryMwh: auxiliary.totalMwh,
+    auxiliaryPercent: auxiliary.percent,
     rawCoalTonnes,
     adjustedCoalTonnes,
     netCoalRate,
@@ -286,17 +291,18 @@ function meterUnitKpis(
   const endColumn = unit === "s1" ? "AB" : "AL";
   const grossMwh = difference(numberOf(current, `${endColumn}8`), numberOf(previous, `${endColumn}8`));
   const netMwh = difference(numberOf(current, `${endColumn}9`), numberOf(previous, `${endColumn}9`));
-  const auxiliaryMwh = sum([
-    difference(numberOf(current, `${endColumn}10`), numberOf(previous, `${endColumn}10`)),
-    difference(numberOf(current, `${endColumn}11`), numberOf(previous, `${endColumn}11`)),
-  ]);
+  const auxiliary = calculateAuxiliaryElectricity(
+    grossMwh,
+    netMwh,
+    numberOf(current, unit === "s1" ? "GRID_RECEIVE_S1" : "GRID_RECEIVE_S2"),
+  );
   const { rawCoalTonnes, adjustedCoalTonnes } = coal;
   const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
   return {
     grossMwh,
     netMwh,
-    auxiliaryMwh,
-    auxiliaryPercent: divide(grossMwh === null || netMwh === null ? null : grossMwh - netMwh, grossMwh, 100),
+    auxiliaryMwh: auxiliary.totalMwh,
+    auxiliaryPercent: auxiliary.percent,
     rawCoalTonnes,
     adjustedCoalTonnes,
     netCoalRate,
@@ -312,6 +318,7 @@ function add(a: number | null, b: number | null) {
 function combineUnitKpis(s1: CtktktKpis, s2: CtktktKpis, hhvKjKg: number | null): CtktktSummary {
   const grossMwh = add(s1.grossMwh, s2.grossMwh);
   const netMwh = add(s1.netMwh, s2.netMwh);
+  const plantAuxiliary = calculateAuxiliaryElectricity(grossMwh, netMwh);
   const adjustedCoalTonnes = add(s1.adjustedCoalTonnes, s2.adjustedCoalTonnes);
   const rawCoalTonnes = add(s1.rawCoalTonnes, s2.rawCoalTonnes);
   const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
@@ -319,7 +326,7 @@ function combineUnitKpis(s1: CtktktKpis, s2: CtktktKpis, hhvKjKg: number | null)
     grossMwh,
     netMwh,
     auxiliaryMwh: add(s1.auxiliaryMwh, s2.auxiliaryMwh),
-    auxiliaryPercent: divide(grossMwh === null || netMwh === null ? null : grossMwh - netMwh, grossMwh, 100),
+    auxiliaryPercent: plantAuxiliary.percent,
     rawCoalTonnes,
     adjustedCoalTonnes,
     netCoalRate,

@@ -129,6 +129,19 @@ test('daily web formulas use full QLKT precision and only the UI may round', () 
   assert.equal(new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(result.W), '10.544,66');
 });
 
+test('daily web adds received grid electricity to auxiliary MWh but not to auxiliary percentage', () => {
+  const result = calculateDailyProduction({
+    B: '10', C: '9', H: '10', I: '9',
+    GRID_RECEIVE_S1: '5', GRID_RECEIVE_S2: '7',
+  });
+  assert.equal(result.D, 1005);
+  assert.equal(result.E, 10);
+  assert.equal(result.J, 1007);
+  assert.equal(result.K, 10);
+  assert.equal(result.P, 2012);
+  assert.equal(result.Q, 10);
+});
+
 test('CSV parser accepts Vietnamese semicolon format and 48 intervals', () => {
   const headers = ['Tên điểm đo','Kênh','Ngày','Tổng',...Array.from({length:48},(_,i)=>`H${i+1}`)].join(';');
   const values = ['DHA_S1','kWhGiao','14/09/2026','4.800,00',...Array.from({length:48},()=> '100,00')].join(';');

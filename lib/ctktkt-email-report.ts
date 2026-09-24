@@ -40,11 +40,6 @@ export interface CtktktEmailReportMetrics {
   nh3IntakeDay: number | null;
 }
 
-export type CtktktEmailAuxiliaryOptions = {
-  gridReceivedMwhS1?: number | null;
-  gridReceivedMwhS2?: number | null;
-};
-
 function numberOf(entries: CtktktDayEntries | undefined, cell: string): number | null {
   const raw = entries?.[cell]?.trim().replace(",", ".");
   if (!raw) return null;
@@ -68,18 +63,13 @@ export function formatMetricNumber(
 export function extractCtktktEmailMetrics(
   current: CtktktDayEntries,
   previous?: CtktktDayEntries,
-  auxiliaryOptions: CtktktEmailAuxiliaryOptions = {},
 ): CtktktEmailReportMetrics {
   const summary = calculateCtktktSummary(current, previous);
-  const withGridReceived = (auxiliaryMwh: number | null, receivedMwh: number | null | undefined) => {
-    if (auxiliaryMwh === null) return null;
-    return auxiliaryMwh + (receivedMwh !== null && receivedMwh !== undefined && Number.isFinite(receivedMwh) && receivedMwh > 0 ? receivedMwh : 0);
-  };
 
   // S1 metrics
   const grossMwhS1 = summary.s1.grossMwh;
   const netMwhS1 = summary.s1.netMwh;
-  const auxMwhS1 = withGridReceived(summary.s1.auxiliaryMwh, auxiliaryOptions.gridReceivedMwhS1);
+  const auxMwhS1 = summary.s1.auxiliaryMwh;
   const auxPercentS1 = summary.s1.auxiliaryPercent;
   const coalTonnesS1 = summary.s1.adjustedCoalTonnes;
   const netCoalRateS1 = summary.s1.netCoalRate;
@@ -109,7 +99,7 @@ export function extractCtktktEmailMetrics(
   // S2 metrics
   const grossMwhS2 = summary.s2.grossMwh;
   const netMwhS2 = summary.s2.netMwh;
-  const auxMwhS2 = withGridReceived(summary.s2.auxiliaryMwh, auxiliaryOptions.gridReceivedMwhS2);
+  const auxMwhS2 = summary.s2.auxiliaryMwh;
   const auxPercentS2 = summary.s2.auxiliaryPercent;
   const coalTonnesS2 = summary.s2.adjustedCoalTonnes;
   const netCoalRateS2 = summary.s2.netCoalRate;

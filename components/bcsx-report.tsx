@@ -33,10 +33,10 @@ function blankEventDraft(): EventDraft {
   return { startTime: "", endTime: "", eventType: 1, description: "" };
 }
 
-type TotalsDraft = { dauCuc: string; thuongPham: string; thanTieuThu: string; thanTonKho: string };
+type TotalsDraft = { dauCuc: string; thuongPham: string; gridReceivedMwh: string; thanTieuThu: string; thanTonKho: string };
 
 function blankTotals(): TotalsDraft {
-  return { dauCuc: "", thuongPham: "", thanTieuThu: "", thanTonKho: "" };
+  return { dauCuc: "", thuongPham: "", gridReceivedMwh: "", thanTieuThu: "", thanTonKho: "" };
 }
 
 function parseAndScaleMwh(valStr: string | undefined): string {
@@ -126,12 +126,14 @@ export function BcsxReport() {
           S1: {
             dauCuc: parseAndScaleMwh(ktktValues.B),
             thuongPham: parseAndScaleMwh(ktktValues.C),
+            gridReceivedMwh: byCode.get("GRID_RECEIVE_S1") || "",
             thanTieuThu: ktktValues.AE || "",
             thanTonKho: stock24h,
           },
           S2: {
             dauCuc: parseAndScaleMwh(ktktValues.H),
             thuongPham: parseAndScaleMwh(ktktValues.I),
+            gridReceivedMwh: byCode.get("GRID_RECEIVE_S2") || "",
             thanTieuThu: ktktValues.AF || "",
             thanTonKho: stock24h,
           },
@@ -376,12 +378,14 @@ export function BcsxReport() {
         S1: {
           dauCuc: parseAndScaleMwh(ktktValues.B),
           thuongPham: parseAndScaleMwh(ktktValues.C),
+          gridReceivedMwh: byCode.get("GRID_RECEIVE_S1") || "",
           thanTieuThu: ktktValues.AE || "",
           thanTonKho: stock24h,
         },
         S2: {
           dauCuc: parseAndScaleMwh(ktktValues.H),
           thuongPham: parseAndScaleMwh(ktktValues.I),
+          gridReceivedMwh: byCode.get("GRID_RECEIVE_S2") || "",
           thanTieuThu: ktktValues.AF || "",
           thanTonKho: stock24h,
         },

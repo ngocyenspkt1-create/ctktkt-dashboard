@@ -64,6 +64,7 @@ test("CTKTKT summary prefers complete PMIS production pairs for both units", () 
     AB8: "1100", AB9: "990", AB10: "106", AB11: "54",
     AL8: "2100", AL9: "1890", AL10: "206", AL11: "104",
     J157: "120", K157: "100", J158: "130", K158: "110",
+    GRID_RECEIVE_S1: "5", GRID_RECEIVE_S2: "7",
   };
   coalMeters(previous, ["X", "Z", "AB"], [0, 0, 0]);
   coalMeters(previous, ["AH", "AJ", "AL"], [0, 0, 0]);
@@ -74,15 +75,16 @@ test("CTKTKT summary prefers complete PMIS production pairs for both units", () 
   const result = calculateCtktktSummary(current, previous);
   assert.equal(result.s1.grossMwh, 120);
   assert.equal(result.s1.netMwh, 100);
-  assert.equal(result.s1.auxiliaryMwh, 20);
+  assert.equal(result.s1.auxiliaryMwh, 25);
   assert.ok(Math.abs(result.s1.auxiliaryPercent - 100 / 6) < 1e-12);
   assert.equal(result.s1.netCoalRate, 300);
   assert.equal(result.s2.grossMwh, 130);
   assert.equal(result.s2.netMwh, 110);
-  assert.equal(result.s2.auxiliaryMwh, 20);
+  assert.equal(result.s2.auxiliaryMwh, 27);
   assert.equal(result.plant.grossMwh, 250);
   assert.equal(result.plant.netMwh, 210);
-  assert.equal(result.plant.auxiliaryMwh, 40);
+  assert.equal(result.plant.auxiliaryMwh, 52);
+  assert.ok(Math.abs(result.plant.auxiliaryPercent - 16) < 1e-12);
 });
 
 test("whole-plant net heat rate remains available when one unit has zero generation", () => {
@@ -108,7 +110,7 @@ test("CTKTKT keeps a separate meter-derived production summary for Excel compari
   const current = {
     AB8: "1100", AB9: "990", AB10: "106", AB11: "54",
     AL8: "2120", AL9: "1900", AL10: "206", AL11: "104",
-    J157: "120", K157: "100", J158: "130", K158: "110",
+    J157: "120", K157: "100", J158: "130", K158: "110", GRID_RECEIVE_S1: "5",
   };
   coalMeters(previous, ["X", "Z", "AB"], [0, 0, 0]);
   coalMeters(previous, ["AH", "AJ", "AL"], [0, 0, 0]);
@@ -124,9 +126,10 @@ test("CTKTKT keeps a separate meter-derived production summary for Excel compari
 
   assert.equal(pmis.s1.grossMwh, 120);
   assert.equal(pmis.s1.netMwh, 100);
+  assert.equal(pmis.s1.auxiliaryMwh, 25);
   assert.equal(meters.s1.grossMwh, 100);
   assert.equal(meters.s1.netMwh, 90);
-  assert.equal(meters.s1.auxiliaryMwh, 10);
+  assert.equal(meters.s1.auxiliaryMwh, 15);
   assert.equal(meters.s1.auxiliaryPercent, 10);
   assert.equal(meters.s2.grossMwh, 120);
   assert.equal(meters.plant.grossMwh, 220);

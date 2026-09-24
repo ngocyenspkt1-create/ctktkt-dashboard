@@ -110,7 +110,7 @@ export function validateOperatingEventDateRange(
   return null;
 }
 
-export type UnitTotals = { dauCuc: number | null; thuongPham: number | null; thanTieuThu: number | null; thanTonKho: number | null };
+export type UnitTotals = { dauCuc: number | null; thuongPham: number | null; gridReceivedMwh?: number | null; thanTieuThu: number | null; thanTonKho: number | null };
 
 export const BCSX_COAL_STOCK_24H_CODE = "BCSX_COAL_STOCK_24H";
 
@@ -118,7 +118,7 @@ export type BcsxExportInput = {
   operatingDate: string; // YYYY-MM-DD
   unit: ExportUnit;
   readings: Partial<Record<ShiftMetric, (number | null)[]>>; // 48 values per metric, in SHIFT_TIME_SLOTS order
-  totals: UnitTotals; // đầu cực/thương phẩm/than tiêu thụ/than tồn kho — tự dùng computed
+  totals: UnitTotals; // đầu cực/thương phẩm/điện nhận lưới/than tiêu thụ/than tồn kho — tự dùng computed
   events: OperatingEvent[];
 };
 
@@ -153,7 +153,11 @@ export async function buildBcsxWorkbookFromTemplate(input: BcsxExportInput, base
     }
   }
 
-  const tuDung = input.totals.dauCuc !== null && input.totals.thuongPham !== null ? input.totals.dauCuc - input.totals.thuongPham : null;
+  const tuDung = calculateAuxiliaryElectricity(
+    input.totals.dauCuc,
+    input.totals.thuongPham,
+    input.totals.gridReceivedMwh,
+  ).totalMwh;
   const totalCells: [string, number | null][] = [
     ["C60", input.totals.dauCuc],
     ["C61", input.totals.thuongPham],
@@ -191,3 +195,4 @@ export function fileNameFor(unit: ExportUnit, operatingDate: string) {
   const [y, m, d] = operatingDate.split("-");
   return `BCSX_NMD_${unit}_${d}.${m}.${y}.xlsx`;
 }
+import { calculateAuxiliaryElectricity } from "./auxiliary-electricity.ts";

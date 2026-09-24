@@ -13,7 +13,7 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
   const [readingsRes, eventsRes, stockRes, ktktRes, ktktShiftRes] = await Promise.all([
     db.prepare("SELECT time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date = ? AND unit = ?").bind(date, unit).all(),
     db.prepare("SELECT start_at AS startAt, end_at AS endAt, event_type AS eventType, description FROM operating_events WHERE operating_date = ? AND unit = ? ORDER BY start_at").bind(date, unit).all(),
-    db.prepare("SELECT value FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(date, BCSX_COAL_STOCK_24H_CODE).all(),
+    db.prepare("SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date = ? AND field_code IN (?, ?, ?)").bind(date, BCSX_COAL_STOCK_24H_CODE, "GRID_RECEIVE_S1", "GRID_RECEIVE_S2").all(),
     db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date IN (?, ?) AND field_code LIKE 'KTKT:%'").bind(previousDate, date).all(),
     db.prepare("SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date IN (?, ?)").bind(previousDate, date).all(),
   ]);
@@ -48,7 +48,8 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
     ktktByDate.set(operatingDate, values);
   }
   const linked = deriveDailyValuesFromCtktkt(ktktByDate.get(date) || {}, ktktByDate.get(previousDate));
-  const stockValue = Number((stockRes.results as Array<{ value: string }>)[0]?.value);
+  const dailyValues = new Map((stockRes.results as Array<{ fieldCode: string; value: string }>).map(item => [item.fieldCode, item.value]));
+  const stockValue = Number(dailyValues.get(BCSX_COAL_STOCK_24H_CODE));
   const stock24h = Number.isFinite(stockValue) ? stockValue : null;
   const numeric = (value?: string) => {
     const parsed = Number(value);
@@ -63,12 +64,14 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
     ? {
         dauCuc: toMwh(linked.B),
         thuongPham: toMwh(linked.C),
+        gridReceivedMwh: numeric(dailyValues.get("GRID_RECEIVE_S1")),
         thanTieuThu: numeric(linked.AE),
         thanTonKho: stock24h,
       }
     : {
         dauCuc: toMwh(linked.H),
         thuongPham: toMwh(linked.I),
+        gridReceivedMwh: numeric(dailyValues.get("GRID_RECEIVE_S2")),
         thanTieuThu: numeric(linked.AF),
         thanTonKho: stock24h,
       };
@@ -77,7 +80,7 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
   return { readings, totals, events };
 }
 
-function sumMaybe(a: number | null, b: number | null) {
+function sumMaybe(a: number | null | undefined, b: number | null | undefined) {
   return a === null && b === null ? null : (a ?? 0) + (b ?? 0);
 }
 
@@ -100,6 +103,7 @@ export async function GET(request: Request) {
       const totals: UnitTotals = {
         dauCuc: sumMaybe(s1.totals.dauCuc, s2.totals.dauCuc),
         thuongPham: sumMaybe(s1.totals.thuongPham, s2.totals.thuongPham),
+        gridReceivedMwh: sumMaybe(s1.totals.gridReceivedMwh, s2.totals.gridReceivedMwh),
         thanTieuThu: sumMaybe(s1.totals.thanTieuThu, s2.totals.thanTieuThu),
         // Than tồn kho là 1 kho dùng chung cho cả nhà máy (không phải 2 kho
         // riêng theo tổ máy) — người dùng đã xác nhận KHÔNG cộng đôi (17/09/2026).

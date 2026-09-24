@@ -43,6 +43,9 @@ export async function GET(request: Request) {
     const { results: waterResults } = await db.prepare(
       "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
     ).bind(from, next).all();
+    const { results: gridReceiveResults } = await db.prepare(
+      "SELECT operating_date AS operatingDate, field_code AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code IN ('GRID_RECEIVE_S1', 'GRID_RECEIVE_S2') ORDER BY operating_date, field_code",
+    ).bind(from, next).all();
 
     const readingsByDate = new Map<string, CtktktBcsxReading[]>();
     for (const reading of shiftResults as CtktktBcsxReading[]) {
@@ -52,6 +55,7 @@ export async function GET(request: Request) {
       readingsByDate.set(date, list);
     }
     const linkedEntries: Array<{ operatingDate: string; cell: string; value: string }> = [];
+    linkedEntries.push(...gridReceiveResults as Array<{ operatingDate: string; cell: string; value: string }>);
     const warnings: Array<{ operatingDate: string; cell: string; message: string }> = [];
     for (const [operatingDate, readings] of readingsByDate) {
       const derived = deriveCtktktCellsFromBcsx(readings);

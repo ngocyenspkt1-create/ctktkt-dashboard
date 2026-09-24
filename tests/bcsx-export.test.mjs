@@ -87,7 +87,7 @@ for (const unit of ["S1", "S2", "A0"]) {
       { startAt: "2026-09-18 01:02", endAt: "2026-09-18 03:04", eventType: 2, description: `${unit} sự kiện 1` },
       { startAt: "2026-09-18 05:06", endAt: "", eventType: 4, description: `${unit} sự kiện 2` },
     ];
-    const totals = { dauCuc: 10001.5 + unitOffset, thuongPham: 9500.25 + unitOffset, thanTieuThu: 4321.75 + unitOffset, thanTonKho: 88888.5 };
+    const totals = { dauCuc: 10001.5 + unitOffset, thuongPham: 9500.25 + unitOffset, gridReceivedMwh: 25.5, thanTieuThu: 4321.75 + unitOffset, thanTonKho: 88888.5 };
 
     const templateBytes = readFileSync(templates[unit].url);
     assert.deepEqual(Buffer.from(templates[unit].base64, "base64"), templateBytes, "embedded template is not byte-identical to the source template");
@@ -133,7 +133,7 @@ for (const unit of ["S1", "S2", "A0"]) {
     }
     assert.equal(output.getCell("C60").value, totals.dauCuc);
     assert.equal(output.getCell("C61").value, totals.thuongPham);
-    assert.equal(output.getCell("C62").value, totals.dauCuc - totals.thuongPham);
+    assert.equal(output.getCell("C62").value, totals.dauCuc - totals.thuongPham + totals.gridReceivedMwh);
     assert.equal(output.getCell("C63").value, totals.thanTieuThu);
     assert.equal(output.getCell("C64").value, totals.thanTonKho);
     assert.equal(output.getCell("A72").value, "09/18/2026 01:02");

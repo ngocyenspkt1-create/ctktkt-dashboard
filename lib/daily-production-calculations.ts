@@ -1,3 +1,5 @@
+import { calculateAuxiliaryElectricity } from "./auxiliary-electricity.ts";
+
 export type DailyProductionRow = Record<string, string | undefined>;
 
 function decimal(value?: string) {
@@ -26,13 +28,17 @@ export function calculateDailyProduction(row: DailyProductionRow): Record<string
   const n = (code: string) => decimal(row[code]);
   const B = n("B"), C = n("C"), F = n("F"), H = n("H"), I = n("I"), L = n("L");
   const AE = n("AE"), AF = n("AF"), AE_ADJ = n("AE_ADJ"), AF_ADJ = n("AF_ADJ"), AJ = n("AJ"), CJ = n("CJ"), CX = n("CX"), BN = n("BN"), BQ = n("BQ"), BR = n("BR");
+  const gridReceivedS1 = n("GRID_RECEIVE_S1"), gridReceivedS2 = n("GRID_RECEIVE_S2");
   const adjustedCoal = (raw: number | null, linkedAdjusted: number | null) => linkedAdjusted ?? (raw === null || CJ === null ? null : raw * (1 - CJ / 100) / (1 - 0.085));
   const adjustedAE = adjustedCoal(AE, AE_ADJ);
   const adjustedAF = adjustedCoal(AF, AF_ADJ);
-  const D = B === null || C === null ? null : (B - C) * 1000;
-  const J = H === null || I === null ? null : (H - I) * 1000;
+  const auxiliaryS1 = calculateAuxiliaryElectricity(B === null ? null : B * 1000, C === null ? null : C * 1000, gridReceivedS1);
+  const auxiliaryS2 = calculateAuxiliaryElectricity(H === null ? null : H * 1000, I === null ? null : I * 1000, gridReceivedS2);
+  const D = auxiliaryS1.totalMwh;
+  const J = auxiliaryS2.totalMwh;
   const N = B === null || H === null ? null : (B + H) * 1000;
   const O = C === null || I === null ? null : (C + I) * 1000;
+  const plantAuxiliary = calculateAuxiliaryElectricity(N, O);
   const T = AE === null || AF === null ? null : AE + AF;
   const BS = BQ === null || BR === null ? null : BQ + BR;
   const shTho = divide(T, N, 1000);
@@ -42,11 +48,11 @@ export function calculateDailyProduction(row: DailyProductionRow): Record<string
   const shTinhS2 = divide(adjustedAF, I);
 
   return {
-    D, E: divide(D, B, 0.1), G: divide(B, F, 1000),
-    J, K: divide(J, H, 0.1), M: divide(H, L, 1000),
+    D, E: auxiliaryS1.percent, G: divide(B, F, 1000),
+    J, K: auxiliaryS2.percent, M: divide(H, L, 1000),
     N, O,
-    P: N === null || O === null ? null : N - O,
-    Q: N === null || O === null ? null : divide(N - O, N, 100),
+    P: auxiliaryS1.totalMwh === null || auxiliaryS2.totalMwh === null ? null : auxiliaryS1.totalMwh + auxiliaryS2.totalMwh,
+    Q: plantAuxiliary.percent,
     R: F === null || L === null ? null : F + L,
     S: N === null || F === null || L === null ? null : divide(N, F + L),
     T,
