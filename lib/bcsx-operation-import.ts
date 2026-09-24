@@ -134,6 +134,15 @@ function inferInitialPower(commands: SourceCommand[]) {
   return minimumPowerMw;
 }
 
+function resolveInitialPower(commands: SourceCommand[], unit: OperationUnit, unitCommands: SourceCommand[], operatingDate: string) {
+  const dayStartOrder = Date.UTC(Number(operatingDate.slice(0, 4)), Number(operatingDate.slice(5, 7)) - 1, Number(operatingDate.slice(8, 10)));
+  const cutoffOrder = unitCommands[0]?.startOrder ?? dayStartOrder;
+  const previousCommand = commands
+    .filter(command => command.unit === unit && command.startAt.slice(0, 10) < operatingDate && command.endOrder <= cutoffOrder)
+    .sort((left, right) => right.endOrder - left.endOrder || right.startOrder - left.startOrder || right.rowNumber - left.rowNumber)[0];
+  return previousCommand?.completedPowerMw ?? inferInitialPower(unitCommands);
+}
+
 function formatPower(value: number) {
   return String(Number(value.toFixed(3)));
 }
@@ -190,7 +199,6 @@ export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFi
     const location = worksheet.name + "!" + rowNumber;
     const startValue = row.getCell(column("startAt")).value;
     const startAt = readTimestamp(startValue, location);
-    if (expectedDate && startAt.slice(0, 10) !== expectedDate) continue;
     const endValue = row.getCell(column("endAt")).value;
     const endAt = readTimestamp(endValue, location);
     if (endAt < startAt) throw new Error(location + ": thời điểm hoàn thành trước thời điểm bắt đầu.");
@@ -202,16 +210,23 @@ export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFi
     throw new Error("File không có lệnh thay đổi công suất đã hoàn thành của Duyên Hải 1 cho S1/S2" + dateDetail + ".");
   }
   const operatingDates = new Set(commands.map(command => command.startAt.slice(0, 10)));
-  if (operatingDates.size !== 1) throw new Error("File chứa lệnh của nhiều ngày; hãy xuất riêng từng ngày trước khi nhập.");
+  if (!expectedDate && operatingDates.size !== 1) throw new Error("File chứa lệnh của nhiều ngày; hãy chọn ngày cần nhập trước khi thực hiện.");
   const operatingDate = expectedDate || [...operatingDates][0];
+  const selectedCommands = commands.filter(command => command.startAt.slice(0, 10) === operatingDate);
+
+  if (!selectedCommands.length) {
+    const dateDetail = expectedDate ? " trong ngày " + expectedDate.split("-").reverse().join("/") : "";
+    throw new Error("File không có lệnh thay đổi công suất đã hoàn thành của Duyên Hải 1 cho S1/S2" + dateDetail + ".");
+  }
 
   commands.sort((left, right) => left.startOrder - right.startOrder || left.endOrder - right.endOrder || left.rowNumber - right.rowNumber);
+  selectedCommands.sort((left, right) => left.startOrder - right.startOrder || left.endOrder - right.endOrder || left.rowNumber - right.rowNumber);
   const initialPowerMw: Record<OperationUnit, number> = { S1: minimumPowerMw, S2: minimumPowerMw };
   const events: Record<OperationUnit, OperatingEvent[]> = { S1: [], S2: [] };
   const eventByRow = new Map<number, OperatingEvent>();
   for (const unit of ["S1", "S2"] as const) {
-    const unitCommands = commands.filter(command => command.unit === unit);
-    initialPowerMw[unit] = inferInitialPower(unitCommands);
+    const unitCommands = selectedCommands.filter(command => command.unit === unit);
+    initialPowerMw[unit] = resolveInitialPower(commands, unit, unitCommands, operatingDate);
     let currentPower = initialPowerMw[unit];
     for (const command of unitCommands) {
       const eventType = resolveEventType(command, currentPower);
@@ -222,8 +237,8 @@ export async function parseOperationCommandWorkbook(bytes: ArrayBuffer, sourceFi
     }
   }
 
-  const allEvents = commands.map(command => ({ ...(eventByRow.get(command.rowNumber) as OperatingEvent), unit: command.unit }));
-  return { kind: "BCSX_OPERATION_IMPORT", version: 1, operatingDate, sourceFileName, sourceRows: commands.length, ignoredRows: Math.max(0, nonEmptyRows - commands.length), initialPowerMw, events, allEvents };
+  const allEvents = selectedCommands.map(command => ({ ...(eventByRow.get(command.rowNumber) as OperatingEvent), unit: command.unit }));
+  return { kind: "BCSX_OPERATION_IMPORT", version: 1, operatingDate, sourceFileName, sourceRows: selectedCommands.length, ignoredRows: Math.max(0, nonEmptyRows - selectedCommands.length), initialPowerMw, events, allEvents };
 }
 
 function timeOnlyDate(timestamp: string) {

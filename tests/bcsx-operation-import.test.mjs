@@ -77,6 +77,20 @@ async function multiDateMidnightWorkbookBytes() {
   return workbook.xlsx.writeBuffer();
 }
 
+async function previousDayS2PowerWorkbookBytes() {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("All");
+  worksheet.addRow(headers);
+  const add = (id, startAt, endAt, completedPower) => worksheet.addRow([
+    id, "Duyên Hải 1", "S2", "Thay đổi công suất", completedPower, completedPower,
+    startAt, endAt, "NSMO", "DH1", false, null, null, null, null, 1,
+  ]);
+  add("22-old", new Date(Date.UTC(2026, 8, 22, 6, 0)), new Date(Date.UTC(2026, 8, 22, 6, 15)), 622.5);
+  add("22-last", new Date(Date.UTC(2026, 8, 22, 22, 0)), new Date(Date.UTC(2026, 8, 22, 22, 15)), 435.7);
+  add("23-first", new Date(Date.UTC(2026, 8, 23, 7, 52)), new Date(Date.UTC(2026, 8, 23, 8, 5)), 480);
+  return workbook.xlsx.writeBuffer();
+}
+
 test("imports completed DH1 power commands into S1/S2 operating events", async () => {
   const result = await parseOperationCommandWorkbook(await sourceWorkbookBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-19");
   assert.equal(result.operatingDate, "2026-09-19");
@@ -154,6 +168,14 @@ test("imports only commands starting on the selected date and keeps midnight com
   assert.equal(result.events.S1[0].startAt, "2026-09-21 23:30");
   assert.equal(result.events.S1[0].endAt, "2026-09-22 00:15");
   assert.equal(result.events.S1[0].description, "Giảm tải S1 từ 622.5MW về 435.7MW");
+});
+
+test("uses the last completed S2 power from the previous day for the first command", async () => {
+  const result = await parseOperationCommandWorkbook(await previousDayS2PowerWorkbookBytes(), "DanhSachLenhKetThuc.xlsx", "2026-09-23");
+  assert.equal(result.sourceRows, 1);
+  assert.equal(result.ignoredRows, 2);
+  assert.equal(result.initialPowerMw.S2, 435.7);
+  assert.equal(result.events.S2[0].description, "Tăng tải S2 từ 435.7MW lên 480MW");
 });
 
 test("builds the five-column QLKT upload workbook", async () => {
