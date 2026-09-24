@@ -480,7 +480,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
 
           {/* Bảng Ma trận Phân quyền */}
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full min-w-[1120px] text-xs">
+            <table className="report-data-table w-full min-w-[1120px] text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-[#f4f6fb] text-left text-slate-700">
                   <th className="p-3 font-bold">Cương vị</th>
@@ -813,7 +813,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
 
           {/* Bảng Danh sách tài khoản */}
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full min-w-[850px] text-xs">
+            <table className="report-data-table w-full min-w-[850px] text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-[#f4f6fb] text-left text-slate-700">
                   <th className="p-3 font-bold">Mã NV</th>

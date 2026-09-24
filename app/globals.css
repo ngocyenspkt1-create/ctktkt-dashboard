@@ -45,6 +45,26 @@ html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Times New Roman", Times, serif; }
 button, input, select, textarea { font: inherit; }
 
+.report-data-table,
+.report-data-table-scope table {
+  border-collapse: collapse;
+}
+.report-data-table th,
+.report-data-table td,
+.report-data-table-scope th,
+.report-data-table-scope td {
+  border: 1px solid #d6c0aa;
+}
+.report-data-table thead th,
+.report-data-table-scope thead th {
+  background-color: #ead9c8;
+  color: #68462e;
+}
+.report-data-table thead tr:nth-child(n + 2) th,
+.report-data-table-scope thead tr:nth-child(n + 2) th {
+  background-color: #f3e8dc;
+}
+
 /* Keep the QLKT review actions visible while its indicator list scrolls. */
 [role="dialog"]:has(table) {
   grid-template-rows: auto minmax(0, 1fr) auto;

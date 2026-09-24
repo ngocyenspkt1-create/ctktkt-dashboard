@@ -345,7 +345,7 @@ export function PpaHeatRateComparison() {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-xs">
+          <table className="report-data-table w-full min-w-[640px] text-xs">
             <thead>
               <tr className="bg-[#dcebf5] text-[#173b64]">
                 <th className="p-2 text-left">Phạm vi</th>
@@ -450,7 +450,7 @@ export function PpaHeatRateComparison() {
         <p className="p-4 text-center text-xs text-slate-500">Chưa lưu kết quả PPA trong tháng này.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-xs">
+          <table className="report-data-table w-full min-w-[900px] text-xs">
             <thead>
               <tr className="bg-[#dcebf5] text-[#173b64]">
                 <th className="p-1.5 text-left">Ngày</th>

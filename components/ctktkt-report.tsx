@@ -172,6 +172,10 @@ const meterComparisonKeys = new Set<keyof CtktktKpis>([
   "netMwh",
   "auxiliaryMwh",
   "auxiliaryPercent",
+  "rawCoalTonnes",
+  "adjustedCoalTonnes",
+  "netCoalRate",
+  "netHeatRate",
 ]);
 
 function format(value: number | null | undefined) {
@@ -1211,7 +1215,7 @@ export function CtktktReport() {
         {!isKpiCollapsed ? (
           <div>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="report-data-table w-full text-xs">
                 <thead>
                   <tr className="border-b bg-[#e9f2fa] text-[#173b64]">
                     <th rowSpan={2} className="p-2 text-left font-bold">Chỉ tiêu KTKT</th>
@@ -1406,7 +1410,7 @@ export function CtktktReport() {
               </div>
 
               <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
-                <table className="w-full text-xs">
+                <table className="report-data-table w-full text-xs">
                   <thead>
                     <tr className="border-b bg-[#e9f2fa] text-[#173b64]">
                       <th className="p-2 text-left font-bold w-48">Thông số / Đại lượng</th>
@@ -1729,7 +1733,7 @@ export function CtktktReport() {
 
                   return (
                     <div className="overflow-x-auto rounded-xl border border-emerald-300 bg-white shadow-xs">
-                      <table className="w-full text-xs">
+                      <table className="report-data-table w-full text-xs">
                         <thead>
                           <tr className="border-b bg-[#d1e7dd] text-[#0f5132]">
                             <th className="p-2.5 text-left font-bold min-w-[240px]">Thông số công tơ nước</th>
@@ -2007,7 +2011,7 @@ export function CtktktReport() {
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="w-full text-xs">
+                      <table className="report-data-table w-full text-xs">
                         <thead>
                           <tr className="bg-[#f0f4f9] text-[#173b64]">
                             <th className="p-1.5 text-left font-bold">Tên công tơ S1</th>
@@ -2107,7 +2111,7 @@ export function CtktktReport() {
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="w-full text-xs">
+                      <table className="report-data-table w-full text-xs">
                         <thead>
                           <tr className="bg-[#fcf8f2] text-amber-950">
                             <th className="p-1.5 text-left font-bold">Chỉ số dầu S1 (tấn)</th>
@@ -2165,7 +2169,7 @@ export function CtktktReport() {
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="min-w-[1450px] w-full text-xs">
+                      <table className="report-data-table min-w-[1450px] w-full text-xs">
                         <thead>
                           <tr className="bg-[#f5f5f5] text-slate-800">
                             <th rowSpan={2} className="p-1.5 text-left font-bold">Mã cân than S1</th>
@@ -2324,7 +2328,7 @@ export function CtktktReport() {
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="w-full text-xs">
+                      <table className="report-data-table w-full text-xs">
                         <thead>
                           <tr className="bg-[#f0f4f9] text-[#173b64]">
                             <th className="p-1.5 text-left font-bold">Tên công tơ S2</th>
@@ -2424,7 +2428,7 @@ export function CtktktReport() {
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="w-full text-xs">
+                      <table className="report-data-table w-full text-xs">
                         <thead>
                           <tr className="bg-[#fcf8f2] text-amber-950">
                             <th className="p-1.5 text-left font-bold">Chỉ số dầu S2 (kg)</th>
@@ -2482,7 +2486,7 @@ export function CtktktReport() {
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="min-w-[1450px] w-full text-xs">
+                      <table className="report-data-table min-w-[1450px] w-full text-xs">
                         <thead>
                           <tr className="bg-[#f5f5f5] text-slate-800">
                             <th rowSpan={2} className="p-1.5 text-left font-bold">Mã cân than S2</th>
@@ -2644,7 +2648,7 @@ export function CtktktReport() {
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full text-xs">
+                  <table className="report-data-table w-full text-xs">
                     <thead>
                       <tr className="bg-[#f0f4f9] text-[#173b64]">
                         <th className="p-2 text-left font-bold w-64">Chỉ tiêu hơi</th>
@@ -2722,7 +2726,7 @@ export function CtktktReport() {
                 <div className="grid gap-4 md:grid-cols-3">
                   {/* Bảng mức bồn */}
                   <div className="overflow-x-auto rounded-lg border md:col-span-2">
-                    <table className="w-full text-xs">
+                    <table className="report-data-table w-full text-xs">
                       <thead>
                         <tr className="bg-[#f0f4f9] text-[#173b64]">
                           <th className="p-2 text-left font-bold">Bồn NH3</th>
@@ -2849,7 +2853,7 @@ export function CtktktReport() {
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full min-w-[1080px] text-xs">
+                  <table className="report-data-table w-full min-w-[1080px] text-xs">
                     <thead>
                       <tr className="bg-[#f0f4f9] text-[#173b64]">
                         <th className="p-2 text-left font-bold">Tổ máy</th>
@@ -2916,7 +2920,7 @@ export function CtktktReport() {
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border max-w-xl">
-                  <table className="w-full text-xs">
+                  <table className="report-data-table w-full text-xs">
                     <thead>
                       <tr className="bg-[#f0f4f9] text-[#173b64]">
                         <th className="p-2 text-left font-bold">Tên công tơ</th>
@@ -2967,7 +2971,7 @@ export function CtktktReport() {
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
-                  <table className="min-w-[980px] w-full text-xs">
+                  <table className="report-data-table min-w-[980px] w-full text-xs">
                     <thead>
                       <tr className="bg-[#f0f4f9] text-[#173b64]">
                         <th className="p-2 text-center font-bold">Tổ máy</th>
@@ -3086,7 +3090,7 @@ export function CtktktReport() {
                     </div>
 
                     <div className="overflow-x-auto rounded-lg border bg-white">
-                      <table className="w-full min-w-[720px] text-xs">
+                      <table className="report-data-table w-full min-w-[720px] text-xs">
                         <thead>
                           <tr className="bg-[#fef9f0] text-amber-950">
                             <th className="w-64 p-2 text-left font-bold">Chỉ số công tơ dầu · {startupUnit || "chưa chọn tổ máy"}</th>
@@ -3207,7 +3211,7 @@ export function CtktktReport() {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-xs">
+                    <table className="report-data-table w-full border-collapse text-xs">
                       <thead>
                         <tr className="bg-slate-50 text-[#173b64]">
                           <th className="border border-slate-300 px-3 py-2 text-center font-bold w-24">
@@ -3315,7 +3319,7 @@ export function CtktktReport() {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-xs whitespace-nowrap">
+                    <table className="report-data-table w-full border-collapse text-xs whitespace-nowrap">
                       <thead>
                         {/* Hàng tiêu đề cấp 1 */}
                         <tr className="bg-slate-100 text-[#173b64] font-bold text-center">

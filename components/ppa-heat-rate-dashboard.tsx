@@ -580,7 +580,7 @@ export function PpaHeatRateDashboard() {
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2></div>
       {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="w-full overflow-hidden">
-        <table className="w-full table-fixed border-collapse text-[10px] [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-slate-200 xl:text-[11px]">
+        <table className="report-data-table w-full table-fixed border-collapse text-[10px] [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-slate-200 xl:text-[11px]">
           <colgroup>
             <col style={{ width: "5%" }}/>
             {Array.from({ length: 17 }, (_, index) => <col key={index} style={{ width: "3.94%" }}/>) }

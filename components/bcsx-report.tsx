@@ -556,7 +556,7 @@ export function BcsxReport() {
             {hours && <span className="text-[10px] font-semibold opacity-85">{hours}</span>}
           </div>
         )}
-        <table className="w-full text-xs">
+        <table className="report-data-table w-full text-xs">
           <thead>
             <tr className="bg-slate-100/90 text-[#173b64] text-[10px] font-bold">
               <th className="py-1 px-1 text-center w-[40px]">Giờ</th>
@@ -749,7 +749,7 @@ export function BcsxReport() {
           </div>
         ) : (
           <div className="max-h-[480px] overflow-auto rounded-xl border border-slate-200">
-            <table className="w-full text-xs">
+            <table className="report-data-table w-full text-xs">
               <thead className="sticky top-0 bg-[#dcebf5] text-[#173b64]">
                 <tr>
                   <th className="p-2 text-center w-[50px]">Thời điểm</th>
@@ -940,7 +940,7 @@ export function BcsxReport() {
         <button type="button" onClick={addEvent} className="rounded-lg border border-[#334785] px-3 py-1.5 text-xs font-bold text-[#334785] hover:bg-slate-50">+ Thêm dòng</button>
       </div>
       <div className="mt-3 overflow-auto rounded-xl border border-slate-200">
-        <table className="w-full min-w-[560px] text-xs">
+        <table className="report-data-table w-full min-w-[560px] text-xs">
           <thead className="bg-[#dcebf5] text-[#173b64]">
             <tr>
               <th className="p-2 text-left w-[80px]">Bắt đầu</th>

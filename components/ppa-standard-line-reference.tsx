@@ -91,7 +91,7 @@ export function PpaStandardLineReference() {
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Mức tải quy đổi (dòng 1–2 đầu sheet)</h2></div>
       <div className="overflow-x-auto p-3">
-        <table className="w-full min-w-[520px] text-xs">
+        <table className="report-data-table w-full min-w-[520px] text-xs">
           <thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="p-2 text-left">Chỉ tiêu</th>{loadLevels.mw.map((mw, index) => <th key={index} className="p-2 text-center font-bold">{fmt(mw)} MW</th>)}</tr></thead>
           <tbody>
             <tr className="border-t"><td className="p-2 font-semibold text-black">Mức tải (MW)</td>{loadLevels.mw.map((mw, index) => <td key={index} className="p-2 text-center text-black">{fmt(mw)}</td>)}</tr>
@@ -108,7 +108,7 @@ export function PpaStandardLineReference() {
         <p className="mt-0.5 text-xs text-slate-500">Năm cơ sở = 2016. Xác lập mức SHN chuẩn tại 5 mốc tải: 100% (622.500 kW), 75% (466.875 kW), 50% (311.266 kW), 40% và 30%.</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[920px] text-xs">
+        <table className="report-data-table w-full min-w-[920px] text-xs">
           <thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="w-10 p-2 text-center">STT</th><th className="p-2 text-left">Chỉ tiêu</th><th className="p-2 text-center">100%</th><th className="p-2 text-center">75%</th><th className="p-2 text-center">50%</th><th className="p-2 text-center">40%</th><th className="p-2 text-center">30%</th><th className="p-2 text-left">Ghi chú</th></tr></thead>
           <tbody>
             {baseYearTable.map((row, index) => <tr key={index} className={`border-t ${row.stt === 10 || row.stt === 11 ? "bg-amber-50" : ""}`}>
@@ -154,7 +154,7 @@ export function PpaStandardLineReference() {
         <p className="mt-0.5 text-xs text-slate-500">SHN (kJ/kWh) tại 8 mốc tải và Suất hao than — SHT (g/kWh) tại 3 mốc tải, cho từng năm trong 30 năm đời dự án.</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1180px] text-xs">
+        <table className="report-data-table w-full min-w-[1180px] text-xs">
           <thead>
             <tr className="bg-[#dcebf5] text-[#173b64]">
               <th rowSpan={2} className="p-2 text-left align-bottom">Năm</th>

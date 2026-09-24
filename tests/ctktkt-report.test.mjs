@@ -110,6 +110,14 @@ test("CTKTKT keeps a separate meter-derived production summary for Excel compari
     AL8: "2120", AL9: "1900", AL10: "206", AL11: "104",
     J157: "120", K157: "100", J158: "130", K158: "110",
   };
+  coalMeters(previous, ["X", "Z", "AB"], [0, 0, 0]);
+  coalMeters(previous, ["AH", "AJ", "AL"], [0, 0, 0]);
+  coalMeters(current, ["X", "Z", "AB"], [10, 20, 30]);
+  coalMeters(current, ["AH", "AJ", "AL"], [20, 40, 60]);
+  for (const row of [87, 88, 89, 90, 91, 92]) {
+    current[`AJ${row}`] = "8.5";
+    current[`AK${row}`] = "5000";
+  }
 
   const pmis = calculateCtktktSummary(current, previous);
   const meters = calculateCtktktMeterSummary(current, previous);
@@ -122,6 +130,14 @@ test("CTKTKT keeps a separate meter-derived production summary for Excel compari
   assert.equal(meters.s1.auxiliaryPercent, 10);
   assert.equal(meters.s2.grossMwh, 120);
   assert.equal(meters.plant.grossMwh, 220);
+  assert.equal(meters.s1.rawCoalTonnes, 30);
+  assert.equal(meters.s1.adjustedCoalTonnes, 30);
+  assert.equal(meters.s1.netCoalRate, 1000 / 3);
+  assert.ok(Math.abs(meters.s1.netHeatRate - 6384.87) < 0.000001);
+  assert.equal(meters.s2.rawCoalTonnes, 60);
+  assert.equal(meters.plant.adjustedCoalTonnes, 90);
+  assert.equal(meters.plant.netCoalRate, 90000 / 190);
+  assert.ok(Math.abs(meters.plant.netHeatRate - meters.plant.netCoalRate * meters.plant.hhvKjKg / 1000) < 0.000001);
 });
 
 test("CTKTKT summary never falls back to meter differences when a QLKT pair is incomplete", () => {
