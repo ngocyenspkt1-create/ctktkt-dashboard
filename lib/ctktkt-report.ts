@@ -77,6 +77,13 @@ export type CoalShiftDetail = {
   asReceivedKcalKg: number | null;
 };
 
+export type CoalMeterShiftConsumption = {
+  shift1: number | null;
+  shift2: number | null;
+  shift3: number | null;
+  total: number | null;
+};
+
 function numberOf(entries: CtktktDayEntries | undefined, cell: string) {
   const raw = entries?.[cell]?.trim().replace(",", ".");
   if (!raw) return null;
@@ -98,6 +105,27 @@ function divide(numerator: number | null, denominator: number | null, multiplier
 
 function meterSum(entries: CtktktDayEntries | undefined, column: string) {
   return sum(Array.from({ length: 12 }, (_, index) => numberOf(entries, `${column}${16 + index}`)));
+}
+
+export function calculateCoalMeterShiftConsumption(
+  current: CtktktDayEntries,
+  previous: CtktktDayEntries | undefined,
+  unit: "s1" | "s2",
+  row: number,
+): CoalMeterShiftConsumption {
+  const firstColumn = unit === "s1" ? "X" : "AH";
+  const secondColumn = unit === "s1" ? "Z" : "AJ";
+  const endColumn = unit === "s1" ? "AB" : "AL";
+  const previousEnd = numberOf(previous, `${endColumn}${row}`);
+  const first = numberOf(current, `${firstColumn}${row}`);
+  const second = numberOf(current, `${secondColumn}${row}`);
+  const end = numberOf(current, `${endColumn}${row}`);
+  return {
+    shift1: difference(first, previousEnd),
+    shift2: difference(second, first),
+    shift3: difference(end, second),
+    total: difference(end, previousEnd),
+  };
 }
 
 type CoalUnitResult = {

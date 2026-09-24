@@ -48,6 +48,7 @@ import {
   calculateNh3Summary,
   calculateNh3DcsSummary,
   calculateCoalShiftDetails,
+  calculateCoalMeterShiftConsumption,
   applyNh3StartLevelCarryover,
   NH3_DCS_START_METER_CELLS,
   NH3_START_LEVEL_CELLS,
@@ -176,6 +177,11 @@ const meterComparisonKeys = new Set<keyof CtktktKpis>([
 function format(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   return numberFormat.format(value);
+}
+
+function coalConsumptionCellClass(value: number | null, total = false) {
+  if (value !== null && value < 0) return "bg-red-50 text-red-700 font-black";
+  return total ? "bg-blue-50 text-blue-950 font-black" : "bg-sky-50/60 text-slate-900 font-bold";
 }
 
 function parseDeminNum(val: string | undefined): number | null {
@@ -2159,13 +2165,21 @@ export function CtktktReport() {
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="w-full text-xs">
+                      <table className="min-w-[1450px] w-full text-xs">
                         <thead>
                           <tr className="bg-[#f5f5f5] text-slate-800">
-                            <th className="p-1.5 text-left font-bold">Mã cân than S1</th>
-                            <th className="p-1.5 text-center font-bold">08h (Ca 1)</th>
+                            <th rowSpan={2} className="p-1.5 text-left font-bold">Mã cân than S1</th>
+                            <th colSpan={3} className="border-l p-1.5 text-center font-bold">Chỉ số lũy kế (tấn)</th>
+                            <th colSpan={4} className="border-l bg-sky-100 p-1.5 text-center font-bold text-[#173b64]">Tiêu thụ theo công tơ — chưa gồm hiệu chỉnh (tấn)</th>
+                          </tr>
+                          <tr className="bg-[#f5f5f5] text-slate-800">
+                            <th className="border-l p-1.5 text-center font-bold">08h (Ca 1)</th>
                             <th className="p-1.5 text-center font-bold">16h (Ca 2)</th>
                             <th className="p-1.5 text-center font-bold">24h (Ca 3)</th>
+                            <th className="border-l bg-sky-50 p-1.5 text-center font-bold" title="08h ngày D trừ 24h ngày D-1">Ca 1 (00–08h)</th>
+                            <th className="bg-sky-50 p-1.5 text-center font-bold" title="16h trừ 08h ngày D">Ca 2 (08–16h)</th>
+                            <th className="bg-sky-50 p-1.5 text-center font-bold" title="24h trừ 16h ngày D">Ca 3 (16–24h)</th>
+                            <th className="bg-blue-100 p-1.5 text-center font-bold" title="24h ngày D trừ 24h ngày D-1">Tổng 3 ca</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-mono">
@@ -2182,8 +2196,9 @@ export function CtktktReport() {
                             { code: "E2", row: 25 },
                             { code: "F1", row: 26 },
                             { code: "F2", row: 27 },
-                          ].map(c => (
-                            <tr key={c.code} className="hover:bg-slate-50">
+                          ].map(c => {
+                            const consumption = calculateCoalMeterShiftConsumption(current, previous, "s1", c.row);
+                            return <tr key={c.code} className="hover:bg-slate-50">
                               <td className="p-1.5 font-bold text-slate-800 font-sans">
                                 Công tơ than # {c.code}
                               </td>
@@ -2202,8 +2217,16 @@ export function CtktktReport() {
                                   group: "may_nghien_coal_s1",
                                 })}
                               </td>
-                            </tr>
-                          ))}
+                              {[consumption.shift1, consumption.shift2, consumption.shift3].map((value, index) => (
+                                <td key={index} className={`border-l p-2 text-right tabular-nums ${coalConsumptionCellClass(value)}`}>
+                                  {format(value)}
+                                </td>
+                              ))}
+                              <td className={`border-l p-2 text-right tabular-nums ${coalConsumptionCellClass(consumption.total, true)}`}>
+                                {format(consumption.total)}
+                              </td>
+                            </tr>;
+                          })}
                           <tr className="bg-amber-50/50">
                             <td className="p-2 font-bold text-amber-950 font-sans">
                               Hiệu chỉnh chênh lệch cân than (tấn, mặc định 0)
@@ -2213,12 +2236,13 @@ export function CtktktReport() {
                                 {renderCellInput(cell, { group: "may_nghien_coal_s1" })}
                               </td>
                             ))}
+                            <td colSpan={4} className="bg-sky-50/40 p-2 text-center font-sans text-slate-500">Không phân bổ tự động theo từng công tơ</td>
                           </tr>
                           <tr className="bg-amber-50/30">
                             <td className="p-2 font-bold text-amber-950 font-sans">
                               Lý do hiệu chỉnh (máy cấp / giá trị)
                             </td>
-                            <td colSpan={3} className="p-1">
+                            <td colSpan={7} className="p-1">
                               {renderCellInput("COAL_ADJ_NOTE_S1", {
                                 group: "may_nghien_coal_s1",
                                 isNumber: false,
@@ -2232,7 +2256,7 @@ export function CtktktReport() {
                             <td className="p-2 text-slate-900 font-sans">
                               Lượng than tiêu thụ - tấn (S1)
                             </td>
-                            <td colSpan={3} className="p-2 text-right text-indigo-900 font-mono">
+                            <td colSpan={7} className="p-2 text-right text-indigo-900 font-mono">
                               Tổng ngày: {format(summary.s1.rawCoalTonnes)} tấn
                             </td>
                           </tr>
@@ -2458,13 +2482,21 @@ export function CtktktReport() {
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="w-full text-xs">
+                      <table className="min-w-[1450px] w-full text-xs">
                         <thead>
                           <tr className="bg-[#f5f5f5] text-slate-800">
-                            <th className="p-1.5 text-left font-bold">Mã cân than S2</th>
-                            <th className="p-1.5 text-center font-bold">08h (Ca 1)</th>
+                            <th rowSpan={2} className="p-1.5 text-left font-bold">Mã cân than S2</th>
+                            <th colSpan={3} className="border-l p-1.5 text-center font-bold">Chỉ số lũy kế (tấn)</th>
+                            <th colSpan={4} className="border-l bg-sky-100 p-1.5 text-center font-bold text-[#173b64]">Tiêu thụ theo công tơ — chưa gồm hiệu chỉnh (tấn)</th>
+                          </tr>
+                          <tr className="bg-[#f5f5f5] text-slate-800">
+                            <th className="border-l p-1.5 text-center font-bold">08h (Ca 1)</th>
                             <th className="p-1.5 text-center font-bold">16h (Ca 2)</th>
                             <th className="p-1.5 text-center font-bold">24h (Ca 3)</th>
+                            <th className="border-l bg-sky-50 p-1.5 text-center font-bold" title="08h ngày D trừ 24h ngày D-1">Ca 1 (00–08h)</th>
+                            <th className="bg-sky-50 p-1.5 text-center font-bold" title="16h trừ 08h ngày D">Ca 2 (08–16h)</th>
+                            <th className="bg-sky-50 p-1.5 text-center font-bold" title="24h trừ 16h ngày D">Ca 3 (16–24h)</th>
+                            <th className="bg-blue-100 p-1.5 text-center font-bold" title="24h ngày D trừ 24h ngày D-1">Tổng 3 ca</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-mono">
@@ -2481,8 +2513,9 @@ export function CtktktReport() {
                             { code: "E2", row: 25 },
                             { code: "F1", row: 26 },
                             { code: "F2", row: 27 },
-                          ].map(c => (
-                            <tr key={c.code} className="hover:bg-slate-50">
+                          ].map(c => {
+                            const consumption = calculateCoalMeterShiftConsumption(current, previous, "s2", c.row);
+                            return <tr key={c.code} className="hover:bg-slate-50">
                               <td className="p-1.5 font-bold text-slate-800 font-sans">
                                 Công tơ than # {c.code}
                               </td>
@@ -2501,8 +2534,16 @@ export function CtktktReport() {
                                   group: "may_nghien_coal_s2",
                                 })}
                               </td>
-                            </tr>
-                          ))}
+                              {[consumption.shift1, consumption.shift2, consumption.shift3].map((value, index) => (
+                                <td key={index} className={`border-l p-2 text-right tabular-nums ${coalConsumptionCellClass(value)}`}>
+                                  {format(value)}
+                                </td>
+                              ))}
+                              <td className={`border-l p-2 text-right tabular-nums ${coalConsumptionCellClass(consumption.total, true)}`}>
+                                {format(consumption.total)}
+                              </td>
+                            </tr>;
+                          })}
                           <tr className="bg-amber-50/50">
                             <td className="p-2 font-bold text-amber-950 font-sans">
                               Hiệu chỉnh chênh lệch cân than (tấn, mặc định 0)
@@ -2512,12 +2553,13 @@ export function CtktktReport() {
                                 {renderCellInput(cell, { group: "may_nghien_coal_s2" })}
                               </td>
                             ))}
+                            <td colSpan={4} className="bg-sky-50/40 p-2 text-center font-sans text-slate-500">Không phân bổ tự động theo từng công tơ</td>
                           </tr>
                           <tr className="bg-amber-50/30">
                             <td className="p-2 font-bold text-amber-950 font-sans">
                               Lý do hiệu chỉnh (máy cấp / giá trị)
                             </td>
-                            <td colSpan={3} className="p-1">
+                            <td colSpan={7} className="p-1">
                               {renderCellInput("COAL_ADJ_NOTE_S2", {
                                 group: "may_nghien_coal_s2",
                                 isNumber: false,
@@ -2531,7 +2573,7 @@ export function CtktktReport() {
                             <td className="p-2 text-slate-900 font-sans">
                               Lượng than tiêu thụ - tấn (S2)
                             </td>
-                            <td colSpan={3} className="p-2 text-right text-indigo-900 font-mono">
+                            <td colSpan={7} className="p-2 text-right text-indigo-900 font-mono">
                               Tổng ngày: {format(summary.s2.rawCoalTonnes)} tấn
                             </td>
                           </tr>

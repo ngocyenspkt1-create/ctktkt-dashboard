@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calculateCtktktMeterSummary, calculateCtktktSummary, calculateDailyAverageMoisture, calculateNh3DcsSummary, previousIsoDate } from "../lib/ctktkt-report.ts";
+import { calculateCoalMeterShiftConsumption, calculateCtktktMeterSummary, calculateCtktktSummary, calculateDailyAverageMoisture, calculateNh3DcsSummary, previousIsoDate } from "../lib/ctktkt-report.ts";
 
 function coalMeters(entries, columns, totals) {
   for (const column of columns) for (let row = 16; row <= 27; row += 1) entries[`${column}${row}`] = "0";
@@ -8,6 +8,32 @@ function coalMeters(entries, columns, totals) {
   entries[`${columns[1]}16`] = String(totals[1]);
   entries[`${columns[2]}16`] = String(totals[2]);
 }
+
+test("coal meter comparison calculates each shift and the three-shift total", () => {
+  const previous = { AB16: "100", AL16: "200" };
+  const current = { X16: "130", Z16: "170", AB16: "220", AH16: "225", AJ16: "260", AL16: "310" };
+  assert.deepEqual(calculateCoalMeterShiftConsumption(current, previous, "s1", 16), {
+    shift1: 30,
+    shift2: 40,
+    shift3: 50,
+    total: 120,
+  });
+  assert.deepEqual(calculateCoalMeterShiftConsumption(current, previous, "s2", 16), {
+    shift1: 25,
+    shift2: 35,
+    shift3: 50,
+    total: 110,
+  });
+});
+
+test("coal meter comparison leaves unavailable periods blank and preserves negative anomalies", () => {
+  assert.deepEqual(calculateCoalMeterShiftConsumption({ X16: "50", Z16: "40", AB16: "70" }, undefined, "s1", 16), {
+    shift1: null,
+    shift2: -10,
+    shift3: 30,
+    total: null,
+  });
+});
 
 test("CTKTKT uses full-precision meter differences and the 8.5% moisture basis", () => {
   const previous = { AB8: "1000", AB9: "900", AB10: "100", AB11: "50", AL8: "2000", AL9: "1800", AL10: "200", AL11: "100" };
