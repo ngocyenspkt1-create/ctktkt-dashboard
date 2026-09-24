@@ -1,3 +1,5 @@
+import { calculateAuxiliaryElectricity } from "./auxiliary-electricity.ts";
+
 // Shared constants + Excel-export builder for the "Nhập liệu BCSX" module.
 //
 // Context: trưởng ca (shift lead) currently retypes the same half-hourly P/Q
@@ -195,4 +197,3 @@ export function fileNameFor(unit: ExportUnit, operatingDate: string) {
   const [y, m, d] = operatingDate.split("-");
   return `BCSX_NMD_${unit}_${d}.${m}.${y}.xlsx`;
 }
-import { calculateAuxiliaryElectricity } from "./auxiliary-electricity.ts";
