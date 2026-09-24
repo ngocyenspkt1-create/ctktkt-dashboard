@@ -216,12 +216,12 @@ export function DailyProductionTable() {
     </div>
 
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {[{label:"Ngày trong tháng",value:days,tone:"text-[#4057b5] bg-[#f0f3ff]"},{label:"Ngày đã nhập",value:daysWithData,tone:"text-[#19845f] bg-[#edf9f4]"},{label:"Ô vừa thay đổi",value:dirty.current.size,tone:"text-[#c87819] bg-[#fff7e8]"},{label:"CE/CF bất thường",value:abnormalCount,tone:abnormalCount?"text-red-700 bg-red-50":"text-[#7451d6] bg-[#f5f1ff]"}].map(card=><div key={card.label} className={`rounded-2xl border border-white p-3 shadow-sm ${card.tone}`}><p className="text-2xl font-extrabold leading-none">{loading?"…":card.value}</p><p className="mt-1 text-xs font-semibold">{card.label}</p></div>)}
+      {[{label:"Ngày trong tháng",value:days,tone:"text-[#4057b5] bg-[#f0f3ff]"},{label:"Ngày đã nhập",value:daysWithData,tone:"text-[#19845f] bg-[#edf9f4]"},{label:"Ô vừa thay đổi",value:dirty.current.size,tone:"text-[#c87819] bg-[#fff7e8]"},{label:"CE/CF bất thường",value:abnormalCount,tone:abnormalCount?"text-red-700 bg-red-50":"text-[#7451d6] bg-[#f5f1ff]"}].map(card=><div key={card.label} className={`ui-3d-card rounded-2xl border border-white p-3 shadow-sm ${card.tone}`}><p className="text-2xl font-extrabold leading-none">{loading?"…":card.value}</p><p className="mt-1 text-xs font-semibold">{card.label}</p></div>)}
     </div>
 
     {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}{message&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">{message}</p>}
 
-    <Tabs value={group} onValueChange={v=>{setGroup(v as Group);setShowCalculated(false);}} className="gap-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <Tabs value={group} onValueChange={v=>{setGroup(v as Group);setShowCalculated(false);}} className="ui-3d-card gap-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
         <TabsList className="h-9 max-w-full overflow-hidden bg-[#f3f5f8] p-1">{groups.map(g=><TabsTrigger key={g.key} value={g.key} className="px-3 text-xs font-bold sm:text-sm">{g.label}</TabsTrigger>)}</TabsList>
         <div className="flex rounded-xl bg-[#f3f5f8] p-1"><button onClick={()=>setShowCalculated(false)} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!showCalculated?"bg-white text-[#354a9f] shadow-sm":"text-slate-500"}`}>Nhập liệu</button><button onClick={()=>setShowCalculated(true)} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${showCalculated?"bg-white text-[#354a9f] shadow-sm":"text-slate-500"}`}>Kết quả tính</button></div>
