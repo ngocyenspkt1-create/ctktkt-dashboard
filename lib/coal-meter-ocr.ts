@@ -198,3 +198,16 @@ export function reviewCoalReading(input: {
   if (input.duplicate) reasons.push("Trùng công tơ và mốc với ảnh khác");
   return { level: reasons.length ? "check" : "ok", reasons };
 }
+
+/** "2026-09-25 15:58" → photo time used to pick the 08h/16h/24h reading. */
+export function parseVisionTimestamp(value: string | null) {
+  const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})/);
+  return match ? { date: `${match[1]}-${match[2]}-${match[3]}`, hour: Number(match[4]), minute: Number(match[5]) } : null;
+}
+
+/** Keeps the digits exactly as displayed; rejects anything that is not a plain decimal number. */
+export function parseVisionTotal(value: string | null) {
+  const cleaned = value?.trim().replace(/\s/g, "").replace(/,/g, ".");
+  if (!cleaned || !/^\d{1,7}(\.\d{1,4})?$/.test(cleaned)) return null;
+  return Number(cleaned);
+}

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, CheckCircle2, ImagePlus, Loader2, TriangleAlert, X } from "lucide-react";
-import type { Worker } from "tesseract.js";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CtktktDayEntries } from "@/lib/ctktkt-report";
 import {
@@ -11,10 +10,9 @@ import {
   coalMeterCell,
   coalMeterLabel,
   matchCoalMeter,
-  parseDigitsLine,
   parseMeterLabel,
-  parseOverlayTime,
-  parseTotalValue,
+  parseVisionTimestamp,
+  parseVisionTotal,
   previousCoalReading,
   readExifTime,
   reviewCoalReading,
@@ -35,91 +33,62 @@ type PhotoRow = {
   key: CoalMeterKey | "";
   slot: CoalSlot | "";
   photoDate: string | null;
+  aiReasons: string[];
+  error: string;
   write: boolean;
 };
 
-type OcrEngine = { general: Worker; digits: Worker };
-let enginePromise: Promise<OcrEngine> | null = null;
+const MAX_UPLOAD_SIDE = 1600;
+const PARALLEL_READS = 3;
 
-// Tesseract (WASM + English data) loads from the CDN on first use only; the workers are reused afterwards.
-function getEngine(): Promise<OcrEngine> {
-  enginePromise ??= (async () => {
-    const { createWorker, PSM } = await import("tesseract.js");
-    const [general, digits] = await Promise.all([createWorker("eng"), createWorker("eng")]);
-    await digits.setParameters({ tessedit_char_whitelist: "0123456789.", tessedit_pageseg_mode: PSM.SINGLE_LINE });
-    return { general, digits };
-  })().catch(error => {
-    enginePromise = null;
-    throw error;
-  });
-  return enginePromise;
-}
-
-function scaledCanvas(bitmap: ImageBitmap, maxWidth: number) {
-  const scale = Math.min(1, maxWidth / bitmap.width);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  return { canvas, scale };
-}
-
-/** Crops the display line and turns green-on-dark LED text into dark digits on a white background. */
-function displayLineCanvas(bitmap: ImageBitmap, box: { x0: number; y0: number; x1: number; y1: number }) {
-  const height = box.y1 - box.y0;
-  const x = Math.max(0, box.x0 - height);
-  const y = Math.max(0, box.y0 - height * 0.4);
-  const width = bitmap.width - x;
-  const cropHeight = Math.min(bitmap.height - y, height * 1.8);
-  const upscale = Math.max(1, 80 / Math.max(1, height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(width * upscale);
-  canvas.height = Math.round(cropHeight * upscale);
-  const context = canvas.getContext("2d")!;
-  context.imageSmoothingQuality = "high";
-  context.drawImage(bitmap, x, y, width, cropHeight, 0, 0, canvas.width, canvas.height);
-  const image = context.getImageData(0, 0, canvas.width, canvas.height);
-  const pixels = image.data;
-  let min = 255;
-  let max = 0;
-  const glow = new Float32Array(pixels.length / 4);
-  for (let i = 0; i < glow.length; i += 1) {
-    const value = pixels[i * 4 + 1] * 0.75 + (pixels[i * 4] + pixels[i * 4 + 2]) * 0.125;
-    glow[i] = value;
-    min = Math.min(min, value);
-    max = Math.max(max, value);
-  }
-  const range = Math.max(1, max - min);
-  for (let i = 0; i < glow.length; i += 1) {
-    const level = 255 - Math.round(((glow[i] - min) / range) * 255);
-    const ink = level < 150 ? 0 : 255;
-    pixels[i * 4] = pixels[i * 4 + 1] = pixels[i * 4 + 2] = ink;
-  }
-  context.putImageData(image, 0, 0);
-  return canvas;
-}
-
-async function readPhoto(file: File) {
-  const engine = await getEngine();
+/** Downscales on the device before upload: faster, cheaper, and plenty for the display digits. */
+async function photoAsJpegBase64(file: File) {
   const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
   try {
-    const { canvas, scale } = scaledCanvas(bitmap, 1600);
-    const { data } = await engine.general.recognize(canvas, {}, { text: true, blocks: true });
-    const text = data.text || "";
-    const lines = (data.blocks || []).flatMap(block => block.paragraphs.flatMap(paragraph => paragraph.lines));
-    const displayLine = lines.find(line => /t[o0]ta/i.test(line.text)) || lines.find(line => /\d{4,6}[.,]\d{2,3}/.test(line.text));
-    let value: number | null = null;
-    if (displayLine) {
-      const box = { x0: displayLine.bbox.x0 / scale, y0: displayLine.bbox.y0 / scale, x1: displayLine.bbox.x1 / scale, y1: displayLine.bbox.y1 / scale };
-      const digits = await engine.digits.recognize(displayLineCanvas(bitmap, box));
-      value = parseDigitsLine(digits.data.text || "");
-    }
-    value ??= parseTotalValue(text);
-    const time = readExifTime(await file.arrayBuffer()) ?? parseOverlayTime(text);
-    return { value, label: parseMeterLabel(text), time };
+    const scale = Math.min(1, MAX_UPLOAD_SIDE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(result => (result ? resolve(result) : reject(new Error("Không nén được ảnh."))), "image/jpeg", 0.88));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
   } finally {
     bitmap.close();
   }
+}
+
+type VisionReading = {
+  screen_type: "led_total" | "touch_material_total" | "no_total_visible" | "not_a_meter";
+  meter_label: string | null;
+  total_display: string | null;
+  photo_timestamp: string | null;
+  confidence: "high" | "medium" | "low";
+  note: string;
+};
+
+async function readPhoto(file: File) {
+  const exifTime = readExifTime(await file.arrayBuffer());
+  const response = await fetch("/api/coal-meter-ocr", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data: await photoAsJpegBase64(file), mediaType: "image/jpeg" }),
+  });
+  const body = await response.json().catch(() => ({})) as { reading?: VisionReading; error?: string };
+  if (!response.ok || !body.reading) throw new Error(body.error || "Không đọc được ảnh.");
+  const reading = body.reading;
+  const aiReasons: string[] = [];
+  if (reading.screen_type === "no_total_visible") aiReasons.push("Màn hình trong ảnh không hiện chỉ số tổng");
+  if (reading.screen_type === "not_a_meter") aiReasons.push("Ảnh không phải màn hình công tơ than");
+  if (reading.confidence !== "high") aiReasons.push(`AI chưa chắc chắn${reading.note ? `: ${reading.note}` : ""}`);
+  return {
+    value: parseVisionTotal(reading.total_display),
+    label: parseMeterLabel(reading.meter_label ?? ""),
+    time: exifTime ?? parseVisionTimestamp(reading.photo_timestamp),
+    aiReasons,
+  };
 }
 
 const SLOT_LABELS: Record<CoalSlot, string> = { "08": "08h (Ca 1)", "16": "16h (Ca 2)", "24": "24h (Ca 3)" };
@@ -164,6 +133,10 @@ export function CoalMeterPhotoImport({
     const review = row.state === "done"
       ? reviewCoalReading({ value: numeric, match, label: row.label, slot, photoDate: row.photoDate, reportDate, duplicate })
       : null;
+    if (review && row.aiReasons.length) {
+      review.reasons.unshift(...row.aiReasons);
+      review.level = "check";
+    }
     const cell = row.key && slot ? coalMeterCell(row.key, slot) : null;
     return { row, numeric, match, review, cell, allowed: cell ? canEditCell(cell) : false };
   }), [rows, current, previous, reportDate, canEditCell]);
@@ -176,31 +149,36 @@ export function CoalMeterPhotoImport({
     const added: PhotoRow[] = Array.from(files).filter(file => file.type.startsWith("image/")).map((file, index) => {
       const url = URL.createObjectURL(file);
       urlsRef.current.push(url);
-      return { id: `${Date.now()}-${index}-${file.name}`, fileName: file.name, url, state: "pending", ocrValue: null, value: "", label: null, key: "", slot: "", photoDate: null, write: false };
+      return { id: `${Date.now()}-${index}-${file.name}`, fileName: file.name, url, state: "pending", ocrValue: null, value: "", label: null, key: "", slot: "", photoDate: null, aiReasons: [], error: "", write: false };
     });
     const fileById = new Map(added.map((row, index) => [row.id, Array.from(files)[index]]));
     setRows(old => [...old, ...added]);
     setBusy(true);
     try {
-      for (const row of added) {
+      const queue = [...added];
+      const readNext = async (): Promise<void> => {
+        const row = queue.shift();
+        if (!row) return;
         setRows(old => old.map(item => (item.id === row.id ? { ...item, state: "reading" } : item)));
         try {
           const result = await readPhoto(fileById.get(row.id)!);
           const timing = result.time ? slotForPhotoTime(result.time) : null;
           const slot = timing?.slot ?? defaultSlot;
           const match = result.value === null ? null : matchCoalMeter(result.value, result.label, key => previousOf(key, slot));
-          const value = result.value === null ? "" : String(truncateTwoDecimals(result.value));
+          const numeric = result.value === null ? null : truncateTwoDecimals(result.value);
           setRows(old => old.map(item => {
             if (item.id !== row.id) return item;
-            const next: PhotoRow = { ...item, state: "done", ocrValue: result.value, value, label: result.label, key: match?.key ?? result.label ?? "", slot, photoDate: timing?.operatingDate ?? null };
-            const numeric = result.value === null ? null : truncateTwoDecimals(result.value);
+            const next: PhotoRow = { ...item, state: "done", ocrValue: result.value, value: numeric === null ? "" : String(numeric), label: result.label, key: match?.key ?? result.label ?? "", slot, photoDate: timing?.operatingDate ?? null, aiReasons: result.aiReasons };
             const status = reviewCoalReading({ value: numeric, match: match ?? { key: null, previous: null, delta: null, source: null }, label: result.label, slot, photoDate: next.photoDate, reportDate, duplicate: false });
-            return { ...next, write: status.level === "ok" };
+            return { ...next, write: status.level === "ok" && result.aiReasons.length === 0 };
           }));
-        } catch {
-          setRows(old => old.map(item => (item.id === row.id ? { ...item, state: "error" } : item)));
+        } catch (caught) {
+          const message = caught instanceof Error ? caught.message : "Không đọc được ảnh.";
+          setRows(old => old.map(item => (item.id === row.id ? { ...item, state: "error", error: message } : item)));
         }
-      }
+        await readNext();
+      };
+      await Promise.all(Array.from({ length: Math.min(PARALLEL_READS, queue.length) }, () => readNext()));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không đọc được ảnh.");
     } finally {
@@ -235,7 +213,7 @@ export function CoalMeterPhotoImport({
           <DialogTitle className="flex items-center gap-2"><Camera className="size-5 text-indigo-600" aria-hidden /> Đọc công tơ than từ ảnh</DialogTitle>
           <DialogDescription>
             Chọn ảnh chụp màn hình công tơ các máy cấp (S1 và S2 đều được). Web đọc chỉ số, tự gán công tơ theo mã máy cấp và số lần đọc trước,
-            mốc giờ theo giờ chụp. Ảnh chỉ dùng trên máy này, không lưu lên hệ thống. Trưởng kíp đối chiếu ảnh trước khi điền vào bảng.
+            mốc giờ theo giờ chụp. Ảnh được thu nhỏ rồi gửi tới dịch vụ AI Claude để đọc số, không lưu lại trên hệ thống. Trưởng kíp đối chiếu ảnh trước khi điền vào bảng.
           </DialogDescription>
         </DialogHeader>
 
@@ -251,7 +229,7 @@ export function CoalMeterPhotoImport({
               {COAL_SLOTS.map(slot => <option key={slot} value={slot}>{SLOT_LABELS[slot]}</option>)}
             </select>
           </label>
-          {rows.length > 0 && <span className="ml-auto text-xs text-slate-500">Lần đầu cần tải bộ đọc chữ (~10 MB), các lần sau nhanh hơn.</span>}
+          {rows.length > 0 && <span className="ml-auto text-xs text-slate-500">Mỗi ảnh mất khoảng 5–15 giây, đọc song song 3 ảnh.</span>}
         </div>
 
         <div className="min-h-0 overflow-auto rounded-xl border border-slate-200">
@@ -312,7 +290,7 @@ export function CoalMeterPhotoImport({
                       {match.delta === null ? "—" : numberFormat.format(Math.round(match.delta * 1000) / 1000)}
                     </td>
                     <td className="p-2">
-                      {row.state === "error" && <span className="inline-flex items-center gap-1 text-xs text-red-600"><TriangleAlert className="size-3.5" aria-hidden /> Không đọc được ảnh</span>}
+                      {row.state === "error" && <span className="inline-flex items-center gap-1 text-xs text-red-600"><TriangleAlert className="size-3.5" aria-hidden /> {row.error || "Không đọc được ảnh"}</span>}
                       {review?.level === "ok" && <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><CheckCircle2 className="size-3.5" aria-hidden /> Khớp</span>}
                       {review?.level === "check" && (
                         <ul className="space-y-0.5 text-[11px] text-amber-800">

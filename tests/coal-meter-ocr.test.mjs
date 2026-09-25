@@ -80,3 +80,30 @@ test("EXIF DateTimeOriginal is read from a JPEG header", () => {
   assert.deepEqual(readExifTime(bytes.buffer), { date: "2026-09-25", hour: 15, minute: 58 });
   assert.equal(readExifTime(new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer), null);
 });
+
+test("AI readings keep the displayed digits and the stamped photo time", async () => {
+  const { parseVisionTotal, parseVisionTimestamp } = await import("../lib/coal-meter-ocr.ts");
+  assert.equal(parseVisionTotal("75859.247"), 75859.247);
+  assert.equal(parseVisionTotal("14589,570"), 14589.57);
+  assert.equal(parseVisionTotal("7585?.247"), null);
+  assert.equal(parseVisionTotal(null), null);
+  assert.deepEqual(parseVisionTimestamp("2026-09-25 15:58"), { date: "2026-09-25", hour: 15, minute: 58 });
+  assert.equal(parseVisionTimestamp("25 Sep"), null);
+});
+
+test("vision request uses Claude Opus 5 with default fallbacks and structured output, and surfaces refusals", async () => {
+  const { readCoalMeterPhoto, COAL_METER_VISION_MODEL } = await import("../lib/coal-meter-vision.ts");
+  let sent;
+  const reading = { screen_type: "led_total", meter_label: "1E2", total_display: "75859.247", total_unit: "MTons", photo_timestamp: "2026-09-25 15:58", confidence: "high", note: "" };
+  const client = { beta: { messages: { parse: async params => { sent = params; return { stop_reason: "end_turn", parsed_output: reading }; } } } };
+  assert.deepEqual(await readCoalMeterPhoto(client, { data: "AAAA", mediaType: "image/jpeg" }), reading);
+  assert.equal(sent.model, COAL_METER_VISION_MODEL);
+  assert.equal(sent.model, "claude-opus-5");
+  assert.equal(sent.fallbacks, "default");
+  assert.deepEqual(sent.betas, ["server-side-fallback-2026-07-01"]);
+  assert.equal(sent.messages[0].content[0].type, "image");
+  assert.ok(sent.output_config.format);
+
+  const refusing = { beta: { messages: { parse: async () => ({ stop_reason: "refusal", parsed_output: null }) } } };
+  await assert.rejects(readCoalMeterPhoto(refusing, { data: "AAAA", mediaType: "image/jpeg" }), /từ chối/);
+});
