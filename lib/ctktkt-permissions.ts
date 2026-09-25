@@ -1,7 +1,7 @@
 import { isAdminUser, type SessionUser } from "./auth/session.ts";
 
 export type CtktktFieldGroup =
-  | "kpi_summary"        // Ô I35, I36
+  | "kpi_summary"        // Ô I35, I36, W87
   | "tkd_trend"           // Bảng TKĐ DCS (P/Q TD 911, 912, 921, 922, 21)
   | "tpd_tcd_power"       // Công tơ máy phát, MBT T1/T2, TD 911/921, TD 912/922 S1 & S2
   | "lo_pho_oil"          // Công tơ dầu cấp lò F1 & dầu về bồn F2 S1 & S2
@@ -23,7 +23,7 @@ export const CTKTKT_GROUP_META: Record<
     label: "Chỉ tiêu KTKT tổng hợp",
     shortLabel: "Chỉ tiêu KTKT",
     responsible: "Trưởng kíp điện / Thống kê / KTV",
-    description: "Nhập suất hao bi nghiền than (150 g/kWh) và lượng than nhập",
+    description: "Nhập suất hao bi nghiền than (150 g/kWh), lượng than nhập và than nhập 06h (W87)",
   },
   tkd_trend: {
     label: "Bảng TKĐ trend DCS",
@@ -101,7 +101,7 @@ export const CTKTKT_GROUP_META: Record<
 
 // Tập hợp ô theo nhóm
 const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
-  kpi_summary: new Set(["I35", "I36"]),
+  kpi_summary: new Set(["I35", "I36", "W87"]),
   tkd_trend: new Set([
     "M9", "N9", "O9", "P9", "Q9", "R9",     // P TD 911
     "M10", "N10", "O10", "P10", "Q10", "R10", // P TD 912
@@ -221,7 +221,7 @@ export function getGroupCells(group: CtktktFieldGroup): Set<string> {
  *   + Cụm 9: Công tơ điện tự dùng TD21
  *   + Cụm 11: Khởi động / Ngừng tổ máy
  *   + Cụm 14: Than trộn PMIS (Wtp, Qk, tỷ lệ trộn)
- *   + Cụm 1: Suất hao bi nghiền than & lượng than nhập (I35, I36)
+ *   + Cụm 1: Suất hao bi nghiền than, lượng than nhập & than nhập 06h (I35, I36, W87)
  * - Trực phụ điện / Trực chính Điện:
  *   + Cụm 4 & 5 (Nhóm điện): Công tơ máy phát, MBT T1/T2, TD 911/921, TD 912/922
  *   + Cụm 9: Công tơ điện tự dùng TD21

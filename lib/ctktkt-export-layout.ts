@@ -38,7 +38,8 @@ export function prepareCtktktPreviousMonthSheet(sheet: ExcelJS.Worksheet, firstD
 /**
  * Carries day D-1 values into day D the same way the web report does:
  * coal stock W86 = W89 of D-1, demin meters W72/W73 = X72/X73 of D-1 when left blank,
- * NH3 24h stock P74 = sum of the three tanks when not entered, coal intake W87 = I36.
+ * NH3 24h stock P74 = sum of the three tanks when not entered.
+ * W87 (coal received, known only after 06h of D+1) is entered separately and never derived.
  */
 export function applyCtktktDailyCarryovers(
   sheet: ExcelJS.Worksheet,
@@ -47,7 +48,6 @@ export function applyCtktktDailyCarryovers(
   previousSheetName: string,
 ) {
   sheet.getCell("W86").value = { formula: `${quoted(previousSheetName)}!W89` };
-  if (numeric(row["KTKT:W87"]) === null && numeric(row["KTKT:I36"]) !== null) sheet.getCell("W87").value = { formula: "I36" };
   for (const [start, end] of [["W72", "X72"], ["W73", "X73"]] as const) {
     const carried = numeric(previousRow?.[`KTKT:${end}`]);
     if (numeric(row[`KTKT:${start}`]) === null && carried !== null) sheet.getCell(start).value = carried;

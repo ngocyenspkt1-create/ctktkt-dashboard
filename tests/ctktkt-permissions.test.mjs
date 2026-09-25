@@ -134,3 +134,11 @@ test("Lò trưởng can enter NH3 DCS but Lò phó cannot", () => {
   assert.equal(canEditCtktktGroup(loPho, "nh3_dcs"), false);
   assert.equal(canEditCtktktField(loPho, "N82"), false);
 });
+
+test("Than nhập 06h (W87) do Trưởng kíp điện nhập cùng nhóm I35, I36", () => {
+  const tkd = { id: 11, username: "tkd2", displayName: "Trưởng kíp điện", role: "viewer", position: "Trưởng kíp điện", permissions: ["view_all"] };
+  const loPho = { id: 31, username: "lopho3", displayName: "Lò phó", role: "viewer", position: "Lò phó", permissions: ["view_all"] };
+  assert.equal(getCtktktFieldGroup("W87"), "kpi_summary");
+  assert.equal(canEditCtktktField(tkd, "W87"), true);
+  assert.equal(canEditCtktktField(loPho, "W87"), false);
+});

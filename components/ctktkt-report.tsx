@@ -1171,7 +1171,7 @@ export function CtktktReport() {
         )}
       </div>
 
-      {/* 2. BẢNG KẾT QUẢ TÍNH TỰ ĐỘNG KPI & Ô NHẬP TAY CỤM 1 (I35, I36) */}
+      {/* 2. BẢNG KẾT QUẢ TÍNH TỰ ĐỘNG KPI & Ô NHẬP TAY CỤM 1 (I35, I36, W87) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
         <div className="flex items-center justify-between border-b bg-[#f8faff] px-4 py-2.5">
           <div className="flex items-center gap-2">
@@ -1179,7 +1179,7 @@ export function CtktktReport() {
               Cụm 1 · Thống kê chỉ tiêu KTKT NMNĐ Duyên Hải 1
             </h2>
             <span className="text-[11px] text-slate-500">
-              (PMIS là số liệu chính · Công tơ chỉ đối chiếu · Nhập I35, I36)
+              (PMIS là số liệu chính · Công tơ chỉ đối chiếu · Nhập I35, I36, W87)
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -1258,7 +1258,7 @@ export function CtktktReport() {
                       <td className="p-2 text-center font-medium text-slate-500">{row.unit}</td>
                     </tr>
                   ))}
-                  {/* Hai ô nhập tay duy nhất của Cụm 1 */}
+                  {/* Các ô nhập tay của Cụm 1 */}
                   <tr className="bg-amber-50/30 border-t-2 border-amber-200">
                     <td className="p-2 font-bold text-amber-950">
                       Suất hao bi nghiền than (Ô I35)
@@ -1284,6 +1284,21 @@ export function CtktktReport() {
                     <td colSpan={2} className="p-1.5 text-right w-36">
                       {renderCellInput("I36", {
                         placeholder: "0",
+                        group: "kpi_summary",
+                      })}
+                    </td>
+                    <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
+                  </tr>
+                  <tr className="bg-amber-50/30">
+                    <td className="p-2 font-bold text-amber-950">
+                      Than nhập 06h (Ô W87)
+                    </td>
+                    <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
+                      Nhập sau 06h theo QLKT trang Nhiên liệu · Tồn kho ngày D (W89 = W86 + W87 − W88) và là W86 của ngày D+1
+                    </td>
+                    <td colSpan={2} className="p-1.5 text-right w-36">
+                      {renderCellInput("W87", {
+                        placeholder: "Nhập sau 06h",
                         group: "kpi_summary",
                       })}
                     </td>

@@ -56,7 +56,7 @@ test("daily carryovers follow the 23-24/09/2026 source workbook rules", async ()
 
   assert.equal(formula(sheet.getCell("W86")), "'23'!W89", "coal stock D-1 = W89 of the previous day");
   assert.equal(formula(sheet.getCell("W89")), "W86+W87-W88");
-  assert.equal(formula(sheet.getCell("W87")), "I36");
+  assert.equal(sheet.getCell("W87").value, null, "W87 is entered after 06h, never derived from I36");
   assert.equal(sheet.getCell("W72").value, 2668.13);
   assert.equal(sheet.getCell("W73").value, 22574.94);
   assert.equal(formula(sheet.getCell("P74")), "P69+P70+P71");
