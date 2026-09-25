@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AuthLayout } from "@/components/auth-layout";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { getSessionUserForPasswordChange } from "@/lib/auth/server";
 
@@ -7,8 +8,8 @@ export default async function ChangePasswordPage() {
   if (!user) redirect("/login");
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[#f5f6f8] p-4">
+    <AuthLayout>
       <ChangePasswordForm displayName={user.displayName} required={Boolean(user.mustChangePassword)} />
-    </main>
+    </AuthLayout>
   );
 }

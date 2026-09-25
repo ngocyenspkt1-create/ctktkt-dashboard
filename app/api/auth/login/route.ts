@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { getRawDb } from "@/db";
 import { clearFailedLogins, clientIp, loginRetryAfter, recordFailedLogin } from "@/lib/auth/login-throttle";
-import { requiresPasswordChange, verifyPassword } from "@/lib/auth/password";
+import { verifyPassword } from "@/lib/auth/password";
 import { createSessionToken, PERMISSIONS, ROLES, SESSION_COOKIE, SESSION_MAX_AGE, type Permission, type Role } from "@/lib/auth/session";
 import { ensureUserSchema } from "@/lib/auth/user-schema";
 
@@ -49,7 +49,8 @@ export async function POST(request: Request) {
     return Response.json({ error: "Sai tên đăng nhập hoặc mật khẩu." }, { status: 401 });
   }
   await clearFailedLogins(db, username).catch(() => undefined);
-  const mustChangePassword = Number(row.mustChangePassword) === 1 || requiresPasswordChange(password, row.username);
+  // Password changes are voluntary for now (test deployment); the flag only applies when set explicitly in the database.
+  const mustChangePassword = Number(row.mustChangePassword) === 1;
 
   if (row.status === "locked") {
     return Response.json({ error: "Tài khoản của bạn đã bị tạm khóa. Vui lòng liên hệ Quản trị viên." }, { status: 403 });

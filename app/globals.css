@@ -1,25 +1,28 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
 :root {
-  --background: #edf3f4; --foreground: #15252a;
+  --app-bg: #f4f6fb;
+  --background: #f4f6fb; --foreground: #0f172a;
   --card: #ffffff; --card-foreground: #15252a;
   --popover: #ffffff; --popover-foreground: #15252a;
-  --primary: #2f6fb0; --primary-foreground: #ffffff;
+  --primary: #4f46e5; --primary-foreground: #ffffff;
   --secondary: #f1f5f9; --secondary-foreground: #15252a;
   --muted: #f1f5f9; --muted-foreground: #64748b;
   --accent: #eef2ff; --accent-foreground: #15252a;
   --destructive: #dc2626; --destructive-foreground: #ffffff;
-  --border: #e2e8f0; --input: #e2e8f0; --ring: #94a3b8;
+  --border: #e2e8f0; --input: #e2e8f0; --ring: #a5b4fc;
 }
 /* shadcn/ui components (Popover, Calendar, Button, Dialog, …) reference these as Tailwind
    utilities (bg-popover, text-muted-foreground, …). Tailwind v4 only generates those utilities
    when a matching --color-* token exists, so without this mapping they silently compile to
    nothing — e.g. the date-picker popover rendered with no background at all. */
 @theme inline {
-  --font-sans: "Times New Roman", Times, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
   --font-serif: "Times New Roman", Times, serif;
-  --font-mono: "Times New Roman", Times, serif;
+  /* Number cells use the UI font with tabular figures so columns line up without a typewriter look. */
+  --font-mono: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -42,35 +45,61 @@
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Times New Roman", Times, serif; }
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11" 1, "ss01" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.font-mono, table, input[inputmode="decimal"], input[type="number"] { font-variant-numeric: tabular-nums; }
+::selection { background: #c7d2fe; color: #1e1b4b; }
+:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
+* { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: #94a3b8; background-clip: content-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+@media print {
+  .app-sidebar, .app-header, button, [role="combobox"] { display: none !important; }
+  .lg:pl-64 { padding-left: 0 !important; }
+  body { background: #fff; }
+  main { padding: 0 !important; }
+}
 button, input, select, textarea { font: inherit; }
 
 .ui-3d-card,
 .ui-3d-control,
 .ui-3d-tab {
   position: relative;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 0 rgba(255, 255, 255, 0.7), 0 7px 14px rgba(71, 85, 105, 0.12), 0 2px 4px rgba(71, 85, 105, 0.1);
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.06);
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
 }
 .ui-3d-card:hover,
 .ui-3d-control:hover,
 .ui-3d-tab:hover {
-  transform: translateY(-1px);
-  border-color: rgba(100, 116, 139, 0.42);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 3px 0 rgba(255, 255, 255, 0.65), 0 10px 18px rgba(71, 85, 105, 0.16), 0 3px 6px rgba(71, 85, 105, 0.12);
+  border-color: rgba(129, 140, 248, 0.45);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
 }
+.ui-3d-control:hover,
+.ui-3d-tab:hover { transform: translateY(-1px); }
 .ui-3d-control:focus,
 .ui-3d-control:focus-visible,
 .ui-3d-tab:focus-visible {
-  outline: 2px solid rgba(64, 87, 181, 0.35);
+  outline: 2px solid rgba(99, 102, 241, 0.45);
   outline-offset: 2px;
 }
-.ui-3d-card:active,
 .ui-3d-control:active,
 .ui-3d-tab:active {
   transform: translateY(0);
-  box-shadow: inset 0 1px 2px rgba(71, 85, 105, 0.12), 0 2px 4px rgba(71, 85, 105, 0.1);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .report-data-table,
@@ -81,7 +110,7 @@ button, input, select, textarea { font: inherit; }
 .report-data-table td,
 .report-data-table-scope th,
 .report-data-table-scope td {
-  border: 1px solid #d6c0aa;
+  border: 1px solid #e3d3c3;
 }
 .report-data-table thead th,
 .report-data-table-scope thead th {

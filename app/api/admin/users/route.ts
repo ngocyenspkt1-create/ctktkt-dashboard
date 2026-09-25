@@ -131,7 +131,7 @@ export async function POST(request: Request) {
       .prepare(`
         INSERT INTO users (
           username, password_hash, display_name, role, employee_code, position, department, email_company, email_work, phone, status, must_change_password
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0)
         RETURNING id, username, display_name AS displayName, role, employee_code AS employeeCode, position, department, email_company AS emailCompany, status, created_at AS createdAt
       `)
       .bind(username, passwordHash, displayName, role, employeeCode || null, position || null, department, emailCompany || null, emailWork || null, phone || null)

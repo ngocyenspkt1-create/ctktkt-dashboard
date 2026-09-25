@@ -12,7 +12,7 @@ test("password policy rejects short, letter-only, common and username-based pass
   assert.equal(validateNewPassword("VanHanh#2026x", "hieunp"), null);
 });
 
-test("the former shared default password now forces a change at login", () => {
+test("weak passwords are recognised for a future forced change", () => {
   assert.equal(requiresPasswordChange("password123", "anyone"), true);
   assert.equal(requiresPasswordChange("VanHanh#2026x", "anyone"), false);
 });

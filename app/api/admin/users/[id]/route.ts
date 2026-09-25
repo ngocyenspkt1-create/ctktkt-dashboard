@@ -84,8 +84,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (typeof body?.password === "string" && body.password) {
       if (body.password.length < PASSWORD_MIN_LENGTH) return Response.json({ error: `Mật khẩu tạm phải có ít nhất ${PASSWORD_MIN_LENGTH} ký tự.` }, { status: 400 });
-      // Passwords set by an administrator are temporary: the user must choose a new one at next login.
-      await db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?").bind(hashPassword(body.password), id).run();
+      await db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").bind(hashPassword(body.password), id).run();
     }
 
     let updated: unknown = null;
