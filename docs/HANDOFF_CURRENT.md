@@ -1,5 +1,15 @@
 # Bàn giao trạng thái hiện tại dự án CTKTKT
 
+## Cập nhật 25/09/2026 — rà soát bảo mật, lỗi và tối ưu (commit 1e27d1a)
+
+- Bắt buộc đổi mật khẩu: đăng nhập bằng mật khẩu yếu/phổ biến (gồm mật khẩu mặc định cũ) hoặc mật khẩu do quản trị đặt (`users.must_change_password = 1`) sẽ chỉ vào được `/doi-mat-khau`. Mật khẩu mới: ≥ 8 ký tự, có chữ và số, không phổ biến, không chứa tên đăng nhập.
+- Đã gỡ toàn bộ `rawPassword` khỏi `lib/auth/initial-users-data.ts`; tạo tài khoản mới khi nạp nhân sự cần biến môi trường `INITIAL_USER_PASSWORD`.
+- Khóa đăng nhập 15 phút sau 5 lần sai/tài khoản hoặc 30 lần sai/IP (bảng `login_attempts`, tự tạo).
+- Phân quyền theo API: `daily-inputs` (edit_daily_inputs | edit_pmis | sync_qlkt), `measurements` (edit_monthly_kpi), `ppa-heat-rate` (edit_ppa), `ppa-heat-rate/notes` (edit_ppa | sync_google_sheet). `requireEditor` đã bỏ.
+- `/api/water-report/compare` không còn công khai; lỗi 500 không trả chi tiết nội bộ; giới hạn 12 MB file nước; chặn open redirect `//host` sau đăng nhập; xóa `app/chatgpt-auth.ts`.
+- ESLint `app components lib hooks proxy.ts tests scripts`: 0 lỗi, 0 cảnh báo. 211/211 test, TypeScript, build đạt.
+- Còn lại: 162/164 tài khoản (có 3 quản trị) vẫn dùng mật khẩu mặc định cũ tới khi đăng nhập lại; phiên đăng nhập cũ (JWT 30 ngày) chưa bị buộc đổi cho tới lần đăng nhập kế tiếp.
+
 ## Cập nhật 23/09/2026 — xác định nguyên nhân 10.494,57 và sửa than quy ẩm
 
 - Ngày 22/09/2026, điện S2 `I=10,3966124 triệu kWh` lấy từ PMIS/02-PĐ (`K158/F181`), không lấy từ 4 công tơ PPA 48 chu kỳ. Giá trị này khớp QLKT.
