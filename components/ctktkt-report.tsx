@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
   Save,
@@ -18,9 +18,11 @@ import {
   RefreshCw,
   Mail,
   Upload,
+  Camera,
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
+import { CoalMeterPhotoImport } from "@/components/coal-meter-photo-import";
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 import { CTKTKT_OPERATING_HOURS_CELLS } from "@/lib/ctktkt-extra-fields";
 import { useSessionUser } from "@/components/session-context";
@@ -253,6 +255,8 @@ export function CtktktReport() {
 
   const [isKpiCollapsed, setIsKpiCollapsed] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [coalPhotoOpen, setCoalPhotoOpen] = useState(false);
+  const canEditCoalCell = useCallback((cell: string) => canEditCtktktField(user, cell), [user]);
   const [extensionVersion, setExtensionVersion] = useState("");
   const extensionOutdated = isQlktExtensionOutdated(extensionVersion);
   const [syncingPmis, setSyncingPmis] = useState(false);
@@ -2260,8 +2264,13 @@ export function CtktktReport() {
                       <span className="text-xs font-bold text-slate-700">
                         3. Khối Than: 12 công tơ than Máy nghiền S1 (A1..F2)
                       </span>
-                      <span className="text-[11px] font-bold text-slate-800">
-                        Cương vị nhập: Vận hành viên Máy nghiền S1
+                      <span className="flex items-center gap-2">
+                        <button type="button" onClick={() => setCoalPhotoOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100" title="Tải ảnh công tơ, web tự đọc số và điền vào bảng">
+                          <Camera className="size-3.5" aria-hidden /> Đọc công tơ từ ảnh
+                        </button>
+                        <span className="text-[11px] font-bold text-slate-800">
+                          Cương vị nhập: Vận hành viên Máy nghiền S1
+                        </span>
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
@@ -2577,8 +2586,13 @@ export function CtktktReport() {
                       <span className="text-xs font-bold text-slate-700">
                         3. Khối Than: 12 công tơ than Máy nghiền S2 (A1..F2)
                       </span>
-                      <span className="text-[11px] font-bold text-slate-800">
-                        Cương vị nhập: Vận hành viên Máy nghiền S2
+                      <span className="flex items-center gap-2">
+                        <button type="button" onClick={() => setCoalPhotoOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100" title="Tải ảnh công tơ, web tự đọc số và điền vào bảng">
+                          <Camera className="size-3.5" aria-hidden /> Đọc công tơ từ ảnh
+                        </button>
+                        <span className="text-[11px] font-bold text-slate-800">
+                          Cương vị nhập: Vận hành viên Máy nghiền S2
+                        </span>
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
@@ -3652,6 +3666,19 @@ export function CtktktReport() {
           initialShiftName="Tổ C"
         />
       )}
+
+      <CoalMeterPhotoImport
+        open={coalPhotoOpen}
+        onOpenChange={setCoalPhotoOpen}
+        reportDate={date}
+        current={current}
+        previous={previous}
+        canEditCell={canEditCoalCell}
+        onApply={values => {
+          for (const { cell, value } of values) update(cell, value);
+          setMessage(`Đã điền ${values.length} chỉ số công tơ than từ ảnh. Kiểm tra bảng rồi bấm “Lưu số liệu”.`);
+        }}
+      />
     </section>
   );
 }
