@@ -46,7 +46,8 @@ export const CTKTKT_PRIOR_DAY_METER_SUPPORT_CELLS = [
 function rawCellValue(sheet: XLSX.WorkSheet, address: string) {
   const cell = sheet[address];
   if (!cell) return { isFormula: false, value: null as unknown };
-  return { isFormula: Boolean(cell.f), value: cell.v as unknown };
+  // Excel errors such as #DIV/0! (stopped unit) carry an error code in v, not a result.
+  return { isFormula: Boolean(cell.f), value: cell.t === "e" ? null : cell.v as unknown };
 }
 
 function numeric(value: unknown): number | null {

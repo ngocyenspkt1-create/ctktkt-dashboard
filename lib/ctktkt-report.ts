@@ -291,17 +291,18 @@ function meterUnitKpis(
   const endColumn = unit === "s1" ? "AB" : "AL";
   const grossMwh = difference(numberOf(current, `${endColumn}8`), numberOf(previous, `${endColumn}8`));
   const netMwh = difference(numberOf(current, `${endColumn}9`), numberOf(previous, `${endColumn}9`));
-  const auxiliary = calculateAuxiliaryElectricity(
-    grossMwh,
-    netMwh,
-    numberOf(current, unit === "s1" ? "GRID_RECEIVE_S1" : "GRID_RECEIVE_S2"),
-  );
+  // Mirrors the workbook: E25/H25 = auxiliary meters 9X1 + 9X2 (E22 + E23), E27/H27 = (gross − net) / gross.
+  const auxiliaryMwh = sum([
+    difference(numberOf(current, `${endColumn}10`), numberOf(previous, `${endColumn}10`)),
+    difference(numberOf(current, `${endColumn}11`), numberOf(previous, `${endColumn}11`)),
+  ]);
+  const auxiliary = calculateAuxiliaryElectricity(grossMwh, netMwh);
   const { rawCoalTonnes, adjustedCoalTonnes } = coal;
   const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
   return {
     grossMwh,
     netMwh,
-    auxiliaryMwh: auxiliary.totalMwh,
+    auxiliaryMwh,
     auxiliaryPercent: auxiliary.percent,
     rawCoalTonnes,
     adjustedCoalTonnes,
@@ -315,6 +316,20 @@ function add(a: number | null, b: number | null) {
   return a === null || b === null ? null : a + b;
 }
 
+/**
+ * Workbook I27/I145: when one unit has zero generation, the stopped unit's auxiliary
+ * consumption is charged to the running unit: (aux stopped + gross running − net running) / gross running.
+ */
+function plantAuxiliaryPercent(s1: CtktktKpis, s2: CtktktKpis): number | null {
+  const oneStopped = (stopped: CtktktKpis, running: CtktktKpis) =>
+    running.grossMwh === null || running.netMwh === null || running.grossMwh === 0
+      ? null
+      : ((stopped.auxiliaryMwh ?? 0) + running.grossMwh - running.netMwh) / running.grossMwh * 100;
+  if (s1.grossMwh === 0 && s2.grossMwh !== 0) return oneStopped(s1, s2);
+  if (s2.grossMwh === 0 && s1.grossMwh !== 0) return oneStopped(s2, s1);
+  return null;
+}
+
 function combineUnitKpis(s1: CtktktKpis, s2: CtktktKpis, hhvKjKg: number | null): CtktktSummary {
   const grossMwh = add(s1.grossMwh, s2.grossMwh);
   const netMwh = add(s1.netMwh, s2.netMwh);
@@ -326,7 +341,7 @@ function combineUnitKpis(s1: CtktktKpis, s2: CtktktKpis, hhvKjKg: number | null)
     grossMwh,
     netMwh,
     auxiliaryMwh: add(s1.auxiliaryMwh, s2.auxiliaryMwh),
-    auxiliaryPercent: plantAuxiliary.percent,
+    auxiliaryPercent: plantAuxiliaryPercent(s1, s2) ?? plantAuxiliary.percent,
     rawCoalTonnes,
     adjustedCoalTonnes,
     netCoalRate,

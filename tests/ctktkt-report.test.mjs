@@ -129,7 +129,7 @@ test("CTKTKT keeps a separate meter-derived production summary for Excel compari
   assert.equal(pmis.s1.auxiliaryMwh, 25);
   assert.equal(meters.s1.grossMwh, 100);
   assert.equal(meters.s1.netMwh, 90);
-  assert.equal(meters.s1.auxiliaryMwh, 15);
+  assert.equal(meters.s1.auxiliaryMwh, 10, "meter column mirrors Excel E25 = TD 9X1 + TD 9X2");
   assert.equal(meters.s1.auxiliaryPercent, 10);
   assert.equal(meters.s2.grossMwh, 120);
   assert.equal(meters.plant.grossMwh, 220);
@@ -371,4 +371,22 @@ test("NH3 00h levels carry over from the previous day's 24h levels", async () =>
   assert.equal(result.N70, "1870");
   assert.equal(result.N71, "2540");
   assert.equal(result.O69, "1900");
+});
+
+test("meter auxiliary power follows workbook E25/H25 on 19/09/2026 (TD 9X1 + 9X2, not gross − net)", () => {
+  const previous = { AB8: "31735384", AB9: "6465203.1", AB10: "2132972.3", AB11: "361102.1", AL8: "31212930", AL9: "6361552.7", AL10: "2106791.7", AL11: "325101" };
+  const current = { AB8: "31746701", AB9: "6475574", AB10: "2133753.2", AB11: "361233", AL8: "31224243", AL9: "6371917.3", AL10: "2107588.5", AL11: "325215.4", GRID_RECEIVE_S1: "5" };
+  const meters = calculateCtktktMeterSummary(current, previous);
+  assert.ok(Math.abs(meters.s1.auxiliaryMwh - 911.8000000003958) < 1e-6);
+  assert.ok(Math.abs(meters.s2.auxiliaryMwh - 911.199999999837) < 1e-6);
+  assert.ok(Math.abs(meters.plant.auxiliaryMwh - 1823.0000000002328) < 1e-6);
+  assert.ok(Math.abs(meters.s1.auxiliaryPercent - (11317 - 10370.900000000373) / 11317 * 100) < 1e-9);
+});
+
+test("plant auxiliary ratio charges a stopped unit's auxiliary power to the running unit (workbook I27/I145, 24/09/2026)", () => {
+  const previous = { AB8: "100", AB9: "100", AB10: "1000", AB11: "500", AL8: "1000", AL9: "1000", AL10: "0", AL11: "0" };
+  const current = { AB8: "100", AB9: "100", AB10: "1157.1", AB11: "545.1", AL8: "11645", AL9: "10741.5", AL10: "761.9", AL11: "104.7" };
+  const meters = calculateCtktktMeterSummary(current, previous);
+  assert.equal(meters.s1.grossMwh, 0);
+  assert.ok(Math.abs(meters.plant.auxiliaryPercent - 10.38703616721531) < 1e-9);
 });
