@@ -165,3 +165,16 @@ test("daily email adds received grid electricity without changing the normal aux
   assert.equal(metrics.auxMwhS2, 15);
   assert.equal(metrics.auxPercentS2, 10);
 });
+
+test("daily email demin water inherits W from previous-day X like the DCS 24h table", () => {
+  const previous = { X72: "2668.13", X73: "22574.94" };
+  const current = { X72: "3420.27", X73: "23346.92" };
+  const metrics = extractCtktktEmailMetrics(current, previous);
+
+  assert.ok(Math.abs(metrics.deminWaterS1 - 752.14) < 1e-6);
+  assert.ok(Math.abs(metrics.deminWaterS2 - 771.98) < 1e-6);
+  assert.ok(Math.abs(metrics.deminWaterTotal - 1524.12) < 1e-6);
+
+  const withAdjustment = extractCtktktEmailMetrics({ ...current, W72: "24900", X72: "120", WATER_ADJ_S1: "25000" }, previous);
+  assert.ok(Math.abs(withAdjustment.deminWaterS1 - 220) < 1e-6);
+});

@@ -92,7 +92,8 @@ export function extractCtktktEmailMetrics(
 
   // Nước demin S1 (Hàng 72): Cột Y = Cột X (24h ngày D) − Cột W (24h ngày D-1) + Hiệu chỉnh
   const waterX72 = numberOf(current, "X72");
-  const waterW72 = numberOf(current, "W72");
+  // W trống thì kế thừa X (24h) của ngày D-1, giống bảng trên web.
+  const waterW72 = numberOf(current, "W72") ?? numberOf(previous, "X72");
   const deminWaterS1 = waterX72 != null && waterW72 != null ? waterX72 - waterW72 + (numberOf(current, "WATER_ADJ_S1") ?? 0) : null;
 
   // S2 metrics
@@ -121,7 +122,7 @@ export function extractCtktktEmailMetrics(
 
   // Nước demin S2 (Hàng 73): Cột Y = Cột X (24h ngày D) − Cột W (24h ngày D-1) + Hiệu chỉnh
   const waterX73 = numberOf(current, "X73");
-  const waterW73 = numberOf(current, "W73");
+  const waterW73 = numberOf(current, "W73") ?? numberOf(previous, "X73");
   const deminWaterS2 = waterX73 != null && waterW73 != null ? waterX73 - waterW73 + (numberOf(current, "WATER_ADJ_S2") ?? 0) : null;
 
   // Tổng lượng nước demin sử dụng ngày D của 2 tổ máy (Hàng 74)
