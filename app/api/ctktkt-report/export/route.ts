@@ -10,6 +10,13 @@ import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
 import { deriveNh3StartLevels, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { applyCtktktStartupEventMetadata } from "@/lib/ctktkt-startup-event";
+import {
+  applyCtktktDailyCarryovers,
+  ctktktDateLabelCells,
+  ctktktExportCell,
+  prepareCtktktDaySheet,
+  prepareCtktktPreviousMonthSheet,
+} from "@/lib/ctktkt-export-layout";
 
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 
@@ -73,12 +80,11 @@ function fillDailyFallbacks(sheet: ExcelJS.Worksheet, row: Record<string, string
   setNumber(sheet, CTKTKT_INSTALLED_CAPACITY_CELL, Number(CTKTKT_INSTALLED_CAPACITY_MW));
   const value = (code: string) => numeric(row[code]);
   const B = value("B"), C = value("C"), H = value("H"), I = value("I");
-  const AE = value("AE"), AF = value("AF"), AJ = value("AJ"), CJ = value("CJ"), AR = value("AR");
+  const AE = value("AE"), AF = value("AF"), AJ = value("AJ"), CJ = value("CJ");
   setNumber(sheet, "J157", B === null ? null : B * 1000);
   setNumber(sheet, "K157", C === null ? null : C * 1000);
   setNumber(sheet, "J158", H === null ? null : H * 1000);
   setNumber(sheet, "K158", I === null ? null : I * 1000);
-  setNumber(sheet, "W86", AR);
   if (CJ !== null) for (const target of ["AJ87", "AJ88", "AJ89", "AJ90", "AJ91", "AJ92"]) setNumber(sheet, target, CJ);
   if (AJ !== null) {
     const dryKcal = AJ / 4.1868 / (CJ === null ? 1 : 1 - CJ / 100);
@@ -96,10 +102,9 @@ function fillDailyFallbacks(sheet: ExcelJS.Worksheet, row: Record<string, string
   setNumber(sheet, "Q181", calculated.W);
 }
 
-function applyDateLabels(sheet: ExcelJS.Worksheet, date: string) {
+function applyDateLabels(sheet: ExcelJS.Worksheet, date: string, isDaySheet: boolean) {
   const display = date.split("-").reverse().join("/");
-  sheet.getCell("Z57").value = display;
-  sheet.getCell("AJ57").value = display;
+  for (const cell of ctktktDateLabelCells(isDaySheet)) sheet.getCell(cell).value = display;
   sheet.getCell("AE83").value = `Ngày ${display.slice(0, 5)}`;
   sheet.getCell("N68").value = `Mức bồn 00h00 ${display}`;
   sheet.getCell("O68").value = `Mức bồn 24h00 ${display}`;
@@ -178,6 +183,9 @@ export async function GET(request: Request) {
     const previousRow = byDate.get(previous);
     if (previousSheet) {
       if (previousRow) fillDailyFallbacks(previousSheet, previousRow);
+      // Seeds the W86 → W89 coal stock chain of the month with the QLKT stock when not entered.
+      setNumber(previousSheet, "W86", numeric(previousRow?.AR));
+      prepareCtktktPreviousMonthSheet(previousSheet, "01");
       for (const [code, value] of Object.entries(previousRow || {})) if (code.startsWith("KTKT:") && exportableCells.has(code.slice(5)) && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
         previousSheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
@@ -186,7 +194,7 @@ export async function GET(request: Request) {
       applyWaterLinks(previousSheet, previous);
       applyWaterAdjustments(previousSheet, previousRow || {});
       applyCoalAdjustmentNotes(previousSheet, previousRow || {});
-      applyDateLabels(previousSheet, previous);
+      applyDateLabels(previousSheet, previous, false);
     }
 
     const daysInMonth = new Date(year, month, 0).getDate();
@@ -194,23 +202,26 @@ export async function GET(request: Request) {
       const date = `${period}-${String(day).padStart(2, "0")}`;
       const sheet = workbook.getWorksheet(String(day).padStart(2, "0"));
       if (!sheet) continue;
-      normalizeCoalMeterFormulas(sheet, day === 1 ? "d-1" : String(day - 1).padStart(2, "0"));
+      const previousSheetName = day === 1 ? "d-1" : String(day - 1).padStart(2, "0");
+      normalizeCoalMeterFormulas(sheet, previousSheetName);
+      prepareCtktktDaySheet(sheet, day < daysInMonth ? String(day + 1).padStart(2, "0") : null);
       const row = byDate.get(date) || {};
       fillDailyFallbacks(sheet, row);
       for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && exportableCells.has(code.slice(5)) && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
         const cell = code.slice(5);
-        sheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
+        sheet.getCell(ctktktExportCell(cell, true)).value = cell === "T181" ? value : numeric(value);
       }
       const previousDate = day === 1
         ? previous
         : `${period}-${String(day - 1).padStart(2, "0")}`;
+      applyCtktktDailyCarryovers(sheet, row, byDate.get(previousDate), previousSheetName);
       applyNh3StartLevelCarryover(sheet, byDate.get(previousDate));
       applyCtktktStartupEventMetadata(sheet, row);
       applyBcsxLinks(sheet, date);
       applyWaterLinks(sheet, date);
       applyWaterAdjustments(sheet, row);
       applyCoalAdjustmentNotes(sheet, row);
-      applyDateLabels(sheet, date);
+      applyDateLabels(sheet, date, true);
     }
     const totalSheet = workbook.getWorksheet("Tổng hợp tháng");
     if (totalSheet) totalSheet.getCell("A1").value = `Tổng hợp tháng ${month}/${year}`;
