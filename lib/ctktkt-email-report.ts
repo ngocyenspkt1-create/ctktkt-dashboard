@@ -32,6 +32,7 @@ export interface CtktktEmailReportMetrics {
   deminWaterS2: number | null;
 
   // Chung toàn nhà máy
+  deminWaterTotal: number | null;
   coalIntake24h: number | null;
   nh3UsedTonnes: number | null;
   nh3RateGross: number | null;
@@ -89,12 +90,10 @@ export function extractCtktktEmailMetrics(
     numberOf(current, "Z60") ??
     (steamTonnesS1 != null && netMwhS1 ? (steamTonnesS1 * 1000) / netMwhS1 : null);
 
-  // Nước demin S1: Ô Y72 hoặc chênh lệch (X72 - W72) + Hiệu chỉnh
-  const deminWaterS1 =
-    numberOf(current, "Y72") ??
-    (numberOf(current, "X72") != null && numberOf(current, "W72") != null
-      ? numberOf(current, "X72")! - numberOf(current, "W72")! + (numberOf(current, "WATER_ADJ_S1") ?? 0)
-      : null);
+  // Nước demin S1 (Hàng 72): Cột Y = Cột X (24h ngày D) − Cột W (24h ngày D-1) + Hiệu chỉnh
+  const waterX72 = numberOf(current, "X72");
+  const waterW72 = numberOf(current, "W72");
+  const deminWaterS1 = waterX72 != null && waterW72 != null ? waterX72 - waterW72 + (numberOf(current, "WATER_ADJ_S1") ?? 0) : null;
 
   // S2 metrics
   const grossMwhS2 = summary.s2.grossMwh;
@@ -120,12 +119,13 @@ export function extractCtktktEmailMetrics(
     numberOf(current, "AJ60") ??
     (steamTonnesS2 != null && netMwhS2 ? (steamTonnesS2 * 1000) / netMwhS2 : null);
 
-  // Nước demin S2: Ô Y73 hoặc chênh lệch (X73 - W73) + Hiệu chỉnh
-  const deminWaterS2 =
-    numberOf(current, "Y73") ??
-    (numberOf(current, "X73") != null && numberOf(current, "W73") != null
-      ? numberOf(current, "X73")! - numberOf(current, "W73")! + (numberOf(current, "WATER_ADJ_S2") ?? 0)
-      : null);
+  // Nước demin S2 (Hàng 73): Cột Y = Cột X (24h ngày D) − Cột W (24h ngày D-1) + Hiệu chỉnh
+  const waterX73 = numberOf(current, "X73");
+  const waterW73 = numberOf(current, "W73");
+  const deminWaterS2 = waterX73 != null && waterW73 != null ? waterX73 - waterW73 + (numberOf(current, "WATER_ADJ_S2") ?? 0) : null;
+
+  // Tổng lượng nước demin sử dụng ngày D của 2 tổ máy (Hàng 74)
+  const deminWaterTotal = deminWaterS1 === null && deminWaterS2 === null ? null : (deminWaterS1 ?? 0) + (deminWaterS2 ?? 0);
 
   // Than nhập kho 24h
   const coalIntake24h = numberOf(current, "I36") ?? numberOf(current, "W87") ?? 0;
@@ -167,6 +167,7 @@ export function extractCtktktEmailMetrics(
     steamRateNetS2,
     deminWaterS2,
 
+    deminWaterTotal,
     coalIntake24h,
     nh3UsedTonnes,
     nh3RateGross,
@@ -195,7 +196,7 @@ export function generateEmailReportText(
     `+ Tổng lượng hơi tiêu thụ S1: ${formatMetricNumber(metrics.steamTonnesS1, 2)} (tấn)`,
     `+ Suất tiêu hao hơi theo sản lượng đầu cực S1: ${formatMetricNumber(metrics.steamRateGrossS1, 2)} (g/kWh)`,
     `+ Suất tiêu hao hơi theo sản lượng phát lưới S1: ${formatMetricNumber(metrics.steamRateNetS1, 2)} (g/kWh)`,
-    `+ Lượng nước demin sử dụng S1: ${formatMetricNumber(metrics.deminWaterS1, 2)} (tấn)`,
+    `+ Lượng nước demin sử dụng S1: ${formatMetricNumber(metrics.deminWaterS1, 2)} (m³)`,
     "- Tổ máy S2 vận hành:",
     `+ Tổng sản lượng đầu cực máy phát S2: ${formatMetricNumber(metrics.grossMwhS2, 2)} (MWh)`,
     `+ Tổng sản lượng tại điểm mua bán điện S2: ${formatMetricNumber(metrics.netMwhS2, 2)} (MWh)`,
@@ -208,8 +209,9 @@ export function generateEmailReportText(
     `+ Tổng lượng hơi tiêu thụ S2: ${formatMetricNumber(metrics.steamTonnesS2, 2)} (tấn)`,
     `+ Suất tiêu hao hơi theo sản lượng đầu cực S2: ${formatMetricNumber(metrics.steamRateGrossS2, 2)} (g/kWh)`,
     `+ Suất tiêu hao hơi theo sản lượng phát lưới S2: ${formatMetricNumber(metrics.steamRateNetS2, 2)} (g/kWh)`,
-    `+ Lượng nước demin sử dụng S2: ${formatMetricNumber(metrics.deminWaterS2, 2)} (tấn)`,
+    `+ Lượng nước demin sử dụng S2: ${formatMetricNumber(metrics.deminWaterS2, 2)} (m³)`,
     "",
+    `- Tổng lượng nước demin sử dụng ngày D của 2 tổ máy: ${formatMetricNumber(metrics.deminWaterTotal, 2)} (m³)`,
     `- Tổng lượng than nhập kho 24h theo số liệu từ PX nhiêu liệu: ${formatMetricNumber(metrics.coalIntake24h, 2)} (tấn)`,
     `- Tổng lượng NH3 tiêu thụ trong ngày: ${formatMetricNumber(metrics.nh3UsedTonnes, 2)} (tấn)`,
     `- Suất tiêu hao NH3 theo sản lượng đầu cực: ${formatMetricNumber(metrics.nh3RateGross, 2)} (g/kWh)`,
@@ -252,7 +254,7 @@ export function generateEmailReportHtml(
     p(`+ Tổng lượng hơi tiêu thụ S1: ${formatMetricNumber(metrics.steamTonnesS1, 2)} (tấn)`),
     p(`+ Suất tiêu hao hơi theo sản lượng đầu cực S1: ${formatMetricNumber(metrics.steamRateGrossS1, 2)} (g/kWh)`),
     p(`+ Suất tiêu hao hơi theo sản lượng phát lưới S1: ${formatMetricNumber(metrics.steamRateNetS1, 2)} (g/kWh)`),
-    p(`+ Lượng nước demin sử dụng S1: ${formatMetricNumber(metrics.deminWaterS1, 2)} (tấn)`),
+    p(`+ Lượng nước demin sử dụng S1: ${formatMetricNumber(metrics.deminWaterS1, 2)} (m³)`),
     p("- Tổ máy S2 vận hành:", true),
     p(`+ Tổng sản lượng đầu cực máy phát S2: ${formatMetricNumber(metrics.grossMwhS2, 2)} (MWh)`),
     p(`+ Tổng sản lượng tại điểm mua bán điện S2: ${formatMetricNumber(metrics.netMwhS2, 2)} (MWh)`),
@@ -265,8 +267,9 @@ export function generateEmailReportHtml(
     p(`+ Tổng lượng hơi tiêu thụ S2: ${formatMetricNumber(metrics.steamTonnesS2, 2)} (tấn)`),
     p(`+ Suất tiêu hao hơi theo sản lượng đầu cực S2: ${formatMetricNumber(metrics.steamRateGrossS2, 2)} (g/kWh)`),
     p(`+ Suất tiêu hao hơi theo sản lượng phát lưới S2: ${formatMetricNumber(metrics.steamRateNetS2, 2)} (g/kWh)`),
-    p(`+ Lượng nước demin sử dụng S2: ${formatMetricNumber(metrics.deminWaterS2, 2)} (tấn)`),
+    p(`+ Lượng nước demin sử dụng S2: ${formatMetricNumber(metrics.deminWaterS2, 2)} (m³)`),
     `<div style="height: 12px;"></div>`,
+    p(`- Tổng lượng nước demin sử dụng ngày D của 2 tổ máy: ${formatMetricNumber(metrics.deminWaterTotal, 2)} (m³)`),
     p(`- Tổng lượng than nhập kho 24h theo số liệu từ PX nhiêu liệu: ${formatMetricNumber(metrics.coalIntake24h, 2)} (tấn)`),
     p(`- Tổng lượng NH3 tiêu thụ trong ngày: ${formatMetricNumber(metrics.nh3UsedTonnes, 2)} (tấn)`),
     p(`- Suất tiêu hao NH3 theo sản lượng đầu cực: ${formatMetricNumber(metrics.nh3RateGross, 2)} (g/kWh)`),

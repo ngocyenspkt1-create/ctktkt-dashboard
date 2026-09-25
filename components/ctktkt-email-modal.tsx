@@ -289,7 +289,7 @@ export function CtktktEmailModal({
                   <p className="text-black mb-0.5">+ Tổng lượng hơi tiêu thụ S1: {metrics.steamTonnesS1 != null ? metrics.steamTonnesS1.toFixed(2) : "—"} (tấn)</p>
                   <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng đầu cực S1: {metrics.steamRateGrossS1 != null ? metrics.steamRateGrossS1.toFixed(2) : "—"} (g/kWh)</p>
                   <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng phát lưới S1: {metrics.steamRateNetS1 != null ? metrics.steamRateNetS1.toFixed(2) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-1">+ Lượng nước demin sử dụng S1: {metrics.deminWaterS1 != null ? metrics.deminWaterS1.toFixed(2) : "—"} (tấn)</p>
+                  <p className="text-black mb-1">+ Lượng nước demin sử dụng S1: {metrics.deminWaterS1 != null ? metrics.deminWaterS1.toFixed(2) : "—"} (m³)</p>
 
                   {/* S2 */}
                   <p className="font-bold text-black mb-0.5">
@@ -306,11 +306,12 @@ export function CtktktEmailModal({
                   <p className="text-black mb-0.5">+ Tổng lượng hơi tiêu thụ S2: {metrics.steamTonnesS2 != null ? metrics.steamTonnesS2.toFixed(2) : "—"} (tấn)</p>
                   <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng đầu cực S2: {metrics.steamRateGrossS2 != null ? metrics.steamRateGrossS2.toFixed(2) : "—"} (g/kWh)</p>
                   <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng phát lưới S2: {metrics.steamRateNetS2 != null ? metrics.steamRateNetS2.toFixed(2) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-1">+ Lượng nước demin sử dụng S2: {metrics.deminWaterS2 != null ? metrics.deminWaterS2.toFixed(2) : "—"} (tấn)</p>
+                  <p className="text-black mb-1">+ Lượng nước demin sử dụng S2: {metrics.deminWaterS2 != null ? metrics.deminWaterS2.toFixed(2) : "—"} (m³)</p>
 
                   <div className="h-3"></div>
 
                   {/* Toàn nhà máy */}
+                  <p className="text-black mb-0.5">- Tổng lượng nước demin sử dụng ngày D của 2 tổ máy: {metrics.deminWaterTotal != null ? metrics.deminWaterTotal.toFixed(2) : "—"} (m³)</p>
                   <p className="text-black mb-0.5">- Tổng lượng than nhập kho 24h theo số liệu từ PX nhiêu liệu: {metrics.coalIntake24h != null ? metrics.coalIntake24h.toFixed(2).replace(/\.00$/, "") : "0"} (tấn)</p>
                   <p className="text-black mb-0.5">- Tổng lượng NH3 tiêu thụ trong ngày: {metrics.nh3UsedTonnes != null ? metrics.nh3UsedTonnes.toFixed(2) : "—"} (tấn)</p>
                   <p className="text-black mb-0.5">- Suất tiêu hao NH3 theo sản lượng đầu cực: {metrics.nh3RateGross != null ? metrics.nh3RateGross.toFixed(2) : "—"} (g/kWh)</p>

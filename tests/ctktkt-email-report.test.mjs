@@ -35,6 +35,7 @@ test("extractCtktktEmailMetrics accurately extracts all 22+ metrics from CTKTKT 
   assert.ok(Math.abs(metrics.steamRateGrossS1 - 3219.08) < 0.05);
   assert.ok(Math.abs(metrics.steamRateNetS1 - 3499.95) < 0.05);
   assert.ok(Math.abs(metrics.deminWaterS1 - 792.41) < 0.01);
+  assert.ok(Math.abs(metrics.deminWaterTotal - 1718.91) < 0.01);
 
   // S2 Power & Coal
   assert.equal(metrics.grossMwhS2, 11030.56);
@@ -85,7 +86,7 @@ test("generateEmailReportText generates complete text report matching exact temp
   assert.ok(text.includes("+ Tổng lượng hơi tiêu thụ S1: 35582.55 (tấn)"));
   assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S1: 3219.08 (g/kWh)"));
   assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S1: 3499.95 (g/kWh)"));
-  assert.ok(text.includes("+ Lượng nước demin sử dụng S1: 792.41 (tấn)"));
+  assert.ok(text.includes("+ Lượng nước demin sử dụng S1: 792.41 (m³)"));
 
   assert.ok(text.includes("- Tổ máy S2 vận hành:"));
   assert.ok(text.includes("+ Tổng sản lượng đầu cực máy phát S2: 11030.56 (MWh)"));
@@ -99,8 +100,9 @@ test("generateEmailReportText generates complete text report matching exact temp
   assert.ok(text.includes("+ Tổng lượng hơi tiêu thụ S2: 34544.72 (tấn)"));
   assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S2: 3131.73 (g/kWh)"));
   assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S2: 3409.22 (g/kWh)"));
-  assert.ok(text.includes("+ Lượng nước demin sử dụng S2: 926.50 (tấn)"));
+  assert.ok(text.includes("+ Lượng nước demin sử dụng S2: 926.50 (m³)"));
 
+  assert.ok(text.includes("- Tổng lượng nước demin sử dụng ngày D của 2 tổ máy: 1718.91 (m³)"));
   assert.ok(text.includes("- Tổng lượng than nhập kho 24h theo số liệu từ PX nhiêu liệu: 0 (tấn)"));
   assert.ok(text.includes("- Tổng lượng NH3 tiêu thụ trong ngày: 14.39 (tấn)"));
   assert.ok(text.includes("- Suất tiêu hao NH3 theo sản lượng đầu cực: 0.65 (g/kWh)"));
