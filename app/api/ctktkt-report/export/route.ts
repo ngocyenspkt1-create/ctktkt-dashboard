@@ -4,18 +4,21 @@ import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_DAY03_INPUT_CELLS } from "@/lib/ctktkt-fields.generated";
-import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
+import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, CTKTKT_OPERATING_HOURS_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
 import { deriveNh3StartLevels, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { applyCtktktStartupEventMetadata } from "@/lib/ctktkt-startup-event";
 import {
+  applyCtktktCarriedValues,
   applyCtktktDailyCarryovers,
+  CTKTKT_GRINDING_BALL_DEFAULT,
   ctktktDateLabelCells,
   ctktktExportCell,
   prepareCtktktDaySheet,
   prepareCtktktPreviousMonthSheet,
+  sanitizeCtktktTemplate,
 } from "@/lib/ctktkt-export-layout";
 
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
@@ -152,6 +155,20 @@ export async function GET(request: Request) {
     }
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
 
+    // Operating hours persist until someone enters a new value, possibly in an earlier month.
+    const hourCodes = CTKTKT_OPERATING_HOURS_CELLS.map(cell => `KTKT:${cell}`);
+    const { results: earlierHours } = await db.prepare(
+      `SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date < ? AND field_code IN (${hourCodes.map(() => "?").join(", ")}) ORDER BY operating_date`,
+    ).bind(previous, ...hourCodes).all();
+    const latestHours = new Map<string, number>();
+    const rememberHours = (row: Record<string, string> | undefined) => {
+      for (const cell of CTKTKT_OPERATING_HOURS_CELLS) {
+        const value = numeric(row?.[`KTKT:${cell}`]);
+        if (value !== null) latestHours.set(cell, value);
+      }
+    };
+    for (const item of earlierHours as { fieldCode: string; value: string }[]) rememberHours({ [item.fieldCode]: item.value });
+
     const applyBcsxLinks = (sheet: ExcelJS.Worksheet, date: string) => {
       const linked = deriveCtktktCellsFromBcsx(readingsByDate.get(date) || []);
       for (const [cell, value] of Object.entries(linked.entries)) setNumber(sheet, cell, numeric(value));
@@ -168,6 +185,7 @@ export async function GET(request: Request) {
     const workbook = new ExcelJS.Workbook();
     const templateBytes = Uint8Array.from(atob(CTKTKT_TEMPLATE_BASE64), character => character.charCodeAt(0));
     await workbook.xlsx.load(templateBytes.buffer);
+    sanitizeCtktktTemplate(workbook);
     const inputCells = [
       ...CTKTKT_DAY03_INPUT_CELLS,
       ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
@@ -190,6 +208,9 @@ export async function GET(request: Request) {
         const cell = code.slice(5);
         previousSheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
+      for (const cell of ["E39", "H39"]) if (numeric(previousRow?.[`KTKT:${cell}`]) === null) setNumber(previousSheet, cell, CTKTKT_GRINDING_BALL_DEFAULT);
+      rememberHours(previousRow);
+      applyCtktktCarriedValues(previousSheet, CTKTKT_OPERATING_HOURS_CELLS, latestHours);
       applyBcsxLinks(previousSheet, previous);
       applyWaterLinks(previousSheet, previous);
       applyWaterAdjustments(previousSheet, previousRow || {});
@@ -215,6 +236,8 @@ export async function GET(request: Request) {
         ? previous
         : `${period}-${String(day - 1).padStart(2, "0")}`;
       applyCtktktDailyCarryovers(sheet, row, byDate.get(previousDate), previousSheetName);
+      rememberHours(row);
+      applyCtktktCarriedValues(sheet, CTKTKT_OPERATING_HOURS_CELLS, latestHours);
       applyNh3StartLevelCarryover(sheet, byDate.get(previousDate));
       applyCtktktStartupEventMetadata(sheet, row);
       applyBcsxLinks(sheet, date);

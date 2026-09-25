@@ -40,3 +40,16 @@ test("an intake of 0 is valid but a blank intake or missing seed stops the chain
   assert.equal(noSeed.stock, null);
   assert.match(noSeed.missing, /ngày 01\/09\/2026/);
 });
+
+test("W86 chains from the day-01 entry: W86(D) = W86(D-1) + W87(D-1) − consumption(D-1), blank W87 = 0", async () => {
+  const { calculatePmisCoalStockOpening } = await import("../lib/coal-stock.ts");
+  const day1 = { ...entriesOf("2026-09-16"), W86: "245431.88997158478", W87: "10500" };
+  const day2 = { ...entriesOf("2026-09-17") };
+  const day0 = entriesOf("2026-09-16");
+  const month = new Map([["2026-08-31", day0], ["2026-09-01", day1], ["2026-09-02", day2]]);
+  assert.equal(calculatePmisCoalStockOpening(month, "2026-09-01").stock, 245431.88997158478);
+  const consumption1 = coalConsumptionTonnes(day1, day0);
+  assert.ok(Math.abs(calculatePmisCoalStockOpening(month, "2026-09-02").stock - (245431.88997158478 + 10500 - consumption1)) < 1e-6);
+  delete day1.W87;
+  assert.ok(Math.abs(calculatePmisCoalStockOpening(month, "2026-09-02").stock - (245431.88997158478 - consumption1)) < 1e-6);
+});

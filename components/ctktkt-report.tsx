@@ -26,7 +26,8 @@ import {
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
-import { calculateCoalStock24h, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
+import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
+import { CTKTKT_OPERATING_HOURS_CELLS } from "@/lib/ctktkt-extra-fields";
 import { useSessionUser } from "@/components/session-context";
 import { defaultOperatingDate } from "@/lib/operating-date";
 import {
@@ -447,14 +448,26 @@ export function CtktktReport() {
   }, [byDate, linkedByDate, date, previous]);
 
   const isFirstDayOfMonth = date.endsWith("-01");
-  const coalStock = useMemo(() => {
+  const mergedByDate = useMemo(() => {
     const merged = new Map<string, CtktktDayEntries>();
     for (const day of new Set([...Object.keys(byDate), ...Object.keys(linkedByDate)])) {
       merged.set(day, { ...(linkedByDate[day] || {}), ...(byDate[day] || {}) });
     }
     merged.set(date, current);
-    return calculateCoalStock24h(merged, date);
+    return merged;
   }, [byDate, linkedByDate, date, current]);
+  const coalStock = useMemo(() => calculateCoalStock24h(mergedByDate, date), [mergedByDate, date]);
+  const pmisCoalStock = useMemo(() => calculatePmisCoalStockOpening(mergedByDate, date), [mergedByDate, date]);
+  const carriedHours = useMemo(() => {
+    const carried: Record<string, string> = {};
+    for (const day of Object.keys(byDate).filter(day => day < date).sort()) {
+      for (const cell of CTKTKT_OPERATING_HOURS_CELLS) {
+        const value = byDate[day]?.[cell];
+        if (value?.trim()) carried[cell] = value;
+      }
+    }
+    return carried;
+  }, [byDate, date]);
 
   const startupUnit: StartupUnit | "" = current.STARTUP_UNIT === "S1" || current.STARTUP_UNIT === "S2"
     ? current.STARTUP_UNIT
@@ -1276,18 +1289,33 @@ export function CtktktReport() {
                   {/* Các ô nhập tay của Cụm 1 */}
                   <tr className="bg-amber-50/30 border-t-2 border-amber-200">
                     <td className="p-2 font-bold text-amber-950">
-                      Suất hao bi nghiền than (Ô I35)
+                      Suất hao bi nghiền than S1 / S2 (Ô E39, H39)
                     </td>
                     <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
-                      Mặc định 150 g/tấn than (Trưởng kíp điện / Thống kê nhập)
+                      Để trống = mặc định 150 g/tấn than
+                    </td>
+                    <td colSpan={2} className="p-1.5 text-right w-36">
+                      <div className="grid grid-cols-2 gap-1">
+                        {renderCellInput("E39", { placeholder: "150", group: "kpi_summary" })}
+                        {renderCellInput("H39", { placeholder: "150", group: "kpi_summary" })}
+                      </div>
+                    </td>
+                    <td className="p-2 text-center text-slate-600 font-bold">g/tấn than</td>
+                  </tr>
+                  <tr className="bg-amber-50/30">
+                    <td className="p-2 font-bold text-amber-950">
+                      Lượng dầu nhập (Ô I35)
+                    </td>
+                    <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
+                      Dầu nhập kho trong ngày · Cộng vào dầu tồn kho (J37)
                     </td>
                     <td colSpan={2} className="p-1.5 text-right w-36">
                       {renderCellInput("I35", {
-                        placeholder: "150",
+                        placeholder: "0",
                         group: "kpi_summary",
                       })}
                     </td>
-                    <td className="p-2 text-center text-slate-600 font-bold">g/tấn than</td>
+                    <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
                   </tr>
                   <tr className="bg-amber-50/30">
                     <td className="p-2 font-bold text-amber-950">
@@ -1324,6 +1352,48 @@ export function CtktktReport() {
                     </td>
                     <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
                   </tr>
+                  <tr className="bg-amber-50/30">
+                    <td className="p-2 font-bold text-amber-950">
+                      Than tồn kho ngày D-1 theo PMIS (Ô W86)
+                    </td>
+                    <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
+                      {isFirstDayOfMonth
+                        ? "Nhập một lần tại ngày 01 · Các ngày sau = W89 ngày D-1 (W86 + W87 − W88)"
+                        : pmisCoalStock.missing
+                          ? pmisCoalStock.missing
+                          : "Tự tính = W89 ngày D-1 (W86 + W87 − than tiêu thụ quy ẩm W88)"}
+                    </td>
+                    <td colSpan={2} className="p-1.5 text-right w-36">
+                      {renderCellInput("W86", {
+                        placeholder: isFirstDayOfMonth ? "Nhập ngày 01" : "—",
+                        group: "kpi_summary",
+                        readOnlyValue: isFirstDayOfMonth ? undefined : pmisCoalStock.stock === null ? "" : format(pmisCoalStock.stock),
+                      })}
+                    </td>
+                    <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
+                  </tr>
+                  {([["S1", "68"], ["S2", "69"]] as const).map(([unitLabel, row]) => (
+                    <tr key={row} className="bg-amber-50/30">
+                      <td className="p-2 font-bold text-amber-950">
+                        Thời gian lũy kế {unitLabel} (Ô W{row}:Z{row})
+                      </td>
+                      <td colSpan={6} className="p-1.5">
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {(["W", "X", "Y", "Z"] as const).map((column, index) => (
+                            <label key={column} className="flex flex-col text-[10px] font-semibold text-slate-500">
+                              {["Giờ vận hành", "Giờ sửa chữa", "Giờ sự cố", "Dự phòng"][index]}
+                              {renderCellInput(`${column}${row}`, {
+                                placeholder: carriedHours[`${column}${row}`] || "—",
+                                group: "kpi_summary",
+                              })}
+                            </label>
+                          ))}
+                        </div>
+                        <div className="mt-1 text-[10px] italic text-slate-500">Để trống = giữ số của ngày gần nhất trước đó (hiện ở ô mờ)</div>
+                      </td>
+                      <td className="p-2 text-center text-slate-600 font-bold">giờ</td>
+                    </tr>
+                  ))}
                   <tr className="bg-amber-50/30">
                     <td className="p-2 font-bold text-amber-950">
                       Than nhập 06h (Ô W87)
@@ -3566,9 +3636,13 @@ export function CtktktReport() {
                         <div className="w-20 shrink-0">
                           {renderCellInput(f.cell, {
                             compact: true,
-                            readOnlyValue: f.cell === COAL_STOCK_24H_START_CELL && !isFirstDayOfMonth
-                              ? coalStock.stock === null ? "" : format(coalStock.stock)
-                              : undefined,
+                            readOnlyValue: isFirstDayOfMonth
+                              ? undefined
+                              : f.cell === COAL_STOCK_24H_START_CELL
+                                ? coalStock.stock === null ? "" : format(coalStock.stock)
+                                : f.cell === "W86"
+                                  ? pmisCoalStock.stock === null ? "" : format(pmisCoalStock.stock)
+                                  : undefined,
                           })}
                         </div>
                       </div>

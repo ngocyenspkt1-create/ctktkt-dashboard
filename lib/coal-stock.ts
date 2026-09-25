@@ -44,7 +44,34 @@ export function coalConsumptionTonnes(current: CtktktDayEntries, previous?: Ctkt
 }
 
 /**
- * Than tồn kho 24h ngày D = tồn kho 24h ngày D-1 + than nhập 24h (I36) ngày D − than tiêu thụ S1 + S2 ngày D.
+ * W86 (than tồn kho ngày D-1 theo PMIS): ngày 01 nhập tay, các ngày sau = W89 ngày D-1 = W86 + W87 − W88.
+ * W87 trống được tính là 0 giống công thức Excel.
+ */
+export function calculatePmisCoalStockOpening(
+  entriesByDate: ReadonlyMap<string, CtktktDayEntries>,
+  targetDate: string,
+): CoalStockResult {
+  const firstDate = `${targetDate.slice(0, 8)}01`;
+  const days: CoalStockDay[] = [];
+  const seed = numberOf(entriesByDate.get(firstDate), "W86");
+  if (seed === null) {
+    return { stock: null, missing: `Chưa nhập than tồn kho ngày D-1 theo PMIS (W86) ngày ${displayDate(firstDate)}.`, days };
+  }
+  let stock = seed;
+  days.push({ date: firstDate, stock, intake: null, consumption: null });
+  for (let date = firstDate; date < targetDate; date = nextIsoDate(date)) {
+    const current = entriesByDate.get(date);
+    const consumption = current ? coalConsumptionTonnes(current, entriesByDate.get(previousIsoDate(date))) : null;
+    if (consumption === null) return { stock: null, missing: `Chưa đủ số liệu than tiêu thụ ngày ${displayDate(date)}.`, days };
+    const intake = numberOf(current, "W87") ?? 0;
+    stock = stock + intake - consumption;
+    days.push({ date: nextIsoDate(date), stock, intake, consumption });
+  }
+  return { stock, missing: null, days };
+}
+
+/**
+ * Than tồn kho 24h ngày D =tồn kho 24h ngày D-1 + than nhập 24h (I36) ngày D − than tiêu thụ S1 + S2 ngày D.
  * Ngày 01 lấy số nhập tay; chuỗi dừng ở ngày đầu tiên thiếu số liệu thay vì tự coi là 0.
  */
 export function calculateCoalStock24h(

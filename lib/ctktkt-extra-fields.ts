@@ -26,7 +26,9 @@ export const CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS = [
 // CTKTKT_INPUT_FIELDS (danh sách sinh tự động từ workbook). Khai báo rõ tại đây
 // để giao diện, API lưu và trang "Tất cả trường" dùng cùng một nguồn dữ liệu.
 export const CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS = [
-  { cell: "I35", section: "kpi_summary", sectionLabel: "Chỉ tiêu KTKT tổng hợp", label: "Suất hao bi nghiền than", row: 35, column: 9 },
+  { cell: "I35", section: "kpi_summary", sectionLabel: "Chỉ tiêu KTKT tổng hợp", label: "Lượng dầu nhập (tấn)", row: 35, column: 9 },
+  { cell: "E39", section: "kpi_summary", sectionLabel: "Chỉ tiêu KTKT tổng hợp", label: "Suất hao bi nghiền than S1 (g/tấn than)", row: 39, column: 5 },
+  { cell: "H39", section: "kpi_summary", sectionLabel: "Chỉ tiêu KTKT tổng hợp", label: "Suất hao bi nghiền than S2 (g/tấn than)", row: 39, column: 8 },
 
   { cell: "M15", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "P TD 21 (MW) · 06h", row: 15, column: 13 },
   { cell: "N15", section: "power_meters", sectionLabel: "Bảng TKĐ trend DCS", label: "P TD 21 (MW) · 10h", row: 15, column: 14 },
@@ -67,6 +69,19 @@ export const CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS = [
   { cell: "F94", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò hơi phụ · Tách lưới I", row: 94, column: 6 },
   { cell: "G94", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò hơi phụ · Hòa lưới II", row: 94, column: 7 },
   { cell: "H94", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò hơi phụ · Tách lưới II", row: 94, column: 8 },
+] as const;
+
+// Giờ vận hành / sửa chữa / sự cố / dự phòng lũy kế (hàng 68–69). X68 đã có trong danh sách sinh từ workbook.
+// Ngày không nhập sẽ giữ số của ngày gần nhất trước đó khi xuất file.
+export const CTKTKT_OPERATING_HOURS_CELLS = ["W68", "X68", "Y68", "Z68", "W69", "X69", "Y69", "Z69"] as const;
+export const CTKTKT_OPERATING_HOURS_FIELDS = [
+  { cell: "W68", section: "kpi_summary", sectionLabel: "Thời gian vận hành tổ máy", label: "S1 · Giờ vận hành lũy kế", row: 68, column: 23 },
+  { cell: "Y68", section: "kpi_summary", sectionLabel: "Thời gian vận hành tổ máy", label: "S1 · Giờ sự cố lũy kế", row: 68, column: 25 },
+  { cell: "Z68", section: "kpi_summary", sectionLabel: "Thời gian vận hành tổ máy", label: "S1 · Giờ dự phòng lũy kế", row: 68, column: 26 },
+  { cell: "W69", section: "kpi_summary", sectionLabel: "Thời gian vận hành tổ máy", label: "S2 · Giờ vận hành lũy kế", row: 69, column: 23 },
+  { cell: "X69", section: "kpi_summary", sectionLabel: "Thời gian vận hành tổ máy", label: "S2 · Giờ sửa chữa lũy kế", row: 69, column: 24 },
+  { cell: "Y69", section: "kpi_summary", sectionLabel: "Thời gian vận hành tổ máy", label: "S2 · Giờ sự cố lũy kế", row: 69, column: 25 },
+  { cell: "Z69", section: "kpi_summary", sectionLabel: "Thời gian vận hành tổ máy", label: "S2 · Giờ dự phòng lũy kế", row: 69, column: 26 },
 ] as const;
 
 // Chỉ nhập tại ngày 01; các ngày sau tự tính trong lib/coal-stock.ts.
@@ -134,6 +149,7 @@ export const CTKTKT_EXTRA_INPUT_FIELDS = [
   ...CTKTKT_WATER_ADJUSTMENT_FIELDS,
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS,
   ...CTKTKT_COAL_STOCK_FIELDS,
+  ...CTKTKT_OPERATING_HOURS_FIELDS,
   ...CTKTKT_COAL_BLEND_FIELDS,
 ] as const;
 

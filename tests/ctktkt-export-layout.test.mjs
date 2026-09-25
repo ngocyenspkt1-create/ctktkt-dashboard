@@ -75,3 +75,71 @@ test("entered values are never overwritten by carryovers", async () => {
   assert.equal(sheet.getCell("W87").value, 4088.86);
   assert.equal(sheet.getCell("P74").value, 138.977);
 });
+
+test("sanitized template has no external links, typos or kg-based S2 oil and still round-trips", async () => {
+  const { sanitizeCtktktTemplate } = await import("../lib/ctktkt-export-layout.ts");
+  const workbook = await loadTemplate();
+  sanitizeCtktktTemplate(workbook);
+  const problems = [];
+  for (const sheet of workbook.worksheets) sheet.eachRow(row => row.eachCell(cell => {
+    const f = cell.formula;
+    if (f && (/\[\d+\]/.test(f) || f.includes("E1360"))) problems.push(`${sheet.name}!${cell.address}`);
+  }));
+  assert.deepEqual(problems, []);
+  const day = workbook.getWorksheet("23");
+  assert.equal(formula(day.getCell("G4")), "AL13/1000");
+  assert.equal(formula(day.getCell("G5")), "AL14/1000");
+  assert.equal(formula(day.getCell("P169")), "'16'!T191");
+  assert.equal(day.getCell("B144").value, "Phần trăm điện tự dùng (%)");
+  assert.equal(formula(day.getCell("H144")), "(H143/H138)*100");
+  assert.equal(formula(day.getCell("H145")), "((H138-H139)/H138)*100");
+  assert.equal(workbook.getWorksheet("d-1").getCell("J19").value, null, "month-to-date restarts on day 01");
+  assert.equal(formula(workbook.getWorksheet("01").getCell("J6")), "I6+'d-1'!J6");
+
+  const reloaded = new ExcelJS.Workbook();
+  await reloaded.xlsx.load(await workbook.xlsx.writeBuffer());
+  assert.equal(reloaded.getWorksheet("23").getCell("I145").formula.includes("E139"), true);
+});
+
+test("night shift uses day D+1 for electricity, coal and steam, and rates use rows 41/42", async () => {
+  const sheet = (await loadTemplate()).getWorksheet("23");
+  prepareCtktktDaySheet(sheet, "24");
+  assert.equal(formula(sheet.getCell("Y41")), "'24'!W8-AA8");
+  assert.equal(formula(sheet.getCell("AI44")), "'24'!AG11-AK11");
+  assert.equal(formula(sheet.getCell("Y46")), "AB28+'24'!W28");
+  assert.equal(formula(sheet.getCell("AI46")), "AL28+'24'!AG28");
+  assert.equal(formula(sheet.getCell("Y60")), "(Y59*10^6)/(Y41*1000)");
+  assert.equal(formula(sheet.getCell("AI61")), "(AI59*10^6)/(AI42*1000)");
+
+  prepareCtktktDaySheet(sheet, null);
+  assert.equal(formula(sheet.getCell("Y41")), "AB8-AA8");
+  assert.equal(formula(sheet.getCell("Y46")), "AB28");
+});
+
+test("auxiliary power adds grid-received electricity and grinding balls default to 150", async () => {
+  const sheet = (await loadTemplate()).getWorksheet("23");
+  applyCtktktDailyCarryovers(sheet, { GRID_RECEIVE_S1: "221.5648" }, undefined, "22");
+  assert.equal(formula(sheet.getCell("L157")), "J157-K157+221.5648");
+  assert.equal(formula(sheet.getCell("L158")), "J158-K158");
+  assert.equal(sheet.getCell("E39").value, 150);
+  assert.equal(sheet.getCell("H39").value, 150);
+});
+
+test("W86 keeps the value entered on day 01 and chains on later days", async () => {
+  const workbook = await loadTemplate();
+  const first = workbook.getWorksheet("01");
+  first.getCell("W86").value = 245431.88997158478;
+  applyCtktktDailyCarryovers(first, { "KTKT:W86": "245431.88997158478" }, undefined, "d-1");
+  assert.equal(first.getCell("W86").value, 245431.88997158478);
+
+  const later = workbook.getWorksheet("02");
+  applyCtktktDailyCarryovers(later, { "KTKT:W86": "1" }, undefined, "01");
+  assert.equal(formula(later.getCell("W86")), "'01'!W89");
+});
+
+test("operating hours carry the latest entered value", async () => {
+  const { applyCtktktCarriedValues } = await import("../lib/ctktkt-export-layout.ts");
+  const sheet = (await loadTemplate()).getWorksheet("23");
+  applyCtktktCarriedValues(sheet, ["W68", "W69"], new Map([["W68", 53289.1887]]));
+  assert.equal(sheet.getCell("W68").value, 53289.1887);
+});
