@@ -5,6 +5,8 @@ import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { extractWorkbookShifts, scanWorkbookBuffer } from "@/lib/water-report/excel-importer";
 import { recalculateWaterShiftChain, type WaterShiftLog } from "@/lib/water-report/calculations";
 
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+
 function rowToLog(row: Record<string, unknown>): WaterShiftLog {
   return {
     id: Number(row.id || 0),
@@ -47,7 +49,11 @@ export async function POST(request: Request) {
     await ensureWaterSchema(rawDb);
 
     const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const uploaded = formData.get("file");
+    const file = uploaded instanceof File ? uploaded : null;
+    if (file && (file.size <= 0 || file.size > MAX_UPLOAD_BYTES)) {
+      return Response.json({ error: "File trống hoặc vượt quá 12 MB." }, { status: 413 });
+    }
     const action = String(formData.get("action") || "scan");
     const rawSheets = formData.get("sheetNames");
     let targetSheets: string[] | undefined = undefined;

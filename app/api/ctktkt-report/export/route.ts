@@ -130,15 +130,22 @@ export async function GET(request: Request) {
     const { year, month, previous, next } = monthBounds(period);
     const db = getRawDb();
     await ensureWaterSchema(db);
-    const { results } = await db.prepare(
-      "SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, field_code",
-    ).bind(previous, next).all();
-    const { results: shiftResults } = await db.prepare(
-      "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
-    ).bind(previous, next).all();
-    const { results: waterResults } = await db.prepare(
-      "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
-    ).bind(previous, next).all();
+    const hourCodes = CTKTKT_OPERATING_HOURS_CELLS.map(cell => `KTKT:${cell}`);
+    const [{ results }, { results: shiftResults }, { results: waterResults }, { results: earlierHours }] = await Promise.all([
+      db.prepare(
+        "SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, field_code",
+      ).bind(previous, next).all(),
+      db.prepare(
+        "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
+      ).bind(previous, next).all(),
+      db.prepare(
+        "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
+      ).bind(previous, next).all(),
+      // Operating hours persist until someone enters a new value, possibly in an earlier month.
+      db.prepare(
+        `SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date < ? AND field_code IN (${hourCodes.map(() => "?").join(", ")}) ORDER BY operating_date`,
+      ).bind(previous, ...hourCodes).all(),
+    ]);
 
     const byDate = new Map<string, Record<string, string>>();
     for (const item of results as { operatingDate: string; fieldCode: string; value: string }[]) {
@@ -155,11 +162,6 @@ export async function GET(request: Request) {
     }
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
 
-    // Operating hours persist until someone enters a new value, possibly in an earlier month.
-    const hourCodes = CTKTKT_OPERATING_HOURS_CELLS.map(cell => `KTKT:${cell}`);
-    const { results: earlierHours } = await db.prepare(
-      `SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date < ? AND field_code IN (${hourCodes.map(() => "?").join(", ")}) ORDER BY operating_date`,
-    ).bind(previous, ...hourCodes).all();
     const latestHours = new Map<string, number>();
     const rememberHours = (row: Record<string, string> | undefined) => {
       for (const cell of CTKTKT_OPERATING_HOURS_CELLS) {
@@ -258,6 +260,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Không xuất được file Chỉ tiêu KTKT." }, { status: 500 });
+    console.error("Không xuất được file Chỉ tiêu KTKT.", error);
+    return Response.json({ error: "Không xuất được file Chỉ tiêu KTKT." }, { status: 500 });
   }
 }

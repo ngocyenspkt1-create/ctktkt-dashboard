@@ -1,6 +1,6 @@
 import { getRawDb } from "../../../db";
 import { validateMeasurement } from "../../../lib/metrics";
-import { requireEditor } from "../../../lib/auth/server";
+import { requireAnyPermission } from "../../../lib/auth/server";
 
 const unavailable = () => Response.json({ error: "Chưa truy cập được kho dữ liệu. Số liệu chưa được lưu; hãy giữ nội dung nhập và thử lại." }, { status: 503 });
 const columns = "id, metric_code AS metricCode, metric_name AS metricName, period, actual, limit_value AS limitValue, note, created_at AS createdAt";
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   } catch { return unavailable(); }
 }
 export async function POST(request: Request) {
-  const guard = await requireEditor(); if (!guard.ok) return guard.response;
+  const guard = await requireAnyPermission("edit_monthly_kpi"); if (!guard.ok) return guard.response;
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });

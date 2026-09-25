@@ -1,6 +1,6 @@
 import { getRawDb } from "@/db";
 import { CTKTKT_LINKED_DAILY_CODES } from "@/lib/daily-source-links";
-import { requireEditor } from "@/lib/auth/server";
+import { requireAnyPermission } from "@/lib/auth/server";
 
 const allowedCodes = new Set(["B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","AA","AE","AF","AG","AH","AJ","AK","AR","AT","CJ","CX","BN","BO","BP","BQ","BR","BS","BT","BU","BV","BW","BX","BY","CN","BZ","CA","CC","CD","CE","CF","CM","CQ","CR","CS","CT","CU","CV","CW","DA","DB","DC","DD","DE","DF","DG","DH","GRID_RECEIVE_S1","GRID_RECEIVE_S2","BCSX_COAL_STOCK_24H"]);
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const guard = await requireEditor(); if (!guard.ok) return guard.response;
+  const guard = await requireAnyPermission("edit_daily_inputs", "edit_pmis", "sync_qlkt"); if (!guard.ok) return guard.response;
   const origin = request.headers.get("origin"); if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
   try { const raw = await request.text(); if (raw.length > 250_000) return Response.json({ error: "Dữ liệu gửi lên quá lớn." }, { status: 413 });

@@ -35,18 +35,20 @@ export async function GET(request: Request) {
   try {
     const db = getRawDb();
     await ensureWaterSchema(db);
-    const { results } = await db.prepare(
-      "SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code",
-    ).bind(from, next).all();
-    const { results: shiftResults } = await db.prepare(
-      "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
-    ).bind(from, next).all();
-    const { results: waterResults } = await db.prepare(
-      "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
-    ).bind(from, next).all();
-    const { results: gridReceiveResults } = await db.prepare(
-      "SELECT operating_date AS operatingDate, field_code AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code IN ('GRID_RECEIVE_S1', 'GRID_RECEIVE_S2') ORDER BY operating_date, field_code",
-    ).bind(from, next).all();
+    const [{ results }, { results: shiftResults }, { results: waterResults }, { results: gridReceiveResults }] = await Promise.all([
+      db.prepare(
+        "SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code",
+      ).bind(from, next).all(),
+      db.prepare(
+        "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
+      ).bind(from, next).all(),
+      db.prepare(
+        "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
+      ).bind(from, next).all(),
+      db.prepare(
+        "SELECT operating_date AS operatingDate, field_code AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code IN ('GRID_RECEIVE_S1', 'GRID_RECEIVE_S2') ORDER BY operating_date, field_code",
+      ).bind(from, next).all(),
+    ]);
 
     const readingsByDate = new Map<string, CtktktBcsxReading[]>();
     for (const reading of shiftResults as CtktktBcsxReading[]) {

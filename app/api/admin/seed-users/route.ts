@@ -10,7 +10,8 @@ export async function POST() {
     const result = await seedUsersAndPositions(getRawDb());
     return Response.json({
       ok: true,
-      message: `Đã đồng bộ thành công ${result.usersSeeded}/${result.totalUsers} nhân sự và ${result.positionsSeeded}/${result.totalPositions} cương vị.`,
+      message: `Đã đồng bộ thành công ${result.usersSeeded}/${result.totalUsers} nhân sự và ${result.positionsSeeded}/${result.totalPositions} cương vị.`
+        + (result.usersSkippedWithoutPassword ? ` Bỏ qua ${result.usersSkippedWithoutPassword} tài khoản mới vì chưa đặt biến môi trường INITIAL_USER_PASSWORD.` : ""),
       result,
     });
   } catch (error) {

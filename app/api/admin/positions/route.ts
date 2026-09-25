@@ -178,7 +178,8 @@ export async function PUT(request: Request) {
 
     return Response.json({ ok: true, updatedCount: listToUpdate.length });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Không lưu được phân quyền." }, { status: 500 });
+    console.error("Không lưu được phân quyền.", error);
+    return Response.json({ error: "Không lưu được phân quyền." }, { status: 500 });
   }
 }
 

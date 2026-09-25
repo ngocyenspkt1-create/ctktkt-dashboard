@@ -1,7 +1,6 @@
 import ExcelJS from "exceljs";
 import { getRawDb } from "@/db";
 import {
-  calculateDailyWaterUsages,
   formatIsoToDmy,
   recalculateWaterShiftChain,
   type WaterShiftLog,
@@ -222,7 +221,6 @@ export async function GET(request: Request) {
     // Ghi dữ liệu từng dòng
     let currentRowIdx = 3;
     const dayGroups: { logDate: string; startRow: number; endRow: number }[] = [];
-    const dailyWaterByDate = calculateDailyWaterUsages(chained);
 
     for (let i = 0; i < chained.length; i++) {
       const item = chained[i];

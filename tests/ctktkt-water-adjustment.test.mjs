@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import ExcelJS from "exceljs";
 import {
   CTKTKT_WATER_ADJUSTMENT_FIELDS,
   CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS,
@@ -11,7 +10,6 @@ import {
 } from "../lib/ctktkt-extra-fields.ts";
 import { getCtktktFieldGroup, canEditCtktktField } from "../lib/ctktkt-permissions.ts";
 import { extractCtktktEmailMetrics } from "../lib/ctktkt-email-report.ts";
-import { CTKTKT_TEMPLATE_BASE64 } from "../lib/ctktkt-template.generated.ts";
 
 test("Water adjustment fields are properly configured in extra fields and permissions", () => {
   assert.equal(CTKTKT_WATER_ADJUSTMENT_FIELDS.length, 2);

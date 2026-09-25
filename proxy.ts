@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
+import { CHANGE_PASSWORD_PATH, PASSWORD_CHANGE_ALLOWED_PATHS, SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
 
-const PUBLIC_PATHS = new Set(["/login", "/api/auth/login", "/api/water-report/compare"]);
+const PUBLIC_PATHS = new Set(["/login", "/api/auth/login"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,6 +16,11 @@ export async function proxy(request: NextRequest) {
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
+  }
+
+  if (user.mustChangePassword && !PASSWORD_CHANGE_ALLOWED_PATHS.has(pathname)) {
+    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Bạn cần đổi mật khẩu trước khi tiếp tục.", mustChangePassword: true }, { status: 403 });
+    return NextResponse.redirect(new URL(CHANGE_PASSWORD_PATH, request.url));
   }
 
   // Khu vực quản lý tài khoản chỉ dành cho Quản trị — chặn ngay ở middleware

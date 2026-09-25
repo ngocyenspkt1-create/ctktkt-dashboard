@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSessionUser } from "@/components/session-context";
 import { isAdminUser } from "@/lib/auth/session";
-import { calculateDailyWaterUsages, formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/lib/water-report/calculations";
+import { formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/lib/water-report/calculations";
 import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/permissions";
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/lib/water-report/schema";
 import { defaultOperatingDate } from "@/lib/operating-date";
@@ -74,15 +74,17 @@ export function WaterReportClient() {
   const canEditIntake = canEditWaterField(user, "water_intake");
   const canEditResin = canEditWaterField(user, "resin_water");
   const isAdmin = isAdminUser(user);
-  const dailyWaterByDate = useMemo(
-    () => calculateDailyWaterUsages(baseline ? [baseline, ...shifts] : shifts),
-    [baseline, shifts],
-  );
 
-  // Tải dữ liệu tháng
+  // Tải dữ liệu tháng; chỉ áp dụng phản hồi của yêu cầu mới nhất để đổi tháng nhanh không bị ghi đè dữ liệu cũ.
+  const loadSeqRef = useRef(0);
   async function loadData(targetMonth: string) {
     setLoading(true);
     setError("");
+    await fetchMonth(targetMonth);
+  }
+
+  async function fetchMonth(targetMonth: string) {
+    const seq = ++loadSeqRef.current;
     try {
       const res = await fetch(`/api/water-report?month=${targetMonth}`, { cache: "no-store" });
       const data = (await res.json()) as {
@@ -93,6 +95,7 @@ export function WaterReportClient() {
         leaders?: string[];
         summary?: MonthlyWaterSummary | null;
       };
+      if (seq !== loadSeqRef.current) return;
       if (!res.ok) throw new Error(data.error || "Không thể tải dữ liệu.");
       setShifts(data.shifts || []);
       setBaseline(data.baseline || null);
@@ -101,14 +104,21 @@ export function WaterReportClient() {
       }
       setSummary(data.summary || null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Lỗi kết nối.");
+      if (seq === loadSeqRef.current) setError(err instanceof Error ? err.message : "Lỗi kết nối.");
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }
 
+  const [trackedMonth, setTrackedMonth] = useState(month);
+  if (trackedMonth !== month) {
+    setTrackedMonth(month);
+    setLoading(true);
+    setError("");
+  }
+
   useEffect(() => {
-    loadData(month);
+    void fetchMonth(month);
   }, [month]);
 
   // Thông báo tạm thời
@@ -178,16 +188,18 @@ export function WaterReportClient() {
   }
 
   // Tìm ca trước ca đang sửa để tính toán thử
+  const editingLogDate = editingShift?.logDate;
+  const editingShiftTime = editingShift?.shiftTime;
   const prevShiftForEditing = useMemo(() => {
-    if (!editingShift?.logDate || !editingShift?.shiftTime) return null;
+    if (!editingLogDate || !editingShiftTime) return null;
     const all = baseline ? [baseline, ...shifts] : shifts;
     const sorted = [...all].sort((a, b) => {
       const orderA = a.shiftTime === "06h00" ? 1 : a.shiftTime === "14h00" ? 2 : 3;
       const orderB = b.shiftTime === "06h00" ? 1 : b.shiftTime === "14h00" ? 2 : 3;
       return `${a.logDate}_${orderA}`.localeCompare(`${b.logDate}_${orderB}`);
     });
-    const currOrder = editingShift.shiftTime === "06h00" ? 1 : editingShift.shiftTime === "14h00" ? 2 : 3;
-    const currKey = `${editingShift.logDate}_${currOrder}`;
+    const currOrder = editingShiftTime === "06h00" ? 1 : editingShiftTime === "14h00" ? 2 : 3;
+    const currKey = `${editingLogDate}_${currOrder}`;
 
     let foundPrev: WaterShiftLog | null = null;
     for (const item of sorted) {
@@ -200,7 +212,7 @@ export function WaterReportClient() {
       }
     }
     return foundPrev;
-  }, [editingShift?.logDate, editingShift?.shiftTime, shifts, baseline]);
+  }, [editingLogDate, editingShiftTime, shifts, baseline]);
 
   // Tính toán thử cho form
   const previewCalculations = useMemo(() => {
@@ -760,8 +772,8 @@ export function WaterReportClient() {
                 <tr>
                   <td colSpan={21} className="py-12 text-center text-slate-400">
                     Chưa có ca trực nào trong tháng {month}. Hãy nhấn{" "}
-                    <strong className="text-emerald-700">"+ Thêm ca trực"</strong> hoặc{" "}
-                    <strong className="text-slate-700">"Nạp từ Excel"</strong> để bắt đầu.
+                    <strong className="text-emerald-700">&ldquo;+ Thêm ca trực&rdquo;</strong> hoặc{" "}
+                    <strong className="text-slate-700">&ldquo;Nạp từ Excel&rdquo;</strong> để bắt đầu.
                   </td>
                 </tr>
               ) : (
@@ -817,7 +829,6 @@ export function WaterReportClient() {
                   {shifts.map((shift, idx) => {
                     const isHighRatioS1 = shift.waterRatioS1 > 0.08;
                     const isHighRatioS2 = shift.waterRatioS2 > 0.08;
-                    const daily = shift.shiftTime === "22h00" ? dailyWaterByDate.get(shift.logDate) : undefined;
 
                     return (
                       <tr

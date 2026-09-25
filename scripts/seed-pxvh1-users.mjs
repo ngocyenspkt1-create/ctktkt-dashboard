@@ -37,6 +37,7 @@ async function main() {
     "ALTER TABLE users ADD COLUMN email_work text",
     "ALTER TABLE users ADD COLUMN phone text",
     "ALTER TABLE users ADD COLUMN status text DEFAULT 'active' NOT NULL",
+    "ALTER TABLE users ADD COLUMN must_change_password integer DEFAULT 0 NOT NULL",
   ];
 
   for (const sql of alterStatements) {
@@ -63,16 +64,17 @@ async function main() {
     });
   }
 
+  const initialPassword = process.env.INITIAL_USER_PASSWORD || '';
+  if (initialPassword.length < 8) throw new Error('Đặt biến môi trường INITIAL_USER_PASSWORD (>= 8 ký tự) làm mật khẩu tạm; người dùng phải đổi ở lần đăng nhập đầu.');
   console.log(`Đang nạp ${INITIAL_USERS.length} tài khoản nhân sự...`);
   let count = 0;
   for (const u of INITIAL_USERS) {
     const cleanUsername = u.username.trim().toLowerCase();
-    const pHash = hashPassword(u.rawPassword);
 
     await client.execute({
       sql: `INSERT INTO users (
-              username, password_hash, display_name, role, employee_code, position, department, email_company, email_work, phone, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              username, password_hash, display_name, role, employee_code, position, department, email_company, email_work, phone, status, must_change_password
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             ON CONFLICT(username) DO UPDATE SET
               employee_code = excluded.employee_code,
               position = excluded.position,
@@ -83,7 +85,7 @@ async function main() {
               status = excluded.status`,
       args: [
         cleanUsername,
-        pHash,
+        hashPassword(initialPassword),
         u.displayName,
         u.role,
         u.employeeCode,

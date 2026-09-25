@@ -72,6 +72,7 @@ export function DailyProductionTable() {
   const [period, setPeriod] = useState(currentPeriod), [group, setGroup] = useState<Group>("production");
   const [showCalculated, setShowCalculated] = useState(false), [rows, setRows] = useState<DailyRow[]>(() => Array.from({ length: 31 }, () => ({})));
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
+  const [dirtyCount, setDirtyCount] = useState(0);
   const [noteCell, setNoteCell] = useState<{ day: number; code: string; label: string } | null>(null), [noteDraft, setNoteDraft] = useState("");
   const [syncHelp, setSyncHelp] = useState(false), [pendingSync, setPendingSync] = useState<QlktSyncPayload | null>(null), [selectedSyncCodes, setSelectedSyncCodes] = useState<Set<string>>(new Set());
   const [syncDate, setSyncDate] = useState(defaultOperatingDate), [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false), [syncProgress, setSyncProgress] = useState("");
@@ -88,7 +89,12 @@ export function DailyProductionTable() {
   const days = useMemo(() => { const [y,m] = period.split("-").map(Number); return new Date(y,m,0).getDate(); }, [period]);
   const extensionOutdated = isQlktExtensionOutdated(extensionVersion);
 
-  useEffect(() => { const controller = new AbortController(); setLoading(true); setError(""); setMessage(""); dirty.current.clear();
+  // Reset view state while rendering when the month changes, instead of synchronously inside the effect.
+  const [trackedPeriod, setTrackedPeriod] = useState(period);
+  if (trackedPeriod !== period) { setTrackedPeriod(period); setLoading(true); setError(""); setMessage(""); setDirtyCount(0); }
+  const markDirty = (key: string) => { dirty.current.add(key); setDirtyCount(dirty.current.size); };
+
+  useEffect(() => { const controller = new AbortController(); dirty.current.clear();
     Promise.all([
       fetch(`/api/daily-inputs?period=${encodeURIComponent(period)}`, { cache:"no-store", signal:controller.signal }),
       fetch(`/api/ctktkt-report?period=${encodeURIComponent(period)}`, { cache:"no-store", signal:controller.signal }),
@@ -127,6 +133,7 @@ export function DailyProductionTable() {
     const payload = decodeQlktSyncHash(window.location.hash);
     if (!payload) return;
     const directPayload = directQlktPayload(payload);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the QLKT hand-off hash after hydration
     setPendingSync(directPayload);
     setSelectedSyncCodes(new Set(directPayload.entries.map(entry => entry.fieldCode)));
     setPeriod(payload.operatingDate.slice(0, 7));
@@ -181,7 +188,7 @@ export function DailyProductionTable() {
   const displayedRows = rows.slice(0, days);
   const daysWithData = rows.slice(0, days).filter(row => Object.values(row).some(Boolean)).length;
   const abnormalCount = rows.slice(0, days).reduce((sum, _row, day) => sum + Number(isWaterAbnormal(rows, day, "CE")) + Number(isWaterAbnormal(rows, day, "CF")), 0);
-  function update(day:number, code:string, value:string){ if(numericCodes.has(code) && value!=="" && !/^-?\d*(?:[.,]\d*)?$/.test(value)) return; setRows(old=>old.map((r,i)=>i===day?{...r,[code]:value}:r)); dirty.current.add(`${day}:${code.endsWith("_NOTE")?code.slice(0,-5):code}`); setMessage(""); }
+  function update(day:number, code:string, value:string){ if(numericCodes.has(code) && value!=="" && !/^-?\d*(?:[.,]\d*)?$/.test(value)) return; setRows(old=>old.map((r,i)=>i===day?{...r,[code]:value}:r)); markDirty(`${day}:${code.endsWith("_NOTE")?code.slice(0,-5):code}`); setMessage(""); }
   function openNote(day:number, field:Field){ setNoteCell({day,code:field.code,label:field.label}); setNoteDraft(rows[day][`${field.code}_NOTE`]||""); }
   function applyNote(){ if(!noteCell)return; update(noteCell.day,`${noteCell.code}_NOTE`,noteDraft.trim()); setNoteCell(null); setMessage("Đã cập nhật ghi chú trên bảng. Nhấn “Lưu thay đổi” để lưu vào hệ thống."); }
   function applyQlktSync(){
@@ -190,7 +197,7 @@ export function DailyProductionTable() {
     if(day<0||day>=days){setError("Ngày từ QLKT không thuộc tháng đang hiển thị.");return;}
     const selected=pendingSync.entries.filter(entry=>QLKT_DIRECT_DAILY_CODES.has(entry.fieldCode)&&selectedSyncCodes.has(entry.fieldCode));
     setRows(old=>old.map((row,index)=>index===day?{...row,...Object.fromEntries(selected.map(entry=>[entry.fieldCode,normalizeQlktValue(entry.value)]))}:row));
-    selected.forEach(entry=>dirty.current.add(`${day}:${entry.fieldCode}`));
+    selected.forEach(entry=>markDirty(`${day}:${entry.fieldCode}`));
     setPendingSync(null);
     setMessage(`Đã đưa ${selected.length} số liệu QLKT vào ngày ${day+1}. Kiểm tra bảng rồi nhấn “Lưu thay đổi”.`);
   }
@@ -209,7 +216,7 @@ export function DailyProductionTable() {
   }
   function noteButton(day:number, field:Field){ const hasNote=Boolean(rows[day][`${field.code}_NOTE`]?.trim()); return <button type="button" onClick={event=>{event.stopPropagation();openNote(day,field);}} aria-label={`${hasNote?"Xem hoặc sửa":"Thêm"} ghi chú cho ${field.label}, ngày ${day+1}`} title={hasNote?rows[day][`${field.code}_NOTE`]:"Thêm ghi chú"} className={`absolute right-0 top-0 z-10 h-4 w-4 ${hasNote?"opacity-100":"opacity-0 group-hover:opacity-100 focus:opacity-100"}`}><span className={`absolute right-0 top-0 h-0 w-0 border-l-[10px] border-l-transparent ${hasNote?"border-t-[10px] border-t-orange-500":"border-t-[10px] border-t-slate-300"}`}/></button>; }
   async function save(){ setError(""); setMessage(""); const entries=[...dirty.current].map(key=>{const [dayText,code]=key.split(":"); const day=Number(dayText); return {operatingDate:`${period}-${String(day+1).padStart(2,"0")}`,fieldCode:code,value:rows[day][code]||"",note:rows[day][`${code}_NOTE`]||""};});
-    if(!entries.length){setMessage("Không có thay đổi mới để lưu."); return;} setSaving(true); try{const r=await fetch("/api/daily-inputs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({period,entries})}); const b=await r.json() as {error?:string;saved?:number}; if(!r.ok)throw new Error(b.error||"Chưa lưu được dữ liệu."); dirty.current.clear(); setMessage(`Đã lưu ${b.saved||entries.length} ô dữ liệu.`);} catch(e){setError(e instanceof Error?e.message:"Chưa lưu được dữ liệu.");} finally{setSaving(false);} }
+    if(!entries.length){setMessage("Không có thay đổi mới để lưu."); return;} setSaving(true); try{const r=await fetch("/api/daily-inputs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({period,entries})}); const b=await r.json() as {error?:string;saved?:number}; if(!r.ok)throw new Error(b.error||"Chưa lưu được dữ liệu."); dirty.current.clear(); setDirtyCount(0); setMessage(`Đã lưu ${b.saved||entries.length} ô dữ liệu.`);} catch(e){setError(e instanceof Error?e.message:"Chưa lưu được dữ liệu.");} finally{setSaving(false);} }
 
   return <section className="space-y-3">
     <div className="flex flex-wrap items-end justify-between gap-3">
@@ -218,7 +225,7 @@ export function DailyProductionTable() {
     </div>
 
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {[{label:"Ngày trong tháng",value:days,tone:"text-[#4057b5] bg-[#f0f3ff]"},{label:"Ngày đã nhập",value:daysWithData,tone:"text-[#19845f] bg-[#edf9f4]"},{label:"Ô vừa thay đổi",value:dirty.current.size,tone:"text-[#c87819] bg-[#fff7e8]"},{label:"CE/CF bất thường",value:abnormalCount,tone:abnormalCount?"text-red-700 bg-red-50":"text-[#7451d6] bg-[#f5f1ff]"}].map(card=><div key={card.label} className={`ui-3d-card rounded-2xl border border-white p-3 shadow-sm ${card.tone}`}><p className="text-2xl font-extrabold leading-none">{loading?"…":card.value}</p><p className="mt-1 text-xs font-semibold">{card.label}</p></div>)}
+      {[{label:"Ngày trong tháng",value:days,tone:"text-[#4057b5] bg-[#f0f3ff]"},{label:"Ngày đã nhập",value:daysWithData,tone:"text-[#19845f] bg-[#edf9f4]"},{label:"Ô vừa thay đổi",value:dirtyCount,tone:"text-[#c87819] bg-[#fff7e8]"},{label:"CE/CF bất thường",value:abnormalCount,tone:abnormalCount?"text-red-700 bg-red-50":"text-[#7451d6] bg-[#f5f1ff]"}].map(card=><div key={card.label} className={`ui-3d-card rounded-2xl border border-white p-3 shadow-sm ${card.tone}`}><p className="text-2xl font-extrabold leading-none">{loading?"…":card.value}</p><p className="mt-1 text-xs font-semibold">{card.label}</p></div>)}
     </div>
 
     {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}{message&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">{message}</p>}

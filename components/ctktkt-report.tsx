@@ -11,14 +11,9 @@ import {
   Boxes,
   Power,
   FileText,
-  CheckCircle2,
   Lock,
-  Unlock,
   ChevronDown,
   ChevronUp,
-  LayoutGrid,
-  Rows3,
-  TableProperties,
   UserCheck,
   RefreshCw,
   Mail,
@@ -38,8 +33,8 @@ import {
   CTKTKT_GROUP_META,
   type CtktktFieldGroup,
 } from "@/lib/ctktkt-permissions";
-import { CTKTKT_BCSX_LINKED_CELLS, CTKTKT_BCSX_LINKS } from "@/lib/ctktkt-bcsx-link";
-import { CTKTKT_WATER_LINKED_CELLS, CTKTKT_WATER_LINKS } from "@/lib/ctktkt-water-link";
+import { CTKTKT_BCSX_LINKED_CELLS } from "@/lib/ctktkt-bcsx-link";
+import { CTKTKT_WATER_LINKED_CELLS } from "@/lib/ctktkt-water-link";
 import {
   calculateCtktktSummary,
   calculateCtktktMeterSummary,
@@ -83,7 +78,6 @@ import {
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
-type DisplayField = { cell: string; label: string; row: number; column: number };
 type ImportEntry = { cell: string; value: string };
 type ImportDay = { date: string; sheetName: string; manualEntries: ImportEntry[] };
 type ImportPackage = {
@@ -132,21 +126,6 @@ const editableFields = [
   ...CTKTKT_EXTRA_INPUT_FIELDS,
 ];
 
-const displayFields: DisplayField[] = [
-  ...editableFields,
-  ...CTKTKT_BCSX_LINKS.map(link => ({
-    cell: link.cell,
-    label: link.label,
-    row: Number(link.cell.match(/\d+$/)?.[0] || 0),
-    column: link.cell.charCodeAt(0) - 64,
-  })),
-  ...CTKTKT_WATER_LINKS.filter(link => !editableFields.some(f => f.cell === link.cell)).map(link => ({
-    cell: link.cell,
-    label: link.label,
-    row: Number(link.cell.match(/\d+$/)?.[0] || 0),
-    column: link.cell.charCodeAt(0) - 64,
-  })),
-].sort((a, b) => a.row - b.row || a.column - b.column);
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 
@@ -264,7 +243,6 @@ export function CtktktReport() {
   // Tab điều hướng chính theo đúng các cụm phân công vận hành
   const [activeTab, setActiveTab] = useState<MainTab>("tkd_dcs");
   const [unitView, setUnitView] = useState<"s1" | "s2" | "both">("s1");
-  const [isStartupExpanded, setIsStartupExpanded] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -274,7 +252,6 @@ export function CtktktReport() {
   const [error, setError] = useState("");
 
   const [isKpiCollapsed, setIsKpiCollapsed] = useState(false);
-  const [allViewMode, setAllViewMode] = useState<"dense" | "matrix" | "cards">("dense");
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [extensionVersion, setExtensionVersion] = useState("");
   const extensionOutdated = isQlktExtensionOutdated(extensionVersion);
@@ -483,7 +460,6 @@ export function CtktktReport() {
     () => linkWarnings.filter(item => item.operatingDate === date),
     [linkWarnings, date],
   );
-  const linkedCount = Object.keys(linkedByDate[date] || {}).length;
   const hasPreviousManualData = Boolean(byDate[previousDate]);
 
   // Tính toán chỉ tiêu tổng hợp toàn nhà máy

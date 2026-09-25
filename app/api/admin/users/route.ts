@@ -1,6 +1,6 @@
 import { getRawDb } from "@/db";
 import { requireAdmin } from "@/lib/auth/server";
-import { hashPassword } from "@/lib/auth/password";
+import { hashPassword, PASSWORD_MIN_LENGTH } from "@/lib/auth/password";
 import { PERMISSIONS, ROLES, type Permission, type Role } from "@/lib/auth/session";
 import { ensureUserSchema } from "@/lib/auth/user-schema";
 
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
   if (!usernamePattern.test(username)) {
     return Response.json({ error: "Tên đăng nhập chỉ gồm chữ thường, số, dấu chấm/gạch (3-32 ký tự)." }, { status: 400 });
   }
-  if (password.length < 6) return Response.json({ error: "Mật khẩu phải có ít nhất 6 ký tự." }, { status: 400 });
+  if (password.length < PASSWORD_MIN_LENGTH) return Response.json({ error: `Mật khẩu tạm phải có ít nhất ${PASSWORD_MIN_LENGTH} ký tự.` }, { status: 400 });
   if (!displayName) return Response.json({ error: "Nhập tên hiển thị." }, { status: 400 });
 
   try {
@@ -130,8 +130,8 @@ export async function POST(request: Request) {
     const created = await rawDb
       .prepare(`
         INSERT INTO users (
-          username, password_hash, display_name, role, employee_code, position, department, email_company, email_work, phone, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active') 
+          username, password_hash, display_name, role, employee_code, position, department, email_company, email_work, phone, status, must_change_password
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1)
         RETURNING id, username, display_name AS displayName, role, employee_code AS employeeCode, position, department, email_company AS emailCompany, status, created_at AS createdAt
       `)
       .bind(username, passwordHash, displayName, role, employeeCode || null, position || null, department, emailCompany || null, emailWork || null, phone || null)

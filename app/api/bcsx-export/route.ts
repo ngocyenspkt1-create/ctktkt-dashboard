@@ -126,6 +126,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Không xuất được file." }, { status: 500 });
+    console.error("Không xuất được file.", error);
+    return Response.json({ error: "Không xuất được file." }, { status: 500 });
   }
 }

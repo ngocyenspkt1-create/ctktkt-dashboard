@@ -35,7 +35,7 @@ export async function GET() {
     });
   } catch (err) {
     console.error("Lỗi lấy dữ liệu đối chiếu:", err);
-    return Response.json({ error: String(err) }, { status: 500 });
+    return Response.json({ error: "Chưa tải được dữ liệu đối chiếu." }, { status: 500 });
   }
 }
 

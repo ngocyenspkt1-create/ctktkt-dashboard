@@ -20,10 +20,12 @@ export function LoginForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: username.trim(), password }),
       });
-      const body = await response.json() as { ok?: boolean; error?: string };
+      const body = await response.json() as { ok?: boolean; error?: string; mustChangePassword?: boolean };
       if (!response.ok || !body.ok) throw new Error(body.error || "Đăng nhập không thành công.");
       const next = searchParams.get("next");
-      router.replace(next && next.startsWith("/") ? next : "/");
+      // Only same-site relative paths; "//host" would be an open redirect.
+      const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      router.replace(body.mustChangePassword ? "/doi-mat-khau" : safeNext);
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Đăng nhập không thành công.");

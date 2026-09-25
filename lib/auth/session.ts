@@ -46,6 +46,8 @@ export type SessionUser = {
   position?: string;
   employeeCode?: string;
   permissions: Permission[];
+  /** Set when the account still uses a temporary or weak password; only password change is allowed. */
+  mustChangePassword?: boolean;
 };
 
 export function isAdminUser(user: SessionUser | null | undefined): boolean {
@@ -76,6 +78,9 @@ export function hasPermission(user: SessionUser | null | undefined, permission: 
 }
 
 export const SESSION_COOKIE = "session";
+export const CHANGE_PASSWORD_PATH = "/doi-mat-khau";
+/** Routes reachable while a password change is pending. */
+export const PASSWORD_CHANGE_ALLOWED_PATHS = new Set([CHANGE_PASSWORD_PATH, "/api/auth/change-password", "/api/auth/logout"]);
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 ngày
 
 function getSecretKey() {
@@ -96,6 +101,7 @@ export async function createSessionToken(user: SessionUser): Promise<string> {
     position: user.position || "",
     employeeCode: user.employeeCode || "",
     permissions: user.permissions || [],
+    mustChangePassword: Boolean(user.mustChangePassword),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(String(user.id))
@@ -123,6 +129,7 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
       position: typeof payload.position === "string" ? payload.position : undefined,
       employeeCode: typeof payload.employeeCode === "string" ? payload.employeeCode : undefined,
       permissions,
+      mustChangePassword: payload.mustChangePassword === true,
     };
   } catch {
     return null;

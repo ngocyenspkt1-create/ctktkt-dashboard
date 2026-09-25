@@ -50,7 +50,6 @@ export type UserSeed = {
   department: string;
   role: Role;
   username: string;
-  rawPassword: string;
   status: "active" | "locked";
 };
 
@@ -275,7 +274,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "hieunp",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -288,7 +286,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "trieult",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -301,7 +298,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thonglpm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -314,7 +310,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "lamnt1",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -327,7 +322,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "liemnt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -340,7 +334,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "annt5",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -353,7 +346,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "longtt1",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -366,7 +358,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thainh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -379,7 +370,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "anvh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -392,7 +382,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "khanhnt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -405,7 +394,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thiennv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -418,7 +406,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "duynn",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -431,7 +418,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "trunglt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -444,7 +430,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "quitl",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -457,7 +442,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "admin",
     username: "minhlc",
-    rawPassword: "Cogidau3@",
     status: "active",
   },
   {
@@ -470,7 +454,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phudm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -483,7 +466,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "utt1",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -496,7 +478,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "datnq",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -509,7 +490,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "vitt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -522,7 +502,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "doitv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -535,7 +514,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "lamnt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -548,7 +526,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phind",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -561,7 +538,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "aunv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -574,7 +550,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "dayhm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -587,7 +562,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "quilh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -600,7 +574,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhutcm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -613,7 +586,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "technician",
     username: "haipm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -626,7 +598,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "technician",
     username: "baonk",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -639,7 +610,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "technician",
     username: "tambh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -652,7 +622,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "technician",
     username: "tienvv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -665,7 +634,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "technician",
     username: "damnq",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -678,7 +646,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "truyenpt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -691,7 +658,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "namph",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -704,7 +670,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "sonlv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -717,7 +682,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "teonv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -730,7 +694,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thactv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -743,7 +706,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phuctv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -756,7 +718,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thientc",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -769,7 +730,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "dienpt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -782,7 +742,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tambc",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -795,7 +754,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "trangnq",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -808,7 +766,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "admin",
     username: "khanhmdk",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -821,7 +778,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thanhkvc",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -834,7 +790,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "luandv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -847,7 +802,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "namnt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -860,7 +814,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "longpx",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -873,7 +826,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "chunglv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -886,7 +838,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhamt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -899,7 +850,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "haitt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -912,7 +862,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "daolv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -925,7 +874,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thuypb",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -938,7 +886,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "Sangnv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -951,7 +898,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "quannh1",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -964,7 +910,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "vuth",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -977,7 +922,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "huongtv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -990,7 +934,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tintt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1003,7 +946,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "khoalt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1016,7 +958,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "dont",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1029,7 +970,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "hieuvc",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1042,7 +982,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "huycb",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1055,7 +994,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phuctlb",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1068,7 +1006,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "khamvm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1081,7 +1018,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thanglh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1094,7 +1030,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phuctd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1107,7 +1042,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "luandm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1120,7 +1054,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tuth",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1133,7 +1066,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "dattt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1146,7 +1078,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "trungnm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1159,7 +1090,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "teocv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1172,7 +1102,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "Liemdh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1185,7 +1114,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "hiephh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1198,7 +1126,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phuchv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1211,7 +1138,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "datpq1",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1224,7 +1150,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phatct",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1237,7 +1162,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thuctm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1250,7 +1174,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "xuyenht",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1263,7 +1186,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "quipp",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1276,7 +1198,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tuanbq",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1289,7 +1210,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "mollvl",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1302,7 +1222,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thinhvc",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1315,7 +1234,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "trinv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1328,7 +1246,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "quonnv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1341,7 +1258,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "cuongtv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1354,7 +1270,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "hieutq",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1367,7 +1282,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tuanth",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1380,7 +1294,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "haidm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1393,7 +1306,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "loctv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1406,7 +1318,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhuongdn",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1419,7 +1330,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "admin",
     username: "cuongnv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1432,7 +1342,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "admin",
     username: "yennn",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1445,7 +1354,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "admin",
     username: "huantth",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1458,7 +1366,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "sondt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1471,7 +1378,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhamnx",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1484,7 +1390,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thachnv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1497,7 +1402,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "namnd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1510,7 +1414,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tinhkd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1523,7 +1426,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "taihv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1536,7 +1438,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "khoacv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1549,7 +1450,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "longdh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1562,7 +1462,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "khangtd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1575,7 +1474,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "linhnc",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1588,7 +1486,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "sangpv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1601,7 +1498,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "hienlq",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1614,7 +1510,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "bant",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1627,7 +1522,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "hieunv2",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1640,7 +1534,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "manht",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1653,7 +1546,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhungtt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1666,7 +1558,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "chiennv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1679,7 +1570,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhanlh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1692,7 +1582,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "chaulh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1705,7 +1594,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "datth",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1718,7 +1606,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "kiendt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1731,7 +1618,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tinhhm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1744,7 +1630,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "annlt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1757,7 +1642,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "linhpv1",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1770,7 +1654,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "laclv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1783,7 +1666,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "congnc",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1796,7 +1678,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "huynd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1809,7 +1690,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "yenqt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1822,7 +1702,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "annt1",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1835,7 +1714,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phonglh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1848,7 +1726,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "cuonglv2",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1861,7 +1738,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "chiennq",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1874,7 +1750,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "vinhtq",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1887,7 +1762,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phatth",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1900,7 +1774,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "huylq",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1913,7 +1786,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "khuonghd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1926,7 +1798,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tamnt1",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1939,7 +1810,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "Anlt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1952,7 +1822,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nguyenth",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1965,7 +1834,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "giangnt2",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1978,7 +1846,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "vuhd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -1991,7 +1858,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thais",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2004,7 +1870,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "lamdn",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2017,7 +1882,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "haindd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2030,7 +1894,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhul",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2043,7 +1906,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tungpt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2056,7 +1918,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "khoapt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2069,7 +1930,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phatdt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2082,7 +1942,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "danhnh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2095,7 +1954,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhanpt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2108,7 +1966,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "supervisor",
     username: "lenn",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2121,7 +1978,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "supervisor",
     username: "vietnlt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2134,7 +1990,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "supervisor",
     username: "chaulv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2147,7 +2002,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "supervisor",
     username: "trongnm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2160,7 +2014,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "supervisor",
     username: "nidx",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2173,7 +2026,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "chanhvm",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2186,7 +2038,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tannv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2199,7 +2050,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "thuatv",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2212,7 +2062,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhantp",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2225,7 +2074,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "luanhd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2238,7 +2086,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "nhannht",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2251,7 +2098,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "hienpt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2264,7 +2110,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "khanhnd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2277,7 +2122,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "emnh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2290,7 +2134,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "quynhkn",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2303,7 +2146,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "phongtt1",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2316,7 +2158,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "loitd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2329,7 +2170,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "honnh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2342,7 +2182,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "annh",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2355,7 +2194,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "tuyenhd",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2368,7 +2206,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "kietpt",
-    rawPassword: "password123",
     status: "active",
   },
   {
@@ -2381,7 +2218,6 @@ export const INITIAL_USERS: UserSeed[] = [
     department: "Vận hành 1",
     role: "viewer",
     username: "chikm",
-    rawPassword: "password123",
     status: "active",
   },
 ];
@@ -2411,6 +2247,7 @@ export async function seedUsersAndPositions(rawDb: ReturnType<typeof import("@/d
     "ALTER TABLE users ADD COLUMN email_work text",
     "ALTER TABLE users ADD COLUMN phone text",
     "ALTER TABLE users ADD COLUMN status text DEFAULT 'active' NOT NULL",
+    "ALTER TABLE users ADD COLUMN must_change_password integer DEFAULT 0 NOT NULL",
   ];
   for (const sql of alterColumns) {
     try {
@@ -2433,18 +2270,24 @@ export async function seedUsersAndPositions(rawDb: ReturnType<typeof import("@/d
   }
 
   // 4. Khởi tạo 124 Người dùng
+  // New accounts get a temporary password from the environment (never committed) and must change it at first login.
+  const initialPassword = process.env.INITIAL_USER_PASSWORD || "";
   let usersSeeded = 0;
+  let usersSkippedWithoutPassword = 0;
   for (const u of INITIAL_USERS) {
     const cleanUsername = u.username.trim().toLowerCase();
     try {
       const existing = await rawDb.prepare("SELECT id FROM users WHERE LOWER(username) = ?").bind(cleanUsername).first();
-      const pHash = hashPassword(u.rawPassword);
       if (!existing) {
+        if (initialPassword.length < 8) {
+          usersSkippedWithoutPassword++;
+          continue;
+        }
         await rawDb.prepare(
-          "INSERT INTO users (username, password_hash, display_name, role, employee_code, position, department, email_company, email_work, phone, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO users (username, password_hash, display_name, role, employee_code, position, department, email_company, email_work, phone, status, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
         ).bind(
           cleanUsername,
-          pHash,
+          hashPassword(initialPassword),
           u.displayName,
           u.role,
           u.employeeCode,
@@ -2475,5 +2318,5 @@ export async function seedUsersAndPositions(rawDb: ReturnType<typeof import("@/d
     }
   }
 
-  return { positionsSeeded, usersSeeded, totalUsers: INITIAL_USERS.length, totalPositions: DEFAULT_POSITIONS.length };
+  return { positionsSeeded, usersSeeded, usersSkippedWithoutPassword, totalUsers: INITIAL_USERS.length, totalPositions: DEFAULT_POSITIONS.length };
 }

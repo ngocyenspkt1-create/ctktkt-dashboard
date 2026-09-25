@@ -33,7 +33,7 @@ test("Danh sách Nhân sự tích hợp đủ nhân sự PXVH1 (>= 124) và thu�
     assert.ok(u.displayName, `Thiếu họ tên cho ${u.username}`);
     assert.ok(u.employeeCode, `Thiếu mã NV cho ${u.username}`);
     assert.ok(validPositions.has(u.position), `Cương vị không hợp lệ cho ${u.username}: ${u.position}`);
-    assert.ok(u.rawPassword.length >= 6, `Mật khẩu quá ngắn cho ${u.username}`);
+    assert.equal("rawPassword" in u, false, `Không được lưu mật khẩu rõ cho ${u.username}`);
   }
 });
 
