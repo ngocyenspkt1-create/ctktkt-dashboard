@@ -1,5 +1,6 @@
 import { getRawDb } from "@/db";
-import { BCSX_COAL_STOCK_24H_CODE, buildBcsxWorkbook, deriveA0Readings, fileNameFor, SHIFT_METRICS, SHIFT_TIME_SLOTS, type ExportUnit, type OperatingEvent, type ShiftMetric, type UnitTotals } from "@/lib/bcsx";
+import { calculateCoalStock24h } from "@/lib/coal-stock";
+import { buildBcsxWorkbook, deriveA0Readings, fileNameFor, SHIFT_METRICS, SHIFT_TIME_SLOTS, type ExportUnit, type OperatingEvent, type ShiftMetric, type UnitTotals } from "@/lib/bcsx";
 import { deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { deriveDailyValuesFromCtktkt } from "@/lib/daily-source-links";
 import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
@@ -10,11 +11,13 @@ const exportUnits = new Set(["S1", "S2", "A0"]);
 async function loadUnitData(date: string, unit: "S1" | "S2") {
   const db = getRawDb();
   const previousDate = previousIsoDate(date);
+  // The 24h coal stock chains from day 01 of the month, whose consumption needs the day before.
+  const rangeStart = previousIsoDate(`${date.slice(0, 8)}01`);
   const [readingsRes, eventsRes, stockRes, ktktRes, ktktShiftRes] = await Promise.all([
     db.prepare("SELECT time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date = ? AND unit = ?").bind(date, unit).all(),
     db.prepare("SELECT start_at AS startAt, end_at AS endAt, event_type AS eventType, description FROM operating_events WHERE operating_date = ? AND unit = ? ORDER BY start_at").bind(date, unit).all(),
-    db.prepare("SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date = ? AND field_code IN (?, ?, ?)").bind(date, BCSX_COAL_STOCK_24H_CODE, "GRID_RECEIVE_S1", "GRID_RECEIVE_S2").all(),
-    db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date IN (?, ?) AND field_code LIKE 'KTKT:%'").bind(previousDate, date).all(),
+    db.prepare("SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date = ? AND field_code IN (?, ?)").bind(date, "GRID_RECEIVE_S1", "GRID_RECEIVE_S2").all(),
+    db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date BETWEEN ? AND ? AND field_code LIKE 'KTKT:%'").bind(rangeStart, date).all(),
     db.prepare("SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date IN (?, ?)").bind(previousDate, date).all(),
   ]);
 
@@ -49,8 +52,7 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
   }
   const linked = deriveDailyValuesFromCtktkt(ktktByDate.get(date) || {}, ktktByDate.get(previousDate));
   const dailyValues = new Map((stockRes.results as Array<{ fieldCode: string; value: string }>).map(item => [item.fieldCode, item.value]));
-  const stockValue = Number(dailyValues.get(BCSX_COAL_STOCK_24H_CODE));
-  const stock24h = Number.isFinite(stockValue) ? stockValue : null;
+  const stock24h = calculateCoalStock24h(ktktByDate, date).stock;
   const numeric = (value?: string) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;

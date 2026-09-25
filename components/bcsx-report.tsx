@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
-import { BCSX_COAL_STOCK_24H_CODE, EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
+import { calculateCoalStock24h } from "@/lib/coal-stock";
+import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
 import { deriveDailyValuesFromCtktkt } from "@/lib/daily-source-links";
 import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { useSessionUser } from "@/components/session-context";
@@ -62,6 +63,11 @@ function ctktktEntriesByDate(entries: Array<{ operatingDate: string; cell: strin
   return byDate;
 }
 
+function coalStock24hText(byDate: Map<string, CtktktDayEntries>, date: string) {
+  const result = calculateCoalStock24h(byDate, date);
+  return { value: result.stock === null ? "" : String(Number(result.stock.toFixed(2))), missing: result.missing };
+}
+
 export function BcsxReport() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_bcsx");
@@ -73,6 +79,7 @@ export function BcsxReport() {
   const [totals, setTotals] = useState<Record<Unit, TotalsDraft>>({ S1: blankTotals(), S2: blankTotals() });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [coalStockMissing, setCoalStockMissing] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -120,7 +127,9 @@ export function BcsxReport() {
           ktktByDate.get(operatingDate) || {},
           ktktByDate.get(previousIsoDate(operatingDate)),
         );
-        const stock24h = byCode.get(BCSX_COAL_STOCK_24H_CODE) || "";
+        const coalStock = coalStock24hText(ktktByDate, operatingDate);
+        const stock24h = coalStock.value;
+        setCoalStockMissing(coalStock.missing);
 
         setTotals({
           S1: {
@@ -350,12 +359,6 @@ export function BcsxReport() {
     }
   }
 
-  function setTotal(field: keyof TotalsDraft, value: string) {
-    setTotals(old => field === "thanTonKho"
-      ? { S1: { ...old.S1, thanTonKho: value }, S2: { ...old.S2, thanTonKho: value } }
-      : { ...old, [unit]: { ...old[unit], [field]: value } });
-  }
-
   async function reloadTotalsFromCtktkt() {
     setError(null); setNotice(null);
     try {
@@ -372,7 +375,9 @@ export function BcsxReport() {
         ktktByDate.get(operatingDate) || {},
         ktktByDate.get(previousIsoDate(operatingDate)),
       );
-      const stock24h = byCode.get(BCSX_COAL_STOCK_24H_CODE) || "";
+      const coalStock = coalStock24hText(ktktByDate, operatingDate);
+      const stock24h = coalStock.value;
+      setCoalStockMissing(coalStock.missing);
 
       setTotals({
         S1: {
@@ -390,26 +395,9 @@ export function BcsxReport() {
           thanTonKho: stock24h,
         },
       });
-      setNotice(`Đã nạp lại 3 số liệu liên kết từ Chỉ tiêu KTKT và than tồn kho 24h đã lưu cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
+      setNotice(`Đã nạp lại số liệu liên kết và than tồn kho 24h từ Chỉ tiêu KTKT cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không tải lại được số liệu từ Chỉ tiêu KTKT.");
-    }
-  }
-
-  async function saveTotals() {
-    setSaving(true); setError(null); setNotice(null);
-    try {
-      const t = totals[unit];
-      const entries = [{ operatingDate, fieldCode: BCSX_COAL_STOCK_24H_CODE, value: t.thanTonKho.trim() }];
-      const res = await fetch("/api/daily-inputs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period: operatingDate.slice(0, 7), entries }) });
-      const json = await res.json() as { saved?: number; error?: string };
-      if (!res.ok || json.error) throw new Error(json.error || "Không lưu được số liệu tổng ngày.");
-
-      setNotice("Đã lưu than tồn kho 24h dùng chung cho BCSX S1, S2 và A0.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Không lưu được số liệu tổng ngày.");
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -859,7 +847,7 @@ export function BcsxReport() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-extrabold text-[#173b64]">2. Số liệu tổng ngày — tổ máy {unit}</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Sản lượng đầu cực, thương phẩm và than tiêu thụ tự liên kết từ <Link href="/ctktkt-report" className="font-semibold text-[#334785] underline">Chỉ tiêu KTKT</Link>. Riêng <b>than tồn kho 24h</b> nhập tay tại đây, dùng chung khi xuất BCSX S1, S2 và A0; không lấy từ tồn kho 06h00 của QLKT.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Toàn bộ số liệu tổng ngày tự liên kết từ <Link href="/ctktkt-report" className="font-semibold text-[#334785] underline">Chỉ tiêu KTKT</Link>. <b>Than tồn kho 24h</b> = tồn kho 24h ngày D-1 + than nhập 24h (I36) − than tiêu thụ quy ẩm S1 + S2, dùng chung khi xuất BCSX S1, S2 và A0.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -869,15 +857,6 @@ export function BcsxReport() {
             title="Nạp lại số liệu Mục 2 mới nhất từ trang Chỉ tiêu KTKT"
           >
             🔄 Nạp lại từ Chỉ tiêu KTKT
-          </button>
-          <button
-            type="button"
-            disabled={saving || isViewer}
-            title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
-            onClick={() => void saveTotals()}
-            className="rounded-lg bg-[#334785] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50"
-          >
-            {saving ? "Đang lưu…" : "Lưu than tồn kho 24h"}
           </button>
         </div>
       </div>
@@ -896,10 +875,11 @@ export function BcsxReport() {
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">
           Than tồn kho 24h (tấn, toàn nhà máy)
-          <input value={totals[unit].thanTonKho} onChange={e => setTotal("thanTonKho", e.target.value)} inputMode="decimal" placeholder="—" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-right font-mono text-xs text-black outline-none focus:border-[#334785]"/>
+          <input disabled value={totals[unit].thanTonKho} inputMode="decimal" placeholder="—" title="Tự tính từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
       </div>
-      <p className="mt-2 text-[11px] text-slate-400">Ba ô màu xanh là dữ liệu liên kết, không nhập lại. Than tồn kho 24h là số nhập tay độc lập với than tồn kho 06h00 trên Dữ liệu các tháng.</p>
+      {coalStockMissing && <p className="mt-2 text-[11px] font-semibold text-amber-700">Than tồn kho 24h chưa tính được: {coalStockMissing} Nhập tại trang Chỉ tiêu KTKT, Cụm 1.</p>}
+      <p className="mt-2 text-[11px] text-slate-400">Các ô màu xanh là dữ liệu liên kết, không nhập lại. Than tồn kho 24h ngày 01 nhập một lần tại Chỉ tiêu KTKT; các ngày sau tự tính, độc lập với than tồn kho 06h00 trên Dữ liệu các tháng.</p>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

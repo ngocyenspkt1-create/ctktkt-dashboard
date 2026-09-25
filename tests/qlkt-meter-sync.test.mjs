@@ -106,7 +106,8 @@ test('BCSX imports operating events from the dispatch workbook and sources Secti
   assert.doesNotMatch(dailySource, /type:"SYNC_UNIFIED"/);
   assert.match(source, /\/api\/ctktkt-report/);
   assert.match(source, /deriveDailyValuesFromCtktkt/);
-  assert.match(source, /BCSX_COAL_STOCK_24H_CODE/);
+  assert.match(source, /calculateCoalStock24h/);
+  assert.doesNotMatch(source, /BCSX_COAL_STOCK_24H_CODE/);
   assert.doesNotMatch(source, /byCode\.get\("AR"\)/);
   assert.match(ctktktSource, /SYNC_PMIS_02PD/);
   assert.match(ctktktSource, /sanitizeCtktktPmisSyncEntries\(payload\.entries\)/);

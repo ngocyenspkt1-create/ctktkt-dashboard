@@ -69,6 +69,11 @@ export const CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS = [
   { cell: "H94", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Dầu về lò hơi phụ · Tách lưới II", row: 94, column: 8 },
 ] as const;
 
+// Chỉ nhập tại ngày 01; các ngày sau tự tính trong lib/coal-stock.ts.
+export const CTKTKT_COAL_STOCK_FIELDS = [
+  { cell: "COAL_STOCK_24H_START", section: "kpi_summary", sectionLabel: "Chỉ tiêu KTKT tổng hợp", label: "Than tồn kho 24h ngày đầu tháng (t)", row: 0, column: 0 },
+] as const;
+
 export const CTKTKT_TEXT_INPUT_CELLS = new Set<string>([
   ...CTKTKT_COAL_ADJUSTMENT_NOTE_FIELDS.map(field => field.cell),
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS.map(field => field.cell),
@@ -81,6 +86,7 @@ export const CTKTKT_TEXT_INPUT_CELLS = new Set<string>([
 export const CTKTKT_NON_WORKBOOK_INPUT_CELLS = new Set<string>([
   ...CTKTKT_TEXT_INPUT_CELLS,
   ...CTKTKT_WATER_ADJUSTMENT_FIELDS.map(field => field.cell),
+  ...CTKTKT_COAL_STOCK_FIELDS.map(field => field.cell),
   "STARTUP_UNIT",
   "STARTUP_EVENT",
   "STARTUP_OIL_START_TIME",
@@ -127,6 +133,7 @@ export const CTKTKT_EXTRA_INPUT_FIELDS = [
   ...CTKTKT_COAL_ADJUSTMENT_NOTE_FIELDS,
   ...CTKTKT_WATER_ADJUSTMENT_FIELDS,
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS,
+  ...CTKTKT_COAL_STOCK_FIELDS,
   ...CTKTKT_COAL_BLEND_FIELDS,
 ] as const;
 

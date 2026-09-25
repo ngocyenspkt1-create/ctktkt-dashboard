@@ -8,6 +8,7 @@ import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_TEXT_INPUT_CELLS, normalizeCtktktInpu
 import { applyCtktktFixedValue } from "@/lib/ctktkt-defaults";
 import { NH3_DCS_START_METER_CELLS } from "@/lib/ctktkt-report";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
+import { COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 
 const fieldCells = new Set<string>([
   ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
@@ -104,6 +105,9 @@ export async function POST(request: Request) {
       const isText = CTKTKT_TEXT_INPUT_CELLS.has(cell) || cell === "T181";
       const value = normalizeCtktktInputValue(cell, applyCtktktFixedValue(cell, entry.value));
       if (!fieldCells.has(cell)) throw new Error(`Ô ${cell || "không rõ"} không nằm trong mẫu được phép nhập.`);
+      if (cell === COAL_STOCK_24H_START_CELL && value && !String(body.operatingDate).endsWith("-01")) {
+        throw new Error("Than tồn kho 24h chỉ nhập tại ngày 01; các ngày sau tự tính.");
+      }
       if (cell === "STARTUP_UNIT" && value && value !== "S1" && value !== "S2") {
         throw new Error("Tổ máy sự kiện chỉ được chọn S1 hoặc S2.");
       }

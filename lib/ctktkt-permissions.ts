@@ -101,7 +101,7 @@ export const CTKTKT_GROUP_META: Record<
 
 // Tập hợp ô theo nhóm
 const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
-  kpi_summary: new Set(["I35", "I36", "W87"]),
+  kpi_summary: new Set(["I35", "I36", "W87", "COAL_STOCK_24H_START"]),
   tkd_trend: new Set([
     "M9", "N9", "O9", "P9", "Q9", "R9",     // P TD 911
     "M10", "N10", "O10", "P10", "Q10", "R10", // P TD 912

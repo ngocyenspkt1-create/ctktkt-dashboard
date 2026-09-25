@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
+import { calculateCoalStock24h, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 import { useSessionUser } from "@/components/session-context";
 import { defaultOperatingDate } from "@/lib/operating-date";
 import {
@@ -444,6 +445,16 @@ export function CtktktReport() {
     combined[CTKTKT_INSTALLED_CAPACITY_CELL] = CTKTKT_INSTALLED_CAPACITY_MW;
     return applyNh3StartLevelCarryover(combined, previous);
   }, [byDate, linkedByDate, date, previous]);
+
+  const isFirstDayOfMonth = date.endsWith("-01");
+  const coalStock = useMemo(() => {
+    const merged = new Map<string, CtktktDayEntries>();
+    for (const day of new Set([...Object.keys(byDate), ...Object.keys(linkedByDate)])) {
+      merged.set(day, { ...(linkedByDate[day] || {}), ...(byDate[day] || {}) });
+    }
+    merged.set(date, current);
+    return calculateCoalStock24h(merged, date);
+  }, [byDate, linkedByDate, date, current]);
 
   const startupUnit: StartupUnit | "" = current.STARTUP_UNIT === "S1" || current.STARTUP_UNIT === "S2"
     ? current.STARTUP_UNIT
@@ -940,6 +951,7 @@ export function CtktktReport() {
       group?: CtktktFieldGroup;
       compact?: boolean;
       maxLength?: number;
+      readOnlyValue?: string;
     },
   ) => {
     const isWaterLinked = CTKTKT_WATER_LINKED_CELLS.has(cell);
@@ -947,11 +959,14 @@ export function CtktktReport() {
     const isFixed = cell === CTKTKT_INSTALLED_CAPACITY_CELL;
     const isNh3Carryover = NH3_START_LEVEL_CELLS.has(cell);
     const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isQlktProduction || isFixed || isNh3Carryover;
-    const canEditThis = !isLinked && canEditCtktktField(user, cell);
-    const value = current[cell] || "";
+    const isComputed = options?.readOnlyValue !== undefined;
+    const canEditThis = !isLinked && !isComputed && canEditCtktktField(user, cell);
+    const value = isComputed ? options.readOnlyValue ?? "" : current[cell] || "";
 
     const groupMeta = options?.group ? CTKTKT_GROUP_META[options.group] : null;
-    const tooltip = isLinked
+    const tooltip = isComputed
+      ? `${cell}: Tự tính, không nhập tay`
+      : isLinked
       ? isFixed
         ? `${cell}: Công suất đặt cố định của NMNĐ Duyên Hải 1 (${CTKTKT_INSTALLED_CAPACITY_MW} MW)`
         : isNh3Carryover
@@ -1276,15 +1291,35 @@ export function CtktktReport() {
                   </tr>
                   <tr className="bg-amber-50/30">
                     <td className="p-2 font-bold text-amber-950">
-                      Lượng than nhập trong ngày (Ô I36)
+                      Than nhập 24h (Ô I36)
                     </td>
                     <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
-                      Cộng dồn vào lượng than tồn kho ngày D
+                      Dùng tính than tồn kho 24h cho Nhập liệu BCSX
                     </td>
                     <td colSpan={2} className="p-1.5 text-right w-36">
                       {renderCellInput("I36", {
                         placeholder: "0",
                         group: "kpi_summary",
+                      })}
+                    </td>
+                    <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
+                  </tr>
+                  <tr className="bg-amber-50/30">
+                    <td className="p-2 font-bold text-amber-950">
+                      Than tồn kho 24h
+                    </td>
+                    <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
+                      {isFirstDayOfMonth
+                        ? "Nhập một lần tại ngày 01 · Các ngày sau tự tính và tự điền sang Nhập liệu BCSX"
+                        : coalStock.missing
+                          ? coalStock.missing
+                          : "Tồn kho 24h ngày D-1 + Than nhập 24h (I36) − Than tiêu thụ quy ẩm S1 + S2 · Tự điền sang Nhập liệu BCSX"}
+                    </td>
+                    <td colSpan={2} className="p-1.5 text-right w-36">
+                      {renderCellInput(COAL_STOCK_24H_START_CELL, {
+                        placeholder: isFirstDayOfMonth ? "Nhập ngày 01" : "—",
+                        group: "kpi_summary",
+                        readOnlyValue: isFirstDayOfMonth ? undefined : coalStock.stock === null ? "" : format(coalStock.stock),
                       })}
                     </td>
                     <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
@@ -3529,7 +3564,12 @@ export function CtktktReport() {
                           </span>
                         </div>
                         <div className="w-20 shrink-0">
-                          {renderCellInput(f.cell, { compact: true })}
+                          {renderCellInput(f.cell, {
+                            compact: true,
+                            readOnlyValue: f.cell === COAL_STOCK_24H_START_CELL && !isFirstDayOfMonth
+                              ? coalStock.stock === null ? "" : format(coalStock.stock)
+                              : undefined,
+                          })}
                         </div>
                       </div>
                     );
