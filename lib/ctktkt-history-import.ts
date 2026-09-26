@@ -1,6 +1,8 @@
 import * as XLSX from "xlsx";
 import { CTKTKT_DAY03_INPUT_CELLS } from "./ctktkt-fields.generated.ts";
 import {
+  CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS,
+  CTKTKT_CARRY_FORWARD_INPUT_CELLS,
   CTKTKT_COAL_ADJUSTMENT_FIELDS,
   CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS,
   CTKTKT_NON_WORKBOOK_INPUT_CELLS,
@@ -190,8 +192,14 @@ export async function buildCtktktHistoryImportPackage(
   const throughDay = requested?.day ?? Math.min(named!.throughDay, Math.max(...numericSheets, 0));
   if (!throughDay) throw new Error("File không có các sheet ngày 01, 02, ... để nhập.");
 
+  // Hourly meters, HFO tanks and TD21 readings exist in the source but not in the old template's input list.
+  const workbookExtraCells = [
+    ...CTKTKT_CARRY_FORWARD_INPUT_CELLS,
+    ...CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS.filter(field => field.section === "power_meters").map(field => field.cell),
+  ];
   const inputCells = [...new Set([
     ...CTKTKT_DAY03_INPUT_CELLS,
+    ...workbookExtraCells,
     ...CTKTKT_BCSX_LINKED_CELLS,
     ...CTKTKT_WATER_LINKED_CELLS,
   ])].filter(cell => !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(cell));

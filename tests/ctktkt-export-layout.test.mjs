@@ -18,27 +18,64 @@ async function loadTemplate() {
 
 const formula = cell => cell.value?.formula ?? null;
 
-test("day sheets write cumulative steam to the template's row 55 and drop its sample values", async () => {
-  const sheet = (await loadTemplate()).getWorksheet("24");
-  assert.equal(sheet.getCell("W55").value, 8418.28, "template ships sample steam values");
-  assert.equal(formula(sheet.getCell("W56")), "W55");
+test("day sheets use the source steam block at rows 53-60 and drop the template samples", async () => {
+  const { sanitizeCtktktTemplate } = await import("../lib/ctktkt-export-layout.ts");
+  const workbook = await loadTemplate();
+  sanitizeCtktktTemplate(workbook);
+  const sheet = workbook.getWorksheet("24");
+  assert.equal(sheet.getCell("V54").value, "Tổng lưu lượng hơi");
+  assert.equal(sheet.getCell("W53").value, 6);
+  assert.equal(sheet.getCell("AL53").value, 24);
+  assert.equal(formula(sheet.getCell("W55")), "W54");
+  assert.equal(formula(sheet.getCell("AL55")), "AL54-AK54");
 
   prepareCtktktDaySheet(sheet, "25");
-  for (const column of ["W", "AB", "AG", "AL"]) assert.equal(sheet.getCell(`${column}55`).value, null);
+  for (const column of ["W", "AB", "AG", "AL"]) assert.equal(sheet.getCell(`${column}54`).value, null);
   for (const cell of ["W49", "X49", "AG49", "AH49"]) assert.equal(sheet.getCell(cell).value, null);
 
-  const s2 = { AG54: 8147.96, AH54: 13680.29, AI54: 19944.19, AJ54: 27439.38, AK54: 35021.28, AL54: 39008 };
-  for (const [cell, value] of Object.entries(s2)) sheet.getCell(ctktktExportCell(cell, true)).value = value;
-  assert.equal(sheet.getCell("AL55").value, 39008);
-  assert.equal(sheet.getCell("AF54").value, "S2", "header row must stay intact");
-  assert.equal(formula(sheet.getCell("AJ59")), "AL55");
-  assert.equal(formula(sheet.getCell("Y59")), "AB56+'25'!W55");
-  assert.equal(formula(sheet.getCell("AI59")), "AL56+'25'!AG55");
-  assert.deepEqual(ctktktDateLabelCells(true), ["Z58", "AJ58"]);
-  assert.equal(ctktktExportCell("AG54", false), "AG54", "d-1 keeps the source layout");
+  sheet.getCell(ctktktExportCell("AL54", true)).value = 39008;
+  assert.equal(sheet.getCell("AL54").value, 39008);
+  assert.equal(formula(sheet.getCell("AJ58")), "AL54");
+  assert.equal(formula(sheet.getCell("Y58")), "AB55+'25'!W55");
+  assert.equal(formula(sheet.getCell("AI58")), "AL55+'25'!AG55");
+  assert.equal(formula(sheet.getCell("Z59")), "(Z58*10^6)/(E20*1000)");
+  assert.equal(formula(sheet.getCell("AJ60")), "(AJ58*10^6)/(H21*1000)");
+  assert.equal(sheet.getCell("V61").value, null);
+  assert.deepEqual(ctktktDateLabelCells(true), ["Z57", "AJ57"]);
 
   prepareCtktktDaySheet(sheet, null);
-  assert.equal(formula(sheet.getCell("Y59")), "AB56");
+  assert.equal(formula(sheet.getCell("Y58")), "AB55");
+});
+
+test("day sheets carry the source shift statistics, HFO headers and report side calculations", async () => {
+  const { sanitizeCtktktTemplate } = await import("../lib/ctktkt-export-layout.ts");
+  const workbook = await loadTemplate();
+  sanitizeCtktktTemplate(workbook);
+  const sheet = workbook.getWorksheet("25");
+  assert.equal(formula(sheet.getCell("Z30")), "(Z8-Y8)");
+  assert.equal(formula(sheet.getCell("AJ34")), "AJ9-AI9");
+  assert.equal(formula(sheet.getCell("Y33")), "Y32+Y31");
+  assert.equal(formula(sheet.getCell("AA35")), "(AA28*10^6)/(AA30*1000)");
+  assert.equal(formula(sheet.getCell("AK32")), "AK11-AI11", "keeps the correct 14h-22h interval");
+  assert.equal(formula(sheet.getCell("AG15")).includes("'25'!"), false);
+  assert.equal(sheet.getCell("M51").value, 6);
+  assert.equal(sheet.getCell("N59").value, "Nhiệt độ");
+  assert.equal(sheet.getCell("AO87").value, 24.421265114971156);
+  assert.equal(sheet.getCell("AL92").value, 0);
+  assert.equal(formula(sheet.getCell("I163")), "(E162+F162)/2");
+  assert.equal(formula(sheet.getCell("L162")), "L158+L157+I24");
+});
+
+test("coal-scale corrections are folded into the shift formulas and the unit totals like the source", async () => {
+  const { applyCtktktCoalAdjustments } = await import("../lib/ctktkt-export-layout.ts");
+  const sheet = (await loadTemplate()).getWorksheet("25");
+  sheet.getCell("AB28").value = { formula: "SUM(AB16:AB27)-SUM(Z16:Z27)" };
+  sheet.getCell("AA28").value = 40.42;
+  applyCtktktCoalAdjustments(sheet, { "KTKT:AA28": "40.42", "KTKT:Y28": "-2.8" });
+  assert.equal(formula(sheet.getCell("AB28")), "SUM(AB16:AB27)-SUM(Z16:Z27)+40.42");
+  assert.equal(sheet.getCell("AA28").value, 0);
+  assert.equal(formula(sheet.getCell("E19")), "SUM(E7:E18)+37.62");
+  assert.equal(formula(sheet.getCell("H19")), "SUM(H7:H18)");
 });
 
 test("previous-month sheet links its night shift to day 01 instead of an external workbook", async () => {
@@ -108,19 +145,26 @@ test("night shift uses day D+1 for electricity, coal and steam, and rates use ro
   assert.equal(formula(sheet.getCell("AI44")), "'24'!AG11-AK11");
   assert.equal(formula(sheet.getCell("Y46")), "AB28+'24'!W28");
   assert.equal(formula(sheet.getCell("AI46")), "AL28+'24'!AG28");
-  assert.equal(formula(sheet.getCell("Y60")), "(Y59*10^6)/(Y41*1000)");
-  assert.equal(formula(sheet.getCell("AI61")), "(AI59*10^6)/(AI42*1000)");
+  assert.equal(formula(sheet.getCell("Y59")), "(Y58*10^6)/(Y41*1000)");
+  assert.equal(formula(sheet.getCell("AI60")), "(AI58*10^6)/(AI42*1000)");
 
   prepareCtktktDaySheet(sheet, null);
   assert.equal(formula(sheet.getCell("Y41")), "AB8-AA8");
   assert.equal(formula(sheet.getCell("Y46")), "AB28");
 });
 
-test("auxiliary power adds grid-received electricity and grinding balls default to 150", async () => {
+test("auxiliary power adds grid-received electricity only for a stopped unit; a running unit keeps it in M157:M160", async () => {
   const sheet = (await loadTemplate()).getWorksheet("23");
-  applyCtktktDailyCarryovers(sheet, { GRID_RECEIVE_S1: "221.5648" }, undefined, "22");
+  applyCtktktDailyCarryovers(sheet, { GRID_RECEIVE_S1: "221.5648", B: "0" }, undefined, "22");
   assert.equal(formula(sheet.getCell("L157")), "J157-K157+221.5648");
   assert.equal(formula(sheet.getCell("L158")), "J158-K158");
+
+  const running = (await loadTemplate()).getWorksheet("25");
+  applyCtktktDailyCarryovers(running, { GRID_RECEIVE_S1: "261.45", B: "3.19424" }, undefined, "24");
+  assert.equal(formula(running.getCell("L157")), "J157-K157");
+  assert.equal(running.getCell("M158").value, 261.45);
+  assert.equal(formula(running.getCell("M159")), "M158+L157");
+  assert.equal(formula(running.getCell("M160")), "M159+L158+I24");
   assert.equal(sheet.getCell("E39").value, 150);
   assert.equal(sheet.getCell("H39").value, 150);
 });

@@ -4,7 +4,7 @@ import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_DAY03_INPUT_CELLS } from "@/lib/ctktkt-fields.generated";
-import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, CTKTKT_OPERATING_HOURS_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
+import { CTKTKT_CARRY_FORWARD_INPUT_CELLS, CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, CTKTKT_OPERATING_HOURS_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
 import { loadCtktktOperatingHours } from "@/lib/ctktkt-operating-hours-db";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
@@ -12,7 +12,7 @@ import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/
 import { deriveNh3StartLevels, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { applyCtktktStartupEventMetadata } from "@/lib/ctktkt-startup-event";
 import {
-  applyCtktktCoalAdjustmentTotals,
+  applyCtktktCoalAdjustments,
   applyCtktktDailyCarryovers,
   CTKTKT_GRINDING_BALL_DEFAULT,
   ctktktDateLabelCells,
@@ -160,6 +160,19 @@ export async function GET(request: Request) {
     }
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
 
+    // Hourly meters and tank levels left blank keep the latest earlier reading, as the source
+    // workbook does by copying the previous day's sheet.
+    const sortedDates = [...byDate.keys()].sort();
+    const applyCarryForward = (sheet: ExcelJS.Worksheet, date: string, row: Record<string, string>) => {
+      for (const cell of CTKTKT_CARRY_FORWARD_INPUT_CELLS) {
+        if (numeric(row[`KTKT:${cell}`]) !== null) continue;
+        for (let index = sortedDates.length - 1; index >= 0; index -= 1) {
+          if (sortedDates[index] >= date) continue;
+          const earlier = numeric(byDate.get(sortedDates[index])?.[`KTKT:${cell}`]);
+          if (earlier !== null) { sheet.getCell(cell).value = earlier; break; }
+        }
+      }
+    };
     const applyOperatingHours = (sheet: ExcelJS.Worksheet, date: string) => {
       const totals = operatingHours.totalsByDate.get(date);
       for (const cell of CTKTKT_OPERATING_HOURS_CELLS) sheet.getCell(cell).value = totals ? totals[cell] : null;
@@ -210,7 +223,7 @@ export async function GET(request: Request) {
       applyWaterLinks(previousSheet, previous);
       applyWaterAdjustments(previousSheet, previousRow || {});
       applyCoalAdjustmentNotes(previousSheet, previousRow || {});
-      applyCtktktCoalAdjustmentTotals(previousSheet);
+      applyCtktktCoalAdjustments(previousSheet, previousRow || {});
       applyDateLabels(previousSheet, previous, false);
     }
 
@@ -232,7 +245,8 @@ export async function GET(request: Request) {
         ? previous
         : `${period}-${String(day - 1).padStart(2, "0")}`;
       applyCtktktDailyCarryovers(sheet, row, byDate.get(previousDate), previousSheetName);
-      applyCtktktCoalAdjustmentTotals(sheet);
+      applyCarryForward(sheet, date, row);
+      applyCtktktCoalAdjustments(sheet, row);
       applyOperatingHours(sheet, date);
       applyNh3StartLevelCarryover(sheet, byDate.get(previousDate));
       applyCtktktStartupEventMetadata(sheet, row);
