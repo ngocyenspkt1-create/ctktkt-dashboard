@@ -9,6 +9,8 @@ import { applyCtktktFixedValue } from "@/lib/ctktkt-defaults";
 import { NH3_DCS_START_METER_CELLS } from "@/lib/ctktkt-report";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
+import { CTKTKT_OPERATING_HOURS_CELLS } from "@/lib/ctktkt-extra-fields";
+import { loadCtktktOperatingHours } from "@/lib/ctktkt-operating-hours-db";
 
 const fieldCells = new Set<string>([
   ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
@@ -65,8 +67,12 @@ export async function GET(request: Request) {
       for (const [cell, value] of Object.entries(derived.entries)) linkedEntries.push({ operatingDate, cell, value });
       for (const warning of derived.warnings) warnings.push({ operatingDate, ...warning });
     }
+    const hourCells = new Set<string>(CTKTKT_OPERATING_HOURS_CELLS);
+    // Giờ lũy kế luôn cộng dồn từ QLKT; bỏ qua số nhập tay cũ nếu còn trong cơ sở dữ liệu.
     const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry =>
-      !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell) && !CTKTKT_WATER_LINKED_CELLS.has(entry.cell));
+      !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell) && !CTKTKT_WATER_LINKED_CELLS.has(entry.cell) && !hourCells.has(entry.cell));
+    const operatingHours = await loadCtktktOperatingHours(db, from, next);
+    linkedEntries.push(...operatingHours.entries);
     const nonEmptyManualKeys = new Set(manualEntries.filter(e => e.value !== "" && e.value !== null && e.value !== undefined).map(e => `${e.operatingDate}|${e.cell}`));
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
     for (const operatingDate of new Set(waterLogs.map(log => log.logDate))) {
@@ -76,7 +82,7 @@ export async function GET(request: Request) {
         }
       }
     }
-    return Response.json({ entries: manualEntries, linkedEntries, warnings }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ entries: manualEntries, linkedEntries, warnings, operatingHoursMissingDates: operatingHours.missingDates }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Chưa tải được dữ liệu Chỉ tiêu KTKT." }, { status: 503 });
   }

@@ -14,12 +14,39 @@ import { defaultOperatingDate } from "@/lib/operating-date";
 import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { CTKTKT_LINKED_DAILY_CODES, deriveDailyValuesFromCtktkt, QLKT_DIRECT_DAILY_CODES } from "@/lib/daily-source-links";
 import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXTENSION_VERSION } from "@/lib/qlkt-extension-version";
+import { buildQlktRangeEntries, listIsoDates, QLKT_RANGE_SYNC_DEFAULT_FROM } from "@/lib/qlkt-range-sync";
 
 type Group = "production" | "environment" | "operation";
 type Field = { code: string; label: string; unit?: string; input?: boolean; noteFor?: string; width?: string };
 type DailyRow = Record<string, string>;
 type LoadedEntry = { operatingDate: string; fieldCode: string; value: string; note: string };
 type CtktktLoadedEntry = { operatingDate: string; cell: string; value: string };
+type QlktResult = { ok?: boolean; payload?: unknown; error?: string };
+type RangeState = { running: boolean; done: number; total: number; saved: number; current: string; failed: string[] };
+
+const displayDate = (iso: string) => iso.split("-").reverse().join("/");
+
+/** Gửi SYNC_ALL cho một ngày và chờ đúng kết quả của yêu cầu đó (không đụng luồng đồng bộ một ngày). */
+function requestQlktDay(operatingDate: string, timeoutMs = 360000) {
+  return new Promise<QlktResult>(resolve => {
+    const channel = "ctktkt-qlkt-sync";
+    const requestId = crypto.randomUUID();
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      const data = event.data as { channel?: string; sender?: string; type?: string; requestId?: string; result?: QlktResult };
+      if (!data || data.channel !== channel || data.sender !== "ctktkt-extension" || data.type !== "SYNC_ALL_RESULT" || data.requestId !== requestId) return;
+      window.clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+      resolve(data.result || { ok: false });
+    };
+    const timer = window.setTimeout(() => {
+      window.removeEventListener("message", onMessage);
+      resolve({ ok: false, error: "QLKT phản hồi quá lâu" });
+    }, timeoutMs);
+    window.addEventListener("message", onMessage);
+    window.postMessage({ channel, sender: "ctktkt-web", type: "SYNC_ALL", requestId, operatingDate }, window.location.origin);
+  });
+}
 
 function directQlktPayload(payload: QlktSyncPayload): QlktSyncPayload {
   return { ...payload, entries: payload.entries.filter(entry => QLKT_DIRECT_DAILY_CODES.has(entry.fieldCode)) };
@@ -79,6 +106,9 @@ export function DailyProductionTable() {
   const [focusedCell, setFocusedCell] = useState("");
   const [ctktktLinkedCells, setCtktktLinkedCells] = useState<Set<string>>(new Set());
   const [chartField, setChartField] = useState<Field | null>(null);
+  const [rangeFrom, setRangeFrom] = useState(QLKT_RANGE_SYNC_DEFAULT_FROM), [rangeTo, setRangeTo] = useState(defaultOperatingDate);
+  const [rangeState, setRangeState] = useState<RangeState | null>(null), [reloadKey, setReloadKey] = useState(0);
+  const rangeStopRef = useRef(false);
   // Bấm vào 1 ô (dù là ô nhập liệu hay ô kết quả tính) sẽ tô vàng ô đó để dễ dò theo hàng/cột trên
   // bảng rộng nhiều cột; bấm lại đúng ô đó để bỏ tô.
   const [selectedCell, setSelectedCell] = useState("");
@@ -127,7 +157,7 @@ export function DailyProductionTable() {
         }
       }
       setCtktktLinkedCells(linked); setRows(next);
-    }).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Không tải được dữ liệu.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);}); return ()=>controller.abort(); },[period]);
+    }).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Không tải được dữ liệu.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);}); return ()=>controller.abort(); },[period,reloadKey]);
 
   useEffect(() => {
     const payload = decodeQlktSyncHash(window.location.hash);
@@ -214,6 +244,50 @@ export function DailyProductionTable() {
     qlktRequestRef.current={id:requestId,timer};setSyncingQlkt(true);setSyncProgress("Đang đọc tồn kho 06h00, nước và thời gian vận hành từ QLKT…");
     window.postMessage({channel:"ctktkt-qlkt-sync",sender:"ctktkt-web",type:"SYNC_ALL",requestId,operatingDate:syncDate},window.location.origin);
   }
+  async function syncQlktRange(){
+    setError("");setMessage("");
+    if(!canSyncDaily){setError("Tài khoản chưa có quyền đồng bộ dữ liệu ngày từ QLKT.");return;}
+    if(!extensionVersion||extensionOutdated){setSyncHelp(true);setError("Chưa kết nối tiện ích QLKT hoặc tiện ích chưa Reload.");return;}
+    if(dirty.current.size){setError("Bảng đang có thay đổi chưa lưu. Hãy lưu hoặc tải lại trang trước khi đồng bộ nhiều ngày.");return;}
+    const dates=listIsoDates(rangeFrom,rangeTo);
+    if(!dates.length){setError("Khoảng ngày không hợp lệ (tối đa 400 ngày, từ ngày phải trước đến ngày).");return;}
+    rangeStopRef.current=false;
+    let wakeLock:{release:()=>Promise<void>}|null=null;
+    try{wakeLock=await (navigator as Navigator&{wakeLock?:{request:(type:"screen")=>Promise<{release:()=>Promise<void>}>}}).wakeLock?.request("screen")??null;}catch{wakeLock=null;}
+    const notesByPeriod=new Map<string,Map<string,string>>();
+    const failed:string[]=[];let saved=0;
+    setRangeState({running:true,done:0,total:dates.length,saved:0,current:dates[0],failed:[]});
+    for(const [index,date] of dates.entries()){
+      if(rangeStopRef.current)break;
+      setRangeState(state=>state&&{...state,current:date});
+      const result=await requestQlktDay(date);
+      const payload=result.ok?validateQlktSyncPayload(result.payload):null;
+      if(!payload||payload.operatingDate!==date){failed.push(`${displayDate(date)}: ${result.error||"dữ liệu chưa đủ hoặc sai ngày"}`);}
+      else{
+        const monthKey=date.slice(0,7);
+        try{
+          if(!notesByPeriod.has(monthKey)){
+            const response=await fetch(`/api/daily-inputs?period=${monthKey}`,{cache:"no-store"});
+            const body=await response.json() as {entries?:LoadedEntry[];error?:string};
+            if(!response.ok)throw new Error(body.error||"không đọc được ghi chú hiện có");
+            notesByPeriod.set(monthKey,new Map((body.entries||[]).filter(entry=>entry.note).map(entry=>[`${entry.operatingDate}|${entry.fieldCode}`,entry.note])));
+          }
+          const entries=buildQlktRangeEntries(date,directQlktPayload(payload).entries.map(entry=>({fieldCode:entry.fieldCode,value:normalizeQlktValue(entry.value)})),notesByPeriod.get(monthKey)!);
+          if(entries.length){
+            const response=await fetch("/api/daily-inputs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({period:monthKey,entries})});
+            const body=await response.json() as {error?:string};
+            if(!response.ok)throw new Error(body.error||"không lưu được");
+            saved+=entries.length;
+          }
+        }catch(reason){failed.push(`${displayDate(date)}: ${reason instanceof Error?reason.message:"không lưu được"}`);}
+      }
+      setRangeState(state=>state&&{...state,done:index+1,saved,failed:[...failed]});
+    }
+    try{await wakeLock?.release();}catch{}
+    setRangeState(state=>state&&{...state,running:false});
+    setReloadKey(key=>key+1);
+    setMessage(`${rangeStopRef.current?"Đã dừng":"Đã xong"} đồng bộ QLKT ${displayDate(rangeFrom)}–${displayDate(rangeTo)}: lưu ${saved} ô${failed.length?`, ${failed.length} ngày lỗi (xem danh sách bên dưới, có thể chạy lại riêng các ngày đó)`:""}.`);
+  }
   function noteButton(day:number, field:Field){ const hasNote=Boolean(rows[day][`${field.code}_NOTE`]?.trim()); return <button type="button" onClick={event=>{event.stopPropagation();openNote(day,field);}} aria-label={`${hasNote?"Xem hoặc sửa":"Thêm"} ghi chú cho ${field.label}, ngày ${day+1}`} title={hasNote?rows[day][`${field.code}_NOTE`]:"Thêm ghi chú"} className={`absolute right-0 top-0 z-10 h-4 w-4 ${hasNote?"opacity-100":"opacity-0 group-hover:opacity-100 focus:opacity-100"}`}><span className={`absolute right-0 top-0 h-0 w-0 border-l-[10px] border-l-transparent ${hasNote?"border-t-[10px] border-t-orange-500":"border-t-[10px] border-t-slate-300"}`}/></button>; }
   async function save(){ setError(""); setMessage(""); const entries=[...dirty.current].map(key=>{const [dayText,code]=key.split(":"); const day=Number(dayText); return {operatingDate:`${period}-${String(day+1).padStart(2,"0")}`,fieldCode:code,value:rows[day][code]||"",note:rows[day][`${code}_NOTE`]||""};});
     if(!entries.length){setMessage("Không có thay đổi mới để lưu."); return;} setSaving(true); try{const r=await fetch("/api/daily-inputs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({period,entries})}); const b=await r.json() as {error?:string;saved?:number}; if(!r.ok)throw new Error(b.error||"Chưa lưu được dữ liệu."); dirty.current.clear(); setDirtyCount(0); setMessage(`Đã lưu ${b.saved||entries.length} ô dữ liệu.`);} catch(e){setError(e instanceof Error?e.message:"Chưa lưu được dữ liệu.");} finally{setSaving(false);} }
@@ -227,6 +301,20 @@ export function DailyProductionTable() {
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {[{label:"Ngày trong tháng",value:days,tone:"text-[#4057b5] bg-[#f0f3ff]"},{label:"Ngày đã nhập",value:daysWithData,tone:"text-[#19845f] bg-[#edf9f4]"},{label:"Ô vừa thay đổi",value:dirtyCount,tone:"text-[#c87819] bg-[#fff7e8]"},{label:"CE/CF bất thường",value:abnormalCount,tone:abnormalCount?"text-red-700 bg-red-50":"text-[#7451d6] bg-[#f5f1ff]"}].map(card=><div key={card.label} className={`ui-3d-card rounded-2xl border border-white p-3 shadow-sm ${card.tone}`}><p className="text-2xl font-extrabold leading-none">{loading?"…":card.value}</p><p className="mt-1 text-xs font-semibold">{card.label}</p></div>)}
     </div>
+
+    {canSyncDaily&&<div className="ui-3d-card flex flex-wrap items-end gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <div className="mr-auto"><p className="text-xs font-bold text-[#173b64]">Đồng bộ QLKT nhiều ngày</p><p className="text-[11px] text-slate-500">Giờ phát, thời gian vận hành, nhận lưới S1/S2, tồn kho 06h00, nước bổ sung · tự lưu từng ngày · cần mở và đăng nhập QLKT, giữ tab này mở</p></div>
+      <label className="grid gap-1 text-xs font-bold text-slate-600">TỪ NGÀY<DateField value={rangeFrom} onChange={setRangeFrom} className="w-[150px]"/></label>
+      <label className="grid gap-1 text-xs font-bold text-slate-600">ĐẾN NGÀY<DateField value={rangeTo} onChange={setRangeTo} className="w-[150px]"/></label>
+      {rangeState?.running
+        ?<button type="button" onClick={()=>{rangeStopRef.current=true;}} className="h-10 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-700">■ Dừng</button>
+        :<button type="button" disabled={syncingQlkt} onClick={syncQlktRange} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:opacity-60">⚡ Đồng bộ khoảng ngày</button>}
+      {rangeState&&<div className="w-full text-[11px] text-slate-600">
+        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-[#438ec1]" style={{width:`${rangeState.total?Math.round(rangeState.done/rangeState.total*100):0}%`}}/></div>
+        <p className="mt-1">{rangeState.running?`Đang đọc ngày ${displayDate(rangeState.current)} · `:""}{rangeState.done}/{rangeState.total} ngày · đã lưu {rangeState.saved} ô{rangeState.failed.length?` · ${rangeState.failed.length} ngày lỗi`:""}</p>
+        {rangeState.failed.length>0&&<details className="mt-1"><summary className="cursor-pointer font-semibold text-amber-800">Ngày lỗi</summary><ul className="mt-1 max-h-32 list-disc overflow-auto pl-5">{rangeState.failed.map(item=><li key={item}>{item}</li>)}</ul></details>}
+      </div>}
+    </div>}
 
     {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}{message&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">{message}</p>}
 

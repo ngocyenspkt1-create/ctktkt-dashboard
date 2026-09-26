@@ -24,7 +24,6 @@ import { DateField } from "@/components/ui/date-field";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
 import { CoalMeterPhotoImport } from "@/components/coal-meter-photo-import";
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
-import { CTKTKT_OPERATING_HOURS_CELLS } from "@/lib/ctktkt-extra-fields";
 import { useSessionUser } from "@/components/session-context";
 import { defaultOperatingDate } from "@/lib/operating-date";
 import {
@@ -243,6 +242,7 @@ export function CtktktReport() {
   const [byDate, setByDate] = useState<Record<string, CtktktDayEntries>>({});
   const [linkedByDate, setLinkedByDate] = useState<Record<string, CtktktDayEntries>>({});
   const [linkWarnings, setLinkWarnings] = useState<LinkWarning[]>([]);
+  const [hoursMissingDates, setHoursMissingDates] = useState<string[]>([]);
 
   // Tab điều hướng chính theo đúng các cụm phân công vận hành
   const [activeTab, setActiveTab] = useState<MainTab>("tkd_dcs");
@@ -375,9 +375,11 @@ export function CtktktReport() {
           entries?: LoadedEntry[];
           linkedEntries?: LoadedEntry[];
           warnings?: LinkWarning[];
+          operatingHoursMissingDates?: string[];
           error?: string;
         };
         if (!response.ok) throw new Error(body.error || "Không tải được dữ liệu.");
+        setHoursMissingDates(body.operatingHoursMissingDates || []);
         const next: Record<string, CtktktDayEntries> = {};
         for (const entry of body.entries || []) {
           next[entry.operatingDate] ||= {};
@@ -441,16 +443,8 @@ export function CtktktReport() {
   }, [byDate, linkedByDate, date, current]);
   const coalStock = useMemo(() => calculateCoalStock24h(mergedByDate, date), [mergedByDate, date]);
   const pmisCoalStock = useMemo(() => calculatePmisCoalStockOpening(mergedByDate, date), [mergedByDate, date]);
-  const carriedHours = useMemo(() => {
-    const carried: Record<string, string> = {};
-    for (const day of Object.keys(byDate).filter(day => day < date).sort()) {
-      for (const cell of CTKTKT_OPERATING_HOURS_CELLS) {
-        const value = byDate[day]?.[cell];
-        if (value?.trim()) carried[cell] = value;
-      }
-    }
-    return carried;
-  }, [byDate, date]);
+  // Giờ lũy kế cộng dồn từ QLKT kể từ 01/01/2026; chỉ tính các ngày QLKT chưa có tới ngày đang xem.
+  const hoursMissingUpToDate = useMemo(() => hoursMissingDates.filter(day => day <= date), [hoursMissingDates, date]);
 
   const startupUnit: StartupUnit | "" = current.STARTUP_UNIT === "S1" || current.STARTUP_UNIT === "S2"
     ? current.STARTUP_UNIT
@@ -1365,13 +1359,18 @@ export function CtktktReport() {
                             <label key={column} className="flex flex-col text-[10px] font-semibold text-slate-500">
                               {["Giờ vận hành", "Giờ sửa chữa", "Giờ sự cố", "Dự phòng"][index]}
                               {renderCellInput(`${column}${row}`, {
-                                placeholder: carriedHours[`${column}${row}`] || "—",
                                 group: "kpi_summary",
+                                readOnlyValue: current[`${column}${row}`] ? format(Number(current[`${column}${row}`])) : "",
                               })}
                             </label>
                           ))}
                         </div>
-                        <div className="mt-1 text-[10px] italic text-slate-500">Để trống = giữ số của ngày gần nhất trước đó (hiện ở ô mờ)</div>
+                        <div className="mt-1 text-[10px] italic text-slate-500">Tự cộng dồn từ QLKT kể từ 01/01/2026: giờ phát {unitLabel === "S1" ? "F" : "L"}; sự cố CT, sửa chữa CU, dự phòng CS gán cho tổ máy không chạy đủ 24 giờ.</div>
+                        {hoursMissingUpToDate.length > 0 && (
+                          <div className="mt-1 text-[10px] font-semibold text-amber-700">
+                            Còn {hoursMissingUpToDate.length} ngày chưa có giờ phát QLKT (từ {hoursMissingUpToDate[0].split("-").reverse().join("/")}); lũy kế đang thiếu các ngày này. Đồng bộ QLKT theo khoảng ngày tại trang Dữ liệu các tháng.
+                          </div>
+                        )}
                       </td>
                       <td className="p-2 text-center text-slate-600 font-bold">giờ</td>
                     </tr>

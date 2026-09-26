@@ -4,6 +4,7 @@ import {
   CTKTKT_COAL_ADJUSTMENT_FIELDS,
   CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS,
   CTKTKT_NON_WORKBOOK_INPUT_CELLS,
+  CTKTKT_OPERATING_HOURS_CELLS,
 } from "./ctktkt-extra-fields.ts";
 import { CTKTKT_BCSX_LINKED_CELLS } from "./ctktkt-bcsx-link.ts";
 import { CTKTKT_WATER_LINKED_CELLS } from "./ctktkt-water-link.ts";
@@ -198,7 +199,9 @@ export async function buildCtktktHistoryImportPackage(
     ...inputCells.filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell) && !CTKTKT_WATER_LINKED_CELLS.has(cell) && !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(cell)),
     ...CTKTKT_COAL_ADJUSTMENT_FIELDS.map(field => field.cell),
   ])].filter(cell => !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(cell)
-    && !NH3_DCS_START_METER_CELLS.has(cell));
+    && !NH3_DCS_START_METER_CELLS.has(cell)
+    // Giờ lũy kế luôn cộng dồn từ QLKT, không lấy theo file.
+    && !(CTKTKT_OPERATING_HOURS_CELLS as readonly string[]).includes(cell));
   const warnings: CtktktHistoryImportPackage["warnings"] = [];
   const entriesByDate = new Map<string, CtktktDayEntries>();
   const sheets: Array<{ sheetName: string; date: string; importDay: boolean }> = [];

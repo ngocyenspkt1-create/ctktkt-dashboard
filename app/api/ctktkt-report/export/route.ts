@@ -5,13 +5,13 @@ import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxRea
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_DAY03_INPUT_CELLS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, CTKTKT_OPERATING_HOURS_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
+import { loadCtktktOperatingHours } from "@/lib/ctktkt-operating-hours-db";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
 import { deriveNh3StartLevels, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { applyCtktktStartupEventMetadata } from "@/lib/ctktkt-startup-event";
 import {
-  applyCtktktCarriedValues,
   applyCtktktCoalAdjustmentTotals,
   applyCtktktDailyCarryovers,
   CTKTKT_GRINDING_BALL_DEFAULT,
@@ -131,8 +131,7 @@ export async function GET(request: Request) {
     const { year, month, previous, next } = monthBounds(period);
     const db = getRawDb();
     await ensureWaterSchema(db);
-    const hourCodes = CTKTKT_OPERATING_HOURS_CELLS.map(cell => `KTKT:${cell}`);
-    const [{ results }, { results: shiftResults }, { results: waterResults }, { results: earlierHours }] = await Promise.all([
+    const [{ results }, { results: shiftResults }, { results: waterResults }, operatingHours] = await Promise.all([
       db.prepare(
         "SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, field_code",
       ).bind(previous, next).all(),
@@ -142,10 +141,8 @@ export async function GET(request: Request) {
       db.prepare(
         "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
       ).bind(previous, next).all(),
-      // Operating hours persist until someone enters a new value, possibly in an earlier month.
-      db.prepare(
-        `SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date < ? AND field_code IN (${hourCodes.map(() => "?").join(", ")}) ORDER BY operating_date`,
-      ).bind(previous, ...hourCodes).all(),
+      // Operating hours are accumulated from the QLKT daily hours since 01/01/2026.
+      loadCtktktOperatingHours(db, previous, next),
     ]);
 
     const byDate = new Map<string, Record<string, string>>();
@@ -163,14 +160,10 @@ export async function GET(request: Request) {
     }
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
 
-    const latestHours = new Map<string, number>();
-    const rememberHours = (row: Record<string, string> | undefined) => {
-      for (const cell of CTKTKT_OPERATING_HOURS_CELLS) {
-        const value = numeric(row?.[`KTKT:${cell}`]);
-        if (value !== null) latestHours.set(cell, value);
-      }
+    const applyOperatingHours = (sheet: ExcelJS.Worksheet, date: string) => {
+      const totals = operatingHours.totalsByDate.get(date);
+      for (const cell of CTKTKT_OPERATING_HOURS_CELLS) sheet.getCell(cell).value = totals ? totals[cell] : null;
     };
-    for (const item of earlierHours as { fieldCode: string; value: string }[]) rememberHours({ [item.fieldCode]: item.value });
 
     const applyBcsxLinks = (sheet: ExcelJS.Worksheet, date: string) => {
       const linked = deriveCtktktCellsFromBcsx(readingsByDate.get(date) || []);
@@ -212,8 +205,7 @@ export async function GET(request: Request) {
         previousSheet.getCell(cell).value = cell === "T181" ? value : numeric(value);
       }
       for (const cell of ["E39", "H39"]) if (numeric(previousRow?.[`KTKT:${cell}`]) === null) setNumber(previousSheet, cell, CTKTKT_GRINDING_BALL_DEFAULT);
-      rememberHours(previousRow);
-      applyCtktktCarriedValues(previousSheet, CTKTKT_OPERATING_HOURS_CELLS, latestHours);
+      applyOperatingHours(previousSheet, previous);
       applyBcsxLinks(previousSheet, previous);
       applyWaterLinks(previousSheet, previous);
       applyWaterAdjustments(previousSheet, previousRow || {});
@@ -241,8 +233,7 @@ export async function GET(request: Request) {
         : `${period}-${String(day - 1).padStart(2, "0")}`;
       applyCtktktDailyCarryovers(sheet, row, byDate.get(previousDate), previousSheetName);
       applyCtktktCoalAdjustmentTotals(sheet);
-      rememberHours(row);
-      applyCtktktCarriedValues(sheet, CTKTKT_OPERATING_HOURS_CELLS, latestHours);
+      applyOperatingHours(sheet, date);
       applyNh3StartLevelCarryover(sheet, byDate.get(previousDate));
       applyCtktktStartupEventMetadata(sheet, row);
       applyBcsxLinks(sheet, date);
