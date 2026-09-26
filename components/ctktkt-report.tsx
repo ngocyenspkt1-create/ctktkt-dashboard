@@ -146,6 +146,7 @@ const metricRows: Array<{ key: keyof CtktktKpis; label: string; unit: string }> 
   { key: "auxiliaryPercent", label: "Tỷ lệ tự dùng gồm tổn thất MBA", unit: "%" },
   { key: "rawCoalTonnes", label: "Than chưa quy ẩm", unit: "tấn" },
   { key: "adjustedCoalTonnes", label: "Than quy ẩm 8,5%", unit: "tấn" },
+  { key: "hhvKjKg", label: "Nhiệt trị than quy ẩm 8,5%", unit: "kJ/kg" },
   { key: "netCoalRate", label: "Suất hao than tinh", unit: "g/kWh" },
   { key: "netHeatRate", label: "Suất hao nhiệt tinh", unit: "kJ/kWh" },
 ];
@@ -156,6 +157,7 @@ const meterComparisonKeys = new Set<keyof CtktktKpis>([
   "auxiliaryMwh",
   "auxiliaryPercent",
   "rawCoalTonnes",
+  "hhvKjKg",
   "adjustedCoalTonnes",
   "netCoalRate",
   "netHeatRate",

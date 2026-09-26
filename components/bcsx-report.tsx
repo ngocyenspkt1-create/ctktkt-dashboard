@@ -136,14 +136,14 @@ export function BcsxReport() {
             dauCuc: parseAndScaleMwh(ktktValues.B),
             thuongPham: parseAndScaleMwh(ktktValues.C),
             gridReceivedMwh: byCode.get("GRID_RECEIVE_S1") || "",
-            thanTieuThu: ktktValues.AE || "",
+            thanTieuThu: ktktValues.AE_ADJ || "",
             thanTonKho: stock24h,
           },
           S2: {
             dauCuc: parseAndScaleMwh(ktktValues.H),
             thuongPham: parseAndScaleMwh(ktktValues.I),
             gridReceivedMwh: byCode.get("GRID_RECEIVE_S2") || "",
-            thanTieuThu: ktktValues.AF || "",
+            thanTieuThu: ktktValues.AF_ADJ || "",
             thanTonKho: stock24h,
           },
         });
@@ -384,14 +384,14 @@ export function BcsxReport() {
           dauCuc: parseAndScaleMwh(ktktValues.B),
           thuongPham: parseAndScaleMwh(ktktValues.C),
           gridReceivedMwh: byCode.get("GRID_RECEIVE_S1") || "",
-          thanTieuThu: ktktValues.AE || "",
+          thanTieuThu: ktktValues.AE_ADJ || "",
           thanTonKho: stock24h,
         },
         S2: {
           dauCuc: parseAndScaleMwh(ktktValues.H),
           thuongPham: parseAndScaleMwh(ktktValues.I),
           gridReceivedMwh: byCode.get("GRID_RECEIVE_S2") || "",
-          thanTieuThu: ktktValues.AF || "",
+          thanTieuThu: ktktValues.AF_ADJ || "",
           thanTonKho: stock24h,
         },
       });
@@ -870,7 +870,7 @@ export function BcsxReport() {
           <input disabled value={totals[unit].thuongPham} inputMode="decimal" placeholder="—" title="Tự liên kết từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">
-          Than tiêu thụ (tấn)
+          Than tiêu thụ quy ẩm 8,5% (tấn)
           <input disabled value={totals[unit].thanTieuThu} inputMode="decimal" placeholder="—" title="Tự tính từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">

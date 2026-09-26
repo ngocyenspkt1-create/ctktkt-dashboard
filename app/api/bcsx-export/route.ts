@@ -67,14 +67,14 @@ async function loadUnitData(date: string, unit: "S1" | "S2") {
         dauCuc: toMwh(linked.B),
         thuongPham: toMwh(linked.C),
         gridReceivedMwh: numeric(dailyValues.get("GRID_RECEIVE_S1")),
-        thanTieuThu: numeric(linked.AE),
+        thanTieuThu: numeric(linked.AE_ADJ),
         thanTonKho: stock24h,
       }
     : {
         dauCuc: toMwh(linked.H),
         thuongPham: toMwh(linked.I),
         gridReceivedMwh: numeric(dailyValues.get("GRID_RECEIVE_S2")),
-        thanTieuThu: numeric(linked.AF),
+        thanTieuThu: numeric(linked.AF_ADJ),
         thanTonKho: stock24h,
       };
 
