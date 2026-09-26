@@ -1,6 +1,6 @@
 // Node's built-in TypeScript test runner requires the explicit extension here.
 import type { CtktktDayEntries } from "./ctktkt-report.ts";
-import { calculateCtktktSummary, calculateNh3Summary } from "./ctktkt-report.ts";
+import { calculateCtktktMeterSummary, calculateCtktktSummary, calculateNh3Summary } from "./ctktkt-report.ts";
 
 export interface CtktktEmailReportMetrics {
   // S1
@@ -66,6 +66,8 @@ export function extractCtktktEmailMetrics(
   previous?: CtktktDayEntries,
 ): CtktktEmailReportMetrics {
   const summary = calculateCtktktSummary(current, previous);
+  // The workbook divides steam by the meter generation (Z59 = Z58 / E20, Z60 = Z58 / E21), not by PMIS.
+  const meterSummary = calculateCtktktMeterSummary(current, previous);
 
   // S1 metrics
   const grossMwhS1 = summary.s1.grossMwh;
@@ -85,10 +87,10 @@ export function extractCtktktEmailMetrics(
   const steamTonnesS1 = numberOf(current, "Z58") ?? numberOf(current, "AB54");
   const steamRateGrossS1 =
     numberOf(current, "Z59") ??
-    (steamTonnesS1 != null && grossMwhS1 ? (steamTonnesS1 * 1000) / grossMwhS1 : null);
+    (steamTonnesS1 != null && meterSummary.s1.grossMwh ? (steamTonnesS1 * 1000) / meterSummary.s1.grossMwh : null);
   const steamRateNetS1 =
     numberOf(current, "Z60") ??
-    (steamTonnesS1 != null && netMwhS1 ? (steamTonnesS1 * 1000) / netMwhS1 : null);
+    (steamTonnesS1 != null && meterSummary.s1.netMwh ? (steamTonnesS1 * 1000) / meterSummary.s1.netMwh : null);
 
   // Nước demin S1 (Hàng 72): Cột Y = Cột X (24h ngày D) − Cột W (24h ngày D-1) + Hiệu chỉnh
   const waterX72 = numberOf(current, "X72");
@@ -115,10 +117,10 @@ export function extractCtktktEmailMetrics(
   const steamTonnesS2 = numberOf(current, "AJ58") ?? numberOf(current, "AL54");
   const steamRateGrossS2 =
     numberOf(current, "AJ59") ??
-    (steamTonnesS2 != null && grossMwhS2 ? (steamTonnesS2 * 1000) / grossMwhS2 : null);
+    (steamTonnesS2 != null && meterSummary.s2.grossMwh ? (steamTonnesS2 * 1000) / meterSummary.s2.grossMwh : null);
   const steamRateNetS2 =
     numberOf(current, "AJ60") ??
-    (steamTonnesS2 != null && netMwhS2 ? (steamTonnesS2 * 1000) / netMwhS2 : null);
+    (steamTonnesS2 != null && meterSummary.s2.netMwh ? (steamTonnesS2 * 1000) / meterSummary.s2.netMwh : null);
 
   // Nước demin S2 (Hàng 73): Cột Y = Cột X (24h ngày D) − Cột W (24h ngày D-1) + Hiệu chỉnh
   const waterX73 = numberOf(current, "X73");

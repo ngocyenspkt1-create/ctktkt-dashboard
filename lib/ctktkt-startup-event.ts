@@ -70,6 +70,11 @@ export function applyCtktktStartupEventMetadata(
   sheet.getCell("H86").alignment = { ...sheet.getCell("H86").alignment, wrapText: true };
   sheet.getCell("B89").value = "Lượng dầu từng giai đoạn / tổng (tấn)";
   sheet.getCell("H89").value = summary.totalTonnes;
+  // The source workbook enters the event oil as the unit's boiler oil of the day (E6 for S1, H6 for S2).
+  const oilCell = unit === "S1" ? "E6" : unit === "S2" ? "H6" : null;
+  if (oilCell && summary.totalTonnes !== null && numeric(row[`KTKT:${oilCell}`]) === null) {
+    sheet.getCell(oilCell).value = summary.totalTonnes;
+  }
   if (!sheet.getCell("B90").isMerged) sheet.mergeCells("B90:H90");
   const phaseDescriptions = event.phaseLabels.map((label, index) =>
     `${label}: ${display(summary.phaseTonnes[index])}`,

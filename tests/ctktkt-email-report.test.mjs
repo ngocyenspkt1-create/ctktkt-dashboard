@@ -32,8 +32,8 @@ test("extractCtktktEmailMetrics accurately extracts all 22+ metrics from CTKTKT 
 
   // S1 Steam & Water
   assert.equal(metrics.steamTonnesS1, 35582.55);
-  assert.ok(Math.abs(metrics.steamRateGrossS1 - 3219.08) < 0.05);
-  assert.ok(Math.abs(metrics.steamRateNetS1 - 3499.95) < 0.05);
+  assert.ok(Math.abs(metrics.steamRateGrossS1 - 3222.18) < 0.05);
+  assert.ok(Math.abs(metrics.steamRateNetS1 - 3516.90) < 0.05);
   assert.ok(Math.abs(metrics.deminWaterS1 - 792.41) < 0.01);
   assert.ok(Math.abs(metrics.deminWaterTotal - 1718.91) < 0.01);
 
@@ -49,8 +49,8 @@ test("extractCtktktEmailMetrics accurately extracts all 22+ metrics from CTKTKT 
 
   // S2 Steam & Water
   assert.equal(metrics.steamTonnesS2, 34544.72);
-  assert.ok(Math.abs(metrics.steamRateGrossS2 - 3131.73) < 0.05);
-  assert.ok(Math.abs(metrics.steamRateNetS2 - 3409.22) < 0.05);
+  assert.ok(Math.abs(metrics.steamRateGrossS2 - 3134.73) < 0.05);
+  assert.ok(Math.abs(metrics.steamRateNetS2 - 3422.23) < 0.05);
   assert.ok(Math.abs(metrics.deminWaterS2 - 926.5) < 0.01);
 
   // Common Plant Metrics
@@ -84,8 +84,8 @@ test("generateEmailReportText generates complete text report matching exact temp
   assert.ok(text.includes("+ Nhiệt trị than quy ẩm: 20021.59 (kJ/kg)"));
   assert.ok(text.includes("+ Suất hao nhiệt tinh S1: 10518.533 (kJ/kWh)"));
   assert.ok(text.includes("+ Tổng lượng hơi tiêu thụ S1: 35582.55 (tấn)"));
-  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S1: 3219.08 (g/kWh)"));
-  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S1: 3499.95 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S1: 3222.18 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S1: 3516.90 (g/kWh)"));
   assert.ok(text.includes("+ Lượng nước demin sử dụng S1: 792.41 (m³)"));
 
   assert.ok(text.includes("- Tổ máy S2 vận hành:"));
@@ -98,8 +98,8 @@ test("generateEmailReportText generates complete text report matching exact temp
   assert.ok(text.includes("+ Nhiệt trị than quy ẩm: 20021.59 (kJ/kg)"));
   assert.ok(text.includes("+ Suất hao nhiệt tinh S2: 10570.875 (kJ/kWh)"));
   assert.ok(text.includes("+ Tổng lượng hơi tiêu thụ S2: 34544.72 (tấn)"));
-  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S2: 3131.73 (g/kWh)"));
-  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S2: 3409.22 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng đầu cực S2: 3134.73 (g/kWh)"));
+  assert.ok(text.includes("+ Suất tiêu hao hơi theo sản lượng phát lưới S2: 3422.23 (g/kWh)"));
   assert.ok(text.includes("+ Lượng nước demin sử dụng S2: 926.50 (m³)"));
 
   assert.ok(text.includes("- Tổng lượng nước demin sử dụng ngày D của 2 tổ máy: 1718.91 (m³)"));

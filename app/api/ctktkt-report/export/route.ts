@@ -12,6 +12,7 @@ import { deriveNh3StartLevels, type CtktktDayEntries } from "@/lib/ctktkt-report
 import { applyCtktktStartupEventMetadata } from "@/lib/ctktkt-startup-event";
 import {
   applyCtktktCarriedValues,
+  applyCtktktCoalAdjustmentTotals,
   applyCtktktDailyCarryovers,
   CTKTKT_GRINDING_BALL_DEFAULT,
   ctktktDateLabelCells,
@@ -217,6 +218,7 @@ export async function GET(request: Request) {
       applyWaterLinks(previousSheet, previous);
       applyWaterAdjustments(previousSheet, previousRow || {});
       applyCoalAdjustmentNotes(previousSheet, previousRow || {});
+      applyCtktktCoalAdjustmentTotals(previousSheet);
       applyDateLabels(previousSheet, previous, false);
     }
 
@@ -238,6 +240,7 @@ export async function GET(request: Request) {
         ? previous
         : `${period}-${String(day - 1).padStart(2, "0")}`;
       applyCtktktDailyCarryovers(sheet, row, byDate.get(previousDate), previousSheetName);
+      applyCtktktCoalAdjustmentTotals(sheet);
       rememberHours(row);
       applyCtktktCarriedValues(sheet, CTKTKT_OPERATING_HOURS_CELLS, latestHours);
       applyNh3StartLevelCarryover(sheet, byDate.get(previousDate));

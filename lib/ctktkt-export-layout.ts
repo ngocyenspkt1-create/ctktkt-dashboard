@@ -41,6 +41,16 @@ function isSharedFormula(value: ExcelJS.CellValue) {
  */
 export function sanitizeCtktktTemplate(workbook: ExcelJS.Workbook) {
   for (const sheet of workbook.worksheets) {
+    // ExcelJS reads a conditional-format numFmt as { id, formatCode } but writes it back as a string,
+    // producing formatCode="[object Object]" that makes Excel refuse to open the file.
+    const conditional = (sheet as unknown as { conditionalFormattings?: Array<{ rules: ExcelJS.ConditionalFormattingRule[] }> }).conditionalFormattings;
+    for (const rule of conditional?.flatMap(item => item.rules) ?? []) {
+      const style = rule.style as { numFmt?: unknown } | undefined;
+      if (!style || !("numFmt" in style) || typeof style.numFmt === "string") continue;
+      const formatCode = (style.numFmt as { formatCode?: unknown } | null)?.formatCode;
+      if (typeof formatCode === "string") style.numFmt = formatCode;
+      else delete style.numFmt;
+    }
     const isPreviousMonth = sheet.name === "d-1";
     const isDaySheet = DAY_SHEET.test(sheet.name);
     // Read every (translated) formula before editing so shared-formula clones never lose their master.
@@ -136,6 +146,16 @@ export function applyCtktktDailyCarryovers(
     const received = numeric(row[code]);
     setFormula(sheet, cell, received !== null && received > 0 ? `${gross}-${net}+${received}` : `${gross}-${net}`);
   }
+}
+
+/**
+ * The source workbook folds coal-meter corrections into the mill rows (e.g. E9 "=D9-C9+4.19-20.61+145.42"),
+ * so E19/H19 already include them. The web keeps corrections in W/Y/AA28 and AG/AI/AK28 instead,
+ * so the daily totals add those cells back.
+ */
+export function applyCtktktCoalAdjustmentTotals(sheet: ExcelJS.Worksheet) {
+  setFormula(sheet, "E19", "SUM(E7:E18)+W28+Y28+AA28");
+  setFormula(sheet, "H19", "SUM(H7:H18)+AG28+AI28+AK28");
 }
 
 /** Latest entered value on or before the day; operating hours persist until someone updates them. */
