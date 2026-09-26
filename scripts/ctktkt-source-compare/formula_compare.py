@@ -6,7 +6,7 @@ from openpyxl.utils import get_column_letter as L
 
 G = openpyxl.load_workbook(sys.argv[1])
 W = openpyxl.load_workbook(sys.argv[2])
-DAYS = [s for s in (f"{i:02d}" for i in range(1, 32)) if s in G.sheetnames and s in W.sheetnames and G[s]["D20"].value not in (None, "")]
+DAYS = [s for s in (f"{i:02d}" for i in range(1, 32)) if s in G.sheetnames and s in W.sheetnames and isinstance(G[s]["AB8"].value, (int, float))]
 
 def norm(f, sheet):
     if not (isinstance(f, str) and f.startswith("=")):

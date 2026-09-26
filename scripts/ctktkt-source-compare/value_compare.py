@@ -51,7 +51,7 @@ def same(a, b):
     return norm(a) == norm(b)
 
 result = {}
-sheets = ["d-1"] + [s for s in (f"{i:02d}" for i in range(1, 32)) if s in Gf.sheetnames and s in Wf.sheetnames and Gf[s]["D20"].value not in (None, "")] + ["Tổng hợp tháng"]
+sheets = ["d-1"] + [s for s in (f"{i:02d}" for i in range(1, 32)) if s in Gf.sheetnames and s in Wf.sheetnames and isinstance(Gf[s]["AB8"].value, (int, float))] + ["Tổng hợp tháng"]
 for s in sheets:
     gf, gv, wf, wv = Gf[s], Gv[s], Wf[s], Wv[s]
     maxr = max(gf.max_row, wf.max_row)
