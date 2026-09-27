@@ -1,4 +1,4 @@
-@import "tailwindcss";
+ï»¿@import "tailwindcss";
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
 :root {
@@ -13,10 +13,10 @@
   --destructive: #dc2626; --destructive-foreground: #ffffff;
   --border: #e2e8f0; --input: #e2e8f0; --ring: #a5b4fc;
 }
-/* shadcn/ui components (Popover, Calendar, Button, Dialog, …) reference these as Tailwind
-   utilities (bg-popover, text-muted-foreground, …). Tailwind v4 only generates those utilities
+/* shadcn/ui components (Popover, Calendar, Button, Dialog, â€¦) reference these as Tailwind
+   utilities (bg-popover, text-muted-foreground, â€¦). Tailwind v4 only generates those utilities
    when a matching --color-* token exists, so without this mapping they silently compile to
-   nothing — e.g. the date-picker popover rendered with no background at all. */
+   nothing â€” e.g. the date-picker popover rendered with no background at all. */
 @theme inline {
   --font-sans: "Times New Roman", Times, serif;
   --font-serif: "Times New Roman", Times, serif;
@@ -72,7 +72,7 @@ body {
 }
 button, input, select, textarea { font: inherit; }
 
-/* Styling cho các ô input b? khóa */
+/* Styling cho cÃ¡c Ã´ input b? khÃ³a */
 input:disabled,
 input[readonly] {
   text-align: center;
@@ -140,3 +140,4 @@ input[readonly] {
   top: 0;
   z-index: 1;
 }
+
