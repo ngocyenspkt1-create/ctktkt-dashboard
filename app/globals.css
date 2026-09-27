@@ -13,10 +13,10 @@
   --destructive: #dc2626; --destructive-foreground: #ffffff;
   --border: #e2e8f0; --input: #e2e8f0; --ring: #a5b4fc;
 }
-/* shadcn/ui components (Popover, Calendar, Button, Dialog, â€¦) reference these as Tailwind
-   utilities (bg-popover, text-muted-foreground, â€¦). Tailwind v4 only generates those utilities
+/* shadcn/ui components (Popover, Calendar, Button, Dialog, …) reference these as Tailwind
+   utilities (bg-popover, text-muted-foreground, …). Tailwind v4 only generates those utilities
    when a matching --color-* token exists, so without this mapping they silently compile to
-   nothing â€” e.g. the date-picker popover rendered with no background at all. */
+   nothing — e.g. the date-picker popover rendered with no background at all. */
 @theme inline {
   --font-sans: "Times New Roman", Times, serif;
   --font-serif: "Times New Roman", Times, serif;
@@ -71,6 +71,13 @@ body {
   main { padding: 0 !important; }
 }
 button, input, select, textarea { font: inherit; }
+
+/* Styling cho các ô input b? khóa */
+input:disabled,
+input[readonly] {
+  text-align: center;
+  font-weight: 600;
+}
 
 .ui-3d-card,
 .ui-3d-control,
