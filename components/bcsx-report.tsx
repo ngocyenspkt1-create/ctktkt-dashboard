@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
 import { calculateCoalStock24h } from "@/lib/coal-stock";
-import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
+import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, nextOperatingDate, validateOperatingEventDateRange, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
 import { deriveDailyValuesFromCtktkt } from "@/lib/daily-source-links";
 import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { useSessionUser } from "@/components/session-context";
@@ -30,8 +30,8 @@ function emptyGrid(): ReadingsGrid {
 
 type EventDraft = { startDate: string; startTime: string; endDate: string; endTime: string; eventType: number; description: string };
 
-function blankEventDraft(): EventDraft {
-  return { startTime: "", endTime: "", eventType: 1, description: "" };
+function blankEventDraft(date: string): EventDraft {
+  return { startDate: date, startTime: "", endDate: date, endTime: "", eventType: 1, description: "" };
 }
 
 type TotalsDraft = { dauCuc: string; thuongPham: string; gridReceivedMwh: string; thanTieuThu: string; thanTonKho: string };
@@ -45,7 +45,7 @@ function parseAndScaleMwh(valStr: string | undefined): string {
   const clean = valStr.trim().replace(",", ".");
   const num = Number(clean);
   if (!Number.isFinite(num)) return valStr;
-  // Trong daily_inputs lÆ°u Ä‘Æ¡n vá»‹ triá»‡u kWh (vÃ­ dá»¥ 10.47). Náº¿u < 100 thÃ¬ quy Ä‘á»•i sang MWh (* 1000)
+  // Trong daily_inputs lưu đơn vị triệu kWh (ví dụ 10.47). Nếu < 100 thì quy đổi sang MWh (* 1000)
   if (num > 0 && num < 100) {
     const mwh = num * 1000;
     return String(Number(mwh.toFixed(2)));
@@ -75,7 +75,7 @@ export function BcsxReport() {
   const [unit, setUnit] = useState<Unit>("S1");
   const [grids, setGrids] = useState<Record<Unit, ReadingsGrid>>({ S1: emptyGrid(), S2: emptyGrid() });
   const [events, setEvents] = useState<Record<Unit, OperatingEvent[]>>({ S1: [], S2: [] });
-  const [draft, setDraft] = useState<EventDraft>({ startDate: defaultOperatingDate, startTime: "", endDate: defaultOperatingDate, endTime: "", eventType: 1, description: "" });
+  const [draft, setDraft] = useState<EventDraft>(() => blankEventDraft(defaultOperatingDate()));
   const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
   const [totals, setTotals] = useState<Record<Unit, TotalsDraft>>({ S1: blankTotals(), S2: blankTotals() });
   const [loading, setLoading] = useState(false);
@@ -149,7 +149,7 @@ export function BcsxReport() {
           },
         });
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "KhÃ´ng táº£i Ä‘Æ°á»£c dá»¯ liá»‡u.");
+        if (!cancelled) setError(err instanceof Error ? err.message : "Không tải được dữ liệu.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -163,6 +163,14 @@ export function BcsxReport() {
 
   function changeOperatingDate(nextDate: string) {
     setOperatingDate(nextDate);
+    setDraft(blankEventDraft(nextDate));
+    setEditingEventIndex(null);
+  }
+
+  function changeUnit(nextUnit: Unit) {
+    setUnit(nextUnit);
+    setDraft(blankEventDraft(operatingDate));
+    setEditingEventIndex(null);
   }
 
   function setCell(metric: ShiftMetric, index: number, value: string) {
@@ -180,14 +188,14 @@ export function BcsxReport() {
         const index = Number(indexText);
         return { unit, timeSlot: SHIFT_TIME_SLOTS[index], metric, value: grid[metric][index].trim() };
       });
-      if (!entries.length) throw new Error(`KhÃ´ng cÃ³ Ã´ nÃ o cá»§a tá»• mÃ¡y ${unit} vá»«a thay Ä‘á»•i Ä‘á»ƒ lÆ°u.`);
+      if (!entries.length) throw new Error(`Không có ô nào của tổ máy ${unit} vừa thay đổi để lưu.`);
       const res = await fetch("/api/shift-readings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: operatingDate, entries }) });
       const json = await res.json() as { saved?: number; error?: string };
-      if (!res.ok || json.error) throw new Error(json.error || "KhÃ´ng lÆ°u Ä‘Æ°á»£c sá»‘ liá»‡u.");
+      if (!res.ok || json.error) throw new Error(json.error || "Không lưu được số liệu.");
       for (const key of dirtyKeys) dirtyReadingsRef.current.delete(key);
-      setNotice(`ÄÃ£ lÆ°u ${json.saved ?? entries.length} Ã´ vá»«a thay Ä‘á»•i cá»§a tá»• mÃ¡y ${unit}.`);
+      setNotice(`Đã lưu ${json.saved ?? entries.length} ô vừa thay đổi của tổ máy ${unit}.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "KhÃ´ng lÆ°u Ä‘Æ°á»£c sá»‘ liá»‡u.");
+      setError(err instanceof Error ? err.message : "Không lưu được số liệu.");
     } finally {
       setSaving(false);
     }
@@ -206,11 +214,11 @@ export function BcsxReport() {
         body: JSON.stringify({ date: day.date, entries: day.entries }),
       });
       const body = await response.json() as { error?: string };
-      if (!response.ok || body.error) throw new Error(body.error || `KhÃ´ng ghi Ä‘Æ°á»£c Má»¥c 1 ngÃ y ${day.date}.`);
+      if (!response.ok || body.error) throw new Error(body.error || `Không ghi được Mục 1 ngày ${day.date}.`);
     };
 
     try {
-      if (files.length !== 2) throw new Error("HÃ£y chá»n Ä‘á»“ng thá»i Ä‘Ãºng 2 file Excel BCSX: má»™t file S1 vÃ  má»™t file S2.");
+      if (files.length !== 2) throw new Error("Hãy chọn đồng thời đúng 2 file Excel BCSX: một file S1 và một file S2.");
       const formData = new FormData();
       Array.from(files).forEach(file => formData.append("files", file));
       const parseResponse = await fetch("/api/bcsx-section1-import", { method: "POST", body: formData });
@@ -219,14 +227,14 @@ export function BcsxReport() {
       try {
         parsed = JSON.parse(rawParseResponse) as Partial<Section1ImportPackage> & { error?: string };
       } catch {
-        throw new Error("MÃ¡y chá»§ khÃ´ng tráº£ dá»¯ liá»‡u JSON há»£p lá»‡ khi Ä‘á»c hai file Excel S1/S2.");
+        throw new Error("Máy chủ không trả dữ liệu JSON hợp lệ khi đọc hai file Excel S1/S2.");
       }
-      if (!parseResponse.ok || parsed.error) throw new Error(parsed.error || "KhÃ´ng Ä‘á»c Ä‘Æ°á»£c hai file Excel S1/S2.");
+      if (!parseResponse.ok || parsed.error) throw new Error(parsed.error || "Không đọc được hai file Excel S1/S2.");
       if (parsed.kind !== "BCSX_SECTION_1_HISTORY" || parsed.version !== 1 || !/^\d{4}-\d{2}$/.test(parsed.month || "") || !Number.isInteger(parsed.throughDay) || Number(parsed.throughDay) < 1 || Number(parsed.throughDay) > 31 || !Array.isArray(parsed.days) || parsed.days.length !== parsed.throughDay) {
-        throw new Error("GÃ³i nháº­p Má»¥c 1 BCSX khÃ´ng Ä‘Ãºng cáº¥u trÃºc.");
+        throw new Error("Gói nhập Mục 1 BCSX không đúng cấu trúc.");
       }
       if (!parsed.totals || parsed.totals.failed !== 0 || parsed.totals.checks !== parsed.totals.passed) {
-        throw new Error("GÃ³i nháº­p chÆ°a Ä‘áº¡t kiá»ƒm tra Ä‘áº§y Ä‘á»§; chÆ°a ghi dá»¯ liá»‡u.");
+        throw new Error("Gói nhập chưa đạt kiểm tra đầy đủ; chưa ghi dữ liệu.");
       }
       const importPackage = parsed as Section1ImportPackage;
       const expectedKeys = new Set((['S1', 'S2'] as const).flatMap(importUnit => SHIFT_TIME_SLOTS.flatMap(timeSlot => SHIFT_METRICS.map(metric => `${importUnit}|${timeSlot}|${metric.key}`))));
@@ -234,27 +242,27 @@ export function BcsxReport() {
       for (const [dayIndex, day] of importPackage.days.entries()) {
         const expectedDate = `${importPackage.month}-${String(dayIndex + 1).padStart(2, "0")}`;
         if (day.date !== expectedDate || seenDates.has(day.date) || !Array.isArray(day.entries) || day.entries.length !== expectedKeys.size) {
-          throw new Error(`Dá»¯ liá»‡u ngÃ y ${day.date || "khÃ´ng rÃµ"} khÃ´ng há»£p lá»‡.`);
+          throw new Error(`Dữ liệu ngày ${day.date || "không rõ"} không hợp lệ.`);
         }
         seenDates.add(day.date);
         const keys = new Set<string>();
         for (const entry of day.entries) {
           const key = `${entry.unit}|${entry.timeSlot}|${entry.metric}`;
           if (!expectedKeys.has(key) || keys.has(key) || !String(entry.value).trim() || !Number.isFinite(Number(entry.value))) {
-            throw new Error(`Má»¥c 1 ngÃ y ${day.date} cÃ³ Ã´ thiáº¿u, trÃ¹ng hoáº·c khÃ´ng pháº£i sá»‘.`);
+            throw new Error(`Mục 1 ngày ${day.date} có ô thiếu, trùng hoặc không phải số.`);
           }
           keys.add(key);
         }
       }
       if (importPackage.totals.days !== importPackage.days.length || importPackage.totals.entries !== importPackage.days.length * expectedKeys.size || importPackage.totals.checks !== importPackage.totals.entries || importPackage.totals.passed !== importPackage.totals.entries) {
-        throw new Error("Tá»•ng kiá»ƒm tra trong gÃ³i nháº­p khÃ´ng khá»›p dá»¯ liá»‡u chi tiáº¿t.");
+        throw new Error("Tổng kiểm tra trong gói nhập không khớp dữ liệu chi tiết.");
       }
 
       backup = {};
       for (const day of importPackage.days) {
         const response = await fetch(`/api/shift-readings?date=${encodeURIComponent(day.date)}`, { cache: "no-store" });
         const body = await response.json() as { entries?: Section1ImportEntry[]; error?: string };
-        if (!response.ok || body.error) throw new Error(body.error || `KhÃ´ng sao lÆ°u Ä‘Æ°á»£c ngÃ y ${day.date}.`);
+        if (!response.ok || body.error) throw new Error(body.error || `Không sao lưu được ngày ${day.date}.`);
         backup[day.date] = body.entries || [];
       }
       const backupBlob = new Blob([JSON.stringify({ kind: "BCSX_SECTION_1_BACKUP", createdAt: new Date().toISOString(), entriesByDate: backup }, null, 2)], { type: "application/json" });
@@ -273,11 +281,11 @@ export function BcsxReport() {
       for (const day of importPackage.days) {
         const response = await fetch(`/api/shift-readings?date=${encodeURIComponent(day.date)}`, { cache: "no-store" });
         const body = await response.json() as { entries?: Section1ImportEntry[]; error?: string };
-        if (!response.ok || body.error) throw new Error(body.error || `KhÃ´ng Ä‘á»c láº¡i Ä‘Æ°á»£c ngÃ y ${day.date}.`);
+        if (!response.ok || body.error) throw new Error(body.error || `Không đọc lại được ngày ${day.date}.`);
         const actual = new Map((body.entries || []).map(entry => [`${entry.unit}|${entry.timeSlot}|${entry.metric}`, entry.value]));
         for (const entry of day.entries) {
           const saved = actual.get(`${entry.unit}|${entry.timeSlot}|${entry.metric}`);
-          if (saved === undefined || Math.abs(Number(saved) - Number(entry.value)) > 1e-9) throw new Error(`Äá»c láº¡i khÃ´ng khá»›p ${entry.unit} ${entry.timeSlot} ${entry.metric}, ngÃ y ${day.date}.`);
+          if (saved === undefined || Math.abs(Number(saved) - Number(entry.value)) > 1e-9) throw new Error(`Đọc lại không khớp ${entry.unit} ${entry.timeSlot} ${entry.metric}, ngày ${day.date}.`);
         }
       }
 
@@ -291,7 +299,7 @@ export function BcsxReport() {
       setGrids(nextGrids);
       dirtyReadingsRef.current.clear();
       setOperatingDate(lastDay.date);
-      setNotice(`ÄÃ£ nháº­p vÃ  Ä‘á»c láº¡i xÃ¡c nháº­n ${importPackage.totals.entries.toLocaleString("vi-VN")} giÃ¡ trá»‹ Má»¥c 1 cho ${importPackage.days.length} ngÃ y. Má»¥c 2 vÃ  nháº­t kÃ½ sá»± kiá»‡n khÃ´ng thay Ä‘á»•i.`);
+      setNotice(`Đã nhập và đọc lại xác nhận ${importPackage.totals.entries.toLocaleString("vi-VN")} giá trị Mục 1 cho ${importPackage.days.length} ngày. Mục 2 và nhật ký sự kiện không thay đổi.`);
     } catch (caught) {
       let rollbackMessage = "";
       if (backup && completed.length) {
@@ -303,12 +311,12 @@ export function BcsxReport() {
               entries: day.entries.map(entry => ({ ...entry, value: previous.get(`${entry.unit}|${entry.timeSlot}|${entry.metric}`) || "" })),
             });
           }
-          rollbackMessage = " ÄÃ£ hoÃ n nguyÃªn cÃ¡c ngÃ y Ä‘Ã£ báº¯t Ä‘áº§u ghi.";
+          rollbackMessage = " Đã hoàn nguyên các ngày đã bắt đầu ghi.";
         } catch {
-          rollbackMessage = " HoÃ n nguyÃªn tá»± Ä‘á»™ng khÃ´ng trá»n váº¹n; dÃ¹ng file BCSX_SECTION1_BACKUP vá»«a táº£i Ä‘á»ƒ phá»¥c há»“i.";
+          rollbackMessage = " Hoàn nguyên tự động không trọn vẹn; dùng file BCSX_SECTION1_BACKUP vừa tải để phục hồi.";
         }
       }
-      setError(`${caught instanceof Error ? caught.message : "KhÃ´ng nháº­p Ä‘Æ°á»£c lá»‹ch sá»­ Má»¥c 1."}${rollbackMessage}`);
+      setError(`${caught instanceof Error ? caught.message : "Không nhập được lịch sử Mục 1."}${rollbackMessage}`);
     } finally {
       setImportingSection1(false);
       if (section1ImportRef.current) section1ImportRef.current.value = "";
@@ -319,14 +327,14 @@ export function BcsxReport() {
     if (!files || isViewer) return;
     setImportingOperations(true); setError(null); setNotice(null);
     try {
-      if (files.length !== 1) throw new Error("HÃ£y chá»n Ä‘Ãºng 1 file DanhSachLenhKetThuc dáº¡ng .xlsx.");
+      if (files.length !== 1) throw new Error("Hãy chọn đúng 1 file DanhSachLenhKetThuc dạng .xlsx.");
       const formData = new FormData();
       formData.append("file", files[0]);
       formData.append("date", operatingDate);
       const response = await fetch("/api/bcsx-operation-import", { method: "POST", body: formData });
       if (!response.ok) {
         const body = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(body?.error || "KhÃ´ng nháº­p Ä‘Æ°á»£c file lá»‡nh Ä‘iá»u Ä‘á»™.");
+        throw new Error(body?.error || "Không nhập được file lệnh điều độ.");
       }
 
       const blob = await response.blob();
@@ -343,7 +351,7 @@ export function BcsxReport() {
 
       const eventsResponse = await fetch("/api/operating-events?date=" + encodeURIComponent(operatingDate), { cache: "no-store" });
       const eventsBody = await eventsResponse.json() as { events?: (OperatingEvent & { unit: Unit })[]; error?: string };
-      if (!eventsResponse.ok || eventsBody.error) throw new Error(eventsBody.error || "ÄÃ£ lÆ°u vÃ  táº£i file QLKT nhÆ°ng khÃ´ng táº£i láº¡i Ä‘Æ°á»£c Má»¥c 3.");
+      if (!eventsResponse.ok || eventsBody.error) throw new Error(eventsBody.error || "Đã lưu và tải file QLKT nhưng không tải lại được Mục 3.");
       const nextEvents: Record<Unit, OperatingEvent[]> = { S1: [], S2: [] };
       for (const event of eventsBody.events || []) nextEvents[event.unit]?.push(event);
       setEvents(nextEvents);
@@ -351,9 +359,9 @@ export function BcsxReport() {
       const s1Count = Number(response.headers.get("X-BCSX-S1-Events") || nextEvents.S1.length);
       const s2Count = Number(response.headers.get("X-BCSX-S2-Events") || nextEvents.S2.length);
       const ignoredRows = Number(response.headers.get("X-BCSX-Ignored-Rows") || 0);
-      setNotice("ÄÃ£ tá»± lÆ°u Má»¥c 3: S1 (" + s1Count + " sá»± kiá»‡n), S2 (" + s2Count + " sá»± kiá»‡n) vÃ  táº£i file QLKT " + fileName + (ignoredRows ? ". Bá» qua " + ignoredRows + " dÃ²ng khÃ´ng thuá»™c ngÃ y Ä‘ang chá»n hoáº·c khÃ´ng Ä‘á»§ Ä‘iá»u kiá»‡n nháº­p." : "."));
+      setNotice("Đã tự lưu Mục 3: S1 (" + s1Count + " sự kiện), S2 (" + s2Count + " sự kiện) và tải file QLKT " + fileName + (ignoredRows ? ". Bỏ qua " + ignoredRows + " dòng không thuộc ngày đang chọn hoặc không đủ điều kiện nhập." : "."));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "KhÃ´ng nháº­p Ä‘Æ°á»£c file lá»‡nh Ä‘iá»u Ä‘á»™.");
+      setError(caught instanceof Error ? caught.message : "Không nhập được file lệnh điều độ.");
     } finally {
       setImportingOperations(false);
       if (operationImportRef.current) operationImportRef.current.value = "";
@@ -396,21 +404,42 @@ export function BcsxReport() {
           thanTonKho: stock24h,
         },
       });
-      setNotice(`ÄÃ£ náº¡p láº¡i sá»‘ liá»‡u liÃªn káº¿t vÃ  than tá»“n kho 24h tá»« Chá»‰ tiÃªu KTKT cho ngÃ y ${operatingDate.split("-").reverse().join("/")}.`);
+      setNotice(`Đã nạp lại số liệu liên kết và than tồn kho 24h từ Chỉ tiêu KTKT cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "KhÃ´ng táº£i láº¡i Ä‘Æ°á»£c sá»‘ liá»‡u tá»« Chá»‰ tiÃªu KTKT.");
+      setError(err instanceof Error ? err.message : "Không tải lại được số liệu từ Chỉ tiêu KTKT.");
     }
   }
 
   function addEvent() {
-    if (!draft.startTime || !draft.description.trim()) { setError("Cáº§n nháº­p thá»i gian báº¯t Ä‘áº§u vÃ  mÃ´ táº£ sá»± kiá»‡n."); return; }
-    const event: OperatingEvent = { startAt: `${operatingDate} ${draft.startTime}`, endAt: draft.endTime ? `${operatingDate} ${draft.endTime}` : "", eventType: draft.eventType, description: draft.description.trim() };
-    setEvents(old => ({ ...old, [unit]: [...old[unit], event].sort((a, b) => a.startAt.localeCompare(b.startAt)) }));
-    setDraft(blankEventDraft());
+    if (isViewer) return;
+    if (!draft.startTime || !draft.description.trim()) { setError("Cần nhập thời gian bắt đầu và mô tả sự kiện."); return; }
+    const startAt = `${draft.startDate} ${draft.startTime}`;
+    const endAt = draft.endTime ? `${draft.endDate} ${draft.endTime}` : "";
+    const dateError = validateOperatingEventDateRange(operatingDate, startAt, endAt);
+    if (dateError) {
+      setError(dateError === "start-date" ? "Ngày bắt đầu phải là ngày vận hành đang chọn." : dateError === "end-date" ? "Ngày kết thúc chỉ được là ngày vận hành hoặc ngày kế tiếp." : "Thời gian kết thúc phải sau thời gian bắt đầu.");
+      return;
+    }
+    const event: OperatingEvent = { startAt, endAt, eventType: draft.eventType, description: draft.description.trim() };
+    setEvents(old => ({ ...old, [unit]: (editingEventIndex === null ? [...old[unit], event] : old[unit].map((item, index) => index === editingEventIndex ? event : item)).sort((a, b) => a.startAt.localeCompare(b.startAt)) }));
+    setEditingEventIndex(null);
+    setDraft(blankEventDraft(operatingDate));
+    setError(null);
+  }
+
+  function editEvent(index: number) {
+    if (isViewer) return;
+    const event = unitEvents[index];
+    setDraft({ startDate: event.startAt.slice(0, 10), startTime: event.startAt.slice(11), endDate: event.endAt ? event.endAt.slice(0, 10) : operatingDate, endTime: event.endAt ? event.endAt.slice(11) : "", eventType: event.eventType, description: event.description });
+    setEditingEventIndex(index);
+    setError(null);
   }
 
   function removeEvent(index: number) {
+    if (isViewer) return;
     setEvents(old => ({ ...old, [unit]: old[unit].filter((_, i) => i !== index) }));
+    setEditingEventIndex(null);
+    setDraft(blankEventDraft(operatingDate));
   }
 
   async function saveEvents() {
@@ -418,10 +447,10 @@ export function BcsxReport() {
     try {
       const res = await fetch("/api/operating-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: operatingDate, unit, events: unitEvents }) });
       const json = await res.json() as { saved?: number; error?: string };
-      if (!res.ok || json.error) throw new Error(json.error || "KhÃ´ng lÆ°u Ä‘Æ°á»£c nháº­t kÃ½ sá»± kiá»‡n.");
-      setNotice(`ÄÃ£ lÆ°u nháº­t kÃ½ sá»± kiá»‡n tá»• mÃ¡y ${unit}.`);
+      if (!res.ok || json.error) throw new Error(json.error || "Không lưu được nhật ký sự kiện.");
+      setNotice(`Đã lưu nhật ký sự kiện tổ máy ${unit}.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "KhÃ´ng lÆ°u Ä‘Æ°á»£c nháº­t kÃ½ sá»± kiá»‡n.");
+      setError(err instanceof Error ? err.message : "Không lưu được nhật ký sự kiện.");
     } finally {
       setSaving(false);
     }
@@ -431,7 +460,7 @@ export function BcsxReport() {
     setExporting(target); setError(null);
     try {
       const res = await fetch(`/api/bcsx-export?date=${operatingDate}&unit=${target}`);
-      if (!res.ok) { const json = await res.json().catch(() => null) as { error?: string } | null; throw new Error(json?.error || "KhÃ´ng xuáº¥t Ä‘Æ°á»£c file."); }
+      if (!res.ok) { const json = await res.json().catch(() => null) as { error?: string } | null; throw new Error(json?.error || "Không xuất được file."); }
       const blob = await res.blob();
       const disposition = res.headers.get("Content-Disposition") || "";
       const match = /filename="([^"]+)"/.exec(disposition);
@@ -441,7 +470,7 @@ export function BcsxReport() {
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "KhÃ´ng xuáº¥t Ä‘Æ°á»£c file.");
+      setError(err instanceof Error ? err.message : "Không xuất được file.");
     } finally {
       setExporting(null);
     }
@@ -453,9 +482,9 @@ export function BcsxReport() {
   const [pasteTargetStart, setPasteTargetStart] = useState<number>(0);
 
   const SHIFT_SLICES = useMemo(() => [
-    { id: "ca1", label: "Ca 1", hours: "00:30 â€“ 08:00", start: 0, end: 16, headerColor: "bg-[#dcebf5] text-[#173b64] border-blue-200" },
-    { id: "ca2", label: "Ca 2", hours: "08:30 â€“ 16:00", start: 16, end: 32, headerColor: "bg-[#dcf5e7] text-[#115e3c] border-emerald-200" },
-    { id: "ca3", label: "Ca 3", hours: "16:30 â€“ 23:59", start: 32, end: 48, headerColor: "bg-[#fef3d6] text-[#854d0e] border-amber-200" },
+    { id: "ca1", label: "Ca 1", hours: "00:30 – 08:00", start: 0, end: 16, headerColor: "bg-[#dcebf5] text-[#173b64] border-blue-200" },
+    { id: "ca2", label: "Ca 2", hours: "08:30 – 16:00", start: 16, end: 32, headerColor: "bg-[#dcf5e7] text-[#115e3c] border-emerald-200" },
+    { id: "ca3", label: "Ca 3", hours: "16:30 – 23:59", start: 32, end: 48, headerColor: "bg-[#fef3d6] text-[#854d0e] border-amber-200" },
   ] as const, []);
 
   function applyPastedMatrix(text: string, startSlotIndex: number, startMetricKey: ShiftMetric = "P"): number {
@@ -503,7 +532,7 @@ export function BcsxReport() {
     if (!text || (!text.includes("\t") && !text.includes("\n"))) return;
     event.preventDefault();
     const count = applyPastedMatrix(text, startIndex, startMetric);
-    if (count > 0) setNotice(`ÄÃ£ dÃ¡n ${count} giÃ¡ trá»‹ tá»« clipboard vÃ o báº£ng.`);
+    if (count > 0) setNotice(`Đã dán ${count} giá trị từ clipboard vào bảng.`);
   }
 
   function handleKeyDown(metric: ShiftMetric, index: number, event: React.KeyboardEvent<HTMLInputElement>) {
@@ -552,11 +581,11 @@ export function BcsxReport() {
         <table className="report-data-table w-full text-xs">
           <thead>
             <tr className="bg-slate-100/90 text-[#173b64] text-[10px] font-bold">
-              <th className="py-1 px-1 text-center w-[40px]">Giá»</th>
-              <th className="py-1 px-0.5 text-center" title="Tá»•ng P (MW) Ä‘áº§u cá»±c mÃ¡y phÃ¡t">P cá»±c</th>
-              <th className="py-1 px-0.5 text-center" title="Tá»•ng Q (MVAr) Ä‘áº§u cá»±c mÃ¡y phÃ¡t">Q cá»±c</th>
-              <th className="py-1 px-0.5 text-center" title="Tá»•ng P (MW) Ä‘iá»ƒm bÃ¡n Ä‘iá»‡n">P bÃ¡n</th>
-              <th className="py-1 px-0.5 text-center" title="Äiá»‡n Ã¡p thanh cÃ¡i (kV)">U Ã¡p</th>
+              <th className="py-1 px-1 text-center w-[40px]">Giờ</th>
+              <th className="py-1 px-0.5 text-center" title="Tổng P (MW) đầu cực máy phát">P cực</th>
+              <th className="py-1 px-0.5 text-center" title="Tổng Q (MVAr) đầu cực máy phát">Q cực</th>
+              <th className="py-1 px-0.5 text-center" title="Tổng P (MW) điểm bán điện">P bán</th>
+              <th className="py-1 px-0.5 text-center" title="Điện áp thanh cái (kV)">U áp</th>
             </tr>
           </thead>
           <tbody>
@@ -575,7 +604,7 @@ export function BcsxReport() {
                         onPaste={e => handleCellPaste(m.key, i, e)}
                         inputMode="decimal"
                         className="h-6 w-full rounded border border-slate-200 bg-white px-1 text-right font-mono text-[11px] text-black outline-none transition focus:border-[#334785] focus:bg-blue-50/50 focus:ring-1 focus:ring-[#334785]/20"
-                        placeholder="â€”"
+                        placeholder="—"
                       />
                     </td>
                   ))}
@@ -584,8 +613,8 @@ export function BcsxReport() {
             })}
             {needDummyRow && (
               <tr className="border-t border-slate-100 bg-slate-50/40 text-slate-300">
-                <td className="py-0.5 px-1 text-center text-[10px]">â€”</td>
-                <td colSpan={4} className="py-0.5 px-1 text-center text-[10px] italic text-slate-400">Káº¿t thÃºc 24h</td>
+                <td className="py-0.5 px-1 text-center text-[10px]">—</td>
+                <td colSpan={4} className="py-0.5 px-1 text-center text-[10px] italic text-slate-400">Kết thúc 24h</td>
               </tr>
             )}
           </tbody>
@@ -597,19 +626,19 @@ export function BcsxReport() {
   const filledCount = useMemo(() => grid.P.filter(v => v.trim() !== "").length, [grid]);
 
   return <div className="flex flex-col gap-3">
-    {/* Header trang tinh gá»n */}
+    {/* Header trang tinh gọn */}
     <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div>
-          <h1 className="text-base font-extrabold text-[#173b64]">Nháº­p liá»‡u váº­n hÃ nh theo ca â€” Xuáº¥t BCSX NMÄ</h1>
-          <p className="text-xs text-slate-500">Nháº­p 1 láº§n trÃªn web, xuáº¥t láº¡i Ä‘Ãºng Ä‘á»‹nh dáº¡ng file BCSX gá»­i Äiá»u Ä‘á»™ NSMO cho cáº£ 3 tá»• mÃ¡y A0/S1/S2.</p>
+          <h1 className="text-base font-extrabold text-[#173b64]">Nhập liệu vận hành theo ca — Xuất BCSX NMĐ</h1>
+          <p className="text-xs text-slate-500">Nhập 1 lần trên web, xuất lại đúng định dạng file BCSX gửi Điều độ NSMO cho cả 3 tổ máy A0/S1/S2.</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-600">NgÃ y:</span>
+          <span className="text-xs font-bold text-slate-600">Ngày:</span>
           <DateField value={operatingDate} onChange={changeOperatingDate} className="w-[145px] h-8 text-xs"/>
           <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
             {(["S1", "S2"] as const).map(u => (
-              <button key={u} type="button" onClick={() => setUnit(u)} className={`rounded-md px-3 py-1 text-xs font-bold transition ${unit === u ? "bg-[#334785] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+              <button key={u} type="button" onClick={() => changeUnit(u)} className={`rounded-md px-3 py-1 text-xs font-bold transition ${unit === u ? "bg-[#334785] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
                 {u}
               </button>
             ))}
@@ -618,29 +647,29 @@ export function BcsxReport() {
       </div>
       {error && <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600">{error}</p>}
       {notice && <p role="status" className="mt-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">{notice}</p>}
-      {loading && <p className="mt-1 text-xs text-slate-400">Äang táº£i dá»¯ liá»‡u ngÃ yâ€¦</p>}
+      {loading && <p className="mt-1 text-xs text-slate-400">Đang tải dữ liệu ngày…</p>}
     </div>
 
-    {/* 1. Báº£ng thÃ´ng sá»‘ ná»­a giá» â€” 3 Ca song song khÃ´ng cáº§n cuá»™n */}
+    {/* 1. Bảng thông số nửa giờ — 3 Ca song song không cần cuộn */}
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#173b64]">
-            1. Báº£ng thÃ´ng sá»‘ ná»­a giá» â€” tá»• mÃ¡y {unit}
+            1. Bảng thông số nửa giờ — tổ máy {unit}
           </h2>
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-            {filledCount}/{SHIFT_TIME_SLOTS.length} Ä‘iá»ƒm Ä‘Ã£ nháº­p ({Math.round(filledCount / SHIFT_TIME_SLOTS.length * 100)}%)
+            {filledCount}/{SHIFT_TIME_SLOTS.length} điểm đã nhập ({Math.round(filledCount / SHIFT_TIME_SLOTS.length * 100)}%)
           </span>
         </div>
 
-        {/* Thanh cÃ´ng cá»¥: Cháº¿ Ä‘á»™ xem + NÃºt dÃ¡n Excel + NÃºt LÆ°u */}
+        {/* Thanh công cụ: Chế độ xem + Nút dán Excel + Nút Lưu */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[11px]">
             <button
               type="button"
               onClick={() => setViewMode("3shifts")}
               className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "3shifts" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-              title="Hiá»ƒn thá»‹ 3 ca song song vá»«a khÃ­t mÃ n hÃ¬nh, khÃ´ng cáº§n cuá»™n"
+              title="Hiển thị 3 ca song song vừa khít màn hình, không cần cuộn"
             >
               3 Ca song song
             </button>
@@ -669,9 +698,9 @@ export function BcsxReport() {
               type="button"
               onClick={() => setViewMode("scroll")}
               className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "scroll" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-              title="Dáº¡ng 1 cá»™t cuá»™n dá»c cá»• Ä‘iá»ƒn"
+              title="Dạng 1 cột cuộn dọc cổ điển"
             >
-              Cuá»™n dá»c
+              Cuộn dọc
             </button>
           </div>
 
@@ -679,9 +708,9 @@ export function BcsxReport() {
             type="button"
             onClick={() => { setPastedExcelText(""); setPasteModalOpen(true); }}
             className="h-7 rounded-lg border border-blue-300 bg-blue-50 px-2.5 text-xs font-bold text-[#334785] shadow-sm hover:bg-blue-100"
-            title="DÃ¡n nhanh hÃ ng loáº¡t tá»« báº£ng tÃ­nh Excel"
+            title="Dán nhanh hàng loạt từ bảng tính Excel"
           >
-            ðŸ“‹ DÃ¡n tá»« Excel
+            📋 Dán từ Excel
           </button>
 
           <input
@@ -697,28 +726,28 @@ export function BcsxReport() {
             onClick={() => section1ImportRef.current?.click()}
             disabled={importingSection1 || saving || isViewer}
             className="h-7 rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-bold text-amber-800 shadow-sm hover:bg-amber-100 disabled:opacity-50"
-            title="Chá»n Ä‘á»“ng thá»i Ä‘Ãºng 2 file Excel BCSX S1 vÃ  S2; há»‡ thá»‘ng tá»± kiá»ƒm tra, sao lÆ°u vÃ  Ä‘á»c láº¡i sau khi ghi"
+            title="Chọn đồng thời đúng 2 file Excel BCSX S1 và S2; hệ thống tự kiểm tra, sao lưu và đọc lại sau khi ghi"
           >
-            {importingSection1 ? "Äang nháº­p 2 fileâ€¦" : "Chá»n 2 file S1 & S2"}
+            {importingSection1 ? "Đang nhập 2 file…" : "Chọn 2 file S1 & S2"}
           </button>
 
           <button
             type="button"
             disabled={saving || isViewer}
-            title={isViewer ? "TÃ i khoáº£n Chá»‰ xem khÃ´ng cÃ³ quyá»n lÆ°u dá»¯ liá»‡u." : undefined}
+            title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
             onClick={() => void saveReadings()}
             className="h-7 rounded-lg bg-gradient-to-r from-[#334785] to-[#4c6bbd] px-3.5 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
           >
-            {saving ? "Äang lÆ°uâ€¦" : "LÆ°u báº£ng thÃ´ng sá»‘"}
+            {saving ? "Đang lưu…" : "Lưu bảng thông số"}
           </button>
         </div>
       </div>
 
       <p className="mt-1.5 text-[11px] text-slate-500">
-        ðŸ’¡ <b>Máº¹o nháº­p nhanh</b>: Báº¥m <b>Enter</b> hoáº·c <b>â†“</b> Ä‘á»ƒ nháº£y xuá»‘ng Ã´ dÆ°á»›i, <b>â†‘</b> nháº£y lÃªn trÃªn, hoáº·c báº¥m trá»±c tiáº¿p vÃ o Ã´ rá»“i áº¥n <b>Ctrl + V</b> Ä‘á»ƒ dÃ¡n dá»¯ liá»‡u copy tá»« Excel.
+        💡 <b>Mẹo nhập nhanh</b>: Bấm <b>Enter</b> hoặc <b>↓</b> để nhảy xuống ô dưới, <b>↑</b> nhảy lên trên, hoặc bấm trực tiếp vào ô rồi ấn <b>Ctrl + V</b> để dán dữ liệu copy từ Excel.
       </p>
 
-      {/* Hiá»ƒn thá»‹ báº£ng theo cháº¿ Ä‘á»™ xem */}
+      {/* Hiển thị bảng theo chế độ xem */}
       <div className="mt-2">
         {viewMode === "3shifts" ? (
           <div className="grid grid-cols-1 gap-2.5 md:grid-cols-3">
@@ -730,22 +759,22 @@ export function BcsxReport() {
           </div>
         ) : viewMode === "ca1" ? (
           <div className="max-w-xl mx-auto">
-            {renderShiftTable(0, 16, "Ca 1", "00:30 â€“ 08:00", "bg-[#dcebf5] text-[#173b64]")}
+            {renderShiftTable(0, 16, "Ca 1", "00:30 – 08:00", "bg-[#dcebf5] text-[#173b64]")}
           </div>
         ) : viewMode === "ca2" ? (
           <div className="max-w-xl mx-auto">
-            {renderShiftTable(16, 32, "Ca 2", "08:30 â€“ 16:00", "bg-[#dcf5e7] text-[#115e3c]")}
+            {renderShiftTable(16, 32, "Ca 2", "08:30 – 16:00", "bg-[#dcf5e7] text-[#115e3c]")}
           </div>
         ) : viewMode === "ca3" ? (
           <div className="max-w-xl mx-auto">
-            {renderShiftTable(32, 48, "Ca 3", "16:30 â€“ 23:59", "bg-[#fef3d6] text-[#854d0e]")}
+            {renderShiftTable(32, 48, "Ca 3", "16:30 – 23:59", "bg-[#fef3d6] text-[#854d0e]")}
           </div>
         ) : (
           <div className="max-h-[480px] overflow-auto rounded-xl border border-slate-200">
             <table className="report-data-table w-full text-xs">
               <thead className="sticky top-0 bg-[#dcebf5] text-[#173b64]">
                 <tr>
-                  <th className="p-2 text-center w-[50px]">Thá»i Ä‘iá»ƒm</th>
+                  <th className="p-2 text-center w-[50px]">Thời điểm</th>
                   {SHIFT_METRICS.map(m => <th key={m.key} className="p-2 text-center font-semibold">{m.label}</th>)}
                 </tr>
               </thead>
@@ -775,35 +804,35 @@ export function BcsxReport() {
       </div>
     </div>
 
-    {/* Modal Há»— trá»£ DÃ¡n nhanh tá»« Excel */}
+    {/* Modal Hỗ trợ Dán nhanh từ Excel */}
     {pasteModalOpen && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
         <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <div>
-              <h3 className="text-sm font-extrabold text-[#173b64]">ðŸ“‹ DÃ¡n nhanh dá»¯ liá»‡u tá»« Excel vÃ o báº£ng</h3>
-              <p className="mt-0.5 text-xs text-slate-500">Copy vÃ¹ng dá»¯ liá»‡u trong Excel (P, Q, P bÃ¡n, U) rá»“i dÃ¡n vÃ o Ã´ bÃªn dÆ°á»›i</p>
+              <h3 className="text-sm font-extrabold text-[#173b64]">📋 Dán nhanh dữ liệu từ Excel vào bảng</h3>
+              <p className="mt-0.5 text-xs text-slate-500">Copy vùng dữ liệu trong Excel (P, Q, P bán, U) rồi dán vào ô bên dưới</p>
             </div>
             <button
               type="button"
               onClick={() => setPasteModalOpen(false)}
               className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             >
-              âœ•
+              ✕
             </button>
           </div>
 
           <div className="mt-3 space-y-2.5">
             <div className="flex items-center gap-2 text-xs">
-              <span className="font-bold text-slate-700">Äiá»n báº¯t Ä‘áº§u tá»«:</span>
+              <span className="font-bold text-slate-700">Điền bắt đầu từ:</span>
               <select
                 value={pasteTargetStart}
                 onChange={e => setPasteTargetStart(Number(e.target.value))}
                 className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-black"
               >
-                <option value={0}>Äáº§u ngÃ y (00:30)</option>
-                <option value={16}>Báº¯t Ä‘áº§u Ca 2 (08:30)</option>
-                <option value={32}>Báº¯t Ä‘áº§u Ca 3 (16:30)</option>
+                <option value={0}>Đầu ngày (00:30)</option>
+                <option value={16}>Bắt đầu Ca 2 (08:30)</option>
+                <option value={32}>Bắt đầu Ca 3 (16:30)</option>
               </select>
             </div>
 
@@ -811,11 +840,11 @@ export function BcsxReport() {
               value={pastedExcelText}
               onChange={e => setPastedExcelText(e.target.value)}
               rows={7}
-              placeholder="DÃ¡n ná»™i dung copy tá»« Excel vÃ o Ä‘Ã¢y (há»— trá»£ cáº£ 4 cá»™t P, Q, P bÃ¡n, U hoáº·c 1 cá»™t dá»c)..."
+              placeholder="Dán nội dung copy từ Excel vào đây (hỗ trợ cả 4 cột P, Q, P bán, U hoặc 1 cột dọc)..."
               className="w-full resize-y rounded-xl border border-slate-300 bg-[#fbfcfe] p-2.5 font-mono text-xs text-black outline-none focus:border-[#334785] focus:ring-1 focus:ring-[#334785]"
             />
             <p className="text-[11px] text-slate-400">
-              * Há»‡ thá»‘ng sáº½ tá»± Ä‘á»™ng tÃ¡ch cá»™t theo phÃ­m Tab vÃ  dÃ²ng theo phÃ­m Enter Ä‘á»ƒ Ä‘iá»n chÃ­nh xÃ¡c vÃ o báº£ng.
+              * Hệ thống sẽ tự động tách cột theo phím Tab và dòng theo phím Enter để điền chính xác vào bảng.
             </p>
           </div>
 
@@ -825,7 +854,7 @@ export function BcsxReport() {
               onClick={() => setPasteModalOpen(false)}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
             >
-              Há»§y
+              Hủy
             </button>
             <button
               type="button"
@@ -833,11 +862,11 @@ export function BcsxReport() {
               onClick={() => {
                 const count = applyPastedMatrix(pastedExcelText, pasteTargetStart, "P");
                 setPasteModalOpen(false);
-                setNotice(`ÄÃ£ Ä‘iá»n thÃ nh cÃ´ng ${count} giÃ¡ trá»‹ vÃ o báº£ng thÃ´ng sá»‘.`);
+                setNotice(`Đã điền thành công ${count} giá trị vào bảng thông số.`);
               }}
               className="rounded-lg bg-gradient-to-r from-[#334785] to-[#4c6bbd] px-4 py-1.5 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
             >
-              Ãp dá»¥ng vÃ o báº£ng
+              Áp dụng vào bảng
             </button>
           </div>
         </div>
@@ -847,47 +876,47 @@ export function BcsxReport() {
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-extrabold text-[#173b64]">2. Sá»‘ liá»‡u tá»•ng ngÃ y â€” tá»• mÃ¡y {unit}</h2>
-          <p className="mt-0.5 text-xs text-slate-500">ToÃ n bá»™ sá»‘ liá»‡u tá»•ng ngÃ y tá»± liÃªn káº¿t tá»« <Link href="/ctktkt-report" className="font-semibold text-[#334785] underline">Chá»‰ tiÃªu KTKT</Link>. <b>Than tá»“n kho 24h</b> = tá»“n kho 24h ngÃ y D-1 + than nháº­p 24h (I36) âˆ’ than tiÃªu thá»¥ quy áº©m S1 + S2, dÃ¹ng chung khi xuáº¥t BCSX S1, S2 vÃ  A0.</p>
+          <h2 className="text-sm font-extrabold text-[#173b64]">2. Số liệu tổng ngày — tổ máy {unit}</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Toàn bộ số liệu tổng ngày tự liên kết từ <Link href="/ctktkt-report" className="font-semibold text-[#334785] underline">Chỉ tiêu KTKT</Link>. <b>Than tồn kho 24h</b> = tồn kho 24h ngày D-1 + than nhập 24h (I36) − than tiêu thụ quy ẩm S1 + S2, dùng chung khi xuất BCSX S1, S2 và A0.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => void reloadTotalsFromCtktkt()}
             className="rounded-lg border border-[#334785] bg-white px-3 py-1.5 text-xs font-bold text-[#334785] hover:bg-slate-50"
-            title="Náº¡p láº¡i sá»‘ liá»‡u Má»¥c 2 má»›i nháº¥t tá»« trang Chá»‰ tiÃªu KTKT"
+            title="Nạp lại số liệu Mục 2 mới nhất từ trang Chỉ tiêu KTKT"
           >
-            ðŸ”„ Náº¡p láº¡i tá»« Chá»‰ tiÃªu KTKT
+            🔄 Nạp lại từ Chỉ tiêu KTKT
           </button>
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <label className="flex flex-col text-xs font-semibold text-slate-500">
-          Sáº£n lÆ°á»£ng Ä‘áº§u cá»±c (MWh)
-          <input disabled value={totals[unit].dauCuc} inputMode="decimal" placeholder="â€”" title="Tá»± liÃªn káº¿t tá»« Chá»‰ tiÃªu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
+          Sản lượng đầu cực (MWh)
+          <input disabled value={totals[unit].dauCuc} inputMode="decimal" placeholder="—" title="Tự liên kết từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">
-          Sáº£n lÆ°á»£ng thÆ°Æ¡ng pháº©m (MWh)
-          <input disabled value={totals[unit].thuongPham} inputMode="decimal" placeholder="â€”" title="Tá»± liÃªn káº¿t tá»« Chá»‰ tiÃªu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
+          Sản lượng thương phẩm (MWh)
+          <input disabled value={totals[unit].thuongPham} inputMode="decimal" placeholder="—" title="Tự liên kết từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">
-          Than tiÃªu thá»¥ quy áº©m 8,5% (táº¥n)
-          <input disabled value={totals[unit].thanTieuThu} inputMode="decimal" placeholder="â€”" title="Tá»± tÃ­nh tá»« Chá»‰ tiÃªu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
+          Than tiêu thụ quy ẩm 8,5% (tấn)
+          <input disabled value={totals[unit].thanTieuThu} inputMode="decimal" placeholder="—" title="Tự tính từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">
-          Than tá»“n kho 24h (táº¥n, toÃ n nhÃ  mÃ¡y)
-          <input disabled value={totals[unit].thanTonKho} inputMode="decimal" placeholder="â€”" title="Tá»± tÃ­nh tá»« Chá»‰ tiÃªu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
+          Than tồn kho 24h (tấn, toàn nhà máy)
+          <input disabled value={totals[unit].thanTonKho} inputMode="decimal" placeholder="—" title="Tự tính từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
         </label>
       </div>
-      {coalStockMissing && <p className="mt-2 text-[11px] font-semibold text-amber-700">Than tá»“n kho 24h chÆ°a tÃ­nh Ä‘Æ°á»£c: {coalStockMissing} Nháº­p táº¡i trang Chá»‰ tiÃªu KTKT, Cá»¥m 1.</p>}
-      <p className="mt-2 text-[11px] text-slate-400">CÃ¡c Ã´ mÃ u xanh lÃ  dá»¯ liá»‡u liÃªn káº¿t, khÃ´ng nháº­p láº¡i. Than tá»“n kho 24h ngÃ y 01 nháº­p má»™t láº§n táº¡i Chá»‰ tiÃªu KTKT; cÃ¡c ngÃ y sau tá»± tÃ­nh, Ä‘á»™c láº­p vá»›i than tá»“n kho 06h00 trÃªn Dá»¯ liá»‡u cÃ¡c thÃ¡ng.</p>
+      {coalStockMissing && <p className="mt-2 text-[11px] font-semibold text-amber-700">Than tồn kho 24h chưa tính được: {coalStockMissing} Nhập tại trang Chỉ tiêu KTKT, Cụm 1.</p>}
+      <p className="mt-2 text-[11px] text-slate-400">Các ô màu xanh là dữ liệu liên kết, không nhập lại. Than tồn kho 24h ngày 01 nhập một lần tại Chỉ tiêu KTKT; các ngày sau tự tính, độc lập với than tồn kho 06h00 trên Dữ liệu các tháng.</p>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-extrabold text-[#173b64]">3. TÃ¬nh hÃ¬nh váº­n hÃ nh (nháº­t kÃ½ sá»± kiá»‡n) â€” tá»• mÃ¡y {unit}</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Chá»n file DanhSachLenhKetThuc: há»‡ thá»‘ng tá»± nháº­n diá»‡n lá»‡nh S1/S2, lÆ°u ngay vÃ o Má»¥c 3 vÃ  táº£i file DH1 Thá»i gian váº­n hÃ nh Ä‘á»ƒ nháº­p lÃªn QLKT. CÃ³ thá»ƒ sá»­a tay sau khi nháº­p.</p>
+          <h2 className="text-sm font-extrabold text-[#173b64]">3. Tình hình vận hành (nhật ký sự kiện) — tổ máy {unit}</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Chọn file DanhSachLenhKetThuc: hệ thống tự nhận diện lệnh S1/S2, lưu ngay vào Mục 3 và tải file DH1 Thời gian vận hành để nhập lên QLKT. Có thể sửa tay sau khi nhập.</p>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -900,77 +929,77 @@ export function BcsxReport() {
           <button
             type="button"
             disabled={importingOperations || saving || isViewer}
-            title={isViewer ? "TÃ i khoáº£n Chá»‰ xem khÃ´ng cÃ³ quyá»n nháº­p dá»¯ liá»‡u." : "Chá»n file DanhSachLenhKetThuc; há»‡ thá»‘ng tá»± lÆ°u S1/S2 vÃ  xuáº¥t file QLKT"}
+            title={isViewer ? "Tài khoản Chỉ xem không có quyền nhập dữ liệu." : "Chọn file DanhSachLenhKetThuc; hệ thống tự lưu S1/S2 và xuất file QLKT"}
             onClick={() => operationImportRef.current?.click()}
             className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
           >
-            {importingOperations ? "Äang nháº­n diá»‡n vÃ  xuáº¥tâ€¦" : "Nháº­p file lá»‡nh & xuáº¥t QLKT"}
+            {importingOperations ? "Đang nhận diện và xuất…" : "Nhập file lệnh & xuất QLKT"}
           </button>
           <button
             type="button"
             disabled={saving || isViewer}
-            title={isViewer ? "TÃ i khoáº£n Chá»‰ xem khÃ´ng cÃ³ quyá»n lÆ°u dá»¯ liá»‡u." : undefined}
+            title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
             onClick={() => void saveEvents()}
             className="rounded-lg bg-[#334785] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50"
           >
-            {saving ? "Äang lÆ°uâ€¦" : "LÆ°u nháº­t kÃ½ sá»± kiá»‡n"}
+            {saving ? "Đang lưu…" : "Lưu nhật ký sự kiện"}
           </button>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-end gap-2">
-        <label className="flex flex-col text-xs font-semibold text-slate-500">Báº¯t Ä‘áº§u<input type="time" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
-        <label className="flex flex-col text-xs font-semibold text-slate-500">Káº¿t thÃºc<input type="time" value={draft.endTime} onChange={e => setDraft(d => ({ ...d, endTime: e.target.value }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
-        <label className="flex flex-col text-xs font-semibold text-slate-500">Loáº¡i sá»± kiá»‡n<select value={draft.eventType} onChange={e => setDraft(d => ({ ...d, eventType: Number(e.target.value) }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black">{EVENT_TYPES.map(t => <option key={t.code} value={t.code}>{t.code} â€” {t.label}</option>)}</select></label>
-        <label className="flex min-w-[220px] flex-1 flex-col text-xs font-semibold text-slate-500">MÃ´ táº£<input value={draft.description} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} placeholder="VÃ­ dá»¥: TÄƒng táº£i S1 tá»« 435.7MW lÃªn 536MW" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
-        <button type="button" onClick={addEvent} className="rounded-lg border border-[#334785] px-3 py-1.5 text-xs font-bold text-[#334785] hover:bg-slate-50">+ ThÃªm dÃ²ng</button>
+        <label className="flex flex-col text-xs font-semibold text-slate-500">Ngày bắt đầu<DateField value={draft.startDate} onChange={startDate => setDraft(d => ({ ...d, startDate }))} min={operatingDate} max={operatingDate} className="mt-1 h-9 w-[145px]" disabled={isViewer}/></label>
+        <label className="flex flex-col text-xs font-semibold text-slate-500">Bắt đầu<input type="time" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
+        <label className="flex flex-col text-xs font-semibold text-slate-500">Ngày kết thúc<DateField value={draft.endDate} onChange={endDate => setDraft(d => ({ ...d, endDate }))} min={operatingDate} max={nextOperatingDate(operatingDate)} className="mt-1 h-9 w-[145px]" disabled={isViewer}/></label>
+        <label className="flex flex-col text-xs font-semibold text-slate-500">Kết thúc<input type="time" value={draft.endTime} onChange={e => setDraft(d => ({ ...d, endTime: e.target.value }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
+        <label className="flex flex-col text-xs font-semibold text-slate-500">Loại sự kiện<select value={draft.eventType} onChange={e => setDraft(d => ({ ...d, eventType: Number(e.target.value) }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black">{EVENT_TYPES.map(t => <option key={t.code} value={t.code}>{t.code} — {t.label}</option>)}</select></label>
+        <label className="flex min-w-[220px] flex-1 flex-col text-xs font-semibold text-slate-500">Mô tả<input value={draft.description} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} placeholder="Ví dụ: Tăng tải S1 từ 435.7MW lên 536MW" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
+        <button type="button" disabled={isViewer} onClick={addEvent} className="rounded-lg border border-[#334785] px-3 py-1.5 text-xs font-bold text-[#334785] hover:bg-slate-50 disabled:opacity-50">{editingEventIndex === null ? "+ Thêm dòng" : "Cập nhật"}</button>
+        {editingEventIndex !== null && <button type="button" onClick={() => { setEditingEventIndex(null); setDraft(blankEventDraft(operatingDate)); }} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600">Hủy</button>}
       </div>
       <div className="mt-3 overflow-auto rounded-xl border border-slate-200">
         <table className="report-data-table w-full min-w-[560px] text-xs">
           <thead className="bg-[#dcebf5] text-[#173b64]">
             <tr>
-              <th className="p-2 text-left w-[80px]">Báº¯t Ä‘áº§u</th>
-              <th className="p-2 text-left w-[80px]">Káº¿t thÃºc</th>
-              <th className="p-2 text-center w-[60px]">Loáº¡i</th>
-              <th className="p-2 text-left">Sá»± kiá»‡n</th>
+              <th className="p-2 text-left w-[80px]">Bắt đầu</th>
+              <th className="p-2 text-left w-[80px]">Kết thúc</th>
+              <th className="p-2 text-center w-[60px]">Loại</th>
+              <th className="p-2 text-left">Sự kiện</th>
               <th className="p-2 text-right w-[60px]"></th>
             </tr>
           </thead>
           <tbody>
             {unitEvents.map((e, i) => (
               <tr key={i} className="border-t border-slate-100 hover:bg-slate-50/60">
-                <td className="p-2 font-mono text-black font-semibold">{e.startAt.slice(11)}</td>
-                <td className="p-2 font-mono text-black">{e.endAt ? e.endAt.slice(11) : "â€”"}</td>
+                <td className="p-2 font-mono text-black font-semibold">{e.startAt.slice(8, 10)}/{e.startAt.slice(5, 7)}/{e.startAt.slice(0, 4)} {e.startAt.slice(11)}</td>
+                <td className="p-2 font-mono text-black">{e.endAt ? `${e.endAt.slice(8, 10)}/${e.endAt.slice(5, 7)}/${e.endAt.slice(0, 4)} ${e.endAt.slice(11)}` : "—"}</td>
                 <td className="p-2 text-center text-black font-bold">{e.eventType}</td>
                 <td className="p-2 text-black">{e.description}</td>
                 <td className="p-2 text-right">
-                  <button type="button" onClick={() => removeEvent(i)} className="text-xs font-bold text-red-500 hover:text-red-700">XÃ³a</button>
+                  <button type="button" disabled={isViewer} onClick={() => editEvent(i)} className="text-xs font-bold text-blue-600 hover:text-blue-800 disabled:opacity-50">Sửa</button>
+                  <span className="mx-1 text-slate-300">|</span>
+                  <button type="button" disabled={isViewer} onClick={() => removeEvent(i)} className="text-xs font-bold text-red-500 hover:text-red-700 disabled:opacity-50">Xóa</button>
                 </td>
               </tr>
             ))}
             {unitEvents.length === 0 && (
               <tr>
                 <td colSpan={5} className="p-3 text-center text-slate-400 italic">
-                  ChÆ°a cÃ³ sá»± kiá»‡n nÃ o cho tá»• mÃ¡y {unit} trong ngÃ y {operatingDate.split("-").reverse().join("/")}. Báº¥m &quot;Nháº­p file lá»‡nh &amp; xuáº¥t QLKT&quot; hoáº·c thÃªm dÃ²ng thá»§ cÃ´ng.
+                  Chưa có sự kiện nào cho tổ máy {unit} trong ngày {operatingDate.split("-").reverse().join("/")}. Bấm &quot;Nhập file lệnh &amp; xuất QLKT&quot; hoặc thêm dòng thủ công.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex justify-end"><button type="button" disabled={saving || isViewer} title={isViewer ? "TÃ i khoáº£n Chá»‰ xem khÃ´ng cÃ³ quyá»n lÆ°u dá»¯ liá»‡u." : undefined} onClick={() => void saveEvents()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Äang lÆ°uâ€¦" : "LÆ°u nháº­t kÃ½ sá»± kiá»‡n"}</button></div>
+      <div className="mt-3 flex justify-end"><button type="button" disabled={saving || isViewer} title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} onClick={() => void saveEvents()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu nhật ký sự kiện"}</button></div>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-extrabold text-[#173b64]">4. Xuáº¥t file BCSX_NMD</h2>
-      <p className="mt-1 text-sm text-slate-500">Xuáº¥t Ä‘Ãºng Ä‘á»‹nh dáº¡ng file máº«u gá»‘c, Ä‘Ã£ Ä‘iá»n sá»‘ liá»‡u â€” nhá»› LÆ°u báº£ng thÃ´ng sá»‘, LÆ°u sá»‘ liá»‡u tá»•ng ngÃ y vÃ  LÆ°u nháº­t kÃ½ sá»± kiá»‡n trÆ°á»›c khi xuáº¥t. File A0 cá»™ng S1+S2 cho P/Q/P Ä‘iá»ƒm bÃ¡n; riÃªng Utc 220 kV láº¥y S1. Nháº­t kÃ½ sá»± kiá»‡n A0 xáº¿p cÃ¡c dÃ²ng cá»§a S1 trÆ°á»›c rá»“i Ä‘áº¿n S2.</p>
+      <h2 className="text-sm font-extrabold text-[#173b64]">4. Xuất file BCSX_NMD</h2>
+      <p className="mt-1 text-sm text-slate-500">Xuất đúng định dạng file mẫu gốc, đã điền số liệu — nhớ Lưu bảng thông số, Lưu số liệu tổng ngày và Lưu nhật ký sự kiện trước khi xuất. File A0 cộng S1+S2 cho P/Q/P điểm bán; riêng Utc 220 kV lấy S1. Nhật ký sự kiện A0 xếp các dòng của S1 trước rồi đến S2.</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        {(["A0", "S1", "S2"] as const).map(target => <button key={target} type="button" disabled={exporting !== null} onClick={() => void exportFile(target)} className="rounded-lg border border-[#334785] bg-white px-4 py-2 text-sm font-bold text-[#334785] disabled:opacity-50">{exporting === target ? "Äang xuáº¥tâ€¦" : `Xuáº¥t BCSX_NMD_${target}`}</button>)}
+        {(["A0", "S1", "S2"] as const).map(target => <button key={target} type="button" disabled={exporting !== null} onClick={() => void exportFile(target)} className="rounded-lg border border-[#334785] bg-white px-4 py-2 text-sm font-bold text-[#334785] disabled:opacity-50">{exporting === target ? "Đang xuất…" : `Xuất BCSX_NMD_${target}`}</button>)}
       </div>
     </div>
   </div>;
 }
-
-
-
-
-
