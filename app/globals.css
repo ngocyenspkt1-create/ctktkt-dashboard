@@ -72,11 +72,12 @@ body {
 }
 button, input, select, textarea { font: inherit; }
 
-/* Styling cho các ô input b? khóa */
+/* Ô dữ liệu bị khóa: canh giữa và hiển thị rõ hơn các giá trị chỉ đọc. */
 input:disabled,
 input[readonly] {
-  text-align: center;
-  font-weight: 600;
+  text-align: center !important;
+  font-size: 0.9375rem !important;
+  font-weight: 700 !important;
 }
 
 .ui-3d-card,
