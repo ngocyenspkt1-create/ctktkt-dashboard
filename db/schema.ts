@@ -121,3 +121,23 @@ export const waterShiftLogs = sqliteTable("water_shift_logs", {
   index("idx_water_shift_date").on(table.logDate),
 ]);
 
+export const chemicalUsageLogs = sqliteTable("chemical_usage_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  usageDate: text("usage_date").notNull(),
+  chemicalCode: text("chemical_code").notNull(),
+  materialCode: text("material_code").notNull(),
+  chemicalName: text("chemical_name").notNull(),
+  unit: text("unit").notNull().default("Tấn"),
+  quantity: real("quantity").notNull(),
+  purpose: text("purpose").notNull().default(""),
+  plantUnit: text("plant_unit").notNull().default("Chung"),
+  reference: text("reference").notNull().default(""),
+  enteredByUserId: integer("entered_by_user_id").notNull(),
+  enteredByName: text("entered_by_name").notNull(),
+  enteredByPosition: text("entered_by_position").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [
+  index("idx_chemical_usage_date").on(table.usageDate),
+  index("idx_chemical_usage_code_date").on(table.chemicalCode, table.usageDate),
+]);

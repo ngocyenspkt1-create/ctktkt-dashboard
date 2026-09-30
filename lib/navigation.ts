@@ -3,13 +3,14 @@ import {
   CalendarRange,
   ClipboardList,
   Droplets,
+  FlaskConical,
   FileSpreadsheet,
   Flame,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
-export type NavKey = "data" | "ctktkt" | "bcsx" | "water" | "ppa" | "pmis" | "admin-users";
+export type NavKey = "data" | "ctktkt" | "bcsx" | "water" | "chemical-usage" | "ppa" | "pmis" | "admin-users";
 
 export type NavItem = { key: NavKey; href: string; label: string; description: string; icon: LucideIcon; keywords: string };
 
@@ -21,6 +22,7 @@ const NAV_GROUPS: Array<{ title: string; adminOnly?: boolean; items: NavItem[] }
       { key: "ctktkt", href: "/ctktkt-report", label: "Báo cáo Chỉ tiêu KTKT", description: "Nhập liệu theo cương vị, xuất Excel, báo cáo mail", icon: FileSpreadsheet, keywords: "chi tieu ktkt excel mail than dau hoi nuoc nh3" },
       { key: "bcsx", href: "/bcsx-report", label: "Nhập liệu BCSX", description: "48 điểm nửa giờ, sự kiện vận hành, xuất A0/S1/S2", icon: ClipboardList, keywords: "bcsx san xuat su kien lenh dieu do ton kho" },
       { key: "water", href: "/water-report", label: "Theo dõi lượng nước", description: "Công tơ nước theo ca 06h · 14h · 22h", icon: Droplets, keywords: "nuoc demin ca tai sinh hat" },
+      { key: "chemical-usage", href: "/chemical-usage", label: "Theo dõi hóa chất", description: "Hóa chất XLN, Polishing theo ngày và cương vị", icon: FlaskConical, keywords: "hoa chat xln polishing pac naocl hcl naoh nh4oh" },
     ],
   },
   {

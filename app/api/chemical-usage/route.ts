@@ -1,0 +1,126 @@
+import { getRawDb } from "@/db";
+import { getSessionUser } from "@/lib/auth/server";
+import { canEnterChemical, CHEMICAL_CATALOG, editableChemicalsFor, findChemical } from "@/lib/chemical-usage/catalog";
+import { ensureChemicalUsageSchema } from "@/lib/chemical-usage/schema";
+
+const monthPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
+const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
+const allowedPlantUnits = new Set(["Chung", "S1", "S2", "S1/S2"]);
+
+function isValidIsoDate(value: string): boolean {
+  if (!datePattern.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+}
+
+function nextMonth(month: string): string {
+  const [yearText, monthText] = month.split("-");
+  const year = Number(yearText);
+  const number = Number(monthText);
+  return number === 12 ? `${year + 1}-01` : `${year}-${String(number + 1).padStart(2, "0")}`;
+}
+
+export async function GET(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
+
+  const month = new URL(request.url).searchParams.get("month") || "";
+  if (!monthPattern.test(month)) {
+    return Response.json({ error: "Tháng không hợp lệ, cần định dạng YYYY-MM." }, { status: 400 });
+  }
+
+  try {
+    const rawDb = getRawDb();
+    await ensureChemicalUsageSchema(rawDb);
+    const result = await rawDb.prepare(`
+      SELECT id, usage_date, chemical_code, material_code, chemical_name, unit, quantity,
+             purpose, plant_unit, reference, entered_by_user_id, entered_by_name,
+             entered_by_position, created_at, updated_at
+      FROM chemical_usage_logs
+      WHERE usage_date >= ? AND usage_date < ?
+      ORDER BY usage_date DESC, id DESC
+    `).bind(`${month}-01`, `${nextMonth(month)}-01`).all();
+
+    return Response.json({
+      ok: true,
+      month,
+      records: result.results,
+      catalog: CHEMICAL_CATALOG,
+      editableCodes: editableChemicalsFor(user).map(item => item.code),
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("Lỗi đọc theo dõi hóa chất:", error);
+    return Response.json({ error: "Không thể đọc dữ liệu theo dõi hóa chất." }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
+
+  try {
+    const body = (await request.json()) as {
+      usageDate?: unknown;
+      chemicalCode?: unknown;
+      quantity?: unknown;
+      purpose?: unknown;
+      plantUnit?: unknown;
+      reference?: unknown;
+    };
+    const usageDate = String(body.usageDate || "").trim();
+    const chemicalCode = String(body.chemicalCode || "").trim();
+    const quantity = Number(body.quantity);
+    const purpose = String(body.purpose || "").trim().slice(0, 500);
+    const plantUnit = String(body.plantUnit || "Chung").trim();
+    const reference = String(body.reference || "").trim().slice(0, 300);
+    const chemical = findChemical(chemicalCode);
+
+    if (!isValidIsoDate(usageDate)) {
+      return Response.json({ error: "Ngày thực hiện không hợp lệ." }, { status: 400 });
+    }
+    if (!chemical) {
+      return Response.json({ error: "Loại hóa chất không thuộc danh mục được theo dõi." }, { status: 400 });
+    }
+    if (!canEnterChemical(user, chemicalCode)) {
+      return Response.json({ error: `Cương vị ${user.position || "chưa xác định"} không được nhập ${chemical.name}.` }, { status: 403 });
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) {
+      return Response.json({ error: "Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn." }, { status: 400 });
+    }
+    if (!purpose) {
+      return Response.json({ error: "Vui lòng nhập nội dung công tác/lý do sử dụng." }, { status: 400 });
+    }
+    if (!allowedPlantUnits.has(plantUnit)) {
+      return Response.json({ error: "Tổ máy không hợp lệ." }, { status: 400 });
+    }
+
+    const rawDb = getRawDb();
+    await ensureChemicalUsageSchema(rawDb);
+    const saved = await rawDb.prepare(`
+      INSERT INTO chemical_usage_logs (
+        usage_date, chemical_code, material_code, chemical_name, unit, quantity,
+        purpose, plant_unit, reference, entered_by_user_id, entered_by_name,
+        entered_by_position, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).bind(
+      usageDate,
+      chemical.code,
+      chemical.materialCode,
+      chemical.name,
+      chemical.unit,
+      quantity,
+      purpose,
+      plantUnit,
+      reference,
+      user.id,
+      user.displayName,
+      user.position || "",
+    ).run();
+
+    return Response.json({ ok: true, id: saved.meta.last_row_id }, { status: 201 });
+  } catch (error) {
+    console.error("Lỗi lưu theo dõi hóa chất:", error);
+    return Response.json({ error: "Không thể lưu dữ liệu theo dõi hóa chất." }, { status: 500 });
+  }
+}
