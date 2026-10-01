@@ -45,3 +45,11 @@ test("chemical entry is always stored for the common plant and offers an explici
   assert.match(client, /Lý do khác…/);
   assert.match(client, /Tổ máy: <strong>Chung<\/strong>/);
 });
+
+test("chemical summary cards filter the monthly log", () => {
+  const client = readFileSync(new URL("../components/chemical-usage-client.tsx", import.meta.url), "utf8");
+  assert.match(client, /setFilterChemicalCode\(current => current === item\.code \? null : item\.code\)/);
+  assert.match(client, /records\.filter\(record => record\.chemical_code === filterChemicalCode\)/);
+  assert.match(client, /filteredRecords\.map\(record =>/);
+  assert.match(client, /Xem tất cả/);
+});

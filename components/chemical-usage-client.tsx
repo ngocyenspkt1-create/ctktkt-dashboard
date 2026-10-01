@@ -50,6 +50,7 @@ export function ChemicalUsageClient() {
   const [reasonChoice, setReasonChoice] = useState<string>(allowedCatalog[0]?.suggestedReasons[0] || "");
   const [otherReason, setOtherReason] = useState("");
   const [reference, setReference] = useState("");
+  const [filterChemicalCode, setFilterChemicalCode] = useState<ChemicalCode | null>(null);
 
   async function fetchMonth(targetMonth: string) {
     try {
@@ -101,6 +102,15 @@ export function ChemicalUsageClient() {
     }
     return result;
   }, [records]);
+
+  const filteredRecords = useMemo(
+    () => filterChemicalCode
+      ? records.filter(record => record.chemical_code === filterChemicalCode)
+      : records,
+    [filterChemicalCode, records],
+  );
+
+  const filteredChemical = catalog.find(item => item.code === filterChemicalCode);
 
   async function saveRecord(event: React.FormEvent) {
     event.preventDefault();
@@ -159,13 +169,26 @@ export function ChemicalUsageClient() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section aria-label="Lọc nhật ký theo loại hóa chất" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {catalog.map(item => (
-          <article key={item.code} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <button
+            key={item.code}
+            type="button"
+            aria-pressed={filterChemicalCode === item.code}
+            onClick={() => setFilterChemicalCode(current => current === item.code ? null : item.code)}
+            className={`rounded-xl border p-4 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-300 ${
+              filterChemicalCode === item.code
+                ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200"
+                : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40"
+            }`}
+          >
             <p className="text-sm font-semibold text-slate-900">{item.name}</p>
             <p className="mt-1 text-2xl font-bold text-emerald-700">{formatNumber(totals.get(item.code) || 0)} <span className="text-sm font-medium text-slate-500">{item.unit}</span></p>
             <p className="mt-2 text-xs leading-5 text-slate-500">Nhập: {item.allowedPositions.join(" · ")}</p>
-          </article>
+            <p className="mt-2 text-xs font-semibold text-emerald-700">
+              {filterChemicalCode === item.code ? "Đang lọc — bấm lại để bỏ lọc" : "Bấm để xem nhật ký"}
+            </p>
+          </button>
         ))}
       </section>
 
@@ -226,9 +249,18 @@ export function ChemicalUsageClient() {
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <h3 className="font-semibold text-slate-900">Nhật ký tháng {month.slice(5, 7)}/{month.slice(0, 4)}</h3>
-            <p className="mt-1 text-sm text-slate-500">{records.length} lượt sử dụng đã ghi nhận</p>
+          <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <div>
+              <h3 className="font-semibold text-slate-900">
+                Nhật ký {filteredChemical ? filteredChemical.name : "tất cả hóa chất"} tháng {month.slice(5, 7)}/{month.slice(0, 4)}
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">{filteredRecords.length} lượt sử dụng đã ghi nhận</p>
+            </div>
+            {filterChemicalCode && (
+              <button type="button" onClick={() => setFilterChemicalCode(null)} className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                Xem tất cả
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-[1050px] w-full text-sm">
@@ -237,8 +269,8 @@ export function ChemicalUsageClient() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Đang tải dữ liệu…</td></tr> : null}
-                {!loading && records.length === 0 ? <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Chưa có dữ liệu trong tháng này.</td></tr> : null}
-                {!loading && records.map(record => (
+                {!loading && filteredRecords.length === 0 ? <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Chưa có dữ liệu phù hợp trong tháng này.</td></tr> : null}
+                {!loading && filteredRecords.map(record => (
                   <tr key={record.id} className="align-top hover:bg-slate-50/60">
                     <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-700">{formatDate(record.usage_date)}</td>
                     <td className="px-4 py-3"><span className="font-semibold text-slate-900">{record.chemical_name}</span><span className="block text-xs text-slate-400">{record.material_code}</span></td>
