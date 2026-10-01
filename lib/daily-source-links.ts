@@ -1,11 +1,12 @@
 import {
   calculateCtktktSummary,
   calculateDailyAverageMoisture,
-  calculateDailyOilConsumption,
+  calculateOilEventSummary,
   calculateNh3DcsSummary,
   calculateNh3Summary,
   type CtktktDayEntries,
 } from "./ctktkt-report.ts";
+import { isCtktktOilEventCode } from "./ctktkt-oil-event.ts";
 
 export const CTKTKT_LINKED_DAILY_CODES = new Set([
   "B", "C", "H", "I", "X", "AE", "AF", "AE_ADJ", "AF_ADJ", "AJ", "AT", "BN", "BQ", "BR", "CJ", "CN", "CC", "CD", "CE", "CF", "Q181",
@@ -68,9 +69,11 @@ export function deriveDailyValuesFromCtktkt(
   setNumber(result, "AT", numberOf(current, "W87"));
   setNumber(result, "CJ", calculateDailyAverageMoisture(current, previous));
 
-  const oilS1 = calculateDailyOilConsumption(current, "s1", previous);
-  const oilS2 = calculateDailyOilConsumption(current, "s2", previous);
-  setNumber(result, "X", oilS1 === null || oilS2 === null ? null : Math.max(0, oilS1 + oilS2));
+  const oilEventCode = current.STARTUP_EVENT || "";
+  const oilEvent = isCtktktOilEventCode(oilEventCode)
+    ? calculateOilEventSummary(current, oilEventCode)
+    : null;
+  setNumber(result, "X", oilEvent?.totalTonnes);
 
   const nh3 = calculateNh3Summary(current, null, null);
   setNumber(result, "BN", nh3.usedTonnes);

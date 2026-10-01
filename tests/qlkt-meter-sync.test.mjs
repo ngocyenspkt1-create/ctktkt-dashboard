@@ -154,6 +154,8 @@ test('each report keeps its intended data action and NH3 overlaps link from CTKT
   assert.match(linkSource, /setNumber\(result, "AE", summary\.s1\.adjustedCoalTonnes\)/);
   assert.match(linkSource, /setNumber\(result, "AF", summary\.s2\.adjustedCoalTonnes\)/);
   assert.match(linkSource, /setNumber\(result, "AT", numberOf\(current, "W87"\)\)/);
+  assert.match(linkSource, /calculateOilEventSummary\(current, oilEventCode\)/);
+  assert.doesNotMatch(linkSource, /calculateDailyOilConsumption/);
   assert.match(dailySource, /Than nhập 06h \(PMIS\)/);
   assert.match(linkSource, /setNumber\(result, "CC", deminWaterUsage\(current, previous, "72"\)\)/);
   assert.match(linkSource, /setNumber\(result, "CF", numberOf\(current, "Z73"\)\)/);

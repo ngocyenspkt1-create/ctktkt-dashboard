@@ -22,6 +22,7 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
     J157: "12100", K157: "11200", J158: "12200", K158: "11300", I36: "456.7",
     N81: "111.84", N82: "486.25", P72: "42.21", P73: "117.891", P74: "141.595", Q181: "10460.9417", W87: "4441.3",
     X72: "7337.43", X73: "2128.89", Z72: "0", Z73: "200", WATER_ADJ_S1: "0", WATER_ADJ_S2: "0",
+    STARTUP_EVENT: "startup", C87: "100", C88: "10", E87: "120", E88: "15", G87: "150", G88: "20",
   };
   fillRange(current, "X", 10);
   fillRange(current, "Z", 20);
@@ -48,7 +49,7 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.ok(Number(linked.AE_ADJ) > 0);
   assert.ok(Number(linked.AF_ADJ) > 0);
   assert.equal(linked.AT, "4441.3");
-  assert.equal(linked.X, "48.048");
+  assert.equal(linked.X, "40");
   assert.equal(linked.BQ, "8");
   assert.equal(linked.BR, "6.82");
   assert.equal(linked.BN, "18.506");
@@ -62,20 +63,18 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.ok(Number(linked.AJ) > 0);
 });
 
-test("daily HFO requires complete 24h readings for both units", () => {
-  const previous = { AB13: "100", AB14: "20", AL13: "200", AL14: "40" };
-  const current = { AB13: "160", AB14: "32", AL13: "260" };
+test("monthly HFO remains blank when the selected oil event is incomplete", () => {
+  const current = { STARTUP_EVENT: "shutdown", C87: "100", C88: "10", F87: "120" };
 
-  const linked = deriveDailyValuesFromCtktkt(current, previous);
+  const linked = deriveDailyValuesFromCtktkt(current);
   assert.equal(linked.X, undefined);
 });
 
-test("daily HFO cannot be negative when return-meter drift exceeds supply", () => {
-  const previous = { AB13: "1618075.8", AB14: "1595617.6", AL13: "40984097.7", AL14: "875373788.5" };
-  const current = { AB13: "1618473.1", AB14: "1596017", AL13: "41337029", AL14: "875726692" };
+test("monthly HFO uses the total shown in CTKTKT unit event group", () => {
+  const current = { STARTUP_EVENT: "incident_oil", C87: "100", C88: "10", D87: "135", D88: "15" };
 
-  const linked = deriveDailyValuesFromCtktkt(current, previous);
-  assert.equal(linked.X, "0");
+  const linked = deriveDailyValuesFromCtktkt(current);
+  assert.equal(linked.X, "30");
 });
 
 test("QLKT monthly synchronization excludes fields already linked from CTKTKT", () => {
