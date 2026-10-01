@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DateField } from "@/components/ui/date-field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
@@ -82,6 +82,12 @@ const fields: Record<Group, Field[]> = {
 };
 
 const numericCodes = new Set(Object.values(fields).flat().filter(f => f.input && f.code !== "CW").map(f => f.code));
+const monthlyTotalCodes = new Set([
+  "B", "C", "D", "F", "H", "I", "J", "L", "N", "O", "P", "R",
+  "X", "AE", "AF", "AE_ADJ", "AF_ADJ", "AT",
+  "BN", "BQ", "BR", "CN", "BZ", "CA", "CC", "CD", "CE", "CF", "CM",
+  "CQ", "CS", "CT", "CU", "CV",
+]);
 const currentPeriod = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(new Date());
 const numberValue = (value?: string) => { if (!value?.trim()) return null; const n = Number(value.replace(",", ".")); return Number.isFinite(n) ? n : null; };
 const formatResult = (value: number | null) => value === null ? "—" : new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(value);
@@ -216,6 +222,11 @@ export function DailyProductionTable() {
     .filter(f => showCalculated ? !f.input && !f.noteFor : f.input || f.noteFor);
   const tableSections = [{ label: "", items: visibleFields }];
   const displayedRows = rows.slice(0, days);
+  function monthlyTotal(field: Field) {
+    if (!monthlyTotalCodes.has(field.code)) return null;
+    const values = fieldSeries(field).map(point => point.value).filter((value): value is number => value !== null && Number.isFinite(value));
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+  }
   const daysWithData = rows.slice(0, days).filter(row => Object.values(row).some(Boolean)).length;
   const abnormalCount = rows.slice(0, days).reduce((sum, _row, day) => sum + Number(isWaterAbnormal(rows, day, "CE")) + Number(isWaterAbnormal(rows, day, "CF")), 0);
   function update(day:number, code:string, value:string){ if(numericCodes.has(code) && value!=="" && !/^-?\d*(?:[.,]\d*)?$/.test(value)) return; setRows(old=>old.map((r,i)=>i===day?{...r,[code]:value}:r)); markDirty(`${day}:${code.endsWith("_NOTE")?code.slice(0,-5):code}`); setMessage(""); }
@@ -329,7 +340,7 @@ export function DailyProductionTable() {
           <TableBody>{displayedRows.map((row,d)=>{const result=calculateDailyProduction(row);return <TableRow key={d} className="h-9 hover:bg-[#f5faff]"><TableCell className="border-r bg-white p-0.5 text-center text-[11px] font-normal text-black">{d+1}</TableCell>{section.items.map(f=>{
             const cellKey=`${d}:${f.code}`;
             if(f.input){const isLinked=ctktktLinkedCells.has(cellKey);return <TableCell key={f.code} onClick={()=>selectCell(cellKey)} title={isLinked?"Tự liên kết từ Báo cáo chỉ tiêu KTKT":undefined} className={`group relative border-r p-0 ${isLinked?"bg-emerald-50":cellBg(cellKey)}`}>{noteButton(d,f)}<input disabled={isLinked} aria-label={`${f.label}, ngày ${d+1}`} inputMode={f.code==="CW"?"text":"decimal"} value={focusedCell===cellKey?(row[f.code]||""):formatInputValue(row[f.code])} onFocus={()=>setFocusedCell(cellKey)} onBlur={()=>setFocusedCell("")} onChange={e=>update(d,f.code,e.target.value)} className="h-8 w-full bg-transparent px-1 text-center text-[11px] font-normal tabular-nums text-black outline-none focus:ring-2 focus:ring-inset focus:ring-[#4c78a8] disabled:cursor-not-allowed disabled:font-semibold disabled:text-emerald-800"/></TableCell>;}
-            return <TableCell key={f.code} onClick={()=>selectCell(cellKey)} className={`group relative cursor-pointer border-r px-0.5 text-center text-[11px] font-normal tabular-nums text-black ${cellBg(cellKey)}`}>{noteButton(d,f)}{formatResult(result[f.code]??null)}</TableCell>})}</TableRow>})}</TableBody></Table></div>)}</div>}
+            return <TableCell key={f.code} onClick={()=>selectCell(cellKey)} className={`group relative cursor-pointer border-r px-0.5 text-center text-[11px] font-normal tabular-nums text-black ${cellBg(cellKey)}`}>{noteButton(d,f)}{formatResult(result[f.code]??null)}</TableCell>})}</TableRow>})}</TableBody><TableFooter><TableRow className="h-10 bg-[#dcebf5] hover:bg-[#dcebf5]"><TableCell className="border-r px-1 text-center text-[10px] font-extrabold text-[#173b64]">Tổng tháng</TableCell>{section.items.map(field=><TableCell key={field.code} className="border-r px-1 text-center text-[11px] font-extrabold tabular-nums text-[#173b64]">{monthlyTotalCodes.has(field.code)?formatResult(monthlyTotal(field)):"—"}</TableCell>)}</TableRow></TableFooter></Table></div>)}</div>}
         <div className="flex min-h-10 items-center justify-between border-t bg-white px-3 py-2 text-[11px] text-slate-600"><span>Nền trắng: số liệu · góc cam: ô có ghi chú</span>{g.key==="environment"&&<span className="font-semibold text-amber-800">CE/CF tăng &gt;30% và ≥100 m³: chỉ cảnh báo, không chặn lưu</span>}</div>
       </TabsContent>)}
     </Tabs>

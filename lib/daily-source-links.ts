@@ -8,11 +8,11 @@ import {
 } from "./ctktkt-report.ts";
 
 export const CTKTKT_LINKED_DAILY_CODES = new Set([
-  "B", "C", "H", "I", "X", "AE", "AF", "AE_ADJ", "AF_ADJ", "AJ", "AT", "BN", "BQ", "BR", "CJ", "CN", "Q181",
+  "B", "C", "H", "I", "X", "AE", "AF", "AE_ADJ", "AF_ADJ", "AJ", "AT", "BN", "BQ", "BR", "CJ", "CN", "CC", "CD", "CE", "CF", "Q181",
 ]);
 
 export const QLKT_DIRECT_DAILY_CODES = new Set([
-  "F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV", "GRID_RECEIVE_S1", "GRID_RECEIVE_S2",
+  "F", "L", "AR", "CS", "CT", "CU", "CV", "GRID_RECEIVE_S1", "GRID_RECEIVE_S2",
 ]);
 
 type DailyInputEntry = { operatingDate: string; fieldCode: string; value: string };
@@ -29,6 +29,17 @@ function setNumber(result: Record<string, string>, code: string, value: number |
   if (value !== null && value !== undefined && Number.isFinite(value)) {
     result[code] = String(Number(value.toPrecision(15)));
   }
+}
+
+function deminWaterUsage(
+  current: CtktktDayEntries,
+  previous: CtktktDayEntries | undefined,
+  row: "72" | "73",
+) {
+  const end = numberOf(current, `X${row}`);
+  const start = numberOf(current, `W${row}`) ?? numberOf(previous || {}, `X${row}`);
+  const adjustment = numberOf(current, row === "72" ? "WATER_ADJ_S1" : "WATER_ADJ_S2") ?? 0;
+  return end === null || start === null ? null : end - start + adjustment;
 }
 
 export function deriveDailyValuesFromCtktkt(
@@ -66,6 +77,11 @@ export function deriveDailyValuesFromCtktkt(
   const nh3Dcs = calculateNh3DcsSummary(current, previous);
   setNumber(result, "BQ", nh3Dcs.s1?.usedTonnes);
   setNumber(result, "BR", nh3Dcs.s2?.usedTonnes);
+
+  setNumber(result, "CC", deminWaterUsage(current, previous, "72"));
+  setNumber(result, "CD", deminWaterUsage(current, previous, "73"));
+  setNumber(result, "CE", numberOf(current, "Z72"));
+  setNumber(result, "CF", numberOf(current, "Z73"));
 
   return result;
 }

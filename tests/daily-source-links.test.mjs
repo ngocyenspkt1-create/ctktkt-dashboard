@@ -13,12 +13,15 @@ function fillRange(target, column, value) {
 
 test("monthly data derives duplicated production values from CTKTKT", () => {
   const previous = { AB13: "100", AB14: "20", AL13: "200", AL14: "40", N81: "103.84", N82: "479.43" };
+  previous.X72 = "6845.42";
+  previous.X73 = "1529.27";
   fillRange(previous, "AB", 0);
   fillRange(previous, "AL", 0);
 
   const current = {
     J157: "12100", K157: "11200", J158: "12200", K158: "11300", I36: "456.7",
     N81: "111.84", N82: "486.25", P72: "42.21", P73: "117.891", P74: "141.595", Q181: "10460.9417",
+    X72: "7337.43", X73: "2128.89", Z72: "0", Z73: "200", WATER_ADJ_S1: "0", WATER_ADJ_S2: "0",
   };
   fillRange(current, "X", 10);
   fillRange(current, "Z", 20);
@@ -52,6 +55,10 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.CN, "42.21");
   assert.equal(linked.CJ, "10");
   assert.equal(linked.Q181, "10460.9417");
+  assert.equal(linked.CC, "492.01");
+  assert.equal(linked.CD, "599.62");
+  assert.equal(linked.CE, "0");
+  assert.equal(linked.CF, "200");
   assert.ok(Number(linked.AJ) > 0);
 });
 
@@ -73,7 +80,7 @@ test("daily HFO cannot be negative when return-meter drift exceeds supply", () =
 
 test("QLKT monthly synchronization excludes fields already linked from CTKTKT", () => {
   for (const code of CTKTKT_LINKED_DAILY_CODES) assert.equal(QLKT_DIRECT_DAILY_CODES.has(code), false, code);
-  assert.deepEqual([...QLKT_DIRECT_DAILY_CODES], ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV", "GRID_RECEIVE_S1", "GRID_RECEIVE_S2"]);
+  assert.deepEqual([...QLKT_DIRECT_DAILY_CODES], ["F", "L", "AR", "CS", "CT", "CU", "CV", "GRID_RECEIVE_S1", "GRID_RECEIVE_S2"]);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BQ"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BR"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("BN"), true);
@@ -82,6 +89,16 @@ test("QLKT monthly synchronization excludes fields already linked from CTKTKT", 
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("Q181"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("AE_ADJ"), true);
   assert.equal(CTKTKT_LINKED_DAILY_CODES.has("AF_ADJ"), true);
+  for (const code of ["CC", "CD", "CE", "CF"]) assert.equal(CTKTKT_LINKED_DAILY_CODES.has(code), true, code);
+});
+
+test("demin usage link honors a 25,000 m3 meter rollover adjustment", () => {
+  const linked = deriveDailyValuesFromCtktkt(
+    { X72: "120", WATER_ADJ_S1: "25000", Z72: "35" },
+    { X72: "24900" },
+  );
+  assert.equal(linked.CC, "220");
+  assert.equal(linked.CE, "35");
 });
 
 test("PPA actual data prefers CTKTKT links and keeps QLKT-only fields", () => {
