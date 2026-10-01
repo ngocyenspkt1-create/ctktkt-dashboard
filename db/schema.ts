@@ -135,9 +135,11 @@ export const chemicalUsageLogs = sqliteTable("chemical_usage_logs", {
   enteredByUserId: integer("entered_by_user_id").notNull(),
   enteredByName: text("entered_by_name").notNull(),
   enteredByPosition: text("entered_by_position").notNull(),
+  sourceKey: text("source_key").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
   index("idx_chemical_usage_date").on(table.usageDate),
   index("idx_chemical_usage_code_date").on(table.chemicalCode, table.usageDate),
+  uniqueIndex("uidx_chemical_usage_source_key").on(table.sourceKey).where(sql`${table.sourceKey} <> ''`),
 ]);

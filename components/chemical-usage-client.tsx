@@ -47,8 +47,8 @@ export function ChemicalUsageClient() {
   const [usageDate, setUsageDate] = useState(defaultOperatingDate);
   const [chemicalCode, setChemicalCode] = useState<string>(allowedCatalog[0]?.code || "");
   const [quantity, setQuantity] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [plantUnit, setPlantUnit] = useState("Chung");
+  const [reasonChoice, setReasonChoice] = useState<string>(allowedCatalog[0]?.suggestedReasons[0] || "");
+  const [otherReason, setOtherReason] = useState("");
   const [reference, setReference] = useState("");
 
   async function fetchMonth(targetMonth: string) {
@@ -104,6 +104,7 @@ export function ChemicalUsageClient() {
 
   async function saveRecord(event: React.FormEvent) {
     event.preventDefault();
+    const purpose = reasonChoice === "__other__" ? otherReason.trim() : reasonChoice;
     setSaving(true);
     setError("");
     setSuccess("");
@@ -116,7 +117,6 @@ export function ChemicalUsageClient() {
           chemicalCode,
           quantity: Number(quantity.replace(",", ".")),
           purpose,
-          plantUnit,
           reference,
         }),
       });
@@ -124,7 +124,7 @@ export function ChemicalUsageClient() {
       if (!response.ok) throw new Error(data.error || "Không thể lưu dữ liệu.");
       setSuccess("Đã lưu lượng hóa chất và thông tin người nhập.");
       setQuantity("");
-      setPurpose("");
+      setOtherReason("");
       setReference("");
       const targetMonth = usageDate.slice(0, 7);
       if (targetMonth !== month) setMonth(targetMonth);
@@ -185,24 +185,34 @@ export function ChemicalUsageClient() {
                 <input required type="date" value={usageDate} onChange={event => setUsageDate(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
               </label>
               <label className="block text-sm font-medium text-slate-700">Loại hóa chất
-                <select required value={chemicalCode} onChange={event => setChemicalCode(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-emerald-400">
+                <select required value={chemicalCode} onChange={event => {
+                  const nextCode = event.target.value;
+                  const nextChemical = allowedCatalog.find(item => item.code === nextCode);
+                  setChemicalCode(nextCode);
+                  setReasonChoice(nextChemical?.suggestedReasons[0] || "");
+                  setOtherReason("");
+                }} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-emerald-400">
                   {allowedCatalog.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}
                 </select>
                 {selectedChemical && <span className="mt-1 block text-xs text-slate-400">Mã vật tư: {selectedChemical.materialCode}</span>}
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-sm font-medium text-slate-700">Số lượng ({selectedChemical?.unit || "Tấn"})
-                  <input required inputMode="decimal" value={quantity} onChange={event => setQuantity(event.target.value)} placeholder="0,000" className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
-                </label>
-                <label className="block text-sm font-medium text-slate-700">Tổ máy
-                  <select value={plantUnit} onChange={event => setPlantUnit(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-emerald-400">
-                    {['Chung', 'S1', 'S2', 'S1/S2'].map(value => <option key={value}>{value}</option>)}
-                  </select>
-                </label>
+              <label className="block text-sm font-medium text-slate-700">Số lượng ({selectedChemical?.unit || "Tấn"})
+                <input required inputMode="decimal" value={quantity} onChange={event => setQuantity(event.target.value)} placeholder="0,000" className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
+              </label>
+              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+                Tổ máy: <strong>Chung</strong> — áp dụng cho toàn bộ hóa chất trong danh mục.
               </div>
               <label className="block text-sm font-medium text-slate-700">Nội dung công tác/lý do sử dụng
-                <textarea required value={purpose} onChange={event => setPurpose(event.target.value)} rows={3} maxLength={500} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-emerald-400" />
+                <select required value={reasonChoice} onChange={event => setReasonChoice(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-emerald-400">
+                  {selectedChemical?.suggestedReasons.map(reason => <option key={reason} value={reason}>{reason}</option>)}
+                  <option value="__other__">Lý do khác…</option>
+                </select>
               </label>
+              {reasonChoice === "__other__" && (
+                <label className="block text-sm font-medium text-slate-700">Ghi rõ lý do khác
+                  <textarea required value={otherReason} onChange={event => setOtherReason(event.target.value)} rows={3} maxLength={500} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-emerald-400" />
+                </label>
+              )}
               <label className="block text-sm font-medium text-slate-700">Tham chiếu/đính kèm (nếu có)
                 <input value={reference} onChange={event => setReference(event.target.value)} maxLength={300} placeholder="Số PCT/LCT hoặc tên hồ sơ" className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
               </label>

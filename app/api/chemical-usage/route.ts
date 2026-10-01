@@ -5,7 +5,6 @@ import { ensureChemicalUsageSchema } from "@/lib/chemical-usage/schema";
 
 const monthPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
-const allowedPlantUnits = new Set(["Chung", "S1", "S2", "S1/S2"]);
 
 function isValidIsoDate(value: string): boolean {
   if (!datePattern.test(value)) return false;
@@ -65,14 +64,12 @@ export async function POST(request: Request) {
       chemicalCode?: unknown;
       quantity?: unknown;
       purpose?: unknown;
-      plantUnit?: unknown;
       reference?: unknown;
     };
     const usageDate = String(body.usageDate || "").trim();
     const chemicalCode = String(body.chemicalCode || "").trim();
     const quantity = Number(body.quantity);
     const purpose = String(body.purpose || "").trim().slice(0, 500);
-    const plantUnit = String(body.plantUnit || "Chung").trim();
     const reference = String(body.reference || "").trim().slice(0, 300);
     const chemical = findChemical(chemicalCode);
 
@@ -91,10 +88,6 @@ export async function POST(request: Request) {
     if (!purpose) {
       return Response.json({ error: "Vui lòng nhập nội dung công tác/lý do sử dụng." }, { status: 400 });
     }
-    if (!allowedPlantUnits.has(plantUnit)) {
-      return Response.json({ error: "Tổ máy không hợp lệ." }, { status: 400 });
-    }
-
     const rawDb = getRawDb();
     await ensureChemicalUsageSchema(rawDb);
     const saved = await rawDb.prepare(`
@@ -111,7 +104,7 @@ export async function POST(request: Request) {
       chemical.unit,
       quantity,
       purpose,
-      plantUnit,
+      "Chung",
       reference,
       user.id,
       user.displayName,

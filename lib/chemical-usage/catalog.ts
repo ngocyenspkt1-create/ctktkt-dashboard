@@ -7,6 +7,7 @@ export const CHEMICAL_CATALOG = [
     name: "PAC lỏng",
     unit: "Tấn",
     allowedPositions: ["XLN hỗn hợp"],
+    suggestedReasons: ["Sử dụng cho sản xuất"],
   },
   {
     code: "NAOCL",
@@ -14,6 +15,7 @@ export const CHEMICAL_CATALOG = [
     name: "NaOCl",
     unit: "Tấn",
     allowedPositions: ["XLN hỗn hợp"],
+    suggestedReasons: ["Sử dụng cho sản xuất"],
   },
   {
     code: "NH4OH_20",
@@ -21,6 +23,7 @@ export const CHEMICAL_CATALOG = [
     name: "NH₄OH 20%",
     unit: "Tấn",
     allowedPositions: ["Máy phó"],
+    suggestedReasons: ["Pha để thực hiện XLN Lò"],
   },
   {
     code: "HCL_31",
@@ -28,6 +31,16 @@ export const CHEMICAL_CATALOG = [
     name: "HCl 31%",
     unit: "Tấn",
     allowedPositions: ["Trợ thủ", "Máy phó", "XLN hỗn hợp", "XLNT"],
+    suggestedReasons: [
+      "Sử dụng cho sản xuất",
+      "Tái sinh hạt CRT Hỗn Hợp 1",
+      "Tái sinh hạt CRT Hỗn Hợp 2",
+      "Tái sinh hạt CRT Hỗn Hợp 3",
+      "Tái sinh hạt CRT Hỗn Hợp 4",
+      "Tái sinh hạt CRT Hỗn Hợp 5",
+      "Tái sinh hạt CRT Hỗn Hợp 6",
+      "Tái sinh hạt CRT Hỗn Hợp 7",
+    ],
   },
   {
     code: "NAOH_31",
@@ -35,6 +48,16 @@ export const CHEMICAL_CATALOG = [
     name: "NaOH 31%",
     unit: "Tấn",
     allowedPositions: ["Trợ thủ", "Máy phó", "XLN hỗn hợp", "XLNT"],
+    suggestedReasons: [
+      "Sử dụng cho sản xuất",
+      "Tái sinh hạt ART Hỗn Hợp 1",
+      "Tái sinh hạt ART Hỗn Hợp 2",
+      "Tái sinh hạt ART Hỗn Hợp 3",
+      "Tái sinh hạt ART Hỗn Hợp 4",
+      "Tái sinh hạt ART Hỗn Hợp 5",
+      "Tái sinh hạt ART Hỗn Hợp 6",
+      "Tái sinh hạt ART Hỗn Hợp 7",
+    ],
   },
 ] as const;
 
