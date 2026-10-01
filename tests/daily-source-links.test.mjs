@@ -20,7 +20,7 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
 
   const current = {
     J157: "12100", K157: "11200", J158: "12200", K158: "11300", I36: "456.7",
-    N81: "111.84", N82: "486.25", P72: "42.21", P73: "117.891", P74: "141.595", Q181: "10460.9417",
+    N81: "111.84", N82: "486.25", P72: "42.21", P73: "117.891", P74: "141.595", Q181: "10460.9417", W87: "4441.3",
     X72: "7337.43", X73: "2128.89", Z72: "0", Z73: "200", WATER_ADJ_S1: "0", WATER_ADJ_S2: "0",
   };
   fillRange(current, "X", 10);
@@ -43,11 +43,11 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.C, "11.2");
   assert.equal(linked.H, "12.2");
   assert.equal(linked.I, "11.3");
-  assert.equal(linked.AE, "360");
-  assert.equal(linked.AF, "360");
+  assert.equal(linked.AE, linked.AE_ADJ);
+  assert.equal(linked.AF, linked.AF_ADJ);
   assert.ok(Number(linked.AE_ADJ) > 0);
   assert.ok(Number(linked.AF_ADJ) > 0);
-  assert.equal(linked.AT, "456.7");
+  assert.equal(linked.AT, "4441.3");
   assert.equal(linked.X, "48.048");
   assert.equal(linked.BQ, "8");
   assert.equal(linked.BR, "6.82");

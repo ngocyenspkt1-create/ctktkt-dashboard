@@ -57,13 +57,15 @@ export function deriveDailyValuesFromCtktkt(
   setNumber(result, "C", netS1 === null ? null : netS1 / 1000);
   setNumber(result, "H", grossS2 === null ? null : grossS2 / 1000);
   setNumber(result, "I", netS2 === null ? null : netS2 / 1000);
-  setNumber(result, "AE", summary.s1.rawCoalTonnes);
-  setNumber(result, "AF", summary.s2.rawCoalTonnes);
+  // Bảng tháng dùng số than quy ẩm 8,5% tại cột PMIS/QLKT của Cụm 1.
+  // Giữ đồng thời AE_ADJ/AF_ADJ để các công thức phía sau không quy ẩm lần hai.
+  setNumber(result, "AE", summary.s1.adjustedCoalTonnes);
+  setNumber(result, "AF", summary.s2.adjustedCoalTonnes);
   setNumber(result, "AE_ADJ", summary.s1.adjustedCoalTonnes);
   setNumber(result, "AF_ADJ", summary.s2.adjustedCoalTonnes);
   setNumber(result, "AJ", summary.plant.hhvKjKg);
   setNumber(result, "Q181", numberOf(current, "Q181"));
-  setNumber(result, "AT", numberOf(current, "I36"));
+  setNumber(result, "AT", numberOf(current, "W87"));
   setNumber(result, "CJ", calculateDailyAverageMoisture(current, previous));
 
   const oilS1 = calculateDailyOilConsumption(current, "s1", previous);
