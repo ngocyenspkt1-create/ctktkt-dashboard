@@ -987,7 +987,7 @@ export function CtktktReport() {
         ? `${cell}: Công suất đặt cố định của NMNĐ Duyên Hải 1 (${CTKTKT_INSTALLED_CAPACITY_MW} MW)`
         : isNh3Carryover
           ? `${cell}: Tự động lấy từ mức 24h ngày D-1`
-          : `${cell}: Liên kết tự động từ ${isQlktProduction ? "QLKT · Sản lượng" : isWaterLinked ? "Theo dõi lượng nước" : "BCSX mục 1"}`
+          : `${cell}: Liên kết tự động từ ${isQlktProduction ? "QLKT · Sản lượng" : isWaterLinked ? "Theo dõi lượng nước" : cell === COAL_STOCK_24H_START_CELL ? "BCSX mục 2" : "BCSX mục 1"}`
       : canEditThis
         ? `${cell}: Bạn có quyền nhập liệu (Phím mũi tên để chuyển ô, Ctrl+V để dán nhiều ô)`
         : `${cell}: Khóa (Chỉ ${groupMeta?.responsible || "cương vị được phân công"} nhập)`;
@@ -1341,17 +1341,12 @@ export function CtktktReport() {
                       Than tồn kho 24h
                     </td>
                     <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
-                      {isFirstDayOfMonth
-                        ? "Nhập một lần tại ngày 01 · Các ngày sau tự tính và tự điền sang Nhập liệu BCSX"
-                        : coalStock.missing
-                          ? coalStock.missing
-                          : "Tồn kho 24h ngày D-1 + Than nhập 24h (I36) − Than tiêu thụ quy ẩm S1 + S2 · Tự điền sang Nhập liệu BCSX"}
+                      Tự động liên kết từ ô “Than tồn kho 24h (tấn, toàn nhà máy)” đã nhập tay tại Nhập liệu BCSX
                     </td>
                     <td colSpan={2} className="p-1.5 text-right w-36">
                       {renderCellInput(COAL_STOCK_24H_START_CELL, {
-                        placeholder: isFirstDayOfMonth ? "Nhập ngày 01" : "—",
+                        placeholder: "Chưa nhập tại BCSX",
                         group: "kpi_summary",
-                        readOnlyValue: isFirstDayOfMonth ? undefined : coalStock.stock === null ? "" : format(coalStock.stock),
                       })}
                     </td>
                     <td className="p-2 text-center text-slate-600 font-bold">tấn</td>

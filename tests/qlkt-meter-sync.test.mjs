@@ -106,8 +106,8 @@ test('BCSX imports operating events from the dispatch workbook and sources Secti
   assert.doesNotMatch(dailySource, /type:"SYNC_UNIFIED"/);
   assert.match(source, /\/api\/ctktkt-report/);
   assert.match(source, /deriveDailyValuesFromCtktkt/);
-  assert.match(source, /calculateCoalStock24h/);
-  assert.doesNotMatch(source, /BCSX_COAL_STOCK_24H_CODE/);
+  assert.doesNotMatch(source, /calculateCoalStock24h/);
+  assert.match(source, /BCSX_COAL_STOCK_24H_CODE/);
   assert.doesNotMatch(source, /byCode\.get\("AR"\)/);
   assert.match(ctktktSource, /SYNC_PMIS_02PD/);
   assert.match(ctktktSource, /sanitizeCtktktPmisSyncEntries\(payload\.entries\)/);
@@ -123,6 +123,17 @@ test('BCSX imports operating events from the dispatch workbook and sources Secti
   assert.match(webBridge, /SYNC_PMIS_02PD/);
   assert.match(importRoute, /parseOperationCommandWorkbook/);
   assert.match(importRoute, /requirePermission\("edit_bcsx"\)/);
+});
+
+test("BCSX manual coal stock links into CTKTKT cluster 1", () => {
+  const routeSource = readFileSync(new URL("../app/api/ctktkt-report/route.ts", import.meta.url), "utf8");
+  const bcsxSource = readFileSync(new URL("../components/bcsx-report.tsx", import.meta.url), "utf8");
+  const linkSource = readFileSync(new URL("../lib/ctktkt-bcsx-link.ts", import.meta.url), "utf8");
+  assert.match(linkSource, /BCSX_COAL_STOCK_24H_CODE = "BCSX_COAL_STOCK_24H"/);
+  assert.match(linkSource, /CTKTKT_COAL_STOCK_24H_CELL = "COAL_STOCK_24H_START"/);
+  assert.match(routeSource, /entry\.cell === BCSX_COAL_STOCK_24H_CODE \? CTKTKT_COAL_STOCK_24H_CELL/);
+  assert.match(bcsxSource, /fetch\("\/api\/bcsx-coal-stock"/);
+  assert.match(bcsxSource, /onChange=\{event => setCoalStock\(event\.target\.value\)\}/);
 });
 
 test('each report keeps its intended data action and NH3 overlaps link from CTKTKT', () => {

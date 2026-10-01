@@ -50,7 +50,12 @@ const voltageLinks = sampleTimes.map(time => ({
 }));
 
 export const CTKTKT_BCSX_LINKS = [...directLinks, ...voltageLinks];
-export const CTKTKT_BCSX_LINKED_CELLS = new Set<string>(CTKTKT_BCSX_LINKS.map(link => link.cell));
+export const BCSX_COAL_STOCK_24H_CODE = "BCSX_COAL_STOCK_24H";
+export const CTKTKT_COAL_STOCK_24H_CELL = "COAL_STOCK_24H_START";
+export const CTKTKT_BCSX_LINKED_CELLS = new Set<string>([
+  ...CTKTKT_BCSX_LINKS.map(link => link.cell),
+  CTKTKT_COAL_STOCK_24H_CELL,
+]);
 
 function readingKey(unit: string, timeSlot: string, metric: string) {
   return `${unit}|${timeSlot}|${metric}`;

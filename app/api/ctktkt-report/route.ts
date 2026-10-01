@@ -1,7 +1,7 @@
 import { getRawDb } from "@/db";
 import { getSessionUser } from "@/lib/auth/server";
 import { canEditAnyCtktktField, canEditCtktktField } from "@/lib/ctktkt-permissions";
-import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
+import { BCSX_COAL_STOCK_24H_CODE, CTKTKT_BCSX_LINKED_CELLS, CTKTKT_COAL_STOCK_24H_CELL, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
 import { CTKTKT_INPUT_FIELDS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_TEXT_INPUT_CELLS, normalizeCtktktInputValue } from "@/lib/ctktkt-extra-fields";
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   try {
     const db = getRawDb();
     await ensureWaterSchema(db);
-    const [{ results }, { results: shiftResults }, { results: waterResults }, { results: gridReceiveResults }] = await Promise.all([
+    const [{ results }, { results: shiftResults }, { results: waterResults }, { results: dailyLinkedResults }] = await Promise.all([
       db.prepare(
         "SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code",
       ).bind(from, next).all(),
@@ -48,8 +48,8 @@ export async function GET(request: Request) {
         "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
       ).bind(from, next).all(),
       db.prepare(
-        "SELECT operating_date AS operatingDate, field_code AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code IN ('GRID_RECEIVE_S1', 'GRID_RECEIVE_S2') ORDER BY operating_date, field_code",
-      ).bind(from, next).all(),
+        "SELECT operating_date AS operatingDate, field_code AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code IN ('GRID_RECEIVE_S1', 'GRID_RECEIVE_S2', ?) ORDER BY operating_date, field_code",
+      ).bind(from, next, BCSX_COAL_STOCK_24H_CODE).all(),
     ]);
 
     const readingsByDate = new Map<string, CtktktBcsxReading[]>();
@@ -60,7 +60,10 @@ export async function GET(request: Request) {
       readingsByDate.set(date, list);
     }
     const linkedEntries: Array<{ operatingDate: string; cell: string; value: string }> = [];
-    linkedEntries.push(...gridReceiveResults as Array<{ operatingDate: string; cell: string; value: string }>);
+    linkedEntries.push(...(dailyLinkedResults as Array<{ operatingDate: string; cell: string; value: string }>).map(entry => ({
+      ...entry,
+      cell: entry.cell === BCSX_COAL_STOCK_24H_CODE ? CTKTKT_COAL_STOCK_24H_CELL : entry.cell,
+    })));
     const warnings: Array<{ operatingDate: string; cell: string; message: string }> = [];
     for (const [operatingDate, readings] of readingsByDate) {
       const derived = deriveCtktktCellsFromBcsx(readings);

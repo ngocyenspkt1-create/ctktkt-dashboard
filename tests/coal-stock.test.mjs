@@ -53,3 +53,11 @@ test("W86 chains from the day-01 entry: W86(D) = W86(D-1) + W87(D-1) − consump
   delete day1.W87;
   assert.ok(Math.abs(calculatePmisCoalStockOpening(month, "2026-09-02").stock - (245431.88997158478 - consumption1)) < 1e-6);
 });
+
+test("manual BCSX 24h coal stock overrides the legacy calculated chain for that day", () => {
+  const byDate = sampleMonth({ seed: "1000", intake: "0" });
+  byDate.get("2026-09-02")[COAL_STOCK_24H_START_CELL] = "98765.4";
+  const result = calculateCoalStock24h(byDate, "2026-09-02");
+  assert.equal(result.stock, 98765.4);
+  assert.equal(result.missing, null);
+});

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
-import { calculateCoalStock24h } from "@/lib/coal-stock";
 import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, nextOperatingDate, validateOperatingEventDateRange, type OperatingEvent, type ShiftMetric } from "@/lib/bcsx";
+import { BCSX_COAL_STOCK_24H_CODE } from "@/lib/ctktkt-bcsx-link";
 import { deriveDailyValuesFromCtktkt } from "@/lib/daily-source-links";
 import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { useSessionUser } from "@/components/session-context";
@@ -65,11 +65,6 @@ function ctktktEntriesByDate(entries: Array<{ operatingDate: string; cell: strin
   return byDate;
 }
 
-function coalStock24hText(byDate: Map<string, CtktktDayEntries>, date: string) {
-  const result = calculateCoalStock24h(byDate, date);
-  return { value: result.stock === null ? "" : String(Number(result.stock.toFixed(2))), missing: result.missing };
-}
-
 export function BcsxReport() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_bcsx");
@@ -82,7 +77,7 @@ export function BcsxReport() {
   const [totals, setTotals] = useState<Record<Unit, TotalsDraft>>({ S1: blankTotals(), S2: blankTotals() });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [coalStockMissing, setCoalStockMissing] = useState<string | null>(null);
+  const [savingCoalStock, setSavingCoalStock] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -130,9 +125,7 @@ export function BcsxReport() {
           ktktByDate.get(operatingDate) || {},
           ktktByDate.get(previousIsoDate(operatingDate)),
         );
-        const coalStock = coalStock24hText(ktktByDate, operatingDate);
-        const stock24h = coalStock.value;
-        setCoalStockMissing(coalStock.missing);
+        const stock24h = byCode.get(BCSX_COAL_STOCK_24H_CODE) || "";
 
         setTotals({
           S1: {
@@ -162,6 +155,32 @@ export function BcsxReport() {
 
   const grid = grids[unit];
   const unitEvents = events[unit];
+
+  function setCoalStock(value: string) {
+    setTotals(old => ({
+      S1: { ...old.S1, thanTonKho: value },
+      S2: { ...old.S2, thanTonKho: value },
+    }));
+  }
+
+  async function saveCoalStock() {
+    setSavingCoalStock(true); setError(null); setNotice(null);
+    try {
+      const response = await fetch("/api/bcsx-coal-stock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operatingDate, value: totals[unit].thanTonKho }),
+      });
+      const body = await response.json() as { error?: string; value?: string };
+      if (!response.ok || body.error) throw new Error(body.error || "Không lưu được than tồn kho 24h.");
+      setCoalStock(body.value || totals[unit].thanTonKho);
+      setNotice(`Đã lưu than tồn kho 24h toàn nhà máy ngày ${operatingDate.split("-").reverse().join("/")} và liên kết sang Chỉ tiêu KTKT.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Không lưu được than tồn kho 24h.");
+    } finally {
+      setSavingCoalStock(false);
+    }
+  }
 
   function changeOperatingDate(nextDate: string) {
     setOperatingDate(nextDate);
@@ -386,9 +405,7 @@ export function BcsxReport() {
         ktktByDate.get(operatingDate) || {},
         ktktByDate.get(previousIsoDate(operatingDate)),
       );
-      const coalStock = coalStock24hText(ktktByDate, operatingDate);
-      const stock24h = coalStock.value;
-      setCoalStockMissing(coalStock.missing);
+      const stock24h = byCode.get(BCSX_COAL_STOCK_24H_CODE) || "";
 
       setTotals({
         S1: {
@@ -406,7 +423,7 @@ export function BcsxReport() {
           thanTonKho: stock24h,
         },
       });
-      setNotice(`Đã nạp lại số liệu liên kết và than tồn kho 24h từ Chỉ tiêu KTKT cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
+      setNotice(`Đã nạp lại số liệu liên kết và than tồn kho 24h đã nhập tại BCSX cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không tải lại được số liệu từ Chỉ tiêu KTKT.");
     }
@@ -895,14 +912,14 @@ export function BcsxReport() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-extrabold text-[#173b64]">2. Số liệu tổng ngày — tổ máy {unit}</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Toàn bộ số liệu tổng ngày tự liên kết từ <Link href="/ctktkt-report" className="font-semibold text-[#334785] underline">Chỉ tiêu KTKT</Link>. <b>Than tồn kho 24h</b> = tồn kho 24h ngày D-1 + than nhập 24h (I36) − than tiêu thụ quy ẩm S1 + S2, dùng chung khi xuất BCSX S1, S2 và A0.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Sản lượng và than tiêu thụ tự liên kết từ <Link href="/ctktkt-report" className="font-semibold text-[#334785] underline">Chỉ tiêu KTKT</Link>. <b>Than tồn kho 24h</b> nhập tay một lần tại đây, dùng chung cho S1/S2/A0 và tự liên kết ngược sang Cụm 1 Chỉ tiêu KTKT.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => void reloadTotalsFromCtktkt()}
             className="rounded-lg border border-[#334785] bg-white px-3 py-1.5 text-xs font-bold text-[#334785] hover:bg-slate-50"
-            title="Nạp lại số liệu Mục 2 mới nhất từ trang Chỉ tiêu KTKT"
+            title="Nạp lại số liệu liên kết và than tồn kho đã lưu"
           >
             🔄 Nạp lại từ Chỉ tiêu KTKT
           </button>
@@ -923,11 +940,13 @@ export function BcsxReport() {
         </label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">
           Than tồn kho 24h (tấn, toàn nhà máy)
-          <input disabled value={totals[unit].thanTonKho} inputMode="decimal" placeholder="—" title="Tự tính từ Chỉ tiêu KTKT" className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-emerald-800"/>
+          <span className="mt-1 flex gap-1.5">
+            <input disabled={isViewer || savingCoalStock} value={totals[unit].thanTonKho} onChange={event => setCoalStock(event.target.value)} inputMode="decimal" placeholder="Nhập số tồn kho" title="Nhập tay tại BCSX; dùng chung S1/S2" className="min-w-0 flex-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 disabled:opacity-60"/>
+            <button type="button" disabled={isViewer || savingCoalStock || !totals[unit].thanTonKho.trim()} onClick={() => void saveCoalStock()} className="rounded-md bg-amber-600 px-2.5 text-xs font-bold text-white disabled:opacity-50">{savingCoalStock ? "Lưu…" : "Lưu"}</button>
+          </span>
         </label>
       </div>
-      {coalStockMissing && <p className="mt-2 text-[11px] font-semibold text-amber-700">Than tồn kho 24h chưa tính được: {coalStockMissing} Nhập tại trang Chỉ tiêu KTKT, Cụm 1.</p>}
-      <p className="mt-2 text-[11px] text-slate-400">Các ô màu xanh là dữ liệu liên kết, không nhập lại. Than tồn kho 24h ngày 01 nhập một lần tại Chỉ tiêu KTKT; các ngày sau tự tính, độc lập với than tồn kho 06h00 trên Dữ liệu các tháng.</p>
+      <p className="mt-2 text-[11px] text-slate-400">Các ô màu xanh là dữ liệu liên kết, không nhập lại. Ô màu vàng là số than tồn kho 24h nhập tay dùng chung toàn nhà máy; sau khi lưu sẽ tự hiển thị tại Cụm 1 Chỉ tiêu KTKT.</p>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

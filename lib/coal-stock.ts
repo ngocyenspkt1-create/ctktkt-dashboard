@@ -78,6 +78,8 @@ export function calculateCoalStock24h(
   entriesByDate: ReadonlyMap<string, CtktktDayEntries>,
   targetDate: string,
 ): CoalStockResult {
+  const direct = numberOf(entriesByDate.get(targetDate), COAL_STOCK_24H_START_CELL);
+  if (direct !== null) return { stock: direct, missing: null, days: [] };
   const firstDate = `${targetDate.slice(0, 8)}01`;
   const days: CoalStockDay[] = [];
   const seed = numberOf(entriesByDate.get(firstDate), COAL_STOCK_24H_START_CELL);
