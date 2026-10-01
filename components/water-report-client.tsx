@@ -7,6 +7,8 @@ import { formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog }
 import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/permissions";
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/lib/water-report/schema";
 import { defaultOperatingDate } from "@/lib/operating-date";
+import { MissingDataAlert } from "@/components/missing-data-alert";
+import { listMissingWaterShifts } from "@/lib/data-completeness";
 
 function getCurrentMonth(): string {
   const d = new Date();
@@ -74,6 +76,10 @@ export function WaterReportClient() {
   const canEditIntake = canEditWaterField(user, "water_intake");
   const canEditResin = canEditWaterField(user, "resin_water");
   const isAdmin = isAdminUser(user);
+  const missingWaterShifts = useMemo(
+    () => listMissingWaterShifts(shifts, month, defaultOperatingDate()),
+    [shifts, month],
+  );
 
   // Tải dữ liệu tháng; chỉ áp dụng phản hồi của yêu cầu mới nhất để đổi tháng nhanh không bị ghi đè dữ liệu cũ.
   const loadSeqRef = useRef(0);
@@ -429,6 +435,7 @@ export function WaterReportClient() {
 
   return (
     <div className="space-y-4">
+      <MissingDataAlert items={missingWaterShifts} loading={loading} scope={`theo dõi nước tháng ${month.slice(5, 7)}/${month.slice(0, 4)}`} />
       {/* 1. Header & Điều khiển tháng */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div>

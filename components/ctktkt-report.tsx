@@ -31,6 +31,7 @@ import {
   canEditCtktktField,
   canEditCtktktGroup,
   getEditableCtktktGroups,
+  getCtktktFieldGroup,
   CTKTKT_GROUP_META,
   type CtktktFieldGroup,
 } from "@/lib/ctktkt-permissions";
@@ -76,6 +77,8 @@ import {
   CTKTKT_OIL_EVENT_CONFIG,
   type CtktktOilEventCode,
 } from "@/lib/ctktkt-oil-event";
+import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
+import { isMissingValue } from "@/lib/data-completeness";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
@@ -431,6 +434,30 @@ export function CtktktReport() {
     combined[CTKTKT_INSTALLED_CAPACITY_CELL] = CTKTKT_INSTALLED_CAPACITY_MW;
     return applyNh3StartLevelCarryover(combined, previous);
   }, [byDate, linkedByDate, date, previous]);
+
+  const missingCtktkt = useMemo(() => {
+    const optionalCells = new Set([
+      "COAL_ADJ_NOTE_S1", "COAL_ADJ_NOTE_S2", "WATER_ADJ_NOTE_S1", "WATER_ADJ_NOTE_S2",
+      "WATER_ADJ_S1", "WATER_ADJ_S2", "W28", "Y28", "AA28", "AG28", "AI28", "AK28",
+    ]);
+    const seen = new Set<string>();
+    const items: MissingDataItem[] = [];
+    for (const field of editableFields) {
+      if (seen.has(field.cell) || optionalCells.has(field.cell)) continue;
+      seen.add(field.cell);
+      const group = getCtktktFieldGroup(field.cell);
+      if (!group || group === "startup_shutdown" || !canEditCtktktField(user, field.cell)) continue;
+      if (field.cell === COAL_STOCK_24H_START_CELL && !date.endsWith("-01")) continue;
+      if (isMissingValue(current[field.cell])) {
+        items.push({
+          key: field.cell,
+          label: `${field.label} [${field.cell}]`,
+          group: CTKTKT_GROUP_META[group]?.shortLabel || field.sectionLabel,
+        });
+      }
+    }
+    return items;
+  }, [current, date, user]);
 
   const isFirstDayOfMonth = date.endsWith("-01");
   const mergedByDate = useMemo(() => {
@@ -1023,6 +1050,7 @@ export function CtktktReport() {
 
   return (
     <section className="mx-auto grid w-full min-w-0 max-w-full gap-3 xl:max-w-[1600px]">
+      <MissingDataAlert items={missingCtktkt} loading={loading} scope={`Báo cáo Chỉ tiêu KTKT ngày ${date.split("-").reverse().join("/")}`} />
       {/* 1. THANH TIÊU ĐỀ, CHỌN NGÀY VÀ ĐIỀU HÀNH */}
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">

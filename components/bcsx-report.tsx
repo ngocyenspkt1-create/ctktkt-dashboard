@@ -10,6 +10,8 @@ import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
+import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
+import { isMissingValue, listBcsxMissing } from "@/lib/data-completeness";
 
 type Unit = "S1" | "S2";
 type ReadingsGrid = Record<ShiftMetric, string[]>;
@@ -624,8 +626,24 @@ export function BcsxReport() {
   }
 
   const filledCount = useMemo(() => grid.P.filter(v => v.trim() !== "").length, [grid]);
+  const bcsxMissing = useMemo(() => {
+    const items: MissingDataItem[] = listBcsxMissing(grids);
+    const totalLabels: Array<[keyof TotalsDraft, string]> = [
+      ["dauCuc", "Sản lượng đầu cực"],
+      ["thuongPham", "Sản lượng thương phẩm"],
+      ["thanTieuThu", "Than tiêu thụ"],
+      ["thanTonKho", "Than tồn kho"],
+    ];
+    for (const targetUnit of ["S1", "S2"] as const) {
+      for (const [key, label] of totalLabels) {
+        if (isMissingValue(totals[targetUnit][key])) items.push({ key: `${targetUnit}:total:${key}`, label, group: `${targetUnit} · Tổng ngày` });
+      }
+    }
+    return items;
+  }, [grids, totals]);
 
   return <div className="flex flex-col gap-3">
+    <MissingDataAlert items={bcsxMissing} loading={loading} scope={`BCSX ngày ${operatingDate.split("-").reverse().join("/")}`} />
     {/* Header trang tinh gọn */}
     <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2.5">

@@ -15,6 +15,8 @@ import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { CTKTKT_LINKED_DAILY_CODES, deriveDailyValuesFromCtktkt, QLKT_DIRECT_DAILY_CODES } from "@/lib/daily-source-links";
 import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXTENSION_VERSION } from "@/lib/qlkt-extension-version";
 import { buildQlktRangeEntries, listIsoDates, QLKT_RANGE_SYNC_DEFAULT_FROM } from "@/lib/qlkt-range-sync";
+import { MissingDataAlert } from "@/components/missing-data-alert";
+import { listMonthlyMissing } from "@/lib/data-completeness";
 
 type Group = "production" | "environment" | "operation";
 type Field = { code: string; label: string; unit?: string; input?: boolean; noteFor?: string; width?: string };
@@ -124,6 +126,12 @@ export function DailyProductionTable() {
   const qlktRequestRef = useRef<{id:string;timer:number}|null>(null);
   const days = useMemo(() => { const [y,m] = period.split("-").map(Number); return new Date(y,m,0).getDate(); }, [period]);
   const extensionOutdated = isQlktExtensionOutdated(extensionVersion);
+  const monthlyMissing = useMemo(() => listMonthlyMissing(
+    rows,
+    period,
+    defaultOperatingDate(),
+    Object.values(fields).flat().filter(field => field.input && field.code !== "CW" && field.code !== "X").map(field => ({ code: field.code, label: field.label })),
+  ), [rows, period]);
 
   // Reset view state while rendering when the month changes, instead of synchronously inside the effect.
   const [trackedPeriod, setTrackedPeriod] = useState(period);
@@ -304,6 +312,7 @@ export function DailyProductionTable() {
     if(!entries.length){setMessage("Không có thay đổi mới để lưu."); return;} setSaving(true); try{const r=await fetch("/api/daily-inputs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({period,entries})}); const b=await r.json() as {error?:string;saved?:number}; if(!r.ok)throw new Error(b.error||"Chưa lưu được dữ liệu."); dirty.current.clear(); setDirtyCount(0); setMessage(`Đã lưu ${b.saved||entries.length} ô dữ liệu.`);} catch(e){setError(e instanceof Error?e.message:"Chưa lưu được dữ liệu.");} finally{setSaving(false);} }
 
   return <section className="space-y-3">
+    <MissingDataAlert items={monthlyMissing} loading={loading} scope={`tháng ${period.slice(5, 7)}/${period.slice(0, 4)}`} />
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Dữ liệu vận hành hằng ngày</p><h2 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">Chỉ tiêu kinh tế kỹ thuật</h2><p className="mt-1 text-sm text-slate-500">Nhập trực tiếp theo tháng · kết quả được tính tự động</p></div>
       <div className="flex flex-wrap items-end justify-end gap-2"><label className="grid gap-1 text-xs font-bold text-slate-600">THÁNG<input type="month" value={period} onChange={e=>setPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐỒNG BỘ<DateField value={syncDate} onChange={setSyncDate} className="w-[150px]"/></label><button type="button" disabled={syncingQlkt||!canSyncDaily} title={!canSyncDaily?"Tài khoản chưa có quyền đồng bộ dữ liệu ngày.":extensionOutdated?`Reload tiện ích QLKT ${REQUIRED_QLKT_EXTENSION_VERSION}`:"Đọc dữ liệu chỉ tiêu ngày từ QLKT"} onClick={syncFromQlkt} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-wait disabled:opacity-60">{syncingQlkt?"Đang đồng bộ…":extensionOutdated?`↻ Reload tiện ích ${REQUIRED_QLKT_EXTENSION_VERSION}`:"⚡ Đồng bộ dữ liệu ngày"}</button><button disabled={saving||loading||isViewer} title={isViewer?"Tài khoản Chỉ xem không có quyền lưu dữ liệu.":undefined} onClick={save} className="h-10 rounded-xl border border-[#b9cae5] bg-[#eef6fc] px-5 text-sm font-bold text-[#274f78] shadow-sm disabled:opacity-50">{saving?"Đang lưu…":"＋ Lưu thay đổi"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionOutdated?"text-red-700":extensionVersion?"text-emerald-700":"text-amber-700"}`}>{syncProgress|| (extensionOutdated?`Tiện ích v${extensionVersion} chưa Reload — nguồn hiện tại ${REQUIRED_QLKT_EXTENSION_VERSION}`:extensionVersion?`Tiện ích v${extensionVersion} đã kết nối`:"Chưa kết nối tiện ích")}</p></div>
