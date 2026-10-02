@@ -35,7 +35,8 @@ export async function GET(request: Request) {
     const result = await rawDb.prepare(`
       SELECT id, usage_date, chemical_code, material_code, chemical_name, unit, quantity,
              purpose, plant_unit, reference, entered_by_user_id, entered_by_name,
-             entered_by_position, created_at, updated_at
+             entered_by_position, updated_by_user_id, updated_by_name, updated_by_position,
+             created_at, updated_at
       FROM chemical_usage_logs
       WHERE usage_date >= ? AND usage_date < ?
       ORDER BY usage_date DESC, id DESC
@@ -115,5 +116,59 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Lỗi lưu theo dõi hóa chất:", error);
     return Response.json({ error: "Không thể lưu dữ liệu theo dõi hóa chất." }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
+
+  try {
+    const body = (await request.json()) as {
+      id?: unknown; usageDate?: unknown; chemicalCode?: unknown; quantity?: unknown;
+      purpose?: unknown; reference?: unknown;
+    };
+    const id = Number(body.id);
+    const usageDate = String(body.usageDate || "").trim();
+    const chemicalCode = String(body.chemicalCode || "").trim();
+    const quantity = Number(body.quantity);
+    const purpose = String(body.purpose || "").trim().slice(0, 500);
+    const reference = String(body.reference || "").trim().slice(0, 300);
+    const chemical = findChemical(chemicalCode);
+
+    if (!Number.isInteger(id) || id <= 0) return Response.json({ error: "Bản ghi cần sửa không hợp lệ." }, { status: 400 });
+    if (!isValidIsoDate(usageDate)) return Response.json({ error: "Ngày thực hiện không hợp lệ." }, { status: 400 });
+    if (!chemical) return Response.json({ error: "Loại hóa chất không thuộc danh mục được theo dõi." }, { status: 400 });
+    if (!canEnterChemical(user, chemicalCode)) {
+      return Response.json({ error: `Cương vị ${user.position || "chưa xác định"} không được sửa ${chemical.name}.` }, { status: 403 });
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) {
+      return Response.json({ error: "Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn." }, { status: 400 });
+    }
+    if (!purpose) return Response.json({ error: "Vui lòng nhập nội dung công tác/lý do sử dụng." }, { status: 400 });
+
+    const rawDb = getRawDb();
+    await ensureChemicalUsageSchema(rawDb);
+    const existing = await rawDb.prepare("SELECT chemical_code FROM chemical_usage_logs WHERE id = ?").bind(id).first<{ chemical_code: string }>();
+    if (!existing) return Response.json({ error: "Không tìm thấy bản ghi cần sửa." }, { status: 404 });
+    if (!canEnterChemical(user, existing.chemical_code)) {
+      return Response.json({ error: "Cương vị hiện tại không được sửa bản ghi hóa chất này." }, { status: 403 });
+    }
+
+    await rawDb.prepare(`
+      UPDATE chemical_usage_logs SET
+        usage_date = ?, chemical_code = ?, material_code = ?, chemical_name = ?, unit = ?,
+        quantity = ?, purpose = ?, plant_unit = 'Chung', reference = ?,
+        updated_by_user_id = ?, updated_by_name = ?, updated_by_position = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      usageDate, chemical.code, chemical.materialCode, chemical.name, chemical.unit,
+      quantity, purpose, reference, user.id, user.displayName, user.position || "", id,
+    ).run();
+
+    return Response.json({ ok: true, id });
+  } catch (error) {
+    console.error("Lỗi sửa theo dõi hóa chất:", error);
+    return Response.json({ error: "Không thể sửa dữ liệu theo dõi hóa chất." }, { status: 500 });
   }
 }

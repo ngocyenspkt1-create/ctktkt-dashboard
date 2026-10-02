@@ -20,6 +20,9 @@ export async function ensureChemicalUsageSchema(rawDb: ReturnType<typeof getRawD
       entered_by_user_id INTEGER NOT NULL,
       entered_by_name TEXT NOT NULL,
       entered_by_position TEXT NOT NULL,
+      updated_by_user_id INTEGER,
+      updated_by_name TEXT NOT NULL DEFAULT '',
+      updated_by_position TEXT NOT NULL DEFAULT '',
       source_key TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -28,6 +31,15 @@ export async function ensureChemicalUsageSchema(rawDb: ReturnType<typeof getRawD
   const columns = await rawDb.prepare("PRAGMA table_info(chemical_usage_logs)").all();
   if (!columns.results.some(column => String(column.name || "") === "source_key")) {
     await rawDb.prepare("ALTER TABLE chemical_usage_logs ADD COLUMN source_key TEXT NOT NULL DEFAULT ''").run();
+  }
+  if (!columns.results.some(column => String(column.name || "") === "updated_by_user_id")) {
+    await rawDb.prepare("ALTER TABLE chemical_usage_logs ADD COLUMN updated_by_user_id INTEGER").run();
+  }
+  if (!columns.results.some(column => String(column.name || "") === "updated_by_name")) {
+    await rawDb.prepare("ALTER TABLE chemical_usage_logs ADD COLUMN updated_by_name TEXT NOT NULL DEFAULT ''").run();
+  }
+  if (!columns.results.some(column => String(column.name || "") === "updated_by_position")) {
+    await rawDb.prepare("ALTER TABLE chemical_usage_logs ADD COLUMN updated_by_position TEXT NOT NULL DEFAULT ''").run();
   }
   await rawDb.prepare("CREATE INDEX IF NOT EXISTS idx_chemical_usage_date ON chemical_usage_logs (usage_date)").run();
   await rawDb.prepare("CREATE INDEX IF NOT EXISTS idx_chemical_usage_code_date ON chemical_usage_logs (chemical_code, usage_date)").run();

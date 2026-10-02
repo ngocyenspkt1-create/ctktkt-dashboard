@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Beaker, CalendarDays, CheckCircle2, LockKeyhole, Save } from "lucide-react";
+import { Beaker, CalendarDays, CheckCircle2, LockKeyhole, Pencil, Save, X } from "lucide-react";
 import { useSessionUser } from "@/components/session-context";
 import { editableChemicalsFor, type ChemicalCatalogItem, type ChemicalCode } from "@/lib/chemical-usage/catalog";
 import { defaultOperatingDate } from "@/lib/operating-date";
@@ -19,6 +19,8 @@ type ChemicalRecord = {
   reference: string;
   entered_by_name: string;
   entered_by_position: string;
+  updated_by_name?: string;
+  updated_by_position?: string;
 };
 
 function currentMonth() {
@@ -51,6 +53,7 @@ export function ChemicalUsageClient() {
   const [otherReason, setOtherReason] = useState("");
   const [reference, setReference] = useState("");
   const [filterChemicalCode, setFilterChemicalCode] = useState<ChemicalCode | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   async function fetchMonth(targetMonth: string) {
     try {
@@ -120,9 +123,10 @@ export function ChemicalUsageClient() {
     setSuccess("");
     try {
       const response = await fetch("/api/chemical-usage", {
-        method: "POST",
+        method: editingId === null ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: editingId,
           usageDate,
           chemicalCode,
           quantity: Number(quantity.replace(",", ".")),
@@ -132,7 +136,8 @@ export function ChemicalUsageClient() {
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error || "Không thể lưu dữ liệu.");
-      setSuccess("Đã lưu lượng hóa chất và thông tin người nhập.");
+      setSuccess(editingId === null ? "Đã lưu lượng hóa chất và thông tin người nhập." : "Đã cập nhật bản ghi hóa chất và lưu người chỉnh sửa.");
+      setEditingId(null);
       setQuantity("");
       setOtherReason("");
       setReference("");
@@ -147,6 +152,36 @@ export function ChemicalUsageClient() {
   }
 
   const selectedChemical = allowedCatalog.find(item => item.code === chemicalCode);
+
+  function startEdit(record: ChemicalRecord) {
+    const chemical = allowedCatalog.find(item => item.code === record.chemical_code);
+    if (!chemical) return;
+    setEditingId(record.id);
+    setUsageDate(record.usage_date);
+    setChemicalCode(record.chemical_code);
+    setQuantity(String(record.quantity).replace(".", ","));
+    if (chemical.suggestedReasons.some(reason => reason === record.purpose)) {
+      setReasonChoice(record.purpose);
+      setOtherReason("");
+    } else {
+      setReasonChoice("__other__");
+      setOtherReason(record.purpose);
+    }
+    setReference(record.reference || "");
+    setError("");
+    setSuccess("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setQuantity("");
+    setOtherReason("");
+    setReference("");
+    const first = allowedCatalog[0];
+    setChemicalCode(first?.code || "");
+    setReasonChoice(first?.suggestedReasons[0] || "");
+  }
 
   return (
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
@@ -194,7 +229,10 @@ export function ChemicalUsageClient() {
 
       <section className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="font-semibold text-slate-900">Nhập lượng sử dụng</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-semibold text-slate-900">{editingId === null ? "Nhập lượng sử dụng" : `Chỉnh sửa bản ghi #${editingId}`}</h3>
+            {editingId !== null && <button type="button" onClick={cancelEdit} className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"><X className="size-4" /> Hủy sửa</button>}
+          </div>
           <p className="mt-1 text-sm text-slate-500">Cương vị hiện tại: <strong>{user.position || "Chưa xác định"}</strong></p>
 
           {allowedCatalog.length === 0 ? (
@@ -240,7 +278,7 @@ export function ChemicalUsageClient() {
                 <input value={reference} onChange={event => setReference(event.target.value)} maxLength={300} placeholder="Số PCT/LCT hoặc tên hồ sơ" className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
               </label>
               <button disabled={saving} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
-                <Save className="size-4" aria-hidden /> {saving ? "Đang lưu…" : "Lưu hóa chất trong ngày"}
+                <Save className="size-4" aria-hidden /> {saving ? "Đang lưu…" : editingId === null ? "Lưu hóa chất trong ngày" : "Lưu nội dung chỉnh sửa"}
               </button>
             </form>
           )}
@@ -265,11 +303,11 @@ export function ChemicalUsageClient() {
           <div className="overflow-x-auto">
             <table className="min-w-[1050px] w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <tr><th className="px-4 py-3">Ngày</th><th className="px-4 py-3">Hóa chất</th><th className="px-4 py-3 text-right">Số lượng</th><th className="px-4 py-3">Tổ máy</th><th className="px-4 py-3">Nội dung/lý do</th><th className="px-4 py-3">Người nhập</th><th className="px-4 py-3">Tham chiếu</th></tr>
+                <tr><th className="px-4 py-3">Ngày</th><th className="px-4 py-3">Hóa chất</th><th className="px-4 py-3 text-right">Số lượng</th><th className="px-4 py-3">Tổ máy</th><th className="px-4 py-3">Nội dung/lý do</th><th className="px-4 py-3">Người nhập</th><th className="px-4 py-3">Tham chiếu</th><th className="px-4 py-3">Thao tác</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {loading ? <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Đang tải dữ liệu…</td></tr> : null}
-                {!loading && filteredRecords.length === 0 ? <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Chưa có dữ liệu phù hợp trong tháng này.</td></tr> : null}
+                {loading ? <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Đang tải dữ liệu…</td></tr> : null}
+                {!loading && filteredRecords.length === 0 ? <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Chưa có dữ liệu phù hợp trong tháng này.</td></tr> : null}
                 {!loading && filteredRecords.map(record => (
                   <tr key={record.id} className="align-top hover:bg-slate-50/60">
                     <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-700">{formatDate(record.usage_date)}</td>
@@ -279,6 +317,11 @@ export function ChemicalUsageClient() {
                     <td className="max-w-xs px-4 py-3 text-slate-600">{record.purpose}</td>
                     <td className="px-4 py-3"><span className="text-slate-800">{record.entered_by_name}</span><span className="block text-xs text-slate-400">{record.entered_by_position}</span></td>
                     <td className="max-w-48 px-4 py-3 text-slate-500">{record.reference || "—"}</td>
+                    <td className="px-4 py-3">
+                      {allowedCatalog.some(item => item.code === record.chemical_code) ? (
+                        <button type="button" onClick={() => startEdit(record)} className="flex items-center gap-1 whitespace-nowrap rounded-md border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"><Pencil className="size-3.5" /> Sửa</button>
+                      ) : <span className="text-xs text-slate-400">Chỉ xem</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

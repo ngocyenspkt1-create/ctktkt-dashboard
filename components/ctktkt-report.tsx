@@ -78,7 +78,7 @@ import {
   type CtktktOilEventCode,
 } from "@/lib/ctktkt-oil-event";
 import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
-import { isMissingValue } from "@/lib/data-completeness";
+import { describeCtktktMissingField, isMissingValue } from "@/lib/data-completeness";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
@@ -447,17 +447,18 @@ export function CtktktReport() {
       seen.add(field.cell);
       const group = getCtktktFieldGroup(field.cell);
       if (!group || group === "startup_shutdown" || !canEditCtktktField(user, field.cell)) continue;
-      if (field.cell === COAL_STOCK_24H_START_CELL && !date.endsWith("-01")) continue;
       if (isMissingValue(current[field.cell])) {
+        const description = describeCtktktMissingField(field);
+        if (!description) continue;
         items.push({
           key: field.cell,
-          label: `${field.label} [${field.cell}]`,
+          label: description,
           group: CTKTKT_GROUP_META[group]?.shortLabel || field.sectionLabel,
         });
       }
     }
     return items;
-  }, [current, date, user]);
+  }, [current, user]);
 
   const isFirstDayOfMonth = date.endsWith("-01");
   const mergedByDate = useMemo(() => {

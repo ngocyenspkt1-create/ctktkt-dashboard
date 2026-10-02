@@ -32,6 +32,9 @@ export function MissingDataAlert({ items, loading = false, scope }: { items: Mis
         <span className="ml-auto text-xs font-medium text-amber-700">Bấm để thu gọn</span>
       </summary>
       <div className="mt-2 grid max-h-52 gap-2 overflow-auto border-t border-amber-200 pt-2 text-xs sm:grid-cols-2 xl:grid-cols-3">
+        <p className="sm:col-span-2 xl:col-span-3 text-amber-800">
+          Chỉ cảnh báo để kiểm tra, không ảnh hưởng thao tác lưu, đồng bộ hoặc xuất báo cáo.
+        </p>
         {[...grouped].map(([group, groupItems]) => (
           <div key={group} className="rounded-lg bg-white/70 p-2">
             <p className="font-bold text-amber-900">{group} ({groupItems.length})</p>

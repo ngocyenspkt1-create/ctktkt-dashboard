@@ -7,6 +7,39 @@ export function isMissingValue(value: unknown) {
   return value === undefined || value === null || String(value).trim() === "";
 }
 
+type CtktktWarningField = {
+  cell: string;
+  label: string;
+  section: string;
+  sectionLabel: string;
+  row: number;
+};
+
+const PMIS_WEB_COLUMNS: Record<string, string> = {
+  C: "Công suất đặt", D: "Điện năng tác dụng", E: "Điện năng phản kháng",
+  F: "Điện năng giao", G: "Điện năng nhận", H: "Điện năng nhận chạy bù",
+  I: "MBA kích từ", J: "MBA nâng", K: "Điện năng tự dùng", L: "Hệ số tự dùng",
+  M: "Nhiên liệu sử dụng", N: "Suất hao nhiên liệu thô", O: "Suất hao nhiên liệu tinh",
+  P: "Suất hao nhiệt thô", Q: "Suất hao nhiệt tinh", R: "Hệ số sử dụng",
+  S: "Hệ số đáp ứng", T: "Độ phát thải",
+};
+
+/** Mô tả theo đúng vị trí người dùng nhìn thấy trên web; địa chỉ Excel luôn đặt cuối. */
+export function describeCtktktMissingField(field: CtktktWarningField): string | null {
+  // Dòng 183-184 là vùng phụ trợ của mẫu Excel, không phải ô nhập trên bảng web.
+  if (field.section === "pmis_02pd" && (field.row === 183 || field.row === 184)) return null;
+
+  if (field.section === "pmis_02pd" && field.row === 181) {
+    const columnLetter = field.cell.match(/^[A-Z]+/)?.[0] || "";
+    return `Hàng: Duyên Hải 1 · Cột: ${PMIS_WEB_COLUMNS[columnLetter] || field.label} · Nội dung: ${field.sectionLabel} · Ô file chỉ tiêu: ${field.cell}`;
+  }
+
+  const parts = field.label.split(" · ").map(part => part.trim()).filter(Boolean);
+  const rowLabel = parts[0] || field.label || `Hàng ${field.row}`;
+  const columnLabel = parts.slice(1).join(" · ") || "Giá trị";
+  return `Hàng: ${rowLabel} · Cột: ${columnLabel} · Nội dung: ${field.sectionLabel} · Ô file chỉ tiêu: ${field.cell}`;
+}
+
 export function elapsedDaysInPeriod(period: string, throughDate: string) {
   if (period < throughDate.slice(0, 7)) return new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate();
   if (period > throughDate.slice(0, 7)) return 0;

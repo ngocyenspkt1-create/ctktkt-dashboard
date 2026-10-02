@@ -53,3 +53,15 @@ test("chemical summary cards filter the monthly log", () => {
   assert.match(client, /filteredRecords\.map\(record =>/);
   assert.match(client, /Xem tất cả/);
 });
+
+test("chemical records can be edited only through server-validated PUT and keep updater audit", () => {
+  const api = readFileSync(new URL("../app/api/chemical-usage/route.ts", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../components/chemical-usage-client.tsx", import.meta.url), "utf8");
+  const schema = readFileSync(new URL("../lib/chemical-usage/schema.ts", import.meta.url), "utf8");
+  assert.match(api, /export async function PUT/);
+  assert.match(api, /canEnterChemical\(user, existing\.chemical_code\)/);
+  assert.match(api, /updated_by_user_id = \?/);
+  assert.match(schema, /updated_by_name TEXT NOT NULL DEFAULT ''/);
+  assert.match(client, /onClick=\{\(\) => startEdit\(record\)\}/);
+  assert.match(client, /Lưu nội dung chỉnh sửa/);
+});
