@@ -149,7 +149,7 @@ export async function PUT(request: Request) {
 
     const rawDb = getRawDb();
     await ensureChemicalUsageSchema(rawDb);
-    const existing = await rawDb.prepare("SELECT chemical_code FROM chemical_usage_logs WHERE id = ?").bind(id).first<{ chemical_code: string }>();
+    const existing = await rawDb.prepare("SELECT chemical_code FROM chemical_usage_logs WHERE id = ?").bind(id).first() as { chemical_code: string } | null;
     if (!existing) return Response.json({ error: "Không tìm thấy bản ghi cần sửa." }, { status: 404 });
     if (!canEnterChemical(user, existing.chemical_code)) {
       return Response.json({ error: "Cương vị hiện tại không được sửa bản ghi hóa chất này." }, { status: 403 });
