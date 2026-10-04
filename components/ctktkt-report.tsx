@@ -93,8 +93,7 @@ import {
   type CtktktOperationPoint,
   type CtktktOperationUnit,
 } from "@/lib/ctktkt-operation-events";
-import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
-import { describeCtktktMissingField, isMissingValue } from "@/lib/data-completeness";
+import { isMissingValue } from "@/lib/data-completeness";
 import { shouldShowCtktktMissingField } from "@/lib/ctktkt-missing-fields";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
@@ -531,24 +530,16 @@ export function CtktktReport() {
       "WATER_ADJ_S1", "WATER_ADJ_S2", "W28", "Y28", "AA28", "AG28", "AI28", "AK28",
     ]);
     const seen = new Set<string>();
-    const items: MissingDataItem[] = [];
+    const cells = new Set<string>();
     for (const field of editableFields) {
       if (seen.has(field.cell) || optionalCells.has(field.cell)) continue;
       if (!shouldShowCtktktMissingField(field.cell, date, byDate)) continue;
       seen.add(field.cell);
       const group = getCtktktFieldGroup(field.cell);
       if (!group || group === "startup_shutdown" || !canEditCtktktField(user, field.cell)) continue;
-      if (isMissingValue(current[field.cell])) {
-        const description = describeCtktktMissingField(field);
-        if (!description) continue;
-        items.push({
-          key: field.cell,
-          label: description,
-          group: CTKTKT_GROUP_META[group]?.shortLabel || field.sectionLabel,
-        });
-      }
+      if (isMissingValue(current[field.cell])) cells.add(field.cell);
     }
-    return items;
+    return cells;
   }, [current, user, byDate, date]);
 
   const isFirstDayOfMonth = date.endsWith("-01");
@@ -1097,6 +1088,7 @@ export function CtktktReport() {
     const isComputed = options?.readOnlyValue !== undefined;
     const canEditThis = !isLinked && !isComputed && canEditCtktktField(user, cell);
     const value = isComputed ? options.readOnlyValue ?? "" : current[cell] || "";
+    const isMissingEditableValue = canEditThis && missingCtktkt.has(cell) && isMissingValue(value);
 
     const groupMeta = options?.group ? CTKTKT_GROUP_META[options.group] : null;
     const tooltip = isComputed
@@ -1119,6 +1111,7 @@ export function CtktktReport() {
           data-cell={cell}
           data-editable={canEditThis ? "true" : "false"}
           disabled={!canEditThis || loading || saving}
+          aria-invalid={isMissingEditableValue || undefined}
           inputMode={options?.isNumber === false ? "text" : "decimal"}
           maxLength={options?.maxLength}
           value={value}
@@ -1129,7 +1122,9 @@ export function CtktktReport() {
           placeholder={options?.placeholder || "—"}
           title={tooltip}
           className={`h-7 w-full rounded border px-1.5 text-right font-mono text-xs font-bold tabular-nums outline-none transition-all ${
-            isLinked
+            isMissingEditableValue
+              ? "animate-pulse border-red-600 bg-red-50 text-red-950 ring-1 ring-red-400 motion-reduce:animate-none"
+              : isLinked
               ? "border-blue-200 bg-blue-50/80 text-blue-900 cursor-not-allowed"
               : canEditThis
                 ? "border-slate-300 bg-white text-slate-900 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-2xs hover:border-indigo-400"
@@ -1171,7 +1166,6 @@ export function CtktktReport() {
 
   return (
     <section className="mx-auto grid w-full min-w-0 max-w-full gap-3 xl:max-w-[1600px]">
-      <MissingDataAlert items={missingCtktkt} loading={loading} scope={`Báo cáo Chỉ tiêu KTKT ngày ${date.split("-").reverse().join("/")}`} />
       {/* 1. THANH TIÊU ĐỀ, CHỌN NGÀY VÀ ĐIỀU HÀNH */}
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
