@@ -95,6 +95,8 @@ import {
 } from "@/lib/ctktkt-operation-events";
 import { isMissingValue } from "@/lib/data-completeness";
 import { shouldShowCtktktMissingField } from "@/lib/ctktkt-missing-fields";
+import { ExportMissingDialog } from "@/components/export-missing-dialog";
+import type { MissingDataItem } from "@/components/missing-data-alert";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
@@ -349,6 +351,9 @@ export function CtktktReport() {
 
   const [isKpiCollapsed, setIsKpiCollapsed] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [exportMissingOpen, setExportMissingOpen] = useState(false);
+  const [exportMissingItems, setExportMissingItems] = useState<MissingDataItem[]>([]);
+  const [pendingReportOutput, setPendingReportOutput] = useState<"excel" | "email" | null>(null);
   const [coalPhotoOpen, setCoalPhotoOpen] = useState(false);
   const canEditCoalCell = useCallback((cell: string) => canEditCtktktField(user, cell), [user]);
   const [extensionVersion, setExtensionVersion] = useState("");
@@ -551,6 +556,35 @@ export function CtktktReport() {
     merged.set(date, current);
     return merged;
   }, [byDate, linkedByDate, date, current]);
+  const missingCtktktForExport = useMemo(() => {
+    if (loading || error) return [] as MissingDataItem[];
+    const today = defaultOperatingDate();
+    if (period > today.slice(0, 7)) return [] as MissingDataItem[];
+    const lastDay = period < today.slice(0, 7)
+      ? new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()
+      : Number(today.slice(8, 10));
+    const optionalCells = new Set([
+      "COAL_ADJ_NOTE_S1", "COAL_ADJ_NOTE_S2", "WATER_ADJ_NOTE_S1", "WATER_ADJ_NOTE_S2",
+      "WATER_ADJ_S1", "WATER_ADJ_S2", "W28", "Y28", "AA28", "AG28", "AI28", "AK28",
+    ]);
+    const items: MissingDataItem[] = [];
+    for (let day = 1; day <= lastDay; day += 1) {
+      const operatingDate = `${period}-${String(day).padStart(2, "0")}`;
+      const entries = mergedByDate.get(operatingDate) || {};
+      for (const field of editableFields) {
+        const group = getCtktktFieldGroup(field.cell);
+        if (!group || group === "startup_shutdown" || optionalCells.has(field.cell)) continue;
+        if (!canEditCtktktField(user, field.cell) || !shouldShowCtktktMissingField(field.cell, operatingDate, byDate)) continue;
+        if (!isMissingValue(entries[field.cell])) continue;
+        items.push({
+          key: `${operatingDate}|${field.cell}`,
+          label: `${operatingDate.split("-").reverse().join("/")} · ${field.label} [${field.cell}]`,
+          group: CTKTKT_GROUP_META[group]?.shortLabel || field.sectionLabel,
+        });
+      }
+    }
+    return items;
+  }, [byDate, mergedByDate, period, user, loading, error]);
   const coalStock = useMemo(() => calculateCoalStock24h(mergedByDate, date), [mergedByDate, date]);
   const pmisCoalStock = useMemo(() => calculatePmisCoalStockOpening(mergedByDate, date), [mergedByDate, date]);
   // Giờ lũy kế cộng dồn từ QLKT kể từ 01/01/2026; chỉ tính các ngày QLKT chưa có tới ngày đang xem.
@@ -569,6 +603,42 @@ export function CtktktReport() {
     [linkWarnings, date],
   );
   const hasPreviousManualData = Boolean(byDate[previousDate]);
+
+  const beginCtktktOutput = (output: "excel" | "email") => {
+    if (missingCtktktForExport.length > 0) {
+      setPendingReportOutput(output);
+      setExportMissingItems(missingCtktktForExport);
+      setExportMissingOpen(true);
+      return;
+    }
+    if (output === "excel") window.location.assign(`/api/ctktkt-report/export?period=${encodeURIComponent(period)}`);
+    else setShowEmailModal(true);
+  };
+
+  const continueCtktktOutput = () => {
+    const output = pendingReportOutput;
+    setExportMissingOpen(false);
+    setPendingReportOutput(null);
+    if (output === "excel") window.location.assign(`/api/ctktkt-report/export?period=${encodeURIComponent(period)}`);
+    if (output === "email") setShowEmailModal(true);
+  };
+
+  const returnToCtktktMissingInput = () => {
+    const first = exportMissingItems[0];
+    setExportMissingOpen(false);
+    setPendingReportOutput(null);
+    if (!first) return;
+    const [missingDate, cell] = first.key.split("|");
+    setDate(missingDate);
+    setActiveTab("input_groups");
+    const group = getCtktktFieldGroup(cell);
+    if (group) setOpenInputGroups(open => open.includes(group) ? open : [...open, group]);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>(`[data-cell="${cell}"]`);
+      input?.scrollIntoView({ behavior: "smooth", block: "center" });
+      input?.focus({ preventScroll: true });
+    }));
+  };
 
   // Tính toán chỉ tiêu tổng hợp toàn nhà máy
   const summary = useMemo(
@@ -1166,6 +1236,14 @@ export function CtktktReport() {
 
   return (
     <section className="mx-auto grid w-full min-w-0 max-w-full gap-3 xl:max-w-[1600px]">
+      <ExportMissingDialog
+        open={exportMissingOpen}
+        items={exportMissingItems}
+        title={`Báo cáo Chỉ tiêu KTKT tháng ${period.slice(5, 7)}/${period.slice(0, 4)}`}
+        onClose={() => { setExportMissingOpen(false); setPendingReportOutput(null); }}
+        onFillMissing={returnToCtktktMissingInput}
+        onExportAnyway={continueCtktktOutput}
+      />
       {/* 1. THANH TIÊU ĐỀ, CHỌN NGÀY VÀ ĐIỀU HÀNH */}
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1230,17 +1308,19 @@ export function CtktktReport() {
               {saving ? "Đang lưu…" : "Lưu số liệu"}
             </button>
 
-            <a
-              href={`/api/ctktkt-report/export?period=${encodeURIComponent(period)}`}
+            <button
+              type="button"
+              onClick={() => beginCtktktOutput("excel")}
+              disabled={loading}
               className="flex h-9 items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-800"
             >
               <Download className="size-3.5" />
               Xuất Excel tháng
-            </a>
+            </button>
 
             <button
               type="button"
-              onClick={() => setShowEmailModal(true)}
+              onClick={() => beginCtktktOutput("email")}
               className="flex h-9 items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-blue-700 active:scale-95"
               title="Mở mẫu báo cáo gửi mail hàng ngày font Times New Roman theo file chỉ tiêu"
             >

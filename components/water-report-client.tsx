@@ -8,6 +8,7 @@ import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/perm
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/lib/water-report/schema";
 import { defaultOperatingDate } from "@/lib/operating-date";
 import { MissingDataAlert } from "@/components/missing-data-alert";
+import { ExportMissingDialog } from "@/components/export-missing-dialog";
 import { listMissingWaterShifts } from "@/lib/data-completeness";
 
 function getCurrentMonth(): string {
@@ -45,6 +46,7 @@ export function WaterReportClient() {
   const [summary, setSummary] = useState<MonthlyWaterSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const [exportMissingOpen, setExportMissingOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string>("");
 
   // Modal thêm/sửa ca
@@ -80,6 +82,20 @@ export function WaterReportClient() {
     () => listMissingWaterShifts(shifts, month, defaultOperatingDate()),
     [shifts, month],
   );
+
+  function requestWaterExport() {
+    if (loading) return;
+    if (missingWaterShifts.length) {
+      setExportMissingOpen(true);
+      return;
+    }
+    window.location.assign(`/api/water-report/export?month=${month}`);
+  }
+
+  function continueWaterExport() {
+    setExportMissingOpen(false);
+    window.location.assign(`/api/water-report/export?month=${month}`);
+  }
 
   // Tải dữ liệu tháng; chỉ áp dụng phản hồi của yêu cầu mới nhất để đổi tháng nhanh không bị ghi đè dữ liệu cũ.
   const loadSeqRef = useRef(0);
@@ -435,6 +451,14 @@ export function WaterReportClient() {
 
   return (
     <div className="space-y-4">
+      <ExportMissingDialog
+        open={exportMissingOpen}
+        items={missingWaterShifts}
+        title={`Theo dõi lượng nước tháng ${month.slice(5, 7)}/${month.slice(0, 4)}`}
+        onClose={() => setExportMissingOpen(false)}
+        onFillMissing={() => { setExportMissingOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+        onExportAnyway={continueWaterExport}
+      />
       <MissingDataAlert items={missingWaterShifts} loading={loading} scope={`theo dõi nước tháng ${month.slice(5, 7)}/${month.slice(0, 4)}`} />
       {/* 1. Header & Điều khiển tháng */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -516,15 +540,16 @@ export function WaterReportClient() {
 
 
           {/* Xuất Excel */}
-          <a
-            href={`/api/water-report/export?month=${month}`}
-            download
+          <button
+            type="button"
+            onClick={requestWaterExport}
+            disabled={loading}
             className="flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 shadow-sm hover:bg-emerald-100"
             title="Tải file Excel đúng chuẩn 20 cột của Phân xưởng"
           >
             <span>⬇</span>
             <span>Xuất Excel</span>
-          </a>
+          </button>
 
           {/* Quản lý Trưởng ca (Admin) */}
           {isAdmin && (

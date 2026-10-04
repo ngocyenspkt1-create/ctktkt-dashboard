@@ -11,6 +11,7 @@ import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
 import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
+import { ExportMissingDialog } from "@/components/export-missing-dialog";
 import { isMissingValue, listBcsxMissing } from "@/lib/data-completeness";
 
 type Unit = "S1" | "S2";
@@ -79,6 +80,9 @@ export function BcsxReport() {
   const [saving, setSaving] = useState(false);
   const [savingCoalStock, setSavingCoalStock] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [exportMissingOpen, setExportMissingOpen] = useState(false);
+  const [exportMissingItems, setExportMissingItems] = useState<MissingDataItem[]>([]);
+  const [pendingExportTarget, setPendingExportTarget] = useState<"S1" | "S2" | "A0" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [importingSection1, setImportingSection1] = useState(false);
@@ -646,9 +650,6 @@ export function BcsxReport() {
   const bcsxMissing = useMemo(() => {
     const items: MissingDataItem[] = listBcsxMissing(grids);
     const totalLabels: Array<[keyof TotalsDraft, string]> = [
-      ["dauCuc", "Sản lượng đầu cực"],
-      ["thuongPham", "Sản lượng thương phẩm"],
-      ["thanTieuThu", "Than tiêu thụ"],
       ["thanTonKho", "Than tồn kho"],
     ];
     for (const targetUnit of ["S1", "S2"] as const) {
@@ -659,7 +660,34 @@ export function BcsxReport() {
     return items;
   }, [grids, totals]);
 
+  function requestExport(target: "S1" | "S2" | "A0") {
+    if (loading || saving) return;
+    const missing = bcsxMissing.filter(item => target === "A0" || item.key.startsWith(`${target}:`));
+    if (missing.length) {
+      setPendingExportTarget(target);
+      setExportMissingItems(missing);
+      setExportMissingOpen(true);
+      return;
+    }
+    void exportFile(target);
+  }
+
+  function continueExportAnyway() {
+    const target = pendingExportTarget;
+    setExportMissingOpen(false);
+    setPendingExportTarget(null);
+    if (target) void exportFile(target);
+  }
+
   return <div className="flex flex-col gap-3">
+    <ExportMissingDialog
+      open={exportMissingOpen}
+      items={exportMissingItems}
+      title={`BCSX ngày ${operatingDate.split("-").reverse().join("/")} · ${pendingExportTarget || ""}`}
+      onClose={() => { setExportMissingOpen(false); setPendingExportTarget(null); }}
+      onFillMissing={() => { setExportMissingOpen(false); setPendingExportTarget(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+      onExportAnyway={continueExportAnyway}
+    />
     <MissingDataAlert items={bcsxMissing} loading={loading} scope={`BCSX ngày ${operatingDate.split("-").reverse().join("/")}`} />
     {/* Header trang tinh gọn */}
     <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
@@ -1035,7 +1063,7 @@ export function BcsxReport() {
       <h2 className="text-sm font-extrabold text-[#173b64]">4. Xuất file BCSX_NMD</h2>
       <p className="mt-1 text-sm text-slate-500">Xuất đúng định dạng file mẫu gốc, đã điền số liệu — nhớ Lưu bảng thông số, Lưu số liệu tổng ngày và Lưu nhật ký sự kiện trước khi xuất. File A0 cộng S1+S2 cho P/Q/P điểm bán; riêng Utc 220 kV lấy S1. Nhật ký sự kiện A0 xếp các dòng của S1 trước rồi đến S2.</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        {(["A0", "S1", "S2"] as const).map(target => <button key={target} type="button" disabled={exporting !== null} onClick={() => void exportFile(target)} className="rounded-lg border border-[#334785] bg-white px-4 py-2 text-sm font-bold text-[#334785] disabled:opacity-50">{exporting === target ? "Đang xuất…" : `Xuất BCSX_NMD_${target}`}</button>)}
+        {(["A0", "S1", "S2"] as const).map(target => <button key={target} type="button" disabled={exporting !== null || loading || saving} onClick={() => requestExport(target)} className="rounded-lg border border-[#334785] bg-white px-4 py-2 text-sm font-bold text-[#334785] disabled:opacity-50">{exporting === target ? "Đang xuất…" : `Xuất BCSX_NMD_${target}`}</button>)}
       </div>
     </div>
   </div>;

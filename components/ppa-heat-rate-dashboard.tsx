@@ -11,6 +11,8 @@ import { hasPermission } from "@/lib/auth/session";
 import { PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE } from "@/lib/google-sheet-sync";
 import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 import { mergeDailyInputsWithCtktkt } from "@/lib/daily-source-links";
+import { ExportMissingDialog } from "@/components/export-missing-dialog";
+import type { MissingDataItem } from "@/components/missing-data-alert";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type CtktktInput = { operatingDate: string; cell: string; value: string };
@@ -233,6 +235,7 @@ export function PpaHeatRateDashboard() {
   const [restoredCount, setRestoredCount] = useState<number | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportMissingOpen, setExportMissingOpen] = useState(false);
   const [sheetDate, setSheetDate] = useState(defaultDate);
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
@@ -397,6 +400,24 @@ export function PpaHeatRateDashboard() {
       });
   }, [entries, actualByDate, dailyValuesByDate]);
 
+  const missingPpaExport = useMemo(() => rows.flatMap(row => {
+    const required: Array<[number | null, string, string]> = [
+      [row.ppaPlant, "PPA chung", "Nhà máy"],
+      [row.actualPlant, "Suất hao nhiệt thực tế chung", "Nhà máy"],
+      [row.ppaS1, "PPA S1", "S1"],
+      [row.actualS1, "Suất hao nhiệt thực tế S1", "S1"],
+      [row.ppaS2, "PPA S2", "S2"],
+      [row.actualS2, "Suất hao nhiệt thực tế S2", "S2"],
+    ];
+    return required
+      .filter(([value]) => value === null || !Number.isFinite(value))
+      .map(([, label, group]) => ({
+        key: `${row.date}:${group}:${label}`,
+        label: `${fullDate(row.date)} · ${label}`,
+        group,
+      }));
+  }), [rows]);
+
   const rowsByMonth = useMemo(() => {
     const groups = new Map<string, Row[]>();
     for (const row of rows) {
@@ -492,7 +513,29 @@ export function PpaHeatRateDashboard() {
     } finally { setExporting(false); }
   }
 
+  function requestExportXlsx() {
+    if (loading || error) return;
+    if (missingPpaExport.length) {
+      setExportMissingOpen(true);
+      return;
+    }
+    void exportXlsx();
+  }
+
+  function continuePpaExport() {
+    setExportMissingOpen(false);
+    void exportXlsx();
+  }
+
   return <section className="space-y-4">
+    <ExportMissingDialog
+      open={exportMissingOpen}
+      items={missingPpaExport}
+      title="So sánh suất hao nhiệt thực tế và PPA trong khoảng đã chọn"
+      onClose={() => setExportMissingOpen(false)}
+      onFillMissing={() => { setExportMissingOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+      onExportAnyway={continuePpaExport}
+    />
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Theo dõi hiệu suất vận hành</p>
@@ -502,7 +545,7 @@ export function PpaHeatRateDashboard() {
       <div className="flex flex-wrap items-end justify-end gap-2">
         <label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐẨY GOOGLE SHEET<DateField value={sheetDate} onChange={setSheetDate} className="w-[180px]"/></label>
         <GoogleSheetSyncButton operatingDate={sheetDate} disabled={!hasSavedPpaForSheet || !hasAvailableCapacityForSheet} disabledReason={sheetDisabledReason} onImported={() => loadRange(fromDate, toDate, false)}/>
-        <button type="button" disabled={exporting || !rows.length} onClick={() => void exportXlsx()} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">{exporting ? "Đang xuất…" : "Xuất kết quả (.xlsx)"}</button>
+        <button type="button" disabled={exporting || loading || !rows.length} onClick={requestExportXlsx} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">{exporting ? "Đang xuất…" : "Xuất kết quả (.xlsx)"}</button>
       </div>
     </div>
 
