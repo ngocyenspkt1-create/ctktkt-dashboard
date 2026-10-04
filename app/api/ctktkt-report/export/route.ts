@@ -6,6 +6,7 @@ import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFrom
 import { CTKTKT_DAY03_INPUT_CELLS } from "@/lib/ctktkt-fields.generated";
 import { CTKTKT_CARRY_FORWARD_INPUT_CELLS, CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON_WORKBOOK_INPUT_CELLS, CTKTKT_OPERATING_HOURS_CELLS, getCtktktCoalAdjustmentNotes, getCtktktWaterAdjustments } from "@/lib/ctktkt-extra-fields";
 import { loadCtktktOperatingHours } from "@/lib/ctktkt-operating-hours-db";
+import { addDaysIso, vietnamDateIso } from "@/lib/operating-date";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
@@ -131,22 +132,27 @@ function normalizeCoalMeterFormulas(sheet: ExcelJS.Worksheet, previousSheetName:
 export async function GET(request: Request) {
   const period = new URL(request.url).searchParams.get("period") || "";
   if (!periodPattern.test(period)) return Response.json({ error: "Tháng không hợp lệ." }, { status: 400 });
+  const today = vietnamDateIso();
+  if (period > today.slice(0, 7)) {
+    return Response.json({ error: "Chưa thể xuất dữ liệu cho tháng trong tương lai." }, { status: 400 });
+  }
   try {
     const { year, month, previous, next } = monthBounds(period);
+    const throughExclusive = period === today.slice(0, 7) ? addDaysIso(today, 1) : next;
     const db = getRawDb();
     await ensureWaterSchema(db);
     const [{ results }, { results: shiftResults }, { results: waterResults }, operatingHours] = await Promise.all([
       db.prepare(
         "SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, field_code",
-      ).bind(previous, next).all(),
+      ).bind(previous, throughExclusive).all(),
       db.prepare(
         "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
-      ).bind(previous, next).all(),
+      ).bind(previous, throughExclusive).all(),
       db.prepare(
         "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
-      ).bind(previous, next).all(),
+      ).bind(previous, throughExclusive).all(),
       // Operating hours are accumulated from the QLKT daily hours since 01/01/2026.
-      loadCtktktOperatingHours(db, previous, next),
+      loadCtktktOperatingHours(db, previous, throughExclusive),
     ]);
 
     const byDate = new Map<string, Record<string, string>>();
@@ -236,6 +242,7 @@ export async function GET(request: Request) {
       const date = `${period}-${String(day).padStart(2, "0")}`;
       const sheet = workbook.getWorksheet(String(day).padStart(2, "0"));
       if (!sheet) continue;
+      if (date > today) continue;
       const previousSheetName = day === 1 ? "d-1" : String(day - 1).padStart(2, "0");
       normalizeCoalMeterFormulas(sheet, previousSheetName);
       prepareCtktktDaySheet(sheet, day < daysInMonth ? String(day + 1).padStart(2, "0") : null);

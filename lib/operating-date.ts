@@ -9,6 +9,10 @@ export function vietnamDateIso(date = new Date()) {
   }).format(date);
 }
 
+export function isFutureOperatingDate(iso: string, today = vietnamDateIso()) {
+  return iso > today;
+}
+
 export function addDaysIso(iso: string, days: number) {
   const date = new Date(`${iso}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);

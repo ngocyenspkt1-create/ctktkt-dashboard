@@ -1,5 +1,6 @@
 import { getRawDb } from "@/db";
 import { getSessionUser } from "@/lib/auth/server";
+import { isFutureOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 import { canEditAnyCtktktField, canEditCtktktField } from "@/lib/ctktkt-permissions";
 import { BCSX_COAL_STOCK_24H_CODE, CTKTKT_BCSX_LINKED_CELLS, CTKTKT_COAL_STOCK_24H_CELL, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
   const period = new URL(request.url).searchParams.get("period") || "";
   if (!periodPattern.test(period)) return Response.json({ error: "Tháng không hợp lệ." }, { status: 400 });
   const { from, next } = monthBounds(period);
+  const today = vietnamDateIso();
   try {
     const db = getRawDb();
     await ensureWaterSchema(db);
@@ -74,9 +76,12 @@ export async function GET(request: Request) {
     const hourCells = new Set<string>(CTKTKT_OPERATING_HOURS_CELLS);
     // Giờ lũy kế luôn cộng dồn từ QLKT; bỏ qua số nhập tay cũ nếu còn trong cơ sở dữ liệu.
     const manualEntries = (results as Array<{ operatingDate: string; cell: string; value: string }>).filter(entry =>
-      !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell) && !CTKTKT_WATER_LINKED_CELLS.has(entry.cell) && !hourCells.has(entry.cell));
+      !isFutureOperatingDate(entry.operatingDate, today)
+      && !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell)
+      && !CTKTKT_WATER_LINKED_CELLS.has(entry.cell)
+      && !hourCells.has(entry.cell));
     const operatingHours = await loadCtktktOperatingHours(db, from, next);
-    linkedEntries.push(...operatingHours.entries);
+    linkedEntries.push(...operatingHours.entries.filter(entry => !isFutureOperatingDate(entry.operatingDate, today)));
     const nonEmptyManualKeys = new Set(manualEntries.filter(e => e.value !== "" && e.value !== null && e.value !== undefined).map(e => `${e.operatingDate}|${e.cell}`));
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);
     for (const operatingDate of new Set(waterLogs.map(log => log.logDate))) {
@@ -86,7 +91,12 @@ export async function GET(request: Request) {
         }
       }
     }
-    return Response.json({ entries: manualEntries, linkedEntries, warnings, operatingHoursMissingDates: operatingHours.missingDates }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({
+      entries: manualEntries,
+      linkedEntries: linkedEntries.filter(entry => !isFutureOperatingDate(entry.operatingDate, today)),
+      warnings: warnings.filter(item => !isFutureOperatingDate(item.operatingDate, today)),
+      operatingHoursMissingDates: operatingHours.missingDates.filter(date => !isFutureOperatingDate(date, today)),
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Chưa tải được dữ liệu Chỉ tiêu KTKT." }, { status: 503 });
   }
@@ -109,6 +119,9 @@ export async function POST(request: Request) {
     const body = JSON.parse(raw) as { operatingDate?: unknown; entries?: unknown };
     if (typeof body.operatingDate !== "string" || !datePattern.test(body.operatingDate) || !Array.isArray(body.entries) || body.entries.length > 400) {
       throw new Error("Ngày hoặc danh sách ô nhập không hợp lệ.");
+    }
+    if (isFutureOperatingDate(body.operatingDate)) {
+      return Response.json({ error: "Không thể nhập số liệu cho ngày trong tương lai." }, { status: 400 });
     }
     const clean = body.entries.map(item => {
       if (!item || typeof item !== "object") throw new Error("Một ô dữ liệu không hợp lệ.");

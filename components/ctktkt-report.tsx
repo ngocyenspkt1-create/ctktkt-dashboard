@@ -29,7 +29,7 @@ import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
 import { CoalMeterPhotoImport } from "@/components/coal-meter-photo-import";
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 import { useSessionUser } from "@/components/session-context";
-import { defaultOperatingDate } from "@/lib/operating-date";
+import { defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 import {
   canEditAnyCtktktField,
   canEditCtktktField,
@@ -1268,6 +1268,7 @@ export function CtktktReport() {
               <span>Ngày báo cáo / nhập file:</span>
               <DateField
                 value={date}
+                max={vietnamDateIso()}
                 disabled={saving || importingHistory || syncingPmis}
                 onChange={value => {
                   if (value.slice(0, 7) !== period) setLoading(true);
