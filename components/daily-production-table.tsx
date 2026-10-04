@@ -171,6 +171,10 @@ export function DailyProductionTable() {
           }
         }
       }
+      for (let day = 0; day < 31; day += 1) {
+        const operatingDate = `${period}-${String(day + 1).padStart(2, "0")}`;
+        if (isFutureOperatingDate(operatingDate, vietnamDateIso())) next[day] = {};
+      }
       setCtktktLinkedCells(linked); setRows(next);
     }).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Không tải được dữ liệu.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);}); return ()=>controller.abort(); },[period,reloadKey]);
 
