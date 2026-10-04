@@ -517,7 +517,7 @@ export function WaterReportClient() {
           <button
             type="button"
             disabled={!canEditAny}
-            onClick={handleOpenAddModal}
+            onClick={() => handleOpenAddModal()}
             className={`flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:opacity-95 ${
               !canEditAny ? "cursor-not-allowed opacity-50" : ""
             }`}
