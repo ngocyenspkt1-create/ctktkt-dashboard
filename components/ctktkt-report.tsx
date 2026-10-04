@@ -95,6 +95,7 @@ import {
 } from "@/lib/ctktkt-operation-events";
 import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
 import { describeCtktktMissingField, isMissingValue } from "@/lib/data-completeness";
+import { shouldShowCtktktMissingField } from "@/lib/ctktkt-missing-fields";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
@@ -533,6 +534,7 @@ export function CtktktReport() {
     const items: MissingDataItem[] = [];
     for (const field of editableFields) {
       if (seen.has(field.cell) || optionalCells.has(field.cell)) continue;
+      if (!shouldShowCtktktMissingField(field.cell, date, byDate)) continue;
       seen.add(field.cell);
       const group = getCtktktFieldGroup(field.cell);
       if (!group || group === "startup_shutdown" || !canEditCtktktField(user, field.cell)) continue;
@@ -547,7 +549,7 @@ export function CtktktReport() {
       }
     }
     return items;
-  }, [current, user]);
+  }, [current, user, byDate, date]);
 
   const isFirstDayOfMonth = date.endsWith("-01");
   const mergedByDate = useMemo(() => {

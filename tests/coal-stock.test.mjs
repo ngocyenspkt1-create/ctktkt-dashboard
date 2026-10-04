@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CTKTKT_SAMPLE_2DAYS } from "../lib/ctktkt-sample-data.ts";
-import { calculateCoalStock24h, coalConsumptionTonnes, COAL_STOCK_24H_START_CELL } from "../lib/coal-stock.ts";
+import { calculateCoalStock24h, coalConsumptionTonnes, COAL_STOCK_24H_START_CELL, isCoalStock24hStartEntryRequired } from "../lib/coal-stock.ts";
 
 const entriesOf = day => Object.fromEntries(CTKTKT_SAMPLE_2DAYS[day].manualEntries.map(e => [e.cell, e.value]));
 
@@ -60,4 +60,10 @@ test("manual BCSX 24h coal stock overrides the legacy calculated chain for that 
   const result = calculateCoalStock24h(byDate, "2026-09-02");
   assert.equal(result.stock, 98765.4);
   assert.equal(result.missing, null);
+});
+
+test("the required-data alert only asks for the coal stock opening on day 01", () => {
+  assert.equal(isCoalStock24hStartEntryRequired("2026-09-01"), true);
+  assert.equal(isCoalStock24hStartEntryRequired("2026-09-02"), false);
+  assert.equal(isCoalStock24hStartEntryRequired("2026-09-30"), false);
 });

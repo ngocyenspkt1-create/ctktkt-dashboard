@@ -5,6 +5,11 @@ import { deriveDailyValuesFromCtktkt } from "./daily-source-links.ts";
 /** Than tồn kho 24h ngày 01 của tháng, nhập tay một lần để các ngày sau tự liên kết. */
 export const COAL_STOCK_24H_START_CELL = "COAL_STOCK_24H_START";
 
+/** Chỉ cần nhập tồn kho 24h thủ công vào ngày đầu tháng. */
+export function isCoalStock24hStartEntryRequired(date: string) {
+  return date.slice(8, 10) === "01";
+}
+
 export type CoalStockDay = {
   date: string;
   stock: number | null;
