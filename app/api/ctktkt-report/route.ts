@@ -11,6 +11,7 @@ import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 import { CTKTKT_OPERATING_HOURS_CELLS } from "@/lib/ctktkt-extra-fields";
 import { loadCtktktOperatingHours } from "@/lib/ctktkt-operating-hours-db";
+import { CTKTKT_OPERATION_EVENTS_CELL, normalizeCtktktOperationEvents } from "@/lib/ctktkt-operation-events";
 
 const fieldCells = new Set<string>([
   ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
@@ -114,7 +115,10 @@ export async function POST(request: Request) {
       const entry = item as Record<string, unknown>;
       const cell = String(entry.cell || "").toUpperCase();
       const isText = CTKTKT_TEXT_INPUT_CELLS.has(cell) || cell === "T181";
-      const value = normalizeCtktktInputValue(cell, applyCtktktFixedValue(cell, entry.value));
+      const normalizedValue = normalizeCtktktInputValue(cell, applyCtktktFixedValue(cell, entry.value));
+      const value = cell === CTKTKT_OPERATION_EVENTS_CELL
+        ? normalizeCtktktOperationEvents(normalizedValue)
+        : normalizedValue;
       if (!fieldCells.has(cell)) throw new Error(`Ô ${cell || "không rõ"} không nằm trong mẫu được phép nhập.`);
       if (cell === COAL_STOCK_24H_START_CELL && value && !String(body.operatingDate).endsWith("-01")) {
         throw new Error("Than tồn kho 24h chỉ nhập tại ngày 01; các ngày sau tự tính.");
@@ -128,7 +132,8 @@ export async function POST(request: Request) {
       if (["STARTUP_OIL_START_TIME", "STARTUP_GRID_SYNC_TIME", "STARTUP_MIN_LOAD_TIME"].includes(cell) && value && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) {
         throw new Error(`Ô ${cell} phải nhập thời gian dạng HH:mm.`);
       }
-      if (value.length > (CTKTKT_TEXT_INPUT_CELLS.has(cell) ? 500 : 80)) throw new Error(`Giá trị ô ${cell} quá dài.`);
+      const maxLength = cell === CTKTKT_OPERATION_EVENTS_CELL ? 25_000 : CTKTKT_TEXT_INPUT_CELLS.has(cell) ? 500 : 80;
+      if (value.length > maxLength) throw new Error(`Giá trị ô ${cell} quá dài.`);
       if (value && !isText && !/^-?\d+(?:\.\d+)?$/.test(value)) throw new Error(`Ô ${cell} phải là số.`);
       return { cell, value };
     });

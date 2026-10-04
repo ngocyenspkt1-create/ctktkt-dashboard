@@ -42,6 +42,7 @@ export const CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS = [
 
   { cell: "STARTUP_UNIT", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Tổ máy sự kiện", row: 0, column: 0 },
   { cell: "STARTUP_EVENT", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Loại sự kiện", row: 0, column: 0 },
+  { cell: "STARTUP_EVENTS_JSON", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Danh sách sự kiện tổ máy", row: 0, column: 0 },
   { cell: "STARTUP_OIL_START_TIME", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Giờ bắt đầu đốt dầu", row: 0, column: 0 },
   { cell: "STARTUP_GRID_SYNC_TIME", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Giờ hòa lưới / tách lưới", row: 0, column: 0 },
   { cell: "STARTUP_MIN_LOAD_TIME", section: "startup_shutdown", sectionLabel: "Khởi động / Ngừng tổ máy", label: "Giờ cắt dầu", row: 0, column: 0 },
@@ -181,6 +182,7 @@ export const CTKTKT_TEXT_INPUT_CELLS = new Set<string>([
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS.map(field => field.cell),
   "STARTUP_UNIT",
   "STARTUP_EVENT",
+  "STARTUP_EVENTS_JSON",
   "STARTUP_OIL_START_TIME",
   "STARTUP_GRID_SYNC_TIME",
   "STARTUP_MIN_LOAD_TIME",
@@ -191,6 +193,7 @@ export const CTKTKT_NON_WORKBOOK_INPUT_CELLS = new Set<string>([
   ...CTKTKT_COAL_STOCK_FIELDS.map(field => field.cell),
   "STARTUP_UNIT",
   "STARTUP_EVENT",
+  "STARTUP_EVENTS_JSON",
   "STARTUP_OIL_START_TIME",
   "STARTUP_GRID_SYNC_TIME",
   "STARTUP_MIN_LOAD_TIME",

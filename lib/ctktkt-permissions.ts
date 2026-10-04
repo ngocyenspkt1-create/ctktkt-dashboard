@@ -176,7 +176,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "M49", "O49", "Q49", "R49",
   ]),
   startup_shutdown: new Set([
-    "STARTUP_UNIT", "STARTUP_EVENT",
+    "STARTUP_UNIT", "STARTUP_EVENT", "STARTUP_EVENTS_JSON",
     "C87", "D87", "E87", "F87", "G87", "H87",
     "C88", "D88", "E88", "F88", "G88", "H88",
     "C93", "D93", "E93", "F93", "G93", "H93",

@@ -10,7 +10,7 @@ import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
 import { deriveNh3StartLevels, type CtktktDayEntries } from "@/lib/ctktkt-report";
-import { applyCtktktStartupEventMetadata } from "@/lib/ctktkt-startup-event";
+import { applyCtktktOperationEventLayout, applyCtktktOperationEvents, CTKTKT_OPERATION_EVENTS_CELL, legacyCtktktOperationEvents } from "@/lib/ctktkt-operation-events";
 import {
   applyCtktktCoalAdjustments,
   applyCtktktDailyCarryovers,
@@ -23,6 +23,10 @@ import {
 } from "@/lib/ctktkt-export-layout";
 
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
+const legacyOperationEventInputCells = new Set([
+  "C87", "D87", "E87", "F87", "G87", "H87", "C88", "D88", "E88", "F88", "G88", "H88",
+  "C93", "D93", "E93", "F93", "G93", "H93", "C94", "D94", "E94", "F94", "G94", "H94",
+]);
 
 function monthBounds(period: string) {
   const [year, month] = period.split("-").map(Number);
@@ -198,7 +202,7 @@ export async function GET(request: Request) {
     const inputCells = [
       ...CTKTKT_DAY03_INPUT_CELLS,
       ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
-    ].filter(cell => !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(cell));
+    ].filter(cell => !CTKTKT_NON_WORKBOOK_INPUT_CELLS.has(cell) && !legacyOperationEventInputCells.has(cell));
     const exportableCells = new Set<string>(inputCells);
     for (const sheetName of ["d-1", ...Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, "0"))]) {
       const sheet = workbook.getWorksheet(sheetName);
@@ -235,6 +239,7 @@ export async function GET(request: Request) {
       const previousSheetName = day === 1 ? "d-1" : String(day - 1).padStart(2, "0");
       normalizeCoalMeterFormulas(sheet, previousSheetName);
       prepareCtktktDaySheet(sheet, day < daysInMonth ? String(day + 1).padStart(2, "0") : null);
+      applyCtktktOperationEventLayout(sheet);
       const row = byDate.get(date) || {};
       fillDailyFallbacks(sheet, row);
       for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && exportableCells.has(code.slice(5)) && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
@@ -249,7 +254,10 @@ export async function GET(request: Request) {
       applyCtktktCoalAdjustments(sheet, row);
       applyOperatingHours(sheet, date);
       applyNh3StartLevelCarryover(sheet, byDate.get(previousDate));
-      applyCtktktStartupEventMetadata(sheet, row);
+      const events = Object.hasOwn(row, `KTKT:${CTKTKT_OPERATION_EVENTS_CELL}`)
+        ? row[`KTKT:${CTKTKT_OPERATION_EVENTS_CELL}`]
+        : legacyCtktktOperationEvents(row, date);
+      applyCtktktOperationEvents(sheet, events);
       applyBcsxLinks(sheet, date);
       applyWaterLinks(sheet, date);
       applyWaterAdjustments(sheet, row);

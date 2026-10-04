@@ -45,7 +45,7 @@ test("blank-template fields reported by users are persisted", () => {
     "I35",
     "M15", "N15", "O15", "P15", "Q15", "R15",
     "M16", "N16", "R16",
-    "STARTUP_UNIT", "STARTUP_EVENT",
+    "STARTUP_UNIT", "STARTUP_EVENT", "STARTUP_EVENTS_JSON",
     "STARTUP_OIL_START_TIME", "STARTUP_GRID_SYNC_TIME", "STARTUP_MIN_LOAD_TIME", "STARTUP_MIN_LOAD_MW",
     "C87", "E87", "F87", "G87", "H87",
     "C88", "D88", "E88", "F88", "G88", "H88",

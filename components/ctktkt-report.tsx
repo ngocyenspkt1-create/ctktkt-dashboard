@@ -19,6 +19,10 @@ import {
   Mail,
   Upload,
   Camera,
+  Calculator,
+  Link2,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
@@ -42,7 +46,6 @@ import {
   calculateCtktktMeterSummary,
   calculateTkdDcsSummary,
   calculateOilDifferences,
-  calculateOilEventSummary,
   calculateSteamDifferences,
   calculateNh3Summary,
   calculateNh3DcsSummary,
@@ -74,9 +77,22 @@ import {
   sanitizeCtktktPmisSyncEntries,
 } from "@/lib/ctktkt-pmis-sync";
 import {
-  CTKTKT_OIL_EVENT_CONFIG,
-  type CtktktOilEventCode,
-} from "@/lib/ctktkt-oil-event";
+  calculateCtktktOperationEventOil,
+  createCtktktOperationEvent,
+  CTKTKT_EVENT_POWER_ROWS,
+  CTKTKT_OPERATION_EVENTS_CELL,
+  CTKTKT_OPERATION_ELECTRICAL_POINTS,
+  CTKTKT_OPERATION_POINT_LABELS,
+  ctktktOperationEventId,
+  ctktktOperationOilCells,
+  ctktktOperationPowerColumn,
+  isCtktktOperationPowerCell,
+  parseCtktktOperationEvents,
+  type CtktktOperationEvent,
+  type CtktktOperationKind,
+  type CtktktOperationPoint,
+  type CtktktOperationUnit,
+} from "@/lib/ctktkt-operation-events";
 import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
 import { describeCtktktMissingField, isMissingValue } from "@/lib/data-completeness";
 
@@ -96,6 +112,8 @@ type ImportPackage = {
 };
 
 type MainTab =
+  | "input_groups"
+  | "computed_linked"
   | "tkd_dcs"
   | "unit_meters"
   | "steam_nh3"
@@ -104,18 +122,21 @@ type MainTab =
   | "pmis_reports"
   | "all_fields";
 
-type StartupUnit = "S1" | "S2";
-type StartupEvent = CtktktOilEventCode;
+const LEGACY_OPERATION_EVENT_CELLS = new Set([
+  "STARTUP_UNIT", "STARTUP_EVENT", "STARTUP_OIL_START_TIME", "STARTUP_GRID_SYNC_TIME", "STARTUP_MIN_LOAD_TIME", "STARTUP_MIN_LOAD_MW",
+  "C87", "D87", "E87", "F87", "G87", "H87", "C88", "D88", "E88", "F88", "G88", "H88",
+  "C93", "D93", "E93", "F93", "G93", "H93", "C94", "D94", "E94", "F94", "G94", "H94",
+]);
 
-const STARTUP_UNITS: Array<{ value: StartupUnit; label: string }> = [
+const STARTUP_UNITS: Array<{ value: CtktktOperationUnit; label: string }> = [
   { value: "S1", label: "Tổ máy S1" },
   { value: "S2", label: "Tổ máy S2" },
 ];
 
-const STARTUP_EVENTS: Array<{ value: StartupEvent; label: string }> = [
-  { value: "startup", label: CTKTKT_OIL_EVENT_CONFIG.startup.label },
-  { value: "shutdown", label: CTKTKT_OIL_EVENT_CONFIG.shutdown.label },
-  { value: "incident_oil", label: CTKTKT_OIL_EVENT_CONFIG.incident_oil.label },
+const OPERATION_KINDS: Array<{ value: CtktktOperationKind; label: string }> = [
+  { value: "startup", label: "Khởi động" },
+  { value: "shutdown", label: "Ngừng tổ máy" },
+  { value: "incident_oil", label: "Đốt dầu sự cố" },
 ];
 
 const QLKT_PRODUCTION_CELLS = new Set<string>(PMIS_PRODUCTION_CELLS);
@@ -128,7 +149,72 @@ const editableFields = [
       && !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(field.cell),
   ),
   ...CTKTKT_EXTRA_INPUT_FIELDS,
-];
+].filter(field => field.cell !== CTKTKT_OPERATION_EVENTS_CELL
+  && !LEGACY_OPERATION_EVENT_CELLS.has(field.cell)
+  && !isCtktktOperationPowerCell(field.cell));
+
+type EditableField = (typeof editableFields)[number];
+const editableFieldGroups = (() => {
+  const groups = new Map<string, { label: string; description: string; fields: EditableField[] }>();
+  for (const field of editableFields) {
+    const group = getCtktktFieldGroup(field.cell);
+    const key = group || field.section;
+    const meta = group ? CTKTKT_GROUP_META[group] : undefined;
+    const entry = groups.get(key) || {
+      label: meta?.label || field.sectionLabel,
+      description: meta?.description || field.sectionLabel,
+      fields: [],
+    };
+    entry.fields.push(field);
+    groups.set(key, entry);
+  }
+  return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
+})();
+
+type InputGridColumn = { key: string; label: string };
+type InputGridRow = { key: string; label: string; sourceRow: number; cells: Record<string, EditableField> };
+
+function buildInputGrid(fields: EditableField[], groupLabel: string) {
+  const rows = new Map<string, InputGridRow>();
+  const columns = new Map<string, InputGridColumn>();
+  const isPeriod = (value: string) => /^(?:\d{1,2}|\d{1,2}\s*h(?:\s*[-–]\s*\d{1,2}\s*h)?|ca\s+(?:sáng|chiều|đêm))$/i.test(value.trim());
+
+  for (const field of fields) {
+    const parts = field.label.split(" · ");
+    const lastPart = parts.at(-1)?.trim() || "";
+    const hasPeriod = (parts.length > 1 && isPeriod(lastPart)) || (parts.length === 1 && isPeriod(lastPart));
+    let periodLabel = hasPeriod ? lastPart : "Giá trị";
+    let rowLabel = hasPeriod && parts.length > 1 ? parts.slice(0, -1).join(" · ") : field.label;
+    if (hasPeriod && parts.length === 1) rowLabel = groupLabel;
+    if (/^\d{1,2}$/.test(periodLabel)) periodLabel = `${periodLabel.padStart(2, "0")}h`;
+
+    const columnKey = hasPeriod ? `period:${periodLabel}` : "value";
+    const rowKey = hasPeriod ? `${field.row}|${rowLabel}` : `${field.row}|${field.cell}`;
+    columns.set(columnKey, { key: columnKey, label: periodLabel });
+    const row = rows.get(rowKey) || { key: rowKey, label: rowLabel, sourceRow: field.row, cells: {} };
+    row.cells[columnKey] = field;
+    rows.set(rowKey, row);
+  }
+
+  const orderedColumns = [...columns.values()].sort((left, right) =>
+    left.key === "value" ? 1 : right.key === "value" ? -1 : 0,
+  );
+  return { columns: orderedColumns, rows: [...rows.values()] };
+}
+
+const LINKED_FIELD_SOURCE = (cell: string) => {
+  if (CTKTKT_BCSX_LINKED_CELLS.has(cell) || cell === COAL_STOCK_24H_START_CELL) return "Báo cáo sản xuất (BCSX)";
+  if (QLKT_PRODUCTION_CELLS.has(cell)) return "QLKT · Sản lượng";
+  if (CTKTKT_WATER_LINKED_CELLS.has(cell)) return "Theo dõi lượng nước";
+  if (NH3_START_LEVEL_CELLS.has(cell) || NH3_DCS_START_METER_CELLS.has(cell)) return "Số cuối ngày D−1";
+  if (cell === CTKTKT_INSTALLED_CAPACITY_CELL) return "Thông số cố định nhà máy";
+  return null;
+};
+
+const linkedFields = [...CTKTKT_INPUT_FIELDS, ...CTKTKT_EXTRA_INPUT_FIELDS]
+  .filter(field => LINKED_FIELD_SOURCE(field.cell))
+  .filter((field, index, all) => all.findIndex(item => item.cell === field.cell) === index)
+  .map(field => ({ ...field, source: LINKED_FIELD_SOURCE(field.cell) || "" }));
 
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
@@ -248,9 +334,12 @@ export function CtktktReport() {
   const [hoursMissingDates, setHoursMissingDates] = useState<string[]>([]);
 
   // Tab điều hướng chính theo đúng các cụm phân công vận hành
-  const [activeTab, setActiveTab] = useState<MainTab>("tkd_dcs");
+  const [activeTab, setActiveTab] = useState<MainTab>("input_groups");
   const [unitView, setUnitView] = useState<"s1" | "s2" | "both">("s1");
+  const [operationUnit, setOperationUnit] = useState<CtktktOperationUnit>("S1");
+  const [operationKind, setOperationKind] = useState<CtktktOperationKind>("startup");
   const [search, setSearch] = useState("");
+  const [openInputGroups, setOpenInputGroups] = useState<string[]>([editableFieldGroups[0]?.key || ""]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importingHistory, setImportingHistory] = useState(false);
@@ -474,15 +563,13 @@ export function CtktktReport() {
   // Giờ lũy kế cộng dồn từ QLKT kể từ 01/01/2026; chỉ tính các ngày QLKT chưa có tới ngày đang xem.
   const hoursMissingUpToDate = useMemo(() => hoursMissingDates.filter(day => day <= date), [hoursMissingDates, date]);
 
-  const startupUnit: StartupUnit | "" = current.STARTUP_UNIT === "S1" || current.STARTUP_UNIT === "S2"
-    ? current.STARTUP_UNIT
-    : "";
-  const startupEvent: StartupEvent | "" = STARTUP_EVENTS.some(item => item.value === current.STARTUP_EVENT)
-    ? current.STARTUP_EVENT as StartupEvent
-    : "";
-  const oilEventConfig = startupEvent ? CTKTKT_OIL_EVENT_CONFIG[startupEvent] : null;
-  const oilEventSummary = startupEvent ? calculateOilEventSummary(current, startupEvent) : null;
-  const canEditStartupMetadata = canEditCtktktField(user, "STARTUP_UNIT");
+  const operationEvents = useMemo(
+    () => parseCtktktOperationEvents(current[CTKTKT_OPERATION_EVENTS_CELL]),
+    [current[CTKTKT_OPERATION_EVENTS_CELL]],
+  );
+  const selectedOperationEvent = operationEvents.find(event => event.unit === operationUnit && event.kind === operationKind) || null;
+  const selectedOperationOil = selectedOperationEvent ? calculateCtktktOperationEventOil(selectedOperationEvent) : null;
+  const canEditOperationEvents = canEditCtktktField(user, CTKTKT_OPERATION_EVENTS_CELL);
 
   const selectedWarnings = useMemo(
     () => linkWarnings.filter(item => item.operatingDate === date),
@@ -529,6 +616,34 @@ export function CtktktReport() {
     setDirty(true);
     setMessage("");
     setError("");
+  };
+
+  const saveOperationEvents = (events: CtktktOperationEvent[]) => {
+    update(CTKTKT_OPERATION_EVENTS_CELL, JSON.stringify(events));
+  };
+
+  const addOperationEvent = () => {
+    if (operationEvents.some(event => event.unit === operationUnit && event.kind === operationKind)) return;
+    saveOperationEvents([...operationEvents, createCtktktOperationEvent(operationUnit, operationKind)]);
+  };
+
+  const deleteOperationEvent = (event: CtktktOperationEvent) => {
+    saveOperationEvents(operationEvents.filter(item => ctktktOperationEventId(item.unit, item.kind) !== ctktktOperationEventId(event.unit, event.kind)));
+  };
+
+  const updateOperationPoint = (
+    point: CtktktOperationPoint,
+    patchValue: Partial<{ time: string; power: Record<string, string>; oilFeed: string; oilReturn: string }>,
+  ) => {
+    if (!selectedOperationEvent) return;
+    const existing = selectedOperationEvent.points[point] || { time: "", power: {}, oilFeed: "", oilReturn: "" };
+    const changed: CtktktOperationEvent = {
+      ...selectedOperationEvent,
+      points: { ...selectedOperationEvent.points, [point]: { ...existing, ...patchValue } },
+    };
+    saveOperationEvents(operationEvents.map(event =>
+      event.unit === changed.unit && event.kind === changed.kind ? changed : event,
+    ));
   };
 
   const save = async () => {
@@ -975,7 +1090,8 @@ export function CtktktReport() {
     const isQlktProduction = QLKT_PRODUCTION_CELLS.has(cell);
     const isFixed = cell === CTKTKT_INSTALLED_CAPACITY_CELL;
     const isNh3Carryover = NH3_START_LEVEL_CELLS.has(cell);
-    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isQlktProduction || isFixed || isNh3Carryover;
+    const isNh3StartMeter = NH3_DCS_START_METER_CELLS.has(cell);
+    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isQlktProduction || isFixed || isNh3Carryover || isNh3StartMeter;
     const isComputed = options?.readOnlyValue !== undefined;
     const canEditThis = !isLinked && !isComputed && canEditCtktktField(user, cell);
     const value = isComputed ? options.readOnlyValue ?? "" : current[cell] || "";
@@ -986,8 +1102,10 @@ export function CtktktReport() {
       : isLinked
       ? isFixed
         ? `${cell}: Công suất đặt cố định của NMNĐ Duyên Hải 1 (${CTKTKT_INSTALLED_CAPACITY_MW} MW)`
-        : isNh3Carryover
-          ? `${cell}: Tự động lấy từ mức 24h ngày D-1`
+        : isNh3StartMeter
+          ? `${cell}: Công tơ NH3 00h tự lấy từ mốc 24h ngày D-1`
+          : isNh3Carryover
+            ? `${cell}: Mức bồn NH3 tự lấy từ mốc 24h ngày D-1`
           : `${cell}: Liên kết tự động từ ${isQlktProduction ? "QLKT · Sản lượng" : isWaterLinked ? "Theo dõi lượng nước" : cell === COAL_STOCK_24H_START_CELL ? "BCSX mục 2" : "BCSX mục 1"}`
       : canEditThis
         ? `${cell}: Bạn có quyền nhập liệu (Phím mũi tên để chuyển ô, Ctrl+V để dán nhiều ô)`
@@ -1439,7 +1557,25 @@ export function CtktktReport() {
 
       {/* 3. TABS ĐIỀU HƯỚNG CÁC CỤM VẬN HÀNH (THIẾT KẾ RÕ RÀNG THEO CƯƠNG VỊ) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-[repeat(6,minmax(0,1fr))_minmax(150px,0.78fr)]">
+        <div className="grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
+          <button
+            type="button"
+            onClick={() => setActiveTab("input_groups")}
+            className={reportTabClass(activeTab === "input_groups")}
+          >
+            <Boxes className="size-4 shrink-0" />
+            <span>Nhập liệu theo nhóm</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("computed_linked")}
+            className={reportTabClass(activeTab === "computed_linked")}
+          >
+            <Link2 className="size-4 shrink-0" />
+            <span>Tự tính &amp; liên kết</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab("tkd_dcs")}
@@ -1509,6 +1645,180 @@ export function CtktktReport() {
         {/* NỘI DUNG TỪNG CỤM */}
         <div className="p-3">
           {/* ========================================================================= */}
+          {activeTab === "input_groups" && (
+            <div className="space-y-3 p-3 sm:p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-black text-[#173b64]">
+                    <Boxes className="size-4" /> Bảng nhập liệu theo nhóm
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Mỗi nhóm có bảng riêng. Ô xanh dương là dữ liệu liên kết; ô khóa màu xám là trường không thuộc quyền nhập của bạn.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 focus-within:border-indigo-500">
+                    <Search className="size-3.5 text-slate-400" />
+                    <input
+                      value={search}
+                      onChange={event => setSearch(event.target.value)}
+                      placeholder="Tìm chỉ tiêu hoặc mã ô..."
+                      className="w-48 bg-transparent outline-none sm:w-64"
+                    />
+                    {search && <button type="button" onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-700" aria-label="Xóa tìm kiếm">×</button>}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setOpenInputGroups(editableFieldGroups.map(group => group.key))}
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  >Mở tất cả</button>
+                  <button
+                    type="button"
+                    onClick={() => setOpenInputGroups([])}
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  >Thu gọn</button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2" aria-label="Đi đến nhóm nhập liệu">
+                {editableFieldGroups.map(group => {
+                  const complete = group.fields.filter(field => !isMissingValue(current[field.cell])).length;
+                  return (
+                    <button
+                      key={group.key}
+                      type="button"
+                      onClick={() => {
+                        setOpenInputGroups(groups => groups.includes(group.key) ? groups : [...groups, group.key]);
+                        document.getElementById(`ktkt-input-group-${group.key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-800"
+                    >{group.label} <span className="ml-1 text-slate-400">{complete}/{group.fields.length}</span></button>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-2">
+                {editableFieldGroups.map((group, groupIndex) => {
+                  const query = search.trim().toLocaleLowerCase("vi");
+                  const fields = group.fields.filter(field => !query || field.cell.toLowerCase().includes(query) || field.label.toLocaleLowerCase("vi").includes(query));
+                  if (!fields.length) return null;
+                  const complete = fields.filter(field => !isMissingValue(current[field.cell])).length;
+                  const editable = fields.filter(field => canEditCtktktField(user, field.cell)).length;
+                  const inputGrid = buildInputGrid(fields, group.label);
+                  const isOpen = Boolean(query) || openInputGroups.includes(group.key);
+                  return (
+                    <details
+                      key={group.key}
+                      id={`ktkt-input-group-${group.key}`}
+                      open={isOpen}
+                      onToggle={event => {
+                        if (query) return;
+                        const isNowOpen = event.currentTarget.open;
+                        setOpenInputGroups(groups => isNowOpen
+                          ? groups.includes(group.key) ? groups : [...groups, group.key]
+                          : groups.filter(key => key !== group.key));
+                      }}
+                      className="scroll-mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs"
+                    >
+                      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-2.5 hover:bg-slate-100 sm:px-4">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-indigo-100 text-xs font-black text-indigo-800">{String(groupIndex + 1).padStart(2, "0")}</span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-black text-slate-800">{group.label}</span>
+                            <span className="mt-0.5 block text-[10px] text-slate-500">{group.description}</span>
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2 text-[10px] font-bold">
+                          <span className="rounded-full bg-white px-2 py-1 text-slate-500">{fields.length} ô</span>
+                          <span className={`rounded-full px-2 py-1 ${complete === fields.length ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{complete}/{fields.length} đã nhập</span>
+                          {editable < fields.length && <span className="hidden rounded-full bg-slate-200 px-2 py-1 text-slate-600 sm:inline">{editable} được sửa</span>}
+                          <ChevronDown className={`size-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                        </span>
+                      </summary>
+                      <div className="max-h-[560px] overflow-auto">
+                        <table className="w-full min-w-[760px] text-xs">
+                          <thead className="sticky top-0 z-10 bg-white text-[10px] uppercase tracking-wide text-slate-500 shadow-[0_1px_0_#e2e8f0]">
+                            <tr>
+                              <th className="sticky left-0 z-20 min-w-56 bg-white px-3 py-2 text-left">Chỉ tiêu / dòng nhập</th>
+                              {inputGrid.columns.map(column => (
+                                <th key={column.key} className="min-w-32 border-l border-slate-100 bg-white px-2 py-2 text-center">{column.label}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {inputGrid.rows.map(row => (
+                              <tr key={row.key} className="odd:bg-white even:bg-slate-50/60 hover:bg-indigo-50/60">
+                                <th className="sticky left-0 z-10 bg-inherit px-3 py-1.5 text-left font-semibold text-slate-700">
+                                  {row.label}
+                                  {row.sourceRow > 0 && <span className="ml-2 text-[9px] font-normal text-slate-400">dòng {row.sourceRow}</span>}
+                                </th>
+                                {inputGrid.columns.map(column => {
+                                  const field = row.cells[column.key];
+                                  if (!field) return <td key={column.key} className="border-l border-slate-100 px-2 py-1 text-center text-slate-300">—</td>;
+                                  return (
+                                    <td key={column.key} className="min-w-32 border-l border-slate-100 px-2 py-1.5 align-top">
+                                      {renderCellInput(field.cell, { group: getCtktktFieldGroup(field.cell) || undefined, compact: true, isNumber: field.cell.endsWith("_TIME") ? false : undefined })}
+                                      <code className="mt-0.5 block text-center font-mono text-[9px] text-slate-400">{field.cell}</code>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "computed_linked" && (
+            <div className="space-y-4 p-3 sm:p-4">
+              <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3">
+                <h3 className="flex items-center gap-2 text-sm font-black text-[#173b64]"><Link2 className="size-4" /> Dữ liệu tự tính và liên kết</h3>
+                <p className="mt-1 text-xs text-slate-600">Các giá trị dưới đây chỉ đọc. Số liệu liên kết được lấy từ phân hệ nguồn; muốn chỉnh sửa, mở đúng phân hệ đó.</p>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center gap-2 border-b bg-slate-50 px-3 py-2.5"><Calculator className="size-4 text-indigo-600" /><h4 className="text-xs font-black text-slate-800">Chỉ tiêu nhà máy tự tính</h4></div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[540px] text-xs">
+                    <thead className="bg-white text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2 text-left">Chỉ tiêu</th><th className="px-3 py-2 text-left">Cách xác định</th><th className="px-3 py-2 text-right">Giá trị</th><th className="px-3 py-2 text-left">Đơn vị</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {metricRows.map(row => (
+                        <tr key={row.key} className="odd:bg-white even:bg-slate-50/60">
+                          <td className="px-3 py-2 font-bold text-slate-700">{row.label}</td>
+                          <td className="px-3 py-2 text-slate-500">Tự tính từ số liệu vận hành đã nhập và công tơ</td>
+                          <td className="px-3 py-2 text-right font-mono font-black tabular-nums text-indigo-800">{format(summary.plant[row.key])}</td>
+                          <td className="px-3 py-2 text-slate-500">{row.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center gap-2 border-b bg-slate-50 px-3 py-2.5"><RefreshCw className="size-4 text-sky-600" /><h4 className="text-xs font-black text-slate-800">Giá trị liên kết từ các phân hệ</h4><span className="ml-auto text-[10px] font-semibold text-slate-500">{linkedFields.length} ô · chỉ đọc</span></div>
+                <div className="max-h-[560px] overflow-auto">
+                  <table className="w-full min-w-[600px] text-xs">
+                    <thead className="sticky top-0 z-10 bg-white text-[10px] uppercase tracking-wide text-slate-500 shadow-[0_1px_0_#e2e8f0]"><tr><th className="px-3 py-2 text-left">Chỉ tiêu</th><th className="w-28 px-3 py-2 text-left">Ô gốc</th><th className="w-56 px-3 py-2 text-left">Nguồn</th><th className="w-44 px-3 py-2 text-right">Giá trị ngày này</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {linkedFields.map(field => (
+                        <tr key={field.cell} className="odd:bg-white even:bg-slate-50/60 hover:bg-sky-50/60">
+                          <td className="px-3 py-1.5 font-semibold text-slate-700">{field.label}</td>
+                          <td className="px-3 py-1.5"><code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600">{field.cell}</code></td>
+                          <td className="px-3 py-1.5"><span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-800"><Link2 className="size-3" />{field.source}</span></td>
+                          <td className="px-3 py-1">{renderCellInput(field.cell, { compact: true })}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: CỤM 2 — BẢNG TKĐ TREND DCS (TRƯỞNG KÍP ĐIỆN NHẬP)                   */}
           {/* ========================================================================= */}
           {activeTab === "tkd_dcs" && (
@@ -3141,135 +3451,182 @@ export function CtktktReport() {
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 5: CỤM 11 — KHỞI ĐỘNG / NGỪNG TỔ MÁY (KHỐI THU GỌN)                    */}
+          {/* TAB 5: CỤM 11 — BẢNG CÔNG TƠ THEO SỰ KIỆN                                  */}
           {/* ========================================================================= */}
           {activeTab === "startup_shutdown" && (
             <div className="space-y-4">
               <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-4 shadow-xs">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 pb-2 mb-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 pb-3">
                   <div>
                     <h3 className="text-sm font-black text-amber-950">
-                      Cụm 11: Sự kiện tổ máy và công tơ dầu
+                      Công tơ điện khi khởi động / ngừng tổ máy
                     </h3>
                     <p className="text-xs text-amber-900">
-                      Chỉ nhập khi có sự kiện khởi động, ngừng tổ máy hoặc đốt dầu do sự cố.
+                      Chọn tổ máy và sự kiện. Mỗi mốc giờ có một bảng chỉ số công tơ; số liệu được đưa về đúng cột sự kiện trong sheet ngày.
                     </p>
                   </div>
                   <span className="rounded-md bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-900">
-                    Trưởng ca · Trưởng kíp điện · Lò phó
+                    TKĐ · TCĐ · TPĐ
                   </span>
                 </div>
 
-                <div className="mb-3 grid gap-3 rounded-lg border border-amber-200 bg-white p-3 sm:grid-cols-2">
-                  <div>
-                    <span className="mb-1.5 block text-xs font-bold text-amber-950">Tổ máy</span>
-                    <div className="grid grid-cols-2 gap-2">
-                      {STARTUP_UNITS.map(item => (
-                        <button
-                          key={item.value}
-                          type="button"
-                          disabled={!canEditStartupMetadata || loading}
-                          onClick={() => update("STARTUP_UNIT", item.value)}
-                          className={`h-9 rounded-lg border text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${startupUnit === item.value
-                            ? "border-amber-700 bg-amber-700 text-white"
-                            : "border-amber-200 bg-amber-50 text-amber-950 hover:bg-amber-100"
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="mb-1.5 block text-xs font-bold text-amber-950">Loại sự kiện</span>
-                    <div className="grid grid-cols-3 gap-2">
-                      {STARTUP_EVENTS.map(item => (
-                        <button
-                          key={item.value}
-                          type="button"
-                          disabled={!canEditStartupMetadata || loading}
-                          onClick={() => update("STARTUP_EVENT", item.value)}
-                          className={`min-h-9 rounded-lg border px-2 text-xs font-bold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${startupEvent === item.value
-                            ? "border-amber-700 bg-amber-700 text-white"
-                            : "border-amber-200 bg-amber-50 text-amber-950 hover:bg-amber-100"
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                <div className="grid gap-3 rounded-lg border border-amber-200 bg-white p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <label className="grid gap-1 text-xs font-bold text-amber-950">
+                    Tổ máy
+                    <select value={operationUnit} onChange={event => setOperationUnit(event.target.value as CtktktOperationUnit)} disabled={loading || saving} className="h-9 rounded-lg border border-amber-200 bg-white px-2 text-sm">
+                      {STARTUP_UNITS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-bold text-amber-950">
+                    Sự kiện
+                    <select value={operationKind} onChange={event => setOperationKind(event.target.value as CtktktOperationKind)} disabled={loading || saving} className="h-9 rounded-lg border border-amber-200 bg-white px-2 text-sm">
+                      {OPERATION_KINDS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
+                  </label>
+                  {!selectedOperationEvent && (
+                    <button type="button" onClick={addOperationEvent} disabled={!canEditOperationEvents || loading || saving} className="h-9 rounded-lg bg-amber-700 px-4 text-xs font-bold text-white hover:bg-amber-800 disabled:opacity-50">
+                      Tạo bảng sự kiện
+                    </button>
+                  )}
                 </div>
 
-                {(!startupUnit || !startupEvent) && (
-                  <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                    Hãy chọn rõ tổ máy S1/S2 và loại sự kiện trước khi nhập số liệu công tơ dầu.
+                {operationEvents.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {operationEvents.map(event => {
+                      const label = OPERATION_KINDS.find(item => item.value === event.kind)?.label || event.kind;
+                      const selected = event.unit === operationUnit && event.kind === operationKind;
+                      return (
+                        <button key={ctktktOperationEventId(event.unit, event.kind)} type="button" onClick={() => { setOperationUnit(event.unit); setOperationKind(event.kind); }} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${selected ? "border-amber-700 bg-amber-700 text-white" : "border-amber-200 bg-white text-amber-900 hover:bg-amber-50"}`}>
+                          {event.unit} · {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
-                {oilEventConfig ? (
-                  <div className="space-y-3">
-                    <div className="grid gap-3 rounded-lg border border-orange-200 bg-orange-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
-                      {oilEventConfig.columns.map(item => (
-                        <label key={item.timeCell} className="grid gap-1 text-xs font-bold text-orange-950">
-                          {item.timeLabel}
-                          {renderCellInput(item.timeCell, { group: "startup_shutdown", isNumber: false, placeholder: "HH:mm" })}
-                        </label>
-                      ))}
-                      {startupEvent === "startup" && (
-                        <label className="grid gap-1 text-xs font-bold text-orange-950">
-                          Tải tối thiểu khi cắt dầu (MW)
-                          {renderCellInput("STARTUP_MIN_LOAD_MW", { group: "startup_shutdown", placeholder: "MW" })}
-                        </label>
-                      )}
-                    </div>
-
-                    <div className="overflow-x-auto rounded-lg border bg-white">
-                      <table className="report-data-table w-full min-w-[720px] text-xs">
-                        <thead>
-                          <tr className="bg-[#fef9f0] text-amber-950">
-                            <th className="w-64 p-2 text-left font-bold">Chỉ số công tơ dầu · {startupUnit || "chưa chọn tổ máy"}</th>
-                            {oilEventConfig.columns.map(item => (
-                              <th key={item.column} className="p-2 text-center font-bold">{item.label}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-mono">
-                          <tr>
-                            <td className="p-2 font-sans font-bold text-slate-800">Công tơ dầu cấp lò</td>
-                            {oilEventConfig.columns.map(item => (
-                              <td key={item.column} className="p-1.5">{renderCellInput(`${item.column}87`, { group: "startup_shutdown" })}</td>
-                            ))}
-                          </tr>
-                          <tr>
-                            <td className="p-2 font-sans font-bold text-slate-800">Công tơ dầu hồi về</td>
-                            {oilEventConfig.columns.map(item => (
-                              <td key={item.column} className="p-1.5">{renderCellInput(`${item.column}88`, { group: "startup_shutdown" })}</td>
-                            ))}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div className={`grid gap-2 ${oilEventConfig.phaseLabels.length > 1 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-                      {oilEventConfig.phaseLabels.map((label, index) => (
-                        <div key={label} className="rounded-lg border border-orange-200 bg-white p-3 text-center">
-                          <div className="text-[11px] font-semibold text-slate-500">{label}</div>
-                          <div className="mt-1 text-base font-black text-orange-800">{format(oilEventSummary?.phaseTonnes[index] ?? null)} tấn</div>
-                        </div>
-                      ))}
-                      <div className="rounded-lg border border-orange-300 bg-orange-100 p-3 text-center">
-                        <div className="text-[11px] font-bold text-orange-900">Tổng dầu sự kiện</div>
-                        <div className="mt-1 text-base font-black text-orange-950">{format(oilEventSummary?.totalTonnes ?? null)} tấn</div>
-                      </div>
-                    </div>
-                    <p className="text-[11px] font-semibold text-orange-900">
-                      Công thức từng giai đoạn: (công tơ cấp cuối − công tơ cấp đầu) − (công tơ hồi cuối − công tơ hồi đầu).
-                    </p>
+                {!selectedOperationEvent ? (
+                  <div className="rounded-lg border border-dashed border-amber-300 bg-white px-4 py-6 text-center text-sm font-semibold text-slate-600">
+                    Chọn tổ máy và loại sự kiện rồi tạo bảng để nhập. Mỗi loại sự kiện của mỗi tổ máy có một bảng trong ngày.
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs font-semibold text-slate-600">
-                    Chọn loại sự kiện để hệ thống chỉ hiện đúng các mốc công tơ cần nhập.
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+                      <div className="text-xs font-bold text-sky-950">Mốc thời gian · {selectedOperationEvent.unit} · {OPERATION_KINDS.find(item => item.value === selectedOperationEvent.kind)?.label}</div>
+                      <button type="button" onClick={() => deleteOperationEvent(selectedOperationEvent)} disabled={!canEditOperationEvents || loading || saving} className="rounded-md px-2 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Xóa bảng sự kiện</button>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      {(Object.keys(CTKTKT_OPERATION_POINT_LABELS[selectedOperationEvent.kind]) as CtktktOperationPoint[]).map(point => {
+                        const reading = selectedOperationEvent.points[point];
+                        return (
+                          <label key={point} className="grid gap-1 rounded-lg border border-sky-200 bg-white p-3 text-xs font-bold text-slate-700">
+                            {CTKTKT_OPERATION_POINT_LABELS[selectedOperationEvent.kind][point]}
+                            <input type="datetime-local" value={reading?.time || ""} onChange={event => updateOperationPoint(point, { time: event.target.value })} disabled={!canEditOperationEvents || loading || saving} className="h-9 min-w-0 rounded-md border border-slate-300 px-2 font-medium disabled:bg-slate-100" />
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {CTKTKT_OPERATION_ELECTRICAL_POINTS[selectedOperationEvent.kind].length > 0 && (
+                      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div className="border-b bg-slate-50 px-3 py-2">
+                          <h4 className="text-xs font-black text-slate-800">Bảng công tơ máy phát và máy biến áp · sheet ngày, dòng 59–83</h4>
+                          <p className="mt-0.5 text-[10px] text-slate-500">Mốc và số liệu sẽ xuất theo đúng cột sự kiện S1/S2 trong biểu mẫu.</p>
+                        </div>
+                        <div className="max-h-[440px] overflow-auto">
+                          <table className="w-full min-w-[640px] text-xs">
+                            <thead className="sticky top-0 z-10 bg-white text-[10px] text-slate-500 shadow-sm">
+                              <tr>
+                                <th className="sticky left-0 z-20 min-w-64 bg-white px-3 py-2 text-left">Công tơ / ô Excel</th>
+                                {CTKTKT_OPERATION_ELECTRICAL_POINTS[selectedOperationEvent.kind].map(point => (
+                                  <th key={point} className="min-w-40 border-l px-2 py-2 text-center">
+                                    {CTKTKT_OPERATION_POINT_LABELS[selectedOperationEvent.kind][point]}
+                                    <span className="mt-1 block font-normal text-slate-400">{selectedOperationEvent.points[point]?.time.replace("T", " ") || "Chưa chọn thời điểm"}</span>
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {CTKTKT_EVENT_POWER_ROWS.map(item => (
+                                <tr key={item.row} className="odd:bg-white even:bg-slate-50/60">
+                                  <th className="sticky left-0 z-[1] bg-inherit px-3 py-1.5 text-left font-semibold text-slate-700">{item.label}</th>
+                                  {CTKTKT_OPERATION_ELECTRICAL_POINTS[selectedOperationEvent.kind].map(point => {
+                                    const column = ctktktOperationPowerColumn(selectedOperationEvent, point);
+                                    const cell = column ? `${column}${item.row}` : "";
+                                    const enabled = canEditOperationEvents && (!((item.row === 83) && !(selectedOperationEvent.kind === "startup" && point === "grid_sync")));
+                                    const value = selectedOperationEvent.points[point]?.power[String(item.row)] || "";
+                                    return (
+                                      <td key={point} className="border-l px-2 py-1.5">
+                                        {enabled ? (
+                                          <>
+                                            <input type="number" step="any" value={value} onChange={event => updateOperationPoint(point, { power: { ...(selectedOperationEvent.points[point]?.power || {}), [item.row]: event.target.value } })} disabled={loading || saving} className="h-8 w-full rounded border border-slate-300 px-2 text-right font-mono text-xs focus:border-amber-500 focus:outline-none disabled:bg-slate-100" />
+                                            <code className="mt-0.5 block text-center text-[9px] text-slate-400">{cell}</code>
+                                          </>
+                                        ) : <span className="block py-1 text-center text-slate-300">—</span>}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+                    )}
+
+                    <section className="overflow-hidden rounded-xl border border-orange-200 bg-white">
+                      <div className="border-b border-orange-100 bg-orange-50/70 px-3 py-2">
+                        <h4 className="text-xs font-black text-orange-950">Bảng công tơ dầu và thời điểm · sheet ngày, dòng 85–110</h4>
+                        <p className="mt-0.5 text-[10px] text-orange-800">Số tiêu thụ theo từng giai đoạn tính đúng công thức của mẫu Excel; các ô công thức vẫn được giữ khi xuất.</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[560px] text-xs">
+                          <thead className="bg-white text-[10px] text-slate-500">
+                            <tr>
+                              <th className="min-w-56 px-3 py-2 text-left">Công tơ dầu / ô Excel</th>
+                              {ctktktOperationOilCells(selectedOperationEvent).map(item => (
+                                <th key={item.point} className="min-w-36 border-l px-2 py-2 text-center">
+                                  {CTKTKT_OPERATION_POINT_LABELS[selectedOperationEvent.kind][item.point]}
+                                  <span className="mt-1 block font-normal text-slate-400">{selectedOperationEvent.points[item.point]?.time.replace("T", " ") || "Chưa chọn thời điểm"}</span>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {([
+                              { key: "oilFeed", label: "Công tơ dầu cấp lò" },
+                              { key: "oilReturn", label: "Công tơ dầu hồi lò" },
+                            ] as const).map(row => (
+                              <tr key={row.key}>
+                                <th className="px-3 py-2 text-left font-semibold text-slate-700">{row.label}</th>
+                                {ctktktOperationOilCells(selectedOperationEvent).map(item => {
+                                  const value = selectedOperationEvent.points[item.point]?.[row.key] || "";
+                                  const cell = row.key === "oilFeed" ? item.feedCell : item.returnCell;
+                                  return (
+                                    <td key={item.point} className="border-l px-2 py-1.5">
+                                      <input type="number" step="any" value={value} onChange={event => updateOperationPoint(item.point, { [row.key]: event.target.value })} disabled={!canEditOperationEvents || loading || saving} className="h-8 w-full rounded border border-slate-300 px-2 text-right font-mono text-xs focus:border-orange-500 focus:outline-none disabled:bg-slate-100" />
+                                      <code className="mt-0.5 block text-center text-[9px] text-slate-400">{cell}</code>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="grid gap-2 border-t border-orange-100 bg-orange-50/50 p-3 sm:grid-cols-3">
+                        {selectedOperationOil?.phases.map((value, index) => (
+                          <div key={index} className="rounded-lg border border-orange-100 bg-white p-2 text-center">
+                            <div className="text-[10px] font-semibold text-slate-500">{selectedOperationEvent.kind === "startup" ? index === 0 ? "Từ khởi động đến hòa lưới" : "Từ hòa lưới đến cắt dầu" : "Lượng dầu của sự kiện"}</div>
+                            <div className="mt-1 text-sm font-black text-orange-900">{format(value)} tấn</div>
+                          </div>
+                        ))}
+                        <div className="rounded-lg border border-orange-200 bg-white p-2 text-center">
+                          <div className="text-[10px] font-bold text-orange-900">Tổng dầu sự kiện</div>
+                          <div className="mt-1 text-sm font-black text-orange-950">{format(selectedOperationOil?.total)} tấn</div>
+                        </div>
+                      </div>
+                    </section>
                   </div>
                 )}
               </div>
