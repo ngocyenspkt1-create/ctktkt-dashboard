@@ -510,6 +510,22 @@ export function BcsxReport() {
     { id: "ca3", label: "Ca 3", hours: "16:30 – 23:59", start: 32, end: 48, headerColor: "bg-[#fef3d6] text-[#854d0e] border-amber-200" },
   ] as const, []);
 
+  function goToBcsxMissingInput(item: MissingDataItem) {
+    const [, metric, ...slotParts] = item.key.split(":");
+    const slotIndex = SHIFT_TIME_SLOTS.indexOf(slotParts.join(":") as typeof SHIFT_TIME_SLOTS[number]);
+    const targetUnit = item.group === "S2" ? "S2" : "S1";
+    setExportMissingOpen(false);
+    setPendingExportTarget(null);
+    setUnit(targetUnit);
+    setViewMode("scroll");
+    if (slotIndex < 0) return;
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const input = document.getElementById(`cell-${metric}-${slotIndex}`) as HTMLInputElement | null;
+      input?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      input?.focus({ preventScroll: true });
+    }));
+  }
+
   function applyPastedMatrix(text: string, startSlotIndex: number, startMetricKey: ShiftMetric = "P"): number {
     const rows = text.trim().split(/\r?\n/).map(row => row.split("\t"));
     if (!rows.length) return 0;
@@ -685,6 +701,7 @@ export function BcsxReport() {
       items={exportMissingItems}
       title={`BCSX ngày ${operatingDate.split("-").reverse().join("/")} · ${pendingExportTarget || ""}`}
       onClose={() => { setExportMissingOpen(false); setPendingExportTarget(null); }}
+      onItemClick={goToBcsxMissingInput}
       onFillMissing={() => { setExportMissingOpen(false); setPendingExportTarget(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
       onExportAnyway={continueExportAnyway}
     />

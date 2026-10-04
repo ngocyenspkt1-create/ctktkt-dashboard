@@ -7,7 +7,7 @@ import { formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog }
 import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/permissions";
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/lib/water-report/schema";
 import { defaultOperatingDate } from "@/lib/operating-date";
-import { MissingDataAlert } from "@/components/missing-data-alert";
+import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
 import { ExportMissingDialog } from "@/components/export-missing-dialog";
 import { listMissingWaterShifts } from "@/lib/data-completeness";
 
@@ -97,6 +97,13 @@ export function WaterReportClient() {
     window.location.assign(`/api/water-report/export?month=${month}`);
   }
 
+  function goToMissingWaterShift(item: MissingDataItem) {
+    const [logDate, shiftTime] = item.key.split(":") as [string, "06h00" | "14h00" | "22h00"];
+    setExportMissingOpen(false);
+    setMonth(logDate.slice(0, 7));
+    handleOpenAddModal({ logDate, shiftTime });
+  }
+
   // Tải dữ liệu tháng; chỉ áp dụng phản hồi của yêu cầu mới nhất để đổi tháng nhanh không bị ghi đè dữ liệu cũ.
   const loadSeqRef = useRef(0);
   async function loadData(targetMonth: string) {
@@ -150,7 +157,7 @@ export function WaterReportClient() {
   }
 
   // Mở modal thêm ca mới (tự động gợi ý tiếp theo từ ca trước)
-  function handleOpenAddModal() {
+  function handleOpenAddModal(prefill?: { logDate: string; shiftTime: "06h00" | "14h00" | "22h00" }) {
     const lastShift = shifts.length > 0 ? shifts[shifts.length - 1] : baseline;
     let nextDate = defaultOperatingDate();
     let nextTime: "06h00" | "14h00" | "22h00" = "06h00";
@@ -180,8 +187,8 @@ export function WaterReportClient() {
 
     dirtyShiftFieldsRef.current.clear();
     setEditingShift({
-      logDate: nextDate,
-      shiftTime: nextTime,
+      logDate: prefill?.logDate || nextDate,
+      shiftTime: prefill?.shiftTime || nextTime,
       shiftTeam: nextTeam,
       shiftLeader: leaders[0] || "Việt",
       elecRecS1: lastShift?.elecRecS1 || 0,
@@ -456,6 +463,7 @@ export function WaterReportClient() {
         items={missingWaterShifts}
         title={`Theo dõi lượng nước tháng ${month.slice(5, 7)}/${month.slice(0, 4)}`}
         onClose={() => setExportMissingOpen(false)}
+        onItemClick={goToMissingWaterShift}
         onFillMissing={() => { setExportMissingOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
         onExportAnyway={continueWaterExport}
       />

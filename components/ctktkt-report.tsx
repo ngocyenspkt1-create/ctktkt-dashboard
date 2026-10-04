@@ -623,8 +623,8 @@ export function CtktktReport() {
     if (output === "email") setShowEmailModal(true);
   };
 
-  const returnToCtktktMissingInput = () => {
-    const first = exportMissingItems[0];
+  const returnToCtktktMissingInput = (item = exportMissingItems[0]) => {
+    const first = item;
     setExportMissingOpen(false);
     setPendingReportOutput(null);
     if (!first) return;
@@ -1241,6 +1241,7 @@ export function CtktktReport() {
         items={exportMissingItems}
         title={`Báo cáo Chỉ tiêu KTKT tháng ${period.slice(5, 7)}/${period.slice(0, 4)}`}
         onClose={() => { setExportMissingOpen(false); setPendingReportOutput(null); }}
+        onItemClick={returnToCtktktMissingInput}
         onFillMissing={returnToCtktktMissingInput}
         onExportAnyway={continueCtktktOutput}
       />

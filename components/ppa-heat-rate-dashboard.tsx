@@ -350,6 +350,19 @@ export function PpaHeatRateDashboard() {
     } finally { setLoading(false); }
   }
 
+  async function goToPpaMissingRow(item: MissingDataItem) {
+    const date = item.key.split(":", 1)[0];
+    setExportMissingOpen(false);
+    setFromDate(date);
+    setToDate(date);
+    setRangeLabel("Tuỳ chọn");
+    await loadRange(date, date, false);
+    window.requestAnimationFrame(() => {
+      const row = document.getElementById(`ppa-row-${date}`);
+      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
   // Chỉ tải một lần khi mở trang; các thao tác đổi khoảng ngày sau đó tự gọi loadRange qua sự kiện người dùng.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadRange(fromDate, toDate, false); }, []);
@@ -533,6 +546,7 @@ export function PpaHeatRateDashboard() {
       items={missingPpaExport}
       title="So sánh suất hao nhiệt thực tế và PPA trong khoảng đã chọn"
       onClose={() => setExportMissingOpen(false)}
+      onItemClick={goToPpaMissingRow}
       onFillMissing={() => { setExportMissingOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
       onExportAnyway={continuePpaExport}
     />
@@ -649,7 +663,7 @@ export function PpaHeatRateDashboard() {
               {monthRows.map(row => {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
                 const statusBadge = (status: string) => <span className={`rounded-full px-1 py-0.5 text-[9px] font-extrabold ${status === "Đạt" ? "bg-emerald-100 text-emerald-800" : status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-500"}`}>{status === "Chưa đủ dữ liệu" ? "—" : status === "Vượt PPA" ? "Vượt" : "Đạt"}</span>;
-                return <tr key={row.date} className="border-t border-slate-200 hover:bg-slate-50/60">
+                return <tr id={`ppa-row-${row.date}`} key={row.date} className="border-t border-slate-200 hover:bg-slate-50/60">
                   <td className="whitespace-nowrap px-0.5 py-1 text-center font-bold text-black">
                     {canEdit ? (
                       <button

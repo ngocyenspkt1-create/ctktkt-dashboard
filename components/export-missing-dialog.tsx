@@ -15,6 +15,7 @@ type ExportMissingDialogProps = {
   items: MissingDataItem[];
   title: string;
   onClose: () => void;
+  onItemClick?: (item: MissingDataItem) => void;
   onFillMissing: () => void;
   onExportAnyway: () => void;
 };
@@ -24,6 +25,7 @@ export function ExportMissingDialog({
   items,
   title,
   onClose,
+  onItemClick,
   onFillMissing,
   onExportAnyway,
 }: ExportMissingDialogProps) {
@@ -43,7 +45,15 @@ export function ExportMissingDialog({
             {visibleItems.map(item => (
               <li key={item.key} className="leading-5">
                 {item.group ? <span className="font-semibold">{item.group}: </span> : null}
-                {item.label}
+                {onItemClick ? (
+                  <button
+                    type="button"
+                    onClick={() => onItemClick(item)}
+                    className="text-left text-slate-800 underline decoration-amber-400 underline-offset-2 hover:text-amber-900 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-700"
+                  >
+                    {item.label}
+                  </button>
+                ) : item.label}
               </li>
             ))}
           </ul>
