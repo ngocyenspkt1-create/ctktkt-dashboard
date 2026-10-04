@@ -1,4 +1,5 @@
 import { getRawDb } from "@/db";
+import { isFutureOperatingDate } from "@/lib/operating-date";
 import { requireAnyPermission } from "@/lib/auth/server";
 import { parseAvailableCapacity, PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE } from "@/lib/google-sheet-sync";
 
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
       const availableCapacityS1Mw = hasAvailableCapacityS1 ? parseAvailableCapacity(value.availableCapacityS1Mw, "Công suất khả dụng S1") : null;
       const availableCapacityS2Mw = hasAvailableCapacityS2 ? parseAvailableCapacity(value.availableCapacityS2Mw, "Công suất khả dụng S2") : null;
       if (!datePattern.test(operatingDate) || seen.has(operatingDate)) throw new Error("Ngày đánh giá không hợp lệ hoặc bị trùng.");
+      if (isFutureOperatingDate(operatingDate)) throw new Error("Không thể đánh giá hoặc lưu dữ liệu cho ngày trong tương lai.");
       if (noteS1.length > 1000 || noteS2.length > 1000) throw new Error(`Đánh giá ngày ${operatingDate} dài quá 1.000 ký tự.`);
       seen.add(operatingDate);
       return { operatingDate, noteS1, noteS2, hasAvailableCapacityS1, hasAvailableCapacityS2, availableCapacityS1Mw, availableCapacityS2Mw };

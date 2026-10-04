@@ -2,6 +2,7 @@ import { getRawDb } from "@/db";
 import { EVENT_TYPES, validateOperatingEventDateRange, type OperatingEvent } from "@/lib/bcsx";
 import { requirePermission } from "@/lib/auth/server";
 import { CTKTKT_LINKED_DAILY_CODES } from "@/lib/daily-source-links";
+import { isFutureOperatingDate } from "@/lib/operating-date";
 
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const timestampPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01]) ([01]\d|2[0-3]):[0-5]\d$/;
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
     const body = JSON.parse(rawText) as SyncBody;
     const date = String(body.date || "");
     if (!datePattern.test(date)) throw new Error("Ngày đồng bộ không hợp lệ.");
+    if (isFutureOperatingDate(date)) throw new Error("Không thể đồng bộ dữ liệu cho ngày trong tương lai.");
     const entries = cleanEntries(body.entries, date);
     const s1Events = cleanEvents(body.events?.S1, date);
     const s2Events = cleanEvents(body.events?.S2, date);

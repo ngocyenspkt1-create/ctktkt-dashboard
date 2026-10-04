@@ -1,6 +1,7 @@
 import { getRawDb } from "@/db";
 import { requirePermission } from "@/lib/auth/server";
 import { BCSX_COAL_STOCK_24H_CODE } from "@/lib/ctktkt-bcsx-link";
+import { isFutureOperatingDate } from "@/lib/operating-date";
 
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
     const valueText = String(body.value ?? "").trim().replace(",", ".");
     const value = Number(valueText);
     if (!datePattern.test(operatingDate)) throw new Error("Ngày vận hành không hợp lệ.");
+    if (isFutureOperatingDate(operatingDate)) throw new Error("Không thể lưu dữ liệu cho ngày trong tương lai.");
     if (!valueText || !Number.isFinite(value) || value < 0 || value > 10_000_000) throw new Error("Than tồn kho 24h phải là số không âm hợp lệ.");
     await getRawDb().prepare(
       "INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
