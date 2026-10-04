@@ -176,6 +176,21 @@ const editableFieldGroups = (() => {
 type InputGridColumn = { key: string; label: string };
 type InputGridRow = { key: string; label: string; sourceRow: number; cells: Record<string, EditableField> };
 
+const NH3_INPUT_GRID_LABELS: Record<string, { row: string; column: string }> = {
+  N69: { row: "Bồn A", column: "Mức đầu ngày 00h (mm)" },
+  O69: { row: "Bồn A", column: "Mức cuối ngày 24h (mm)" },
+  P69: { row: "Bồn A", column: "Khối lượng NH3 (tấn)" },
+  N70: { row: "Bồn B", column: "Mức đầu ngày 00h (mm)" },
+  O70: { row: "Bồn B", column: "Mức cuối ngày 24h (mm)" },
+  P70: { row: "Bồn B", column: "Khối lượng NH3 (tấn)" },
+  N71: { row: "Bồn C", column: "Mức đầu ngày 00h (mm)" },
+  O71: { row: "Bồn C", column: "Mức cuối ngày 24h (mm)" },
+  P71: { row: "Bồn C", column: "Khối lượng NH3 (tấn)" },
+  P72: { row: "Tổng lượng NH3 nhập trong ngày", column: "Lượng NH3 (tấn)" },
+  P73: { row: "Tổng lượng NH3 tồn kho đầu ngày 00h", column: "Lượng NH3 (tấn)" },
+  P74: { row: "Tổng lượng NH3 tồn kho cuối ngày 24h", column: "Lượng NH3 (tấn)" },
+};
+
 function buildInputGrid(fields: EditableField[], groupLabel: string) {
   const rows = new Map<string, InputGridRow>();
   const columns = new Map<string, InputGridColumn>();
@@ -196,6 +211,19 @@ function buildInputGrid(fields: EditableField[], groupLabel: string) {
     const row = rows.get(rowKey) || { key: rowKey, label: rowLabel, sourceRow: field.row, cells: {} };
     row.cells[columnKey] = field;
     rows.set(rowKey, row);
+  }
+
+  for (const field of fields) {
+    const label = NH3_INPUT_GRID_LABELS[field.cell];
+    if (!label) continue;
+    const row = rows.get(`${field.row}|${groupLabel}`);
+    if (row) row.label = label.row;
+    const sourcePeriod = field.label.split(" Â· ").at(-1)?.trim() || "";
+    const columnKey = /^\d{1,2}$/.test(sourcePeriod)
+      ? `period:${sourcePeriod.padStart(2, "0")}h`
+      : "value";
+    const column = columns.get(columnKey);
+    if (column) column.label = label.column;
   }
 
   const orderedColumns = [...columns.values()].sort((left, right) =>
@@ -1783,6 +1811,10 @@ export function CtktktReport() {
                   const complete = fields.filter(field => !isMissingValue(current[field.cell])).length;
                   const editable = fields.filter(field => canEditCtktktField(user, field.cell)).length;
                   const inputGrid = buildInputGrid(fields, group.label);
+                  const groupTitle = group.key === "nh3_tank" ? "Mức bồn, lượng nhập và tồn NH3" : group.label;
+                  const groupDescription = group.key === "nh3_tank"
+                    ? "Nhập mức đầu/cuối ngày cho từng bồn A, B, C; tổng lượng NH3 nhập và tồn kho được ghi riêng bên dưới."
+                    : group.description;
                   const isOpen = Boolean(query) || openInputGroups.includes(group.key);
                   return (
                     <details
@@ -1802,8 +1834,8 @@ export function CtktktReport() {
                         <span className="flex min-w-0 items-center gap-2">
                           <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-indigo-100 text-xs font-black text-indigo-800">{String(groupIndex + 1).padStart(2, "0")}</span>
                           <span className="min-w-0">
-                            <span className="block text-xs font-black text-slate-800">{group.label}</span>
-                            <span className="mt-0.5 block text-[10px] text-slate-500">{group.description}</span>
+                            <span className="block text-xs font-black text-slate-800">{groupTitle}</span>
+                            <span className="mt-0.5 block text-[10px] text-slate-500">{groupDescription}</span>
                           </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-2 text-[10px] font-bold">
