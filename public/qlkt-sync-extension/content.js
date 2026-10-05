@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.31";
+  const CONTENT_SCRIPT_VERSION = "0.4.32";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -271,17 +271,12 @@
     if (!select) throw new Error("Không tìm thấy danh sách chọn Tổ máy trên màn hình này.");
     const targetOption = [...select.options].find(option => optionHeatRateUnit(option) === targetUnit);
     if (!targetOption) throw new Error(`Không tìm thấy Tổ máy DH1_MF${targetUnit} trong danh sách chọn.`);
-    if (select.value === targetOption.value) return;
+    if (select.value === targetOption.value) return waitForHeatRateEntries(targetUnit);
     const before = sampleHeatRateSignature();
     select.value = targetOption.value;
     select.dispatchEvent(new Event("input", { bubbles: true }));
     select.dispatchEvent(new Event("change", { bubbles: true }));
-    const deadline = Date.now() + 12000;
-    while (Date.now() < deadline) {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      if (detectHeatRateUnit() === targetUnit && sampleHeatRateSignature() !== before) return;
-    }
-    throw new Error(`Màn hình chưa nạp xong dữ liệu Tổ máy DH1_MF${targetUnit} sau khi chuyển — hãy thử đồng bộ lại.`);
+    return waitForHeatRateEntries(targetUnit, before);
   }
 
   // 4 chỉ tiêu mới của báo cáo "THEO PMIS" (Trung bình công suất đầu cực, Tổn thất khói khô trung
@@ -312,6 +307,29 @@
     return entries;
   }
 
+  // AJAX có thể xóa bảng trước khi điền số liệu: chữ ký đổi chưa có nghĩa
+  // bảng đã sẵn sàng. Chỉ đọc khi đủ 4 chỉ tiêu, đúng tổ máy và ổn định.
+  async function waitForHeatRateEntries(unit, previousSignature = null) {
+    const deadline = Date.now() + 12000;
+    let stableSignature = null, stableSince = 0, lastEntries = [];
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      try {
+        const signature = sampleHeatRateSignature();
+        const entries = readHeatRateEntriesForCurrentUnit(unit);
+        lastEntries = entries;
+        if (detectHeatRateUnit() === unit && entries.length === 4
+          && (previousSignature === null || signature !== previousSignature)) {
+          if (signature !== stableSignature) { stableSignature = signature; stableSince = Date.now(); }
+          else if (Date.now() - stableSince >= 600) return entries;
+        } else stableSignature = null;
+      } catch { stableSignature = null; /* bảng đang được dựng lại */ }
+    }
+    const required = unit === "2" ? ["DB", "DD", "DF", "DH"] : ["DA", "DC", "DE", "DG"];
+    const missing = required.filter(code => !lastEntries.some(entry => entry.fieldCode === code));
+    throw new Error(`QLKT DH1_MF${unit} chưa nạp đủ/ổn định 4 chỉ tiêu Trung bình${missing.length ? ` (thiếu ${missing.join(", ")})` : ""}. Hãy kiểm tra bảng của tổ máy này và thử đồng bộ lại.`);
+  }
+
   // Đọc cả 2 Tổ máy (S1+S2) trong 1 lần gọi: đọc Tổ máy đang chọn trước, rồi tự chuyển dropdown
   // "Tổ máy" sang Tổ máy còn lại, chờ bảng nạp lại xong (AJAX), đọc tiếp, rồi khôi phục lại đúng
   // Tổ máy ban đầu — để người dùng chỉ cần bấm 1 nút đồng bộ trên web Chỉ tiêu KTKT.
@@ -323,10 +341,9 @@
     const firstUnit = originalUnit || "1";
     if (!originalUnit) await switchHeatRateUnit(firstUnit);
     const otherUnit = firstUnit === "2" ? "1" : "2";
-    const entriesByUnit = { [firstUnit]: readHeatRateEntriesForCurrentUnit(firstUnit) };
+    const entriesByUnit = { [firstUnit]: await waitForHeatRateEntries(firstUnit) };
     try {
-      await switchHeatRateUnit(otherUnit);
-      entriesByUnit[otherUnit] = readHeatRateEntriesForCurrentUnit(otherUnit);
+      entriesByUnit[otherUnit] = await switchHeatRateUnit(otherUnit);
     } finally {
       if (originalUnit && detectHeatRateUnit() !== originalUnit) {
         try { await switchHeatRateUnit(originalUnit); } catch { /* đã lấy đủ dữ liệu cần thiết, bỏ qua lỗi khôi phục */ }

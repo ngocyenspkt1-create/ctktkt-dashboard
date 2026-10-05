@@ -249,7 +249,7 @@ async function readSource(source, url, operatingDate) {
           result = { ...result, error: `${result?.error || "Không đọc được màn hình Công tơ PPA."} [Đọc trực tiếp widget: ${pageWorldError}] [${prepInfo}]` };
         }
       }
-    } else result = await readValuesWithRetry(tabId, operatingDate);
+    } else result = await readValuesWithRetry(tabId, operatingDate, source === "heatrate" ? 2 : 24);
     if (!result?.ok) throw new Error(`Màn hình ${SOURCE_LABELS[source]}: ${result?.error || "không đọc được dữ liệu."}`);
     if (source === "meter") {
       if (result.payload?.kind !== "ppa-meter" || result.payload?.readings?.length !== 6) {
