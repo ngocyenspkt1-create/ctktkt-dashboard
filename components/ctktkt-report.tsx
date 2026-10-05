@@ -486,34 +486,22 @@ export function CtktktReport() {
     return merged;
   }, [byDate, linkedByDate, date, current]);
   const missingCtktktForExport = useMemo(() => {
-    if (loading || error) return [] as MissingDataItem[];
-    const today = defaultOperatingDate();
-    if (period > today.slice(0, 7)) return [] as MissingDataItem[];
-    const lastDay = period < today.slice(0, 7)
-      ? new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate()
-      : Number(today.slice(8, 10));
-    const optionalCells = new Set([
-      "COAL_ADJ_NOTE_S1", "COAL_ADJ_NOTE_S2", "WATER_ADJ_NOTE_S1", "WATER_ADJ_NOTE_S2",
-      "WATER_ADJ_S1", "WATER_ADJ_S2", "W28", "Y28", "AA28", "AG28", "AI28", "AK28",
-    ]);
+    if (loading || error || date > defaultOperatingDate()) return [] as MissingDataItem[];
     const items: MissingDataItem[] = [];
-    for (let day = 1; day <= lastDay; day += 1) {
-      const operatingDate = `${period}-${String(day).padStart(2, "0")}`;
-      const entries = mergedByDate.get(operatingDate) || {};
-      for (const field of editableFields) {
-        const group = getCtktktFieldGroup(field.cell);
-        if (!group || group === "startup_shutdown" || optionalCells.has(field.cell)) continue;
-        if (!canEditCtktktField(user, field.cell) || !shouldShowCtktktMissingField(field.cell, operatingDate, byDate)) continue;
-        if (!isMissingValue(entries[field.cell])) continue;
-        items.push({
-          key: `${operatingDate}|${field.cell}`,
-          label: `${operatingDate.split("-").reverse().join("/")} · ${field.label} [${field.cell}]`,
-          group: CTKTKT_GROUP_META[group]?.shortLabel || field.sectionLabel,
-        });
-      }
+    const seen = new Set<string>();
+    for (const field of editableFields) {
+      if (!missingCtktkt.has(field.cell) || seen.has(field.cell)) continue;
+      seen.add(field.cell);
+      const group = getCtktktFieldGroup(field.cell);
+      if (!group) continue;
+      items.push({
+        key: `${date}|${field.cell}`,
+        label: `${date.split("-").reverse().join("/")} · ${field.label} [${field.cell}]`,
+        group: CTKTKT_GROUP_META[group]?.shortLabel || field.sectionLabel,
+      });
     }
     return items;
-  }, [byDate, mergedByDate, period, user, loading, error]);
+  }, [date, missingCtktkt, loading, error]);
   const coalStock = useMemo(() => calculateCoalStock24h(mergedByDate, date), [mergedByDate, date]);
   const pmisCoalStock = useMemo(() => calculatePmisCoalStockOpening(mergedByDate, date), [mergedByDate, date]);
   // Giờ lũy kế cộng dồn từ QLKT kể từ 01/01/2026; chỉ tính các ngày QLKT chưa có tới ngày đang xem.
