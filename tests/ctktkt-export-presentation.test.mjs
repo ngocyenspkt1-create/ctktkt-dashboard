@@ -80,9 +80,20 @@ test('scratch display is hidden without removing report values or formula depend
  for(const cell of ['H157','I162','J163','L159','L162','M157','V163']) assert.equal(s.getCell(cell).numFmt,';;;');
  for(const cell of ['E157','I160','J157','L158','Q165']) assert.notEqual(s.getCell(cell).numFmt,';;;');
  assert.equal(s.getRow(165).hidden,false);
- assert.equal(s.getRow(166).hidden,true);
- assert.equal(s.getRow(181).hidden,true);
+ for(let row=166;row<=181;row++) assert.equal(s.getRow(row).hidden,false);
+ assert.equal(s.getRow(182).hidden,true);
+ assert.match(s.pageSetup.printArea,/181$/);
+ const bottomTables=[];
+ for(let row=167;row<=181;row++) s.getRow(row).eachCell(cell=>bottomTables.push([cell.address,canonical(cell.value),cell.numFmt,cell.style]));
+ hideCtktktExportScratchArea(w);
+ for(const [address,value,numFmt,style] of bottomTables) {
+  assert.deepEqual(canonical(s.getCell(address).value),value);
+  assert.equal(s.getCell(address).numFmt,numFmt);
+  assert.deepEqual(s.getCell(address).style,style);
+ }
  const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(await w.xlsx.writeBuffer());
- assert.equal(reopened.getWorksheet('03').getRow(181).hidden,true);
+ for(let row=167;row<=181;row++) assert.equal(reopened.getWorksheet('03').getRow(row).hidden,false);
+ assert.equal(reopened.getWorksheet('03').getRow(182).hidden,true);
+ assert.match(reopened.getWorksheet('03').pageSetup.printArea,/181$/);
  assert.equal(reopened.getWorksheet('03').getCell('H157').formula,'E157/24');
 });

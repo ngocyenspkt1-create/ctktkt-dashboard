@@ -45,11 +45,11 @@ export function applyCtktktExportPresentation(workbook: ExcelJS.Workbook) {
   }
 }
 
-/** Keep the three final report tables visible; retain their calculation dependencies. */
+/** Hide scratch areas while retaining all five report tables and their dependencies. */
 export function hideCtktktExportScratchArea(workbook: ExcelJS.Workbook) {
   for (const sheet of workbook.worksheets) {
     if (!/^\d{2}$/.test(sheet.name)) continue;
-    for (let row = 166; row <= sheet.rowCount; row += 1) sheet.getRow(row).hidden = true;
+    for (let row = 166; row <= sheet.rowCount; row += 1) sheet.getRow(row).hidden = row > 181;
     for (let row = 155; row <= 165; row += 1) {
       for (let column = 1; column <= sheet.columnCount; column += 1) {
         const inTable = (column >= 3 && column <= 7 && row <= 163)
@@ -65,6 +65,6 @@ export function hideCtktktExportScratchArea(workbook: ExcelJS.Workbook) {
         cell.border = {};
       }
     }
-    sheet.pageSetup.printArea = `A1:${sheet.getColumn(sheet.columnCount).letter}165`;
+    sheet.pageSetup.printArea = `A1:${sheet.getColumn(sheet.columnCount).letter}181`;
   }
 }
