@@ -642,7 +642,7 @@ export function BcsxReport() {
                         onKeyDown={e => handleKeyDown(m.key, i, e)}
                         onPaste={e => handleCellPaste(m.key, i, e)}
                         inputMode="decimal"
-                        className="h-6 w-full rounded border border-slate-200 bg-white px-1 text-right font-mono text-[11px] text-black outline-none transition focus:border-[#334785] focus:bg-blue-50/50 focus:ring-1 focus:ring-[#334785]/20"
+                        className="h-6 w-full rounded border border-slate-200 bg-white px-1 text-center font-mono text-[15px] text-black outline-none transition focus:border-[#334785] focus:bg-blue-50/50 focus:ring-1 focus:ring-[#334785]/20"
                         placeholder="—"
                       />
                     </td>
@@ -986,7 +986,7 @@ export function BcsxReport() {
         <label className="flex flex-col text-xs font-semibold text-slate-500">
           Than tồn kho 24h (tấn, toàn nhà máy)
           <span className="mt-1 flex gap-1.5">
-            <input disabled={isViewer || savingCoalStock} value={totals[unit].thanTonKho} onChange={event => setCoalStock(event.target.value)} inputMode="decimal" placeholder="Nhập số tồn kho" title="Nhập tay tại BCSX; dùng chung S1/S2" className="min-w-0 flex-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-right font-mono text-xs font-semibold text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 disabled:opacity-60"/>
+            <input disabled={isViewer || savingCoalStock} value={totals[unit].thanTonKho} onChange={event => setCoalStock(event.target.value)} inputMode="decimal" placeholder="Nhập số tồn kho" title="Nhập tay tại BCSX; dùng chung S1/S2" className="min-w-0 flex-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-right font-mono text-[15px] font-semibold text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 disabled:opacity-60"/>
             <button type="button" disabled={isViewer || savingCoalStock || !totals[unit].thanTonKho.trim()} onClick={() => void saveCoalStock()} className="rounded-md bg-amber-600 px-2.5 text-xs font-bold text-white disabled:opacity-50">{savingCoalStock ? "Lưu…" : "Lưu"}</button>
           </span>
         </label>
@@ -1046,7 +1046,7 @@ export function BcsxReport() {
               <th className="p-2 text-left w-[80px]">Kết thúc</th>
               <th className="p-2 text-center w-[60px]">Loại</th>
               <th className="p-2 text-left">Sự kiện</th>
-              <th className="p-2 text-right w-[60px]"></th>
+              <th className="p-2 text-center w-[92px]">Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -1055,11 +1055,12 @@ export function BcsxReport() {
                 <td className="p-2 font-mono text-black font-semibold">{e.startAt.slice(8, 10)}/{e.startAt.slice(5, 7)}/{e.startAt.slice(0, 4)} {e.startAt.slice(11)}</td>
                 <td className="p-2 font-mono text-black">{e.endAt ? `${e.endAt.slice(8, 10)}/${e.endAt.slice(5, 7)}/${e.endAt.slice(0, 4)} ${e.endAt.slice(11)}` : "—"}</td>
                 <td className="p-2 text-center text-black font-bold">{e.eventType}</td>
-                <td className="p-2 text-black">{e.description}</td>
-                <td className="p-2 text-right">
-                  <button type="button" disabled={isViewer} onClick={() => editEvent(i)} className="text-xs font-bold text-blue-600 hover:text-blue-800 disabled:opacity-50">Sửa</button>
-                  <span className="mx-1 text-slate-300">|</span>
-                  <button type="button" disabled={isViewer} onClick={() => removeEvent(i)} className="text-xs font-bold text-red-500 hover:text-red-700 disabled:opacity-50">Xóa</button>
+                <td className="p-2 text-sm leading-5 text-black">{e.description}</td>
+                <td className="p-2">
+                  <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+                    <button type="button" disabled={isViewer} onClick={() => editEvent(i)} className="min-w-9 rounded px-1.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 hover:text-blue-800 disabled:opacity-50">Sửa</button>
+                    <button type="button" disabled={isViewer} onClick={() => removeEvent(i)} className="min-w-9 rounded px-1.5 py-1 text-xs font-bold text-red-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-50">Xóa</button>
+                  </div>
                 </td>
               </tr>
             ))}
