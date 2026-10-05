@@ -293,6 +293,30 @@ export function CtktktReport() {
   const dirtyCellsRef = useRef(new Set<string>());
 
   useEffect(() => {
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      if (!dirty && !saving) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    const guardReportNavigation = (event: MouseEvent) => {
+      if (!dirty && !saving) return;
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!(link instanceof HTMLAnchorElement) || link.target === "_blank" || link.hasAttribute("download")) return;
+      const target = new URL(link.href, window.location.href);
+      if (target.pathname === window.location.pathname && target.search === window.location.search) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setError("Hãy lưu số liệu ngày đang nhập trước khi chuyển sang trang khác.");
+    };
+    document.addEventListener("click", guardReportNavigation, true);
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeLeaving);
+      document.removeEventListener("click", guardReportNavigation, true);
+    };
+  }, [dirty, saving]);
+
+  useEffect(() => {
     const channel = "ctktkt-qlkt-sync";
     const handleMessage = async (event: MessageEvent) => {
       if (event.source !== window || event.origin !== window.location.origin) return;
@@ -542,6 +566,10 @@ export function CtktktReport() {
 
   const returnToCtktktMissingInput = (item = exportMissingItems[0]) => {
     const first = item;
+    if (first && first.key.split("|")[0] !== date && (dirty || saving)) {
+      setError("Hãy lưu số liệu ngày đang nhập trước khi chuyển sang ngày khác.");
+      return;
+    }
     setExportMissingOpen(false);
     setPendingReportOutput(null);
     if (!first) return;
@@ -730,6 +758,11 @@ export function CtktktReport() {
 
   const handleHistoryImport = async (file: File | undefined) => {
     if (!file || !userCanEditAny) return;
+    if (dirtyCellsRef.current.size > 0 || saving) {
+      setError("Hãy lưu số liệu đang nhập trước khi nhập dữ liệu từ file.");
+      if (importFileRef.current) importFileRef.current.value = "";
+      return;
+    }
     setImportingHistory(true);
     setError("");
     setMessage("");
@@ -1207,6 +1240,11 @@ export function CtktktReport() {
                 max={vietnamDateIso()}
                 disabled={saving || importingHistory || syncingPmis}
                 onChange={value => {
+                  if (value === date) return;
+                  if (dirtyCellsRef.current.size > 0 || saving) {
+                    setError("Hãy lưu số liệu ngày đang nhập trước khi chuyển sang ngày khác.");
+                    return;
+                  }
                   if (value.slice(0, 7) !== period) setLoading(true);
                   setDate(value);
                   dirtyCellsRef.current.clear();
@@ -3085,8 +3123,22 @@ export function CtktktReport() {
                       <span className="text-[11px] text-slate-500 font-sans block">
                         Tồn kho 24h00 (tấn):
                       </span>
-                      {renderCellInput("P74", { group: "nh3_tank" })}
+                      <div data-nh3-stock-24h className="text-center text-xs text-indigo-900">
+                        {format(nh3.stock24h)}
+                      </div>
+                      <span className="mt-1 block text-[11px] text-slate-500 font-sans">
+                        {isMissingValue(current["P74"])
+                          ? "Tổng hợp từ số liệu ba bồn đã nhập; chưa nhập trực tiếp P74."
+                          : "Dùng số liệu nhập trực tiếp P74."}
+                      </span>
                     </div>
+
+                    <label className="block">
+                      <span className="mb-1 block text-slate-600">
+                        Tồn kho 24h nhập trực tiếp — P74 (tấn):
+                      </span>
+                      {renderCellInput("P74", { group: "nh3_tank" })}
+                    </label>
 
                     <div className="rounded bg-white p-2 border font-mono">
                       <span className="text-[11px] text-slate-500 font-sans block">
