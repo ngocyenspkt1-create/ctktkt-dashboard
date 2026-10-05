@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
+import { NkvhPpaSyncButton } from "@/components/nkvh-ppa-sync-button";
 import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource, type MeterReading, type PpaResult } from "@/lib/ppa-heat-rate";
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from "@/lib/qlkt-sync";
 import { useSessionUser } from "@/components/session-context";
@@ -479,6 +480,8 @@ export function PpaHeatRateComparison() {
           />
         </label>
       </div>
+      <NkvhPpaSyncButton operatingDate={operatingDate} disabled={loading || saving || savingNotes || isViewer}
+        onApply={(s1, s2) => { if (s1.trim()) setEventS1(s1); if (s2.trim()) setEventS2(s2); }} />
       <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
         <label className="grid gap-1 text-xs font-bold text-slate-700">
           <div className="flex items-center justify-between">
