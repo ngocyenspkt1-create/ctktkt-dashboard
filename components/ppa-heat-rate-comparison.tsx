@@ -8,7 +8,7 @@ import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
 import { mergeDailyInputsWithCtktkt } from "@/lib/daily-source-links";
-import { PPA_OPERATING_EVENT_S1_CODE, PPA_OPERATING_EVENT_S2_CODE } from "@/lib/google-sheet-sync";
+import { parseAvailableCapacity, PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE, PPA_OPERATING_EVENT_S1_CODE, PPA_OPERATING_EVENT_S2_CODE } from "@/lib/google-sheet-sync";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type CtktktInput = { operatingDate: string; cell: string; value: string };
@@ -32,6 +32,7 @@ export function PpaHeatRateComparison() {
   const [operatingDate, setOperatingDate] = useState(defaultOperatingDate), [readings, setReadings] = useState<MeterReading[]>([]), [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [pastedText, setPastedText] = useState(""), [noteS1, setNoteS1] = useState(""), [noteS2, setNoteS2] = useState("");
   const [eventS1, setEventS1] = useState(""), [eventS2, setEventS2] = useState("");
+  const [availableCapacityS1Mw, setAvailableCapacityS1Mw] = useState(""), [availableCapacityS2Mw, setAvailableCapacityS2Mw] = useState("");
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]), [history, setHistory] = useState<StoredPpa[]>([]);
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [savingNotes, setSavingNotes] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
@@ -91,6 +92,8 @@ export function PpaHeatRateComparison() {
       setNoteS2(existing?.noteS2 || "");
       setEventS1(dailyValue(PPA_OPERATING_EVENT_S1_CODE));
       setEventS2(dailyValue(PPA_OPERATING_EVENT_S2_CODE));
+      setAvailableCapacityS1Mw(dailyValue(PPA_AVAILABLE_CAPACITY_S1_CODE));
+      setAvailableCapacityS2Mw(dailyValue(PPA_AVAILABLE_CAPACITY_S2_CODE));
     }, 0);
     return () => window.clearTimeout(timer);
   }, [operatingDate, history, dailyInputs]);
@@ -237,19 +240,25 @@ export function PpaHeatRateComparison() {
     window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "SYNC_PPA", requestId, operatingDate }, window.location.origin);
   }
 
+  async function persistDayDetails() {
+    const capacityS1 = parseAvailableCapacity(availableCapacityS1Mw, "Công suất khả dụng S1");
+    const capacityS2 = parseAvailableCapacity(availableCapacityS2Mw, "Công suất khả dụng S2");
+    const response = await fetch("/api/ppa-heat-rate/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entries: [{ operatingDate, noteS1: noteS1.trim(), noteS2: noteS2.trim(), eventS1: eventS1.trim(), eventS2: eventS2.trim(), availableCapacityS1Mw: capacityS1, availableCapacityS2Mw: capacityS2 }]
+      })
+    });
+    const body = await response.json() as { error?: string };
+    if (!response.ok) throw new Error(body.error || "Chưa lưu được thông tin tổ máy.");
+  }
+
   async function saveNotesOnly() {
     setSavingNotes(true); setError(""); setMessage("");
     try {
-      const response = await fetch("/api/ppa-heat-rate/notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entries: [{ operatingDate, noteS1: noteS1.trim(), noteS2: noteS2.trim(), eventS1: eventS1.trim(), eventS2: eventS2.trim() }]
-        })
-      });
-      const body = await response.json() as { error?: string; updated?: number };
-      if (!response.ok) throw new Error(body.error || "Chưa lưu được nhận xét.");
-      setMessage(`Đã lưu nhận xét và tình hình vận hành S1 & S2 cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
+      await persistDayDetails();
+      setMessage(`Đã lưu công suất khả dụng, nhận xét và sự kiện S1 & S2 cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
       await loadPeriod();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Chưa lưu được nhận xét.");
@@ -262,9 +271,12 @@ export function PpaHeatRateComparison() {
     if (!selected.source || !calculation) { setError("Chưa đủ 4 điểm đo bắt buộc để tính và lưu."); return; }
     setSaving(true); setError(""); setMessage("");
     try {
+      parseAvailableCapacity(availableCapacityS1Mw, "Công suất khả dụng S1");
+      parseAvailableCapacity(availableCapacityS2Mw, "Công suất khả dụng S2");
       const response = await fetch("/api/ppa-heat-rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operatingDate, source: selected.source, sourceFiles, noteS1, noteS2 }) });
       const body = await response.json() as { error?: string };
       if (!response.ok) throw new Error(body.error || "Chưa lưu được kết quả.");
+      await persistDayDetails();
       setMessage(`Đã lưu kết quả so sánh ngày ${operatingDate.split("-").reverse().join("/")}.`);
       await loadPeriod();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Chưa lưu được kết quả."); }
@@ -387,7 +399,7 @@ export function PpaHeatRateComparison() {
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#20345f]">Nhận xét & nguyên nhân chênh lệch tổ máy</h2>
+          <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#20345f]">Thông tin vận hành & nhận xét tổ máy</h2>
           <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">
             Ngày {operatingDate.split("-").reverse().join("/")}
           </span>
@@ -395,17 +407,17 @@ export function PpaHeatRateComparison() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            disabled={savingNotes || isViewer}
+            disabled={loading || saving || savingNotes || isViewer}
             title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
             onClick={saveNotesOnly}
             className="h-7 rounded-lg border border-[#4057b5] bg-white px-3 text-xs font-bold text-[#4057b5] shadow-sm hover:bg-blue-50 disabled:opacity-50"
           >
-            {savingNotes ? "Đang lưu…" : "Lưu nhận xét & sự kiện S1/S2"}
+            {savingNotes ? "Đang lưu…" : "Lưu thông tin S1/S2"}
           </button>
           {calculation && (
             <button
               type="button"
-              disabled={saving || isViewer}
+              disabled={loading || saving || savingNotes || isViewer}
               title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
               onClick={save}
               className="h-7 rounded-lg bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
@@ -414,6 +426,30 @@ export function PpaHeatRateComparison() {
             </button>
           )}
         </div>
+      </div>
+      <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+        <label className="grid gap-1 text-xs font-bold text-blue-900">
+          Công suất khả dụng S1 (MW)
+          <input
+            value={availableCapacityS1Mw}
+            onChange={event => setAvailableCapacityS1Mw(event.target.value)}
+            inputMode="decimal"
+            disabled={loading || isViewer}
+            className="rounded-lg border border-blue-200 bg-blue-50/50 p-2 text-sm font-semibold text-black outline-none focus:border-[#4c78a8] disabled:opacity-50"
+            placeholder="Ví dụ: 622,5"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-bold text-amber-900">
+          Công suất khả dụng S2 (MW)
+          <input
+            value={availableCapacityS2Mw}
+            onChange={event => setAvailableCapacityS2Mw(event.target.value)}
+            inputMode="decimal"
+            disabled={loading || isViewer}
+            className="rounded-lg border border-amber-200 bg-amber-50/50 p-2 text-sm font-semibold text-black outline-none focus:border-[#4c78a8] disabled:opacity-50"
+            placeholder="Ví dụ: 622,5"
+          />
+        </label>
       </div>
       <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
         <label className="grid gap-1 text-xs font-bold text-slate-700">
