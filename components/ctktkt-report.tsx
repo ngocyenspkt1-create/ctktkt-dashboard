@@ -19,10 +19,6 @@ import {
   Mail,
   Upload,
   Camera,
-  Calculator,
-  Link2,
-  CheckCircle2,
-  Circle,
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
@@ -114,8 +110,6 @@ type ImportPackage = {
 };
 
 type MainTab =
-  | "input_groups"
-  | "computed_linked"
   | "tkd_dcs"
   | "unit_meters"
   | "steam_nh3"
@@ -154,98 +148,6 @@ const editableFields = [
 ].filter(field => field.cell !== CTKTKT_OPERATION_EVENTS_CELL
   && !LEGACY_OPERATION_EVENT_CELLS.has(field.cell)
   && !isCtktktOperationPowerCell(field.cell));
-
-type EditableField = (typeof editableFields)[number];
-const editableFieldGroups = (() => {
-  const groups = new Map<string, { label: string; description: string; fields: EditableField[] }>();
-  for (const field of editableFields) {
-    const group = getCtktktFieldGroup(field.cell);
-    const key = group || field.section;
-    const meta = group ? CTKTKT_GROUP_META[group] : undefined;
-    const entry = groups.get(key) || {
-      label: meta?.label || field.sectionLabel,
-      description: meta?.description || field.sectionLabel,
-      fields: [],
-    };
-    entry.fields.push(field);
-    groups.set(key, entry);
-  }
-  return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
-})();
-
-type InputGridColumn = { key: string; label: string };
-type InputGridRow = { key: string; label: string; sourceRow: number; cells: Record<string, EditableField> };
-
-const NH3_INPUT_GRID_LABELS: Record<string, { row: string; column: string }> = {
-  N69: { row: "Bồn A", column: "Mức đầu ngày 00h (mm)" },
-  O69: { row: "Bồn A", column: "Mức cuối ngày 24h (mm)" },
-  P69: { row: "Bồn A", column: "Khối lượng NH3 (tấn)" },
-  N70: { row: "Bồn B", column: "Mức đầu ngày 00h (mm)" },
-  O70: { row: "Bồn B", column: "Mức cuối ngày 24h (mm)" },
-  P70: { row: "Bồn B", column: "Khối lượng NH3 (tấn)" },
-  N71: { row: "Bồn C", column: "Mức đầu ngày 00h (mm)" },
-  O71: { row: "Bồn C", column: "Mức cuối ngày 24h (mm)" },
-  P71: { row: "Bồn C", column: "Khối lượng NH3 (tấn)" },
-  P72: { row: "Tổng lượng NH3 nhập trong ngày", column: "Lượng NH3 (tấn)" },
-  P73: { row: "Tổng lượng NH3 tồn kho đầu ngày 00h", column: "Lượng NH3 (tấn)" },
-  P74: { row: "Tổng lượng NH3 tồn kho cuối ngày 24h", column: "Lượng NH3 (tấn)" },
-};
-
-function buildInputGrid(fields: EditableField[], groupLabel: string) {
-  const rows = new Map<string, InputGridRow>();
-  const columns = new Map<string, InputGridColumn>();
-  const isPeriod = (value: string) => /^(?:\d{1,2}|\d{1,2}\s*h(?:\s*[-–]\s*\d{1,2}\s*h)?|ca\s+(?:sáng|chiều|đêm))$/i.test(value.trim());
-
-  for (const field of fields) {
-    const parts = field.label.split(" · ");
-    const lastPart = parts.at(-1)?.trim() || "";
-    const hasPeriod = (parts.length > 1 && isPeriod(lastPart)) || (parts.length === 1 && isPeriod(lastPart));
-    let periodLabel = hasPeriod ? lastPart : "Giá trị";
-    let rowLabel = hasPeriod && parts.length > 1 ? parts.slice(0, -1).join(" · ") : field.label;
-    if (hasPeriod && parts.length === 1) rowLabel = groupLabel;
-    if (/^\d{1,2}$/.test(periodLabel)) periodLabel = `${periodLabel.padStart(2, "0")}h`;
-
-    const columnKey = hasPeriod ? `period:${periodLabel}` : "value";
-    const rowKey = hasPeriod ? `${field.row}|${rowLabel}` : `${field.row}|${field.cell}`;
-    columns.set(columnKey, { key: columnKey, label: periodLabel });
-    const row = rows.get(rowKey) || { key: rowKey, label: rowLabel, sourceRow: field.row, cells: {} };
-    row.cells[columnKey] = field;
-    rows.set(rowKey, row);
-  }
-
-  for (const field of fields) {
-    const label = NH3_INPUT_GRID_LABELS[field.cell];
-    if (!label) continue;
-    const row = rows.get(`${field.row}|${groupLabel}`);
-    if (row) row.label = label.row;
-    const sourcePeriod = field.label.split(" Â· ").at(-1)?.trim() || "";
-    const columnKey = /^\d{1,2}$/.test(sourcePeriod)
-      ? `period:${sourcePeriod.padStart(2, "0")}h`
-      : "value";
-    const column = columns.get(columnKey);
-    if (column) column.label = label.column;
-  }
-
-  const orderedColumns = [...columns.values()].sort((left, right) =>
-    left.key === "value" ? 1 : right.key === "value" ? -1 : 0,
-  );
-  return { columns: orderedColumns, rows: [...rows.values()] };
-}
-
-const LINKED_FIELD_SOURCE = (cell: string) => {
-  if (CTKTKT_BCSX_LINKED_CELLS.has(cell) || cell === COAL_STOCK_24H_START_CELL) return "Báo cáo sản xuất (BCSX)";
-  if (QLKT_PRODUCTION_CELLS.has(cell)) return "QLKT · Sản lượng";
-  if (CTKTKT_WATER_LINKED_CELLS.has(cell)) return "Theo dõi lượng nước";
-  if (NH3_START_LEVEL_CELLS.has(cell) || NH3_DCS_START_METER_CELLS.has(cell)) return "Số cuối ngày D−1";
-  if (cell === CTKTKT_INSTALLED_CAPACITY_CELL) return "Thông số cố định nhà máy";
-  return null;
-};
-
-const linkedFields = [...CTKTKT_INPUT_FIELDS, ...CTKTKT_EXTRA_INPUT_FIELDS]
-  .filter(field => LINKED_FIELD_SOURCE(field.cell))
-  .filter((field, index, all) => all.findIndex(item => item.cell === field.cell) === index)
-  .map(field => ({ ...field, source: LINKED_FIELD_SOURCE(field.cell) || "" }));
-
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 
@@ -364,12 +266,11 @@ export function CtktktReport() {
   const [hoursMissingDates, setHoursMissingDates] = useState<string[]>([]);
 
   // Tab điều hướng chính theo đúng các cụm phân công vận hành
-  const [activeTab, setActiveTab] = useState<MainTab>("input_groups");
+  const [activeTab, setActiveTab] = useState<MainTab>("tkd_dcs");
   const [unitView, setUnitView] = useState<"s1" | "s2" | "both">("s1");
   const [operationUnit, setOperationUnit] = useState<CtktktOperationUnit>("S1");
   const [operationKind, setOperationKind] = useState<CtktktOperationKind>("startup");
   const [search, setSearch] = useState("");
-  const [openInputGroups, setOpenInputGroups] = useState<string[]>([editableFieldGroups[0]?.key || ""]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importingHistory, setImportingHistory] = useState(false);
@@ -658,13 +559,30 @@ export function CtktktReport() {
     if (!first) return;
     const [missingDate, cell] = first.key.split("|");
     setDate(missingDate);
-    setActiveTab("input_groups");
     const group = getCtktktFieldGroup(cell);
-    if (group) setOpenInputGroups(open => open.includes(group) ? open : [...open, group]);
+    const tabByGroup: Partial<Record<CtktktFieldGroup, MainTab>> = {
+      kpi_summary: "tkd_dcs", tkd_trend: "tkd_dcs",
+      tpd_tcd_power: "unit_meters", lo_pho_oil: "unit_meters",
+      may_nghien_coal_s1: "unit_meters", may_nghien_coal_s2: "unit_meters",
+      steam_flow: "steam_nh3", nh3_tank: "steam_nh3", nh3_dcs: "steam_nh3",
+      td21: "td21_coal_blend", coal_blend_pmis: "td21_coal_blend",
+      startup_shutdown: "startup_shutdown", pmis_reports: "pmis_reports",
+    };
+    setActiveTab(group ? tabByGroup[group] || "all_fields" : "all_fields");
+    setUnitView("both");
+    if (group === "kpi_summary") setIsKpiCollapsed(false);
+    setSearch("");
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>(`[data-cell="${cell}"]`);
-      input?.scrollIntoView({ behavior: "smooth", block: "center" });
-      input?.focus({ preventScroll: true });
+      const focusCell = () => {
+        const input = document.querySelector<HTMLInputElement>(`[data-cell="${cell}"]`);
+        input?.scrollIntoView({ behavior: "smooth", block: "center" });
+        input?.focus({ preventScroll: true });
+        return Boolean(input);
+      };
+      if (!focusCell()) {
+        setActiveTab("all_fields");
+        window.requestAnimationFrame(() => window.requestAnimationFrame(focusCell));
+      }
     }));
   };
 
@@ -1184,7 +1102,8 @@ export function CtktktReport() {
     const isNh3StartMeter = NH3_DCS_START_METER_CELLS.has(cell);
     const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isQlktProduction || isFixed || isNh3Carryover || isNh3StartMeter;
     const isComputed = options?.readOnlyValue !== undefined;
-    const canEditThis = !isLinked && !isComputed && canEditCtktktField(user, cell);
+    const isManual = !isLinked && !isComputed;
+    const canEditThis = isManual && canEditCtktktField(user, cell);
     const value = isComputed ? options.readOnlyValue ?? "" : current[cell] || "";
     const isMissingEditableValue = canEditThis && missingCtktkt.has(cell) && isMissingValue(value);
 
@@ -1206,6 +1125,7 @@ export function CtktktReport() {
     return (
       <div className="relative flex items-center justify-center">
         <input
+          style={{ textAlign: "center", fontSize: isManual ? 14 : 12, fontWeight: isManual ? 700 : 400, borderColor: isMissingEditableValue ? "#dc2626" : isManual ? "#173b64" : undefined }}
           data-cell={cell}
           data-editable={canEditThis ? "true" : "false"}
           disabled={!canEditThis || loading || saving}
@@ -1219,7 +1139,7 @@ export function CtktktReport() {
           onPaste={e => handleCellPaste(e, cell)}
           placeholder={options?.placeholder || "—"}
           title={tooltip}
-          className={`h-7 w-full rounded border px-1.5 text-right font-mono text-xs font-bold tabular-nums outline-none transition-all ${
+          className={`h-7 w-full rounded border px-1.5 text-center font-mono text-xs font-bold tabular-nums outline-none transition-all ${
             isMissingEditableValue
               ? "animate-pulse border-red-600 bg-red-50 text-red-950 ring-1 ring-red-400 motion-reduce:animate-none"
               : isLinked
@@ -1482,37 +1402,37 @@ export function CtktktReport() {
                     <th rowSpan={2} className="p-2 text-center font-bold">Đơn vị</th>
                   </tr>
                   <tr className="border-b bg-[#f4f8fc] text-[10px] font-bold text-slate-600">
-                    <th className="p-1.5 text-right">PMIS/QLKT</th>
-                    <th className="p-1.5 text-right">Công tơ/Excel</th>
-                    <th className="p-1.5 text-right">PMIS/QLKT</th>
-                    <th className="p-1.5 text-right">Công tơ/Excel</th>
-                    <th className="p-1.5 text-right">PMIS/QLKT</th>
-                    <th className="p-1.5 text-right">Công tơ/Excel</th>
+                    <th className="p-1.5 text-center">PMIS/QLKT</th>
+                    <th className="p-1.5 text-center">Công tơ/Excel</th>
+                    <th className="p-1.5 text-center">PMIS/QLKT</th>
+                    <th className="p-1.5 text-center">Công tơ/Excel</th>
+                    <th className="p-1.5 text-center">PMIS/QLKT</th>
+                    <th className="p-1.5 text-center">Công tơ/Excel</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {metricRows.map(row => (
                     <tr key={row.key} className="hover:bg-slate-50/70">
                       <td className="p-2 font-medium text-slate-800">{row.label}</td>
-                      <td className="bg-cyan-50/30 p-2 text-right font-bold font-mono tabular-nums text-[#173b64]">
+                      <td className="bg-cyan-50/30 p-2 text-center font-normal font-mono tabular-nums text-[#173b64] text-xs">
                         {format(summary.s1[row.key])}
                       </td>
-                      <td className="bg-amber-50/40 p-2 text-right font-mono tabular-nums text-amber-900">
+                      <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-xs">
                         {meterComparisonKeys.has(row.key) ? format(meterSummary.s1[row.key]) : "—"}
                       </td>
-                      <td className="bg-cyan-50/30 p-2 text-right font-bold font-mono tabular-nums text-[#173b64]">
+                      <td className="bg-cyan-50/30 p-2 text-center font-normal font-mono tabular-nums text-[#173b64] text-xs">
                         {format(summary.s2[row.key])}
                       </td>
-                      <td className="bg-amber-50/40 p-2 text-right font-mono tabular-nums text-amber-900">
+                      <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-xs">
                         {meterComparisonKeys.has(row.key) ? format(meterSummary.s2[row.key]) : "—"}
                       </td>
-                      <td className="bg-blue-50/40 p-2 text-right font-black font-mono tabular-nums text-indigo-900">
+                      <td className="bg-blue-50/40 p-2 text-center font-normal font-mono tabular-nums text-indigo-900 text-xs">
                         {format(summary.plant[row.key])}
                       </td>
-                      <td className="bg-amber-50/40 p-2 text-right font-mono tabular-nums text-amber-900">
+                      <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-xs">
                         {meterComparisonKeys.has(row.key) ? format(meterSummary.plant[row.key]) : "—"}
                       </td>
-                      <td className="p-2 text-center font-medium text-slate-500">{row.unit}</td>
+                      <td className="p-2 text-center font-medium text-slate-500 text-xs">{row.unit}</td>
                     </tr>
                   ))}
                   {/* Các ô nhập tay của Cụm 1 */}
@@ -1523,13 +1443,13 @@ export function CtktktReport() {
                     <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
                       Để trống = mặc định 150 g/tấn than
                     </td>
-                    <td colSpan={2} className="p-1.5 text-right w-36">
+                    <td colSpan={2} className="p-1.5 text-center w-36 text-xs">
                       <div className="grid grid-cols-2 gap-1">
                         {renderCellInput("E39", { placeholder: "150", group: "kpi_summary" })}
                         {renderCellInput("H39", { placeholder: "150", group: "kpi_summary" })}
                       </div>
                     </td>
-                    <td className="p-2 text-center text-slate-600 font-bold">g/tấn than</td>
+                    <td className="p-2 text-center text-slate-600 font-normal text-xs">g/tấn than</td>
                   </tr>
                   <tr className="bg-amber-50/30">
                     <td className="p-2 font-bold text-amber-950">
@@ -1538,13 +1458,13 @@ export function CtktktReport() {
                     <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
                       Dầu nhập kho trong ngày · Cộng vào dầu tồn kho (J37)
                     </td>
-                    <td colSpan={2} className="p-1.5 text-right w-36">
+                    <td colSpan={2} className="p-1.5 text-center w-36 text-xs">
                       {renderCellInput("I35", {
                         placeholder: "0",
                         group: "kpi_summary",
                       })}
                     </td>
-                    <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
+                    <td className="p-2 text-center text-slate-600 font-normal text-xs">tấn</td>
                   </tr>
                   <tr className="bg-amber-50/30">
                     <td className="p-2 font-bold text-amber-950">
@@ -1553,13 +1473,13 @@ export function CtktktReport() {
                     <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
                       Dùng tính than tồn kho 24h cho Nhập liệu BCSX
                     </td>
-                    <td colSpan={2} className="p-1.5 text-right w-36">
+                    <td colSpan={2} className="p-1.5 text-center w-36 text-xs">
                       {renderCellInput("I36", {
                         placeholder: "0",
                         group: "kpi_summary",
                       })}
                     </td>
-                    <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
+                    <td className="p-2 text-center text-slate-600 font-normal text-xs">tấn</td>
                   </tr>
                   <tr className="bg-amber-50/30">
                     <td className="p-2 font-bold text-amber-950">
@@ -1568,13 +1488,13 @@ export function CtktktReport() {
                     <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
                       Tự động liên kết từ ô “Than tồn kho 24h (tấn, toàn nhà máy)” đã nhập tay tại Nhập liệu BCSX
                     </td>
-                    <td colSpan={2} className="p-1.5 text-right w-36">
+                    <td colSpan={2} className="p-1.5 text-center w-36 text-xs">
                       {renderCellInput(COAL_STOCK_24H_START_CELL, {
                         placeholder: "Chưa nhập tại BCSX",
                         group: "kpi_summary",
                       })}
                     </td>
-                    <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
+                    <td className="p-2 text-center text-slate-600 font-normal text-xs">tấn</td>
                   </tr>
                   <tr className="bg-amber-50/30">
                     <td className="p-2 font-bold text-amber-950">
@@ -1587,14 +1507,14 @@ export function CtktktReport() {
                           ? pmisCoalStock.missing
                           : "Tự tính = W89 ngày D-1 (W86 + W87 − than tiêu thụ quy ẩm W88)"}
                     </td>
-                    <td colSpan={2} className="p-1.5 text-right w-36">
+                    <td colSpan={2} className="p-1.5 text-center w-36 text-xs">
                       {renderCellInput("W86", {
                         placeholder: isFirstDayOfMonth ? "Nhập ngày 01" : "—",
                         group: "kpi_summary",
                         readOnlyValue: isFirstDayOfMonth ? undefined : pmisCoalStock.stock === null ? "" : format(pmisCoalStock.stock),
                       })}
                     </td>
-                    <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
+                    <td className="p-2 text-center text-slate-600 font-normal text-xs">tấn</td>
                   </tr>
                   {([["S1", "68"], ["S2", "69"]] as const).map(([unitLabel, row]) => (
                     <tr key={row} className="bg-amber-50/30">
@@ -1620,7 +1540,7 @@ export function CtktktReport() {
                           </div>
                         )}
                       </td>
-                      <td className="p-2 text-center text-slate-600 font-bold">giờ</td>
+                      <td className="p-2 text-center text-slate-600 font-normal text-xs">giờ</td>
                     </tr>
                   ))}
                   <tr className="bg-amber-50/30">
@@ -1630,13 +1550,13 @@ export function CtktktReport() {
                     <td colSpan={4} className="p-2 text-xs text-slate-500 italic">
                       Nhập sau 06h theo QLKT trang Nhiên liệu · Tồn kho ngày D (W89 = W86 + W87 − W88) và là W86 của ngày D+1
                     </td>
-                    <td colSpan={2} className="p-1.5 text-right w-36">
+                    <td colSpan={2} className="p-1.5 text-center w-36 text-xs">
                       {renderCellInput("W87", {
                         placeholder: "Nhập sau 06h",
                         group: "kpi_summary",
                       })}
                     </td>
-                    <td className="p-2 text-center text-slate-600 font-bold">tấn</td>
+                    <td className="p-2 text-center text-slate-600 font-normal text-xs">tấn</td>
                   </tr>
                 </tbody>
               </table>
@@ -1663,25 +1583,7 @@ export function CtktktReport() {
 
       {/* 3. TABS ĐIỀU HƯỚNG CÁC CỤM VẬN HÀNH (THIẾT KẾ RÕ RÀNG THEO CƯƠNG VỊ) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
-          <button
-            type="button"
-            onClick={() => setActiveTab("input_groups")}
-            className={reportTabClass(activeTab === "input_groups")}
-          >
-            <Boxes className="size-4 shrink-0" />
-            <span>Nhập liệu theo nhóm</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("computed_linked")}
-            className={reportTabClass(activeTab === "computed_linked")}
-          >
-            <Link2 className="size-4 shrink-0" />
-            <span>Tự tính &amp; liên kết</span>
-          </button>
-
+        <div className="grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-7">
           <button
             type="button"
             onClick={() => setActiveTab("tkd_dcs")}
@@ -1751,186 +1653,6 @@ export function CtktktReport() {
         {/* NỘI DUNG TỪNG CỤM */}
         <div className="p-3">
           {/* ========================================================================= */}
-          {activeTab === "input_groups" && (
-            <div className="space-y-3 p-3 sm:p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3">
-                <div>
-                  <h3 className="flex items-center gap-2 text-sm font-black text-[#173b64]">
-                    <Boxes className="size-4" /> Bảng nhập liệu theo nhóm
-                  </h3>
-                  <p className="mt-1 text-xs text-slate-600">
-                    Mỗi nhóm có bảng riêng. Ô xanh dương là dữ liệu liên kết; ô khóa màu xám là trường không thuộc quyền nhập của bạn.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 focus-within:border-indigo-500">
-                    <Search className="size-3.5 text-slate-400" />
-                    <input
-                      value={search}
-                      onChange={event => setSearch(event.target.value)}
-                      placeholder="Tìm chỉ tiêu hoặc mã ô..."
-                      className="w-48 bg-transparent outline-none sm:w-64"
-                    />
-                    {search && <button type="button" onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-700" aria-label="Xóa tìm kiếm">×</button>}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setOpenInputGroups(editableFieldGroups.map(group => group.key))}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                  >Mở tất cả</button>
-                  <button
-                    type="button"
-                    onClick={() => setOpenInputGroups([])}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                  >Thu gọn</button>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2" aria-label="Đi đến nhóm nhập liệu">
-                {editableFieldGroups.map(group => {
-                  const complete = group.fields.filter(field => !isMissingValue(current[field.cell])).length;
-                  return (
-                    <button
-                      key={group.key}
-                      type="button"
-                      onClick={() => {
-                        setOpenInputGroups(groups => groups.includes(group.key) ? groups : [...groups, group.key]);
-                        document.getElementById(`ktkt-input-group-${group.key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                      }}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-800"
-                    >{group.label} <span className="ml-1 text-slate-400">{complete}/{group.fields.length}</span></button>
-                  );
-                })}
-              </div>
-
-              <div className="space-y-2">
-                {editableFieldGroups.map((group, groupIndex) => {
-                  const query = search.trim().toLocaleLowerCase("vi");
-                  const fields = group.fields.filter(field => !query || field.cell.toLowerCase().includes(query) || field.label.toLocaleLowerCase("vi").includes(query));
-                  if (!fields.length) return null;
-                  const complete = fields.filter(field => !isMissingValue(current[field.cell])).length;
-                  const editable = fields.filter(field => canEditCtktktField(user, field.cell)).length;
-                  const inputGrid = buildInputGrid(fields, group.label);
-                  const groupTitle = group.key === "nh3_tank" ? "Mức bồn, lượng nhập và tồn NH3" : group.label;
-                  const groupDescription = group.key === "nh3_tank"
-                    ? "Nhập mức đầu/cuối ngày cho từng bồn A, B, C; tổng lượng NH3 nhập và tồn kho được ghi riêng bên dưới."
-                    : group.description;
-                  const isOpen = Boolean(query) || openInputGroups.includes(group.key);
-                  return (
-                    <details
-                      key={group.key}
-                      id={`ktkt-input-group-${group.key}`}
-                      open={isOpen}
-                      onToggle={event => {
-                        if (query) return;
-                        const isNowOpen = event.currentTarget.open;
-                        setOpenInputGroups(groups => isNowOpen
-                          ? groups.includes(group.key) ? groups : [...groups, group.key]
-                          : groups.filter(key => key !== group.key));
-                      }}
-                      className="scroll-mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs"
-                    >
-                      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-2.5 hover:bg-slate-100 sm:px-4">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-indigo-100 text-xs font-black text-indigo-800">{String(groupIndex + 1).padStart(2, "0")}</span>
-                          <span className="min-w-0">
-                            <span className="block text-xs font-black text-slate-800">{groupTitle}</span>
-                            <span className="mt-0.5 block text-[10px] text-slate-500">{groupDescription}</span>
-                          </span>
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2 text-[10px] font-bold">
-                          <span className="rounded-full bg-white px-2 py-1 text-slate-500">{fields.length} ô</span>
-                          <span className={`rounded-full px-2 py-1 ${complete === fields.length ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{complete}/{fields.length} đã nhập</span>
-                          {editable < fields.length && <span className="hidden rounded-full bg-slate-200 px-2 py-1 text-slate-600 sm:inline">{editable} được sửa</span>}
-                          <ChevronDown className={`size-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                        </span>
-                      </summary>
-                      <div className="max-h-[560px] overflow-auto">
-                        <table className="w-full min-w-[760px] text-xs">
-                          <thead className="sticky top-0 z-10 bg-white text-[10px] uppercase tracking-wide text-slate-500 shadow-[0_1px_0_#e2e8f0]">
-                            <tr>
-                              <th className="sticky left-0 z-20 min-w-56 bg-white px-3 py-2 text-left">Chỉ tiêu / dòng nhập</th>
-                              {inputGrid.columns.map(column => (
-                                <th key={column.key} className="min-w-32 border-l border-slate-100 bg-white px-2 py-2 text-center">{column.label}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {inputGrid.rows.map(row => (
-                              <tr key={row.key} className="odd:bg-white even:bg-slate-50/60 hover:bg-indigo-50/60">
-                                <th className="sticky left-0 z-10 bg-inherit px-3 py-1.5 text-left font-semibold text-slate-700">
-                                  {row.label}
-                                  {row.sourceRow > 0 && <span className="ml-2 text-[9px] font-normal text-slate-400">dòng {row.sourceRow}</span>}
-                                </th>
-                                {inputGrid.columns.map(column => {
-                                  const field = row.cells[column.key];
-                                  if (!field) return <td key={column.key} className="border-l border-slate-100 px-2 py-1 text-center text-slate-300">—</td>;
-                                  return (
-                                    <td key={column.key} className="min-w-32 border-l border-slate-100 px-2 py-1.5 align-top">
-                                      {renderCellInput(field.cell, { group: getCtktktFieldGroup(field.cell) || undefined, compact: true, isNumber: field.cell.endsWith("_TIME") ? false : undefined })}
-                                      <code className="mt-0.5 block text-center font-mono text-[9px] text-slate-400">{field.cell}</code>
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "computed_linked" && (
-            <div className="space-y-4 p-3 sm:p-4">
-              <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3">
-                <h3 className="flex items-center gap-2 text-sm font-black text-[#173b64]"><Link2 className="size-4" /> Dữ liệu tự tính và liên kết</h3>
-                <p className="mt-1 text-xs text-slate-600">Các giá trị dưới đây chỉ đọc. Số liệu liên kết được lấy từ phân hệ nguồn; muốn chỉnh sửa, mở đúng phân hệ đó.</p>
-              </div>
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="flex items-center gap-2 border-b bg-slate-50 px-3 py-2.5"><Calculator className="size-4 text-indigo-600" /><h4 className="text-xs font-black text-slate-800">Chỉ tiêu nhà máy tự tính</h4></div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[540px] text-xs">
-                    <thead className="bg-white text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2 text-left">Chỉ tiêu</th><th className="px-3 py-2 text-left">Cách xác định</th><th className="px-3 py-2 text-right">Giá trị</th><th className="px-3 py-2 text-left">Đơn vị</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {metricRows.map(row => (
-                        <tr key={row.key} className="odd:bg-white even:bg-slate-50/60">
-                          <td className="px-3 py-2 font-bold text-slate-700">{row.label}</td>
-                          <td className="px-3 py-2 text-slate-500">Tự tính từ số liệu vận hành đã nhập và công tơ</td>
-                          <td className="px-3 py-2 text-right font-mono font-black tabular-nums text-indigo-800">{format(summary.plant[row.key])}</td>
-                          <td className="px-3 py-2 text-slate-500">{row.unit}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="flex items-center gap-2 border-b bg-slate-50 px-3 py-2.5"><RefreshCw className="size-4 text-sky-600" /><h4 className="text-xs font-black text-slate-800">Giá trị liên kết từ các phân hệ</h4><span className="ml-auto text-[10px] font-semibold text-slate-500">{linkedFields.length} ô · chỉ đọc</span></div>
-                <div className="max-h-[560px] overflow-auto">
-                  <table className="w-full min-w-[600px] text-xs">
-                    <thead className="sticky top-0 z-10 bg-white text-[10px] uppercase tracking-wide text-slate-500 shadow-[0_1px_0_#e2e8f0]"><tr><th className="px-3 py-2 text-left">Chỉ tiêu</th><th className="w-28 px-3 py-2 text-left">Ô gốc</th><th className="w-56 px-3 py-2 text-left">Nguồn</th><th className="w-44 px-3 py-2 text-right">Giá trị ngày này</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {linkedFields.map(field => (
-                        <tr key={field.cell} className="odd:bg-white even:bg-slate-50/60 hover:bg-sky-50/60">
-                          <td className="px-3 py-1.5 font-semibold text-slate-700">{field.label}</td>
-                          <td className="px-3 py-1.5"><code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600">{field.cell}</code></td>
-                          <td className="px-3 py-1.5"><span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-800"><Link2 className="size-3" />{field.source}</span></td>
-                          <td className="px-3 py-1">{renderCellInput(field.cell, { compact: true })}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 1: CỤM 2 — BẢNG TKĐ TREND DCS (TRƯỞNG KÍP ĐIỆN NHẬP)                   */}
-          {/* ========================================================================= */}
           {activeTab === "tkd_dcs" && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
@@ -1972,13 +1694,13 @@ export function CtktktReport() {
                     {/* Hàng 1: P S1 (MW) */}
                     <tr className="bg-blue-50/30">
                       <td className="p-2 font-semibold text-slate-800 font-sans">P S1 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}3`, { isNumber: true })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-blue-700 font-bold font-sans">
+                      <td className="p-2 text-center text-[10px] text-blue-700 font-normal font-sans text-xs">
                         BCSX mục 1
                       </td>
                     </tr>
@@ -1986,13 +1708,13 @@ export function CtktktReport() {
                     {/* Hàng 2: Q S1 (MVAr) */}
                     <tr className="bg-blue-50/30">
                       <td className="p-2 font-semibold text-slate-800 font-sans">Q S1 (MVAr)</td>
-                      <td className="p-2 text-center text-slate-500">MVAr</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MVAr</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}4`, { isNumber: true })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-blue-700 font-bold font-sans">
+                      <td className="p-2 text-center text-[10px] text-blue-700 font-normal font-sans text-xs">
                         BCSX mục 1
                       </td>
                     </tr>
@@ -2000,13 +1722,13 @@ export function CtktktReport() {
                     {/* Hàng 3: P S2 (MW) */}
                     <tr className="bg-blue-50/30">
                       <td className="p-2 font-semibold text-slate-800 font-sans">P S2 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}5`, { isNumber: true })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-blue-700 font-bold font-sans">
+                      <td className="p-2 text-center text-[10px] text-blue-700 font-normal font-sans text-xs">
                         BCSX mục 1
                       </td>
                     </tr>
@@ -2014,13 +1736,13 @@ export function CtktktReport() {
                     {/* Hàng 4: Q S2 (MVAr) */}
                     <tr className="bg-blue-50/30">
                       <td className="p-2 font-semibold text-slate-800 font-sans">Q S2 (MVAr)</td>
-                      <td className="p-2 text-center text-slate-500">MVAr</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MVAr</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}6`, { isNumber: true })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-blue-700 font-bold font-sans">
+                      <td className="p-2 text-center text-[10px] text-blue-700 font-normal font-sans text-xs">
                         BCSX mục 1
                       </td>
                     </tr>
@@ -2028,13 +1750,13 @@ export function CtktktReport() {
                     {/* Hàng 5: P MBT T1 (MW) */}
                     <tr className="bg-blue-50/30">
                       <td className="p-2 font-semibold text-slate-800 font-sans">P MBT T1 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}7`, { isNumber: true })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-blue-700 font-bold font-sans">
+                      <td className="p-2 text-center text-[10px] text-blue-700 font-normal font-sans text-xs">
                         BCSX mục 1
                       </td>
                     </tr>
@@ -2042,13 +1764,13 @@ export function CtktktReport() {
                     {/* Hàng 6: P MBT T2 (MW) */}
                     <tr className="bg-blue-50/30">
                       <td className="p-2 font-semibold text-slate-800 font-sans">P MBT T2 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}8`, { isNumber: true })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-blue-700 font-bold font-sans">
+                      <td className="p-2 text-center text-[10px] text-blue-700 font-normal font-sans text-xs">
                         BCSX mục 1
                       </td>
                     </tr>
@@ -2056,16 +1778,16 @@ export function CtktktReport() {
                     {/* Hàng 7: P TD 911 (MW) — TRƯỞNG KÍP ĐIỆN NHẬP */}
                     <tr className="bg-amber-50/40">
                       <td className="p-2 font-bold text-amber-950 font-sans">P TD 911 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}9`, {
                             group: "tkd_trend",
                             isNumber: true,
                           })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] font-bold text-amber-900 font-sans">
+                      <td className="p-2 text-center text-[10px] font-normal text-amber-900 font-sans text-xs">
                         Trưởng kíp điện
                       </td>
                     </tr>
@@ -2073,16 +1795,16 @@ export function CtktktReport() {
                     {/* Hàng 8: P TD 912 (MW) — TRƯỞNG KÍP ĐIỆN NHẬP */}
                     <tr className="bg-amber-50/40">
                       <td className="p-2 font-bold text-amber-950 font-sans">P TD 912 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}10`, {
                             group: "tkd_trend",
                             isNumber: true,
                           })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] font-bold text-amber-900 font-sans">
+                      <td className="p-2 text-center text-[10px] font-normal text-amber-900 font-sans text-xs">
                         Trưởng kíp điện
                       </td>
                     </tr>
@@ -2090,13 +1812,13 @@ export function CtktktReport() {
                     {/* Hàng 9: P Σ TD S1 (MW) — TỰ ĐỘNG TÍNH */}
                     <tr className="bg-slate-100/70 font-bold">
                       <td className="p-2 text-slate-900 font-sans">P Σ TD S1 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-2 text-right text-indigo-900 tabular-nums">
+                        <td key={h.col} className="p-2 text-center text-indigo-900 tabular-nums text-xs">
                           {format(tkdCalc[h.col]?.pSumTdS1)}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans">
+                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans text-xs">
                         Tự động (911+912)
                       </td>
                     </tr>
@@ -2104,16 +1826,16 @@ export function CtktktReport() {
                     {/* Hàng 10: P TD 921 (MW) — TRƯỞNG KÍP ĐIỆN NHẬP */}
                     <tr className="bg-amber-50/40">
                       <td className="p-2 font-bold text-amber-950 font-sans">P TD 921 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}12`, {
                             group: "tkd_trend",
                             isNumber: true,
                           })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] font-bold text-amber-900 font-sans">
+                      <td className="p-2 text-center text-[10px] font-normal text-amber-900 font-sans text-xs">
                         Trưởng kíp điện
                       </td>
                     </tr>
@@ -2121,16 +1843,16 @@ export function CtktktReport() {
                     {/* Hàng 11: P TD 922 (MW) — TRƯỞNG KÍP ĐIỆN NHẬP */}
                     <tr className="bg-amber-50/40">
                       <td className="p-2 font-bold text-amber-950 font-sans">P TD 922 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}13`, {
                             group: "tkd_trend",
                             isNumber: true,
                           })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] font-bold text-amber-900 font-sans">
+                      <td className="p-2 text-center text-[10px] font-normal text-amber-900 font-sans text-xs">
                         Trưởng kíp điện
                       </td>
                     </tr>
@@ -2138,13 +1860,13 @@ export function CtktktReport() {
                     {/* Hàng 12: P Σ TD S2 (MW) — TỰ ĐỘNG TÍNH */}
                     <tr className="bg-slate-100/70 font-bold">
                       <td className="p-2 text-slate-900 font-sans">P Σ TD S2 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-2 text-right text-indigo-900 tabular-nums">
+                        <td key={h.col} className="p-2 text-center text-indigo-900 tabular-nums text-xs">
                           {format(tkdCalc[h.col]?.pSumTdS2)}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans">
+                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans text-xs">
                         Tự động (921+922)
                       </td>
                     </tr>
@@ -2152,16 +1874,16 @@ export function CtktktReport() {
                     {/* Hàng 13: P TD 21 (MW) — TRƯỞNG KÍP ĐIỆN NHẬP */}
                     <tr className="bg-amber-50/40">
                       <td className="p-2 font-bold text-amber-950 font-sans">P TD 21 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}15`, {
                             group: "tkd_trend",
                             isNumber: true,
                           })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] font-bold text-amber-900 font-sans">
+                      <td className="p-2 text-center text-[10px] font-normal text-amber-900 font-sans text-xs">
                         Trưởng kíp điện
                       </td>
                     </tr>
@@ -2169,16 +1891,16 @@ export function CtktktReport() {
                     {/* Hàng 14: Q TD 21 (MVAr) — TRƯỞNG KÍP ĐIỆN NHẬP */}
                     <tr className="bg-amber-50/40">
                       <td className="p-2 font-bold text-amber-950 font-sans">Q TD 21( MVAr)</td>
-                      <td className="p-2 text-center text-slate-500">MVAr</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MVAr</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}16`, {
                             group: "tkd_trend",
                             isNumber: true,
                           })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] font-bold text-amber-900 font-sans">
+                      <td className="p-2 text-center text-[10px] font-normal text-amber-900 font-sans text-xs">
                         Trưởng kíp điện
                       </td>
                     </tr>
@@ -2186,13 +1908,13 @@ export function CtktktReport() {
                     {/* Hàng 15: P Σ S1+S2 (MW) — TỰ ĐỘNG TÍNH */}
                     <tr className="bg-indigo-50/50 font-bold">
                       <td className="p-2 text-indigo-950 font-sans">P Σ S1+S2 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-2 text-right text-indigo-900 tabular-nums">
+                        <td key={h.col} className="p-2 text-center text-indigo-900 tabular-nums text-xs">
                           {format(tkdCalc[h.col]?.pSumS1S2)}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans">
+                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans text-xs">
                         Tự động (S1+S2)
                       </td>
                     </tr>
@@ -2200,13 +1922,13 @@ export function CtktktReport() {
                     {/* Hàng 16: P Σ T1+T2 (MW) — TỰ ĐỘNG TÍNH */}
                     <tr className="bg-indigo-50/50 font-bold">
                       <td className="p-2 text-indigo-950 font-sans">P Σ T1+T2 (MW)</td>
-                      <td className="p-2 text-center text-slate-500">MW</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MW</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-2 text-right text-indigo-900 tabular-nums">
+                        <td key={h.col} className="p-2 text-center text-indigo-900 tabular-nums text-xs">
                           {format(tkdCalc[h.col]?.pSumT1T2)}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans">
+                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans text-xs">
                         Tự động (T1+T2)
                       </td>
                     </tr>
@@ -2214,13 +1936,13 @@ export function CtktktReport() {
                     {/* Hàng 17: Q Σ S1+S2 (MVar) — TỰ ĐỘNG TÍNH */}
                     <tr className="bg-indigo-50/50 font-bold">
                       <td className="p-2 text-indigo-950 font-sans">Q Σ S1+S2 (MVar)</td>
-                      <td className="p-2 text-center text-slate-500">MVAr</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">MVAr</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-2 text-right text-indigo-900 tabular-nums">
+                        <td key={h.col} className="p-2 text-center text-indigo-900 tabular-nums text-xs">
                           {format(tkdCalc[h.col]?.qSumS1S2)}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans">
+                      <td className="p-2 text-center text-[10px] text-slate-500 font-sans text-xs">
                         Tự động (Q1+Q2)
                       </td>
                     </tr>
@@ -2228,13 +1950,13 @@ export function CtktktReport() {
                     {/* Hàng 18: Utc 220kV */}
                     <tr className="bg-blue-50/30">
                       <td className="p-2 font-semibold text-slate-800 font-sans">Utc 220kV</td>
-                      <td className="p-2 text-center text-slate-500">kV</td>
+                      <td className="p-2 text-center text-slate-500 text-xs">kV</td>
                       {TKD_HOURS.map(h => (
-                        <td key={h.col} className="p-1.5 text-center">
+                        <td key={h.col} className="p-1.5 text-center text-xs">
                           {renderCellInput(`${h.col}20`, { isNumber: true })}
                         </td>
                       ))}
-                      <td className="p-2 text-center text-[10px] text-blue-700 font-bold font-sans">
+                      <td className="p-2 text-center text-[10px] text-blue-700 font-normal font-sans text-xs">
                         BCSX mục 1
                       </td>
                     </tr>
@@ -2312,21 +2034,21 @@ export function CtktktReport() {
                               Công tơ nước demin tại DCS tổ máy 1
                               <span className="ml-1 text-[10px] text-slate-400 font-mono">(Hàng 72)</span>
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("W72", {
                                 placeholder: previous?.["X72"] || "—",
                                 group: "tkd_trend",
                                 isNumber: true,
                               })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("X72", {
                                 placeholder: "Nhập 24h",
                                 group: "tkd_trend",
                                 isNumber: true,
                               })}
                             </td>
-                            <td className="p-1.5 text-center bg-amber-50/30">
+                            <td className="p-1.5 text-center bg-amber-50/30 text-xs">
                               {renderCellInput("WATER_ADJ_S1", {
                                 placeholder: "0",
                                 group: "tkd_trend",
@@ -2346,10 +2068,10 @@ export function CtktktReport() {
                                 </button>
                               )}
                             </td>
-                            <td className="p-2 text-right font-black font-mono text-emerald-900 bg-emerald-50/60 tabular-nums">
+                            <td className="p-2 text-center font-normal font-mono text-emerald-900 bg-emerald-50/60 tabular-nums text-xs">
                               {formatDeminDiff(current["X72"], current["W72"] || previous?.["X72"], current["WATER_ADJ_S1"])}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("Z72", {
                                 placeholder: linkedByDate[date]?.["Z72"] || "0",
                                 group: "tkd_trend",
@@ -2381,21 +2103,21 @@ export function CtktktReport() {
                               Công tơ nước demin tại DCS tổ máy 2
                               <span className="ml-1 text-[10px] text-slate-400 font-mono">(Hàng 73)</span>
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("W73", {
                                 placeholder: previous?.["X73"] || "—",
                                 group: "tkd_trend",
                                 isNumber: true,
                               })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("X73", {
                                 placeholder: "Nhập 24h",
                                 group: "tkd_trend",
                                 isNumber: true,
                               })}
                             </td>
-                            <td className="p-1.5 text-center bg-amber-50/30">
+                            <td className="p-1.5 text-center bg-amber-50/30 text-xs">
                               {renderCellInput("WATER_ADJ_S2", {
                                 placeholder: "0",
                                 group: "tkd_trend",
@@ -2415,10 +2137,10 @@ export function CtktktReport() {
                                 </button>
                               )}
                             </td>
-                            <td className="p-2 text-right font-black font-mono text-emerald-900 bg-emerald-50/60 tabular-nums">
+                            <td className="p-2 text-center font-normal font-mono text-emerald-900 bg-emerald-50/60 tabular-nums text-xs">
                               {formatDeminDiff(current["X73"], current["W73"] || previous?.["X73"], current["WATER_ADJ_S2"])}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("Z73", {
                                 placeholder: linkedByDate[date]?.["Z73"] || "0",
                                 group: "tkd_trend",
@@ -2450,12 +2172,12 @@ export function CtktktReport() {
                               Tổng lượng nước demin sử dụng của cả ngày D của 2 tổ máy
                               <span className="ml-1 text-[10px] text-emerald-700 font-mono">(Hàng 74)</span>
                             </td>
-                            <td className="p-2 text-center text-slate-400 font-sans">—</td>
-                            <td className="p-2 text-center text-slate-400 font-sans">—</td>
-                            <td className="p-2 text-right font-black font-mono text-amber-950 bg-amber-100/70 tabular-nums">
+                            <td className="p-2 text-center text-slate-400 font-sans text-xs">—</td>
+                            <td className="p-2 text-center text-slate-400 font-sans text-xs">—</td>
+                            <td className="p-2 text-center font-normal font-mono text-amber-950 bg-amber-100/70 tabular-nums text-xs">
                               {formatAdjTotal(current["WATER_ADJ_S1"], current["WATER_ADJ_S2"])}
                             </td>
-                            <td className="p-2 text-right font-black font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-sm">
+                            <td className="p-2 text-center font-normal font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-xs text-xs">
                               {formatDeminTotal(
                                 current["X72"],
                                 current["W72"] || previous?.["X72"],
@@ -2465,10 +2187,10 @@ export function CtktktReport() {
                                 current["WATER_ADJ_S2"],
                               )}
                             </td>
-                            <td className="p-2 text-right font-black font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-sm">
+                            <td className="p-2 text-center font-normal font-mono text-emerald-950 bg-emerald-100/80 tabular-nums text-xs text-xs">
                               {formatResinTotal(current["Z72"], current["Z73"])}
                             </td>
-                            <td className="p-2 text-center text-[11px] text-emerald-800 font-sans">
+                            <td className="p-2 text-center text-[11px] text-emerald-800 font-sans text-xs">
                               Tự động (Y72+Y73, Z72+Z73)
                             </td>
                           </tr>
@@ -2572,17 +2294,17 @@ export function CtktktReport() {
                             <td className="p-2 font-semibold text-slate-800 font-sans">
                               Công tơ máy phát (MWh)
                             </td>
-                            <td className="p-2 text-center text-slate-500">MWh</td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-2 text-center text-slate-500 text-xs">MWh</td>
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("W8", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("Y8", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AA8", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AB8", { group: "tpd_tcd_power" })}
                             </td>
                           </tr>
@@ -2590,17 +2312,17 @@ export function CtktktReport() {
                             <td className="p-2 font-semibold text-slate-800 font-sans">
                               Công tơ điện MBT T1 (MWh)
                             </td>
-                            <td className="p-2 text-center text-slate-500">MWh</td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-2 text-center text-slate-500 text-xs">MWh</td>
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("W9", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("Y9", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AA9", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AB9", { group: "tpd_tcd_power" })}
                             </td>
                           </tr>
@@ -2608,17 +2330,17 @@ export function CtktktReport() {
                             <td className="p-2 font-semibold text-slate-800 font-sans">
                               Công tơ điện tự dùng TD 911 (MWh)
                             </td>
-                            <td className="p-2 text-center text-slate-500">MWh</td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-2 text-center text-slate-500 text-xs">MWh</td>
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("W10", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("Y10", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AA10", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AB10", { group: "tpd_tcd_power" })}
                             </td>
                           </tr>
@@ -2626,17 +2348,17 @@ export function CtktktReport() {
                             <td className="p-2 font-semibold text-slate-800 font-sans">
                               Công tơ điện tự dùng TD 912 (MWh)
                             </td>
-                            <td className="p-2 text-center text-slate-500">MWh</td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-2 text-center text-slate-500 text-xs">MWh</td>
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("W11", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("Y11", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AA11", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AB11", { group: "tpd_tcd_power" })}
                             </td>
                           </tr>
@@ -2673,7 +2395,7 @@ export function CtktktReport() {
                               Công tơ dầu cấp lò F1 (t)
                             </td>
                             {OIL_HOURS.map(h => (
-                              <td key={h.label} className="p-1.5 text-center">
+                              <td key={h.label} className="p-1.5 text-center text-xs">
                                 {renderCellInput(`${h.colS1}13`, { group: "lo_pho_oil" })}
                               </td>
                             ))}
@@ -2683,7 +2405,7 @@ export function CtktktReport() {
                               Công tơ dầu về bồn F2 (t)
                             </td>
                             {OIL_HOURS.map(h => (
-                              <td key={h.label} className="p-1.5 text-center">
+                              <td key={h.label} className="p-1.5 text-center text-xs">
                                 {renderCellInput(`${h.colS1}14`, { group: "lo_pho_oil" })}
                               </td>
                             ))}
@@ -2693,7 +2415,7 @@ export function CtktktReport() {
                               Dầu tiêu thụ từng kỳ = ΔF1 - ΔF2 (t), kỳ 06h lấy mốc D-1
                             </td>
                             {oilS1.map(o => (
-                              <td key={o.label} className="p-2 text-right text-amber-900">
+                              <td key={o.label} className="p-2 text-center text-amber-900 text-xs">
                                 {format(o.diff)}
                               </td>
                             ))}
@@ -2756,27 +2478,27 @@ export function CtktktReport() {
                               <td className="p-1.5 font-bold text-slate-800 font-sans">
                                 Công tơ than # {c.code}
                               </td>
-                              <td className="p-1 text-center">
+                              <td className="p-1 text-center text-xs">
                                 {renderCellInput(`X${c.row}`, {
                                   group: "may_nghien_coal_s1",
                                 })}
                               </td>
-                              <td className="p-1 text-center">
+                              <td className="p-1 text-center text-xs">
                                 {renderCellInput(`Z${c.row}`, {
                                   group: "may_nghien_coal_s1",
                                 })}
                               </td>
-                              <td className="p-1 text-center">
+                              <td className="p-1 text-center text-xs">
                                 {renderCellInput(`AB${c.row}`, {
                                   group: "may_nghien_coal_s1",
                                 })}
                               </td>
                               {[consumption.shift1, consumption.shift2, consumption.shift3].map((value, index) => (
-                                <td key={index} className={`border-l p-2 text-right tabular-nums ${coalConsumptionCellClass(value)}`}>
+                                <td key={index} className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(value)}`}>
                                   {format(value)}
                                 </td>
                               ))}
-                              <td className={`border-l p-2 text-right tabular-nums ${coalConsumptionCellClass(consumption.total, true)}`}>
+                              <td className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(consumption.total, true)}`}>
                                 {format(consumption.total)}
                               </td>
                             </tr>;
@@ -2786,11 +2508,11 @@ export function CtktktReport() {
                               Hiệu chỉnh chênh lệch cân than (tấn, mặc định 0)
                             </td>
                             {(["W28", "Y28", "AA28"] as const).map(cell => (
-                              <td key={cell} className="p-1 text-center">
+                              <td key={cell} className="p-1 text-center text-xs">
                                 {renderCellInput(cell, { group: "may_nghien_coal_s1" })}
                               </td>
                             ))}
-                            <td colSpan={4} className="bg-sky-50/40 p-2 text-center font-sans text-slate-500">Không phân bổ tự động theo từng công tơ</td>
+                            <td colSpan={4} className="bg-sky-50/40 p-2 text-center font-sans text-slate-500 text-xs">Không phân bổ tự động theo từng công tơ</td>
                           </tr>
                           <tr className="bg-amber-50/30">
                             <td className="p-2 font-bold text-amber-950 font-sans">
@@ -2810,7 +2532,7 @@ export function CtktktReport() {
                             <td className="p-2 text-slate-900 font-sans">
                               Lượng than tiêu thụ - tấn (S1)
                             </td>
-                            <td colSpan={7} className="p-2 text-right text-indigo-900 font-mono">
+                            <td colSpan={7} className="p-2 text-center text-indigo-900 font-mono text-xs">
                               Tổng ngày: {format(summary.s1.rawCoalTonnes)} tấn
                             </td>
                           </tr>
@@ -2894,17 +2616,17 @@ export function CtktktReport() {
                             <td className="p-2 font-semibold text-slate-800 font-sans">
                               Công tơ máy phát (MWh)
                             </td>
-                            <td className="p-2 text-center text-slate-500">MWh</td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-2 text-center text-slate-500 text-xs">MWh</td>
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AG8", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AI8", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AK8", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AL8", { group: "tpd_tcd_power" })}
                             </td>
                           </tr>
@@ -2912,17 +2634,17 @@ export function CtktktReport() {
                             <td className="p-2 font-semibold text-slate-800 font-sans">
                               Công tơ điện MBT T2 (MWh)
                             </td>
-                            <td className="p-2 text-center text-slate-500">MWh</td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-2 text-center text-slate-500 text-xs">MWh</td>
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AG9", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AI9", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AK9", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AL9", { group: "tpd_tcd_power" })}
                             </td>
                           </tr>
@@ -2930,17 +2652,17 @@ export function CtktktReport() {
                             <td className="p-2 font-semibold text-slate-800 font-sans">
                               Công tơ điện tự dùng TD 921 (MWh)
                             </td>
-                            <td className="p-2 text-center text-slate-500">MWh</td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-2 text-center text-slate-500 text-xs">MWh</td>
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AG10", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AI10", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AK10", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AL10", { group: "tpd_tcd_power" })}
                             </td>
                           </tr>
@@ -2948,17 +2670,17 @@ export function CtktktReport() {
                             <td className="p-2 font-semibold text-slate-800 font-sans">
                               Công tơ điện tự dùng TD 922 (MWh)
                             </td>
-                            <td className="p-2 text-center text-slate-500">MWh</td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-2 text-center text-slate-500 text-xs">MWh</td>
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AG11", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AI11", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AK11", { group: "tpd_tcd_power" })}
                             </td>
-                            <td className="p-1.5 text-center">
+                            <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AL11", { group: "tpd_tcd_power" })}
                             </td>
                           </tr>
@@ -2995,7 +2717,7 @@ export function CtktktReport() {
                               Công tơ dầu cấp lò F1 (kg)
                             </td>
                             {OIL_HOURS.map(h => (
-                              <td key={h.label} className="p-1.5 text-center">
+                              <td key={h.label} className="p-1.5 text-center text-xs">
                                 {renderCellInput(`${h.colS2}13`, { group: "lo_pho_oil" })}
                               </td>
                             ))}
@@ -3005,7 +2727,7 @@ export function CtktktReport() {
                               Công tơ dầu về bồn F2 (kg)
                             </td>
                             {OIL_HOURS.map(h => (
-                              <td key={h.label} className="p-1.5 text-center">
+                              <td key={h.label} className="p-1.5 text-center text-xs">
                                 {renderCellInput(`${h.colS2}14`, { group: "lo_pho_oil" })}
                               </td>
                             ))}
@@ -3015,7 +2737,7 @@ export function CtktktReport() {
                               Dầu tiêu thụ từng kỳ = ΔF1 - ΔF2 (kg), kỳ 06h lấy mốc D-1
                             </td>
                             {oilS2.map(o => (
-                              <td key={o.label} className="p-2 text-right text-amber-900">
+                              <td key={o.label} className="p-2 text-center text-amber-900 text-xs">
                                 {format(o.diff)}
                               </td>
                             ))}
@@ -3078,27 +2800,27 @@ export function CtktktReport() {
                               <td className="p-1.5 font-bold text-slate-800 font-sans">
                                 Công tơ than # {c.code}
                               </td>
-                              <td className="p-1 text-center">
+                              <td className="p-1 text-center text-xs">
                                 {renderCellInput(`AH${c.row}`, {
                                   group: "may_nghien_coal_s2",
                                 })}
                               </td>
-                              <td className="p-1 text-center">
+                              <td className="p-1 text-center text-xs">
                                 {renderCellInput(`AJ${c.row}`, {
                                   group: "may_nghien_coal_s2",
                                 })}
                               </td>
-                              <td className="p-1 text-center">
+                              <td className="p-1 text-center text-xs">
                                 {renderCellInput(`AL${c.row}`, {
                                   group: "may_nghien_coal_s2",
                                 })}
                               </td>
                               {[consumption.shift1, consumption.shift2, consumption.shift3].map((value, index) => (
-                                <td key={index} className={`border-l p-2 text-right tabular-nums ${coalConsumptionCellClass(value)}`}>
+                                <td key={index} className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(value)}`}>
                                   {format(value)}
                                 </td>
                               ))}
-                              <td className={`border-l p-2 text-right tabular-nums ${coalConsumptionCellClass(consumption.total, true)}`}>
+                              <td className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(consumption.total, true)}`}>
                                 {format(consumption.total)}
                               </td>
                             </tr>;
@@ -3108,11 +2830,11 @@ export function CtktktReport() {
                               Hiệu chỉnh chênh lệch cân than (tấn, mặc định 0)
                             </td>
                             {(["AG28", "AI28", "AK28"] as const).map(cell => (
-                              <td key={cell} className="p-1 text-center">
+                              <td key={cell} className="p-1 text-center text-xs">
                                 {renderCellInput(cell, { group: "may_nghien_coal_s2" })}
                               </td>
                             ))}
-                            <td colSpan={4} className="bg-sky-50/40 p-2 text-center font-sans text-slate-500">Không phân bổ tự động theo từng công tơ</td>
+                            <td colSpan={4} className="bg-sky-50/40 p-2 text-center font-sans text-slate-500 text-xs">Không phân bổ tự động theo từng công tơ</td>
                           </tr>
                           <tr className="bg-amber-50/30">
                             <td className="p-2 font-bold text-amber-950 font-sans">
@@ -3132,7 +2854,7 @@ export function CtktktReport() {
                             <td className="p-2 text-slate-900 font-sans">
                               Lượng than tiêu thụ - tấn (S2)
                             </td>
-                            <td colSpan={7} className="p-2 text-right text-indigo-900 font-mono">
+                            <td colSpan={7} className="p-2 text-center text-indigo-900 font-mono text-xs">
                               Tổng ngày: {format(summary.s2.rawCoalTonnes)} tấn
                             </td>
                           </tr>
@@ -3221,7 +2943,7 @@ export function CtktktReport() {
                           Tổng lưu lượng hơi S1 (tấn)
                         </td>
                         {STEAM_HOURS.map(h => (
-                          <td key={h.label} className="p-1.5 text-center">
+                          <td key={h.label} className="p-1.5 text-center text-xs">
                             {renderCellInput(`${h.colS1}54`, { group: "steam_flow" })}
                           </td>
                         ))}
@@ -3230,7 +2952,7 @@ export function CtktktReport() {
                       <tr className="bg-slate-50 font-bold text-indigo-900">
                         <td className="p-2 font-sans">Sản lượng hơi S1 tiêu thụ (tấn)</td>
                         {steamS1.map(s => (
-                          <td key={s.label} className="p-2 text-right tabular-nums">
+                          <td key={s.label} className="p-2 text-center tabular-nums text-xs">
                             {format(s.consumption)}
                           </td>
                         ))}
@@ -3242,7 +2964,7 @@ export function CtktktReport() {
                           Tổng lưu lượng hơi S2 (tấn)
                         </td>
                         {STEAM_HOURS.map(h => (
-                          <td key={h.label} className="p-1.5 text-center">
+                          <td key={h.label} className="p-1.5 text-center text-xs">
                             {renderCellInput(`${h.colS2}54`, { group: "steam_flow" })}
                           </td>
                         ))}
@@ -3251,7 +2973,7 @@ export function CtktktReport() {
                       <tr className="bg-slate-50 font-bold text-indigo-900">
                         <td className="p-2 font-sans">Sản lượng hơi S2 tiêu thụ (tấn)</td>
                         {steamS2.map(s => (
-                          <td key={s.label} className="p-2 text-right tabular-nums">
+                          <td key={s.label} className="p-2 text-center tabular-nums text-xs">
                             {format(s.consumption)}
                           </td>
                         ))}
@@ -3294,46 +3016,46 @@ export function CtktktReport() {
                       <tbody className="divide-y divide-slate-100 font-mono">
                         <tr>
                           <td className="p-2 font-bold text-slate-800 font-sans">Bồn A</td>
-                          <td className="p-1.5 text-center">
+                          <td className="p-1.5 text-center text-xs">
                             {renderCellInput("N69", { group: "nh3_tank" })}
                           </td>
-                          <td className="p-1.5 text-center">
+                          <td className="p-1.5 text-center text-xs">
                             {renderCellInput("O69", { group: "nh3_tank" })}
                           </td>
-                          <td className="p-1.5 text-center">
+                          <td className="p-1.5 text-center text-xs">
                             {renderCellInput("P69", { group: "nh3_tank" })}
                           </td>
-                          <td className="p-2 text-right font-bold text-indigo-900">
+                          <td className="p-2 text-center font-normal text-indigo-900 text-xs">
                             {format(nh3.tankAvailable[0])}
                           </td>
                         </tr>
                         <tr>
                           <td className="p-2 font-bold text-slate-800 font-sans">Bồn B</td>
-                          <td className="p-1.5 text-center">
+                          <td className="p-1.5 text-center text-xs">
                             {renderCellInput("N70", { group: "nh3_tank" })}
                           </td>
-                          <td className="p-1.5 text-center">
+                          <td className="p-1.5 text-center text-xs">
                             {renderCellInput("O70", { group: "nh3_tank" })}
                           </td>
-                          <td className="p-1.5 text-center">
+                          <td className="p-1.5 text-center text-xs">
                             {renderCellInput("P70", { group: "nh3_tank" })}
                           </td>
-                          <td className="p-2 text-right font-bold text-indigo-900">
+                          <td className="p-2 text-center font-normal text-indigo-900 text-xs">
                             {format(nh3.tankAvailable[1])}
                           </td>
                         </tr>
                         <tr>
                           <td className="p-2 font-bold text-slate-800 font-sans">Bồn C</td>
-                          <td className="p-1.5 text-center">
+                          <td className="p-1.5 text-center text-xs">
                             {renderCellInput("N71", { group: "nh3_tank" })}
                           </td>
-                          <td className="p-1.5 text-center">
+                          <td className="p-1.5 text-center text-xs">
                             {renderCellInput("O71", { group: "nh3_tank" })}
                           </td>
-                          <td className="p-1.5 text-center">
+                          <td className="p-1.5 text-center text-xs">
                             {renderCellInput("P71", { group: "nh3_tank" })}
                           </td>
-                          <td className="p-2 text-right font-bold text-indigo-900">
+                          <td className="p-2 text-center font-normal text-indigo-900 text-xs">
                             {format(nh3.tankAvailable[2])}
                           </td>
                         </tr>
@@ -3341,10 +3063,10 @@ export function CtktktReport() {
                           <td className="p-2 font-black text-[#173b64] font-sans" colSpan={3}>
                             Tổng 3 bồn
                           </td>
-                          <td className="p-2 text-right font-black text-[#173b64]">
+                          <td className="p-2 text-center font-normal text-[#173b64] text-xs">
                             {format(nh3.tankMassTotal)}
                           </td>
-                          <td className="p-2 text-right font-black text-indigo-900">
+                          <td className="p-2 text-center font-normal text-indigo-900 text-xs">
                             {format(nh3.tankAvailableTotal)}
                           </td>
                         </tr>
@@ -3375,9 +3097,7 @@ export function CtktktReport() {
                       <span className="text-[11px] text-slate-500 font-sans block">
                         Tồn kho 24h00 (tấn):
                       </span>
-                      <b className="text-indigo-900">
-                        {format(nh3.stock24h)}
-                      </b>
+                      {renderCellInput("P74", { group: "nh3_tank" })}
                     </div>
 
                     <div className="rounded bg-white p-2 border font-mono">
@@ -3429,21 +3149,21 @@ export function CtktktReport() {
                       ] as const).map(row => (
                         <tr key={row.label}>
                           <td className="p-2 font-bold text-slate-800 font-sans">Tổ máy {row.label}</td>
-                          <td className="bg-blue-50 p-2 text-right font-semibold text-blue-800" title="Tự lấy từ công tơ 24h ngày D-1">
+                          <td className="bg-blue-50 p-2 text-center font-normal text-blue-800 text-xs" title="Tự lấy từ công tơ 24h ngày D-1">
                             {format(row.data?.startTonnes ?? null)}
                           </td>
-                          <td className="p-1.5 text-center">{renderCellInput(row.endCell, { group: "nh3_dcs" })}</td>
-                          <td className="p-2 text-right font-bold text-emerald-800">{format(row.data?.usedTonnes ?? null)}</td>
-                          <td className="p-2 text-right">{format(row.data?.grossMwh ?? null)}</td>
-                          <td className="p-2 text-right">{format(row.data?.netMwh ?? null)}</td>
-                          <td className="p-2 text-right">{format(row.data?.usedKg ?? null)}</td>
-                          <td className="p-2 text-right">{format(row.data?.rateGross ?? null)}</td>
-                          <td className="p-2 text-right">{format(row.data?.rateNet ?? null)}</td>
+                          <td className="p-1.5 text-center text-xs">{renderCellInput(row.endCell, { group: "nh3_dcs" })}</td>
+                          <td className="p-2 text-center font-normal text-emerald-800 text-xs">{format(row.data?.usedTonnes ?? null)}</td>
+                          <td className="p-2 text-center text-xs">{format(row.data?.grossMwh ?? null)}</td>
+                          <td className="p-2 text-center text-xs">{format(row.data?.netMwh ?? null)}</td>
+                          <td className="p-2 text-center text-xs">{format(row.data?.usedKg ?? null)}</td>
+                          <td className="p-2 text-center text-xs">{format(row.data?.rateGross ?? null)}</td>
+                          <td className="p-2 text-center text-xs">{format(row.data?.rateNet ?? null)}</td>
                         </tr>
                       ))}
                       <tr className="border-t-2 border-slate-300 bg-emerald-50/70">
                         <td className="p-2 font-black text-[#173b64] font-sans" colSpan={3}>Tổng NH3 DCS S1 + S2</td>
-                        <td className="p-2 text-right font-black text-emerald-900">{format(nh3Dcs.totalUsedTonnes)}</td>
+                        <td className="p-2 text-center font-normal text-emerald-900 text-xs">{format(nh3Dcs.totalUsedTonnes)}</td>
                         <td className="p-2" colSpan={5}></td>
                       </tr>
                     </tbody>
@@ -3490,16 +3210,16 @@ export function CtktktReport() {
                         <td className="p-2 font-bold text-slate-800 font-sans">
                           Công tơ điện tự dùng - TD21
                         </td>
-                        <td className="p-1.5 text-center">
+                        <td className="p-1.5 text-center text-xs">
                           {renderCellInput("M49", { group: "td21" })}
                         </td>
-                        <td className="p-1.5 text-center">
+                        <td className="p-1.5 text-center text-xs">
                           {renderCellInput("O49", { group: "td21" })}
                         </td>
-                        <td className="p-1.5 text-center">
+                        <td className="p-1.5 text-center text-xs">
                           {renderCellInput("Q49", { group: "td21" })}
                         </td>
-                        <td className="p-1.5 text-center">
+                        <td className="p-1.5 text-center text-xs">
                           {renderCellInput("R49", { group: "td21" })}
                         </td>
                       </tr>
@@ -3543,13 +3263,13 @@ export function CtktktReport() {
                         const row = 87 + index;
                         return (
                           <tr key={`${item.unit}-${item.shift}`} className={item.unit === "S2" ? "bg-slate-50/60" : "bg-white"}>
-                            <td className="p-2 text-center font-sans font-extrabold text-[#173b64]">{item.unit}</td>
-                            <td className="p-2 text-center font-sans font-semibold">Ca {item.shift}</td>
-                            <td className="p-2 text-right tabular-nums">{format(item.rawCoalTonnes)}</td>
+                            <td className="p-2 text-center font-sans font-extrabold text-[#173b64] text-xs">{item.unit}</td>
+                            <td className="p-2 text-center font-sans font-normal text-xs">Ca {item.shift}</td>
+                            <td className="p-2 text-center tabular-nums text-xs">{format(item.rawCoalTonnes)}</td>
                             <td className="p-1.5 bg-yellow-50/60">{renderCellInput(`AJ${row}`, { group: "coal_blend_pmis" })}</td>
                             <td className="p-1.5 bg-yellow-50/60">{renderCellInput(`AK${row}`, { group: "coal_blend_pmis" })}</td>
-                            <td className="p-2 text-right tabular-nums">{format(item.adjustedCoalTonnes)}</td>
-                            <td className="p-2 text-right tabular-nums">{format(item.asReceivedKcalKg)}</td>
+                            <td className="p-2 text-center tabular-nums text-xs">{format(item.adjustedCoalTonnes)}</td>
+                            <td className="p-2 text-center tabular-nums text-xs">{format(item.asReceivedKcalKg)}</td>
                           </tr>
                         );
                       })}
@@ -3669,7 +3389,7 @@ export function CtktktReport() {
                                       <td key={point} className="border-l px-2 py-1.5">
                                         {enabled ? (
                                           <>
-                                            <input type="number" step="any" value={value} onChange={event => updateOperationPoint(point, { power: { ...(selectedOperationEvent.points[point]?.power || {}), [item.row]: event.target.value } })} disabled={loading || saving} className="h-8 w-full rounded border border-slate-300 px-2 text-right font-mono text-xs focus:border-amber-500 focus:outline-none disabled:bg-slate-100" />
+                                            <input type="number" step="any" value={value} onChange={event => updateOperationPoint(point, { power: { ...(selectedOperationEvent.points[point]?.power || {}), [item.row]: event.target.value } })} disabled={loading || saving} className="h-8 w-full rounded border border-[#173b64] px-2 text-center font-mono text-sm font-bold focus:border-[#173b64] focus:outline-none disabled:bg-slate-100" />
                                             <code className="mt-0.5 block text-center text-[9px] text-slate-400">{cell}</code>
                                           </>
                                         ) : <span className="block py-1 text-center text-slate-300">—</span>}
@@ -3714,7 +3434,7 @@ export function CtktktReport() {
                                   const cell = row.key === "oilFeed" ? item.feedCell : item.returnCell;
                                   return (
                                     <td key={item.point} className="border-l px-2 py-1.5">
-                                      <input type="number" step="any" value={value} onChange={event => updateOperationPoint(item.point, { [row.key]: event.target.value })} disabled={!canEditOperationEvents || loading || saving} className="h-8 w-full rounded border border-slate-300 px-2 text-right font-mono text-xs focus:border-orange-500 focus:outline-none disabled:bg-slate-100" />
+                                      <input type="number" step="any" value={value} onChange={event => updateOperationPoint(item.point, { [row.key]: event.target.value })} disabled={!canEditOperationEvents || loading || saving} className="h-8 w-full rounded border border-[#173b64] px-2 text-center font-mono text-sm font-bold focus:border-[#173b64] focus:outline-none disabled:bg-slate-100" />
                                       <code className="mt-0.5 block text-center text-[9px] text-slate-400">{cell}</code>
                                     </td>
                                   );
@@ -3836,64 +3556,64 @@ export function CtktktReport() {
                       <tbody>
                         {/* Tổ máy S1 */}
                         <tr className="bg-[#008000] text-white">
-                          <td className="border border-slate-400 px-3 py-2 text-center font-bold text-white bg-[#006e00]">
+                          <td className="border border-slate-400 px-3 py-2 text-center font-normal text-white bg-[#006e00] text-xs">
                             S1
                           </td>
                           <td className="border border-slate-400 p-1">
                             {renderCellInput("J157", {
                               group: "pmis_reports",
-                              className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-sm text-right focus:!bg-[#005a00] focus:!text-white",
+                              className: "!bg-[#008000] !text-red-300 font-bold text-sm text-center focus:!bg-[#005a00] focus:!text-white",
                               placeholder: "10472.680",
                             })}
                           </td>
                           <td className="border border-slate-400 p-1">
                             {renderCellInput("K157", {
                               group: "pmis_reports",
-                              className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-sm text-right focus:!bg-[#005a00] focus:!text-white",
+                              className: "!bg-[#008000] !text-red-300 font-bold text-sm text-center focus:!bg-[#005a00] focus:!text-white",
                               placeholder: "9631.526",
                             })}
                           </td>
-                          <td className="border border-slate-400 px-3 py-2 text-right font-mono font-bold text-red-300 text-sm">
+                          <td className="border border-slate-400 px-3 py-2 text-center font-mono font-normal text-red-300 text-xs text-xs">
                             {l157 !== null ? format(l157) : "—"}
                           </td>
                         </tr>
 
                         {/* Tổ máy S2 */}
                         <tr className="bg-[#008000] text-white">
-                          <td className="border border-slate-400 px-3 py-2 text-center font-bold text-white bg-[#006e00]">
+                          <td className="border border-slate-400 px-3 py-2 text-center font-normal text-white bg-[#006e00] text-xs">
                             S2
                           </td>
                           <td className="border border-slate-400 p-1">
                             {renderCellInput("J158", {
                               group: "pmis_reports",
-                              className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-sm text-right focus:!bg-[#005a00] focus:!text-white",
+                              className: "!bg-[#008000] !text-red-300 font-bold text-sm text-center focus:!bg-[#005a00] focus:!text-white",
                               placeholder: "10474.000",
                             })}
                           </td>
                           <td className="border border-slate-400 p-1">
                             {renderCellInput("K158", {
                               group: "pmis_reports",
-                              className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-sm text-right focus:!bg-[#005a00] focus:!text-white",
+                              className: "!bg-[#008000] !text-red-300 font-bold text-sm text-center focus:!bg-[#005a00] focus:!text-white",
                               placeholder: "9593.341",
                             })}
                           </td>
-                          <td className="border border-slate-400 px-3 py-2 text-right font-mono font-bold text-red-300 text-sm">
+                          <td className="border border-slate-400 px-3 py-2 text-center font-mono font-normal text-red-300 text-xs text-xs">
                             {l158 !== null ? format(l158) : "—"}
                           </td>
                         </tr>
 
                         {/* Toàn nhà máy */}
                         <tr className="bg-slate-100 font-bold text-[#173b64]">
-                          <td className="border border-slate-300 px-3 py-2 text-center font-extrabold">
+                          <td className="border border-slate-300 px-3 py-2 text-center font-extrabold text-xs">
                             Toàn NM
                           </td>
-                          <td className="border border-slate-300 px-3 py-2 text-right font-mono text-sm">
+                          <td className="border border-slate-300 px-3 py-2 text-center font-mono text-xs text-xs">
                             {(j157 !== null || j158 !== null) ? format(jSum) : "—"}
                           </td>
-                          <td className="border border-slate-300 px-3 py-2 text-right font-mono text-sm">
+                          <td className="border border-slate-300 px-3 py-2 text-center font-mono text-xs text-xs">
                             {(k157 !== null || k158 !== null) ? format(kSum) : "—"}
                           </td>
-                          <td className="border border-slate-300 px-3 py-2 text-right font-mono text-sm">
+                          <td className="border border-slate-300 px-3 py-2 text-center font-mono text-xs text-xs">
                             {(l157 !== null || l158 !== null) ? format(lSum) : "—"}
                           </td>
                         </tr>
@@ -3980,58 +3700,58 @@ export function CtktktReport() {
                         {/* Dòng 181 nhập liệu */}
                         <tr className="bg-[#008000] text-white">
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("C181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "1245" })}
+                            {renderCellInput("C181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "1245" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-28">
-                            {renderCellInput("D181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "20.9467" })}
+                            {renderCellInput("D181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "20.9467" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("E181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
+                            {renderCellInput("E181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-28">
-                            {renderCellInput("F181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "19.2249" })}
+                            {renderCellInput("F181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "19.2249" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("G181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
+                            {renderCellInput("G181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("H181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
+                            {renderCellInput("H181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("I181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
+                            {renderCellInput("I181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("J181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
+                            {renderCellInput("J181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-28">
-                            {renderCellInput("K181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "1.7218" })}
+                            {renderCellInput("K181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "1.7218" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("L181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "8.22" })}
+                            {renderCellInput("L181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "8.22" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-28">
-                            {renderCellInput("M181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "0.0102" })}
+                            {renderCellInput("M181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "0.0102" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-28">
-                            {renderCellInput("N181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "489.2526" })}
+                            {renderCellInput("N181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "489.2526" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-28">
-                            {renderCellInput("O181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "533.0709" })}
+                            {renderCellInput("O181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "533.0709" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-28">
-                            {renderCellInput("P181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "9710.6908" })}
+                            {renderCellInput("P181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "9710.6908" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-28">
-                            {renderCellInput("Q181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "10580.3974" })}
+                            {renderCellInput("Q181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "10580.3974" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("R181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "0.701" })}
+                            {renderCellInput("R181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "0.701" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("S181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-right focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
+                            {renderCellInput("S181", { group: "pmis_reports", className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "0" })}
                           </td>
                           <td className="border border-slate-400 p-1 w-24">
-                            {renderCellInput("T181", { group: "pmis_reports", isNumber: false, className: "!bg-[#008000] !text-red-300 !border-[#009e00] font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "Đạt" })}
+                            {renderCellInput("T181", { group: "pmis_reports", isNumber: false, className: "!bg-[#008000] !text-red-300 font-bold text-xs text-center focus:!bg-[#005a00] focus:!text-white", placeholder: "Đạt" })}
                           </td>
                         </tr>
                       </tbody>
