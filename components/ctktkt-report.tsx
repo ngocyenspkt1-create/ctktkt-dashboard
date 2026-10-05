@@ -90,7 +90,7 @@ import {
   type CtktktOperationPoint,
   type CtktktOperationUnit,
 } from "@/lib/ctktkt-operation-events";
-import { isMissingValue } from "@/lib/data-completeness";
+import { isMissingValue, describeCtktktMissingField } from "@/lib/data-completeness";
 import { shouldShowCtktktMissingField } from "@/lib/ctktkt-missing-fields";
 import { ExportMissingDialog } from "@/components/export-missing-dialog";
 import type { MissingDataItem } from "@/components/missing-data-alert";
@@ -148,7 +148,8 @@ const editableFields = [
   ...CTKTKT_EXTRA_INPUT_FIELDS,
 ].filter(field => field.cell !== CTKTKT_OPERATION_EVENTS_CELL
   && !LEGACY_OPERATION_EVENT_CELLS.has(field.cell)
-  && !isCtktktOperationPowerCell(field.cell));
+  && !isCtktktOperationPowerCell(field.cell)
+  && describeCtktktMissingField(field) !== null);
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 
@@ -519,9 +520,11 @@ export function CtktktReport() {
       seen.add(field.cell);
       const group = getCtktktFieldGroup(field.cell);
       if (!group) continue;
+      const description = describeCtktktMissingField(field);
+      if (!description) continue;
       items.push({
         key: `${date}|${field.cell}`,
-        label: `${date.split("-").reverse().join("/")} · ${field.label} [${field.cell}]`,
+        label: `${date.split("-").reverse().join("/")} · ${description}`,
         group: CTKTKT_GROUP_META[group]?.shortLabel || field.sectionLabel,
       });
     }
@@ -1212,7 +1215,7 @@ export function CtktktReport() {
       <ExportMissingDialog
         open={exportMissingOpen}
         items={exportMissingItems}
-        title={`Báo cáo Chỉ tiêu KTKT tháng ${period.slice(5, 7)}/${period.slice(0, 4)}`}
+        title={`Báo cáo Chỉ tiêu KTKT ngày ${date.split("-").reverse().join("/")}`}
         onClose={() => { setExportMissingOpen(false); setPendingReportOutput(null); }}
         onItemClick={returnToCtktktMissingInput}
         onFillMissing={returnToCtktktMissingInput}
