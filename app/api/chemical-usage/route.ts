@@ -1,5 +1,6 @@
 import { getRawDb } from "@/db";
 import { getSessionUser } from "@/lib/auth/server";
+import { isAdminUser } from "@/lib/auth/session";
 import { canEnterChemical, CHEMICAL_CATALOG, editableChemicalsFor, findChemical } from "@/lib/chemical-usage/catalog";
 import { ensureChemicalUsageSchema } from "@/lib/chemical-usage/schema";
 
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
              entered_by_position, updated_by_user_id, updated_by_name, updated_by_position,
              created_at, updated_at
       FROM chemical_usage_logs
-      WHERE usage_date >= ? AND usage_date < ?
+      WHERE usage_date >= ? AND usage_date < ? AND deleted_at IS NULL
       ORDER BY usage_date DESC, id DESC
     `).bind(`${month}-01`, `${nextMonth(month)}-01`).all();
 
@@ -170,5 +171,34 @@ export async function PUT(request: Request) {
   } catch (error) {
     console.error("Lỗi sửa theo dõi hóa chất:", error);
     return Response.json({ error: "Không thể sửa dữ liệu theo dõi hóa chất." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
+  if (!isAdminUser(user)) return Response.json({ error: "Chỉ tài khoản quản trị được xóa bản ghi." }, { status: 403 });
+
+  const id = Number(new URL(request.url).searchParams.get("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return Response.json({ error: "Bản ghi cần xóa không hợp lệ." }, { status: 400 });
+  }
+
+  try {
+    const rawDb = getRawDb();
+    await ensureChemicalUsageSchema(rawDb);
+    const deleted = await rawDb.prepare(`
+      UPDATE chemical_usage_logs
+      SET deleted_at = CURRENT_TIMESTAMP, deleted_by_user_id = ?, deleted_by_name = ?, deleted_by_position = ?
+      WHERE id = ? AND deleted_at IS NULL
+    `).bind(user.id, user.displayName, user.position || "", id).run();
+
+    if (Number(deleted.meta.changes) === 0) {
+      return Response.json({ error: "Không tìm thấy bản ghi cần xóa." }, { status: 404 });
+    }
+    return Response.json({ ok: true, id });
+  } catch (error) {
+    console.error("Lỗi xóa theo dõi hóa chất:", error);
+    return Response.json({ error: "Không thể xóa dữ liệu theo dõi hóa chất." }, { status: 500 });
   }
 }

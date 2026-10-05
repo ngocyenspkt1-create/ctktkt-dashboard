@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Beaker, CalendarDays, CheckCircle2, LockKeyhole, Pencil, Save, X } from "lucide-react";
+import { Beaker, CalendarDays, CheckCircle2, LockKeyhole, Pencil, Save, Trash2, X } from "lucide-react";
 import { useSessionUser } from "@/components/session-context";
 import { editableChemicalsFor, type ChemicalCatalogItem, type ChemicalCode } from "@/lib/chemical-usage/catalog";
 import { defaultOperatingDate } from "@/lib/operating-date";
@@ -38,12 +38,14 @@ function formatDate(value: string) {
 
 export function ChemicalUsageClient() {
   const user = useSessionUser();
+  const canDeleteRecords = user.role === "admin" || user.permissions.includes("manage_users");
   const allowedCatalog = useMemo(() => editableChemicalsFor(user), [user]);
   const [month, setMonth] = useState(currentMonth);
   const [records, setRecords] = useState<ChemicalRecord[]>([]);
   const [catalog, setCatalog] = useState<readonly ChemicalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [usageDate, setUsageDate] = useState(defaultOperatingDate);
@@ -114,6 +116,29 @@ export function ChemicalUsageClient() {
   );
 
   const filteredChemical = catalog.find(item => item.code === filterChemicalCode);
+
+  async function deleteRecord(record: ChemicalRecord) {
+    const approved = window.confirm(
+      `Xóa bản ghi ${record.chemical_name} ngày ${formatDate(record.usage_date)}, số lượng ${formatNumber(record.quantity)} ${record.unit}? Bản ghi sẽ được ẩn khỏi nhật ký và lưu thông tin xóa để truy vết.`,
+    );
+    if (!approved) return;
+
+    setDeletingId(record.id);
+    setError("");
+    setSuccess("");
+    try {
+      const response = await fetch(`/api/chemical-usage?id=${record.id}`, { method: "DELETE" });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Không thể xóa bản ghi.");
+      if (editingId === record.id) cancelEdit();
+      setSuccess(`Đã xóa bản ghi ${record.chemical_name} ngày ${formatDate(record.usage_date)}.`);
+      await fetchMonth(month);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Không thể xóa bản ghi.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function saveRecord(event: React.FormEvent) {
     event.preventDefault();
@@ -318,9 +343,15 @@ export function ChemicalUsageClient() {
                     <td className="px-4 py-3"><span className="text-slate-800">{record.entered_by_name}</span><span className="block text-xs text-slate-400">{record.entered_by_position}</span></td>
                     <td className="max-w-48 px-4 py-3 text-slate-500">{record.reference || "—"}</td>
                     <td className="px-4 py-3">
-                      {allowedCatalog.some(item => item.code === record.chemical_code) ? (
-                        <button type="button" onClick={() => startEdit(record)} className="flex items-center gap-1 whitespace-nowrap rounded-md border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"><Pencil className="size-3.5" /> Sửa</button>
-                      ) : <span className="text-xs text-slate-400">Chỉ xem</span>}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {allowedCatalog.some(item => item.code === record.chemical_code) && (
+                          <button type="button" onClick={() => startEdit(record)} className="flex items-center gap-1 whitespace-nowrap rounded-md border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"><Pencil className="size-3.5" /> Sửa</button>
+                        )}
+                        {canDeleteRecords && (
+                          <button type="button" onClick={() => void deleteRecord(record)} disabled={deletingId === record.id} aria-label={`Xóa bản ghi ${record.chemical_name} ngày ${formatDate(record.usage_date)}`} className="flex items-center gap-1 whitespace-nowrap rounded-md border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 className="size-3.5" aria-hidden /> {deletingId === record.id ? "Đang xóa…" : "Xóa"}</button>
+                        )}
+                        {!canDeleteRecords && !allowedCatalog.some(item => item.code === record.chemical_code) && <span className="text-xs text-slate-400">Chỉ xem</span>}
+                      </div>
                     </td>
                   </tr>
                 ))}

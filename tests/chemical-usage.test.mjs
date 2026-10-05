@@ -65,3 +65,18 @@ test("chemical records can be edited only through server-validated PUT and keep 
   assert.match(client, /onClick=\{\(\) => startEdit\(record\)\}/);
   assert.match(client, /Lưu nội dung chỉnh sửa/);
 });
+
+test("only admins can soft-delete chemical records, with deletion audit and hidden log rows", () => {
+  const api = readFileSync(new URL("../app/api/chemical-usage/route.ts", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../components/chemical-usage-client.tsx", import.meta.url), "utf8");
+  const schema = readFileSync(new URL("../lib/chemical-usage/schema.ts", import.meta.url), "utf8");
+  assert.match(api, /export async function DELETE/);
+  assert.match(api, /if \(!isAdminUser\(user\)\).*status: 403/);
+  assert.match(api, /deleted_by_user_id = \?/);
+  assert.match(api, /deleted_at IS NULL/);
+  assert.match(api, /AND deleted_at IS NULL/);
+  assert.match(schema, /deleted_by_name TEXT NOT NULL DEFAULT ''/);
+  assert.match(client, /const canDeleteRecords = user\.role === "admin" \|\| user\.permissions\.includes\("manage_users"\)/);
+  assert.match(client, /onClick=\{\(\) => void deleteRecord\(record\)\}/);
+  assert.match(client, /window\.confirm\(/);
+});
