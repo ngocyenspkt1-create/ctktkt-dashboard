@@ -323,7 +323,16 @@ function inputStyle(sheet: ExcelJS.Worksheet, address: string) {
 }
 
 export function applyCtktktOperationEventLayout(sheet: ExcelJS.Worksheet) {
-  if (sheet.getCell("C107").isMerged) sheet.unMergeCells("C107:D107");
+  // Replace the legacy event area completely before populating the six source tables.
+  for (const range of [...(sheet.model.merges || [])]) {
+    const endpoints = range.split(":").map(address => sheet.getCell(address));
+    if (endpoints.every(cell => Number(cell.row) >= 85 && Number(cell.row) <= 110 && Number(cell.col) >= 2 && Number(cell.col) <= 8)) sheet.unMergeCells(range);
+  }
+  for (let row = 85; row <= 110; row += 1) for (let column = 2; column <= 8; column += 1) {
+    const cell = sheet.getRow(row).getCell(column);
+    cell.value = null;
+    cell.style = { font: { name: "Times New Roman", size: 9, color: { argb: "FF000000" } }, fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } } };
+  }
 
   const eventHeaders = [
     "Khởi động S1", "Ngừng đốt lò S1", "Hòa lưới tổ máy S1", "Tách lưới tổ máy S1",
@@ -405,6 +414,21 @@ export function applyCtktktOperationEventLayout(sheet: ExcelJS.Worksheet) {
     ["C103", "(D101-C101)-(D102-C102)"], ["G103", "(H101-G101)-(H102-G102)"],
     ["C110", "(D108-C108)-(D109-C109)"], ["G110", "(H108-G108)-(H109-G109)"],
   ] as const) setFormula(sheet, cell, formula, null);
+  setLabel(sheet, "F89", "Tổng dầu khởi động", { fill: "FF00B0F0", bold: false });
+  setLabel(sheet, "F95", "Tổng dầu khởi động", { fill: "FF00B0F0", bold: false });
+  for (const [top, bottom, left, right] of [[85, 90, 2, 5], [91, 96, 2, 5], [98, 103, 2, 4], [98, 103, 6, 8], [105, 110, 2, 4], [105, 110, 6, 8], [89, 90, 6, 6], [95, 96, 6, 6]]) {
+    for (let row = top; row <= bottom; row += 1) for (let column = left; column <= right; column += 1) {
+      const cell = sheet.getRow(row).getCell(column);
+      cell.border = Object.fromEntries(["top", "bottom", "left", "right"].map(side => [side, { style: "thin", color: { argb: "FF000000" } }]));
+      cell.font = { ...cell.font, bold: false, color: { argb: "FF000000" } };
+      cell.alignment = { ...cell.alignment, horizontal: column === left ? "left" : "center", vertical: "middle", wrapText: true };
+    }
+  }
+  // Source uses yellow only for the oil-meter label, white for the phase labels.
+  for (const address of ["C87", "D87", "E87", "C93", "D93", "E93", "C100", "D100", "G100", "H100", "C107", "D107", "G107", "H107"]) fill(sheet, address, "FFFFFFFF");
+  for (const address of timeHeaders) fill(sheet, address, "FF00B0F0");
+  for (const [cell] of headers) sheet.getCell(cell).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  for (const row of [86, 92, 99, 100, 106, 107, 108, 109, 110]) sheet.getRow(row).height = Math.max(sheet.getRow(row).height || 0, 30);
 }
 
 function setTime(sheet: ExcelJS.Worksheet, cellAddress: string, value: CtktktOperationReading | undefined) {

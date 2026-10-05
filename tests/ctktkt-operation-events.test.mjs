@@ -99,4 +99,41 @@ test("new event layout replaces the old target block while retaining source form
   assert.equal(sheet.getCell("D96").value.formula, "((D94-C94)-(D95-C95))/1000");
   assert.equal(sheet.getCell("C107").isMerged, false);
   assert.equal(sheet.getCell("C103").isMerged, true);
+  for (const cell of ["F86", "G86", "H86", "F92", "G92", "H92", "C104", "D104"]) assert.equal(sheet.getCell(cell).value, null);
+  assert.equal(sheet.getCell("F89").value, "Tổng dầu khởi động");
+  assert.equal(sheet.getCell("F95").value, "Tổng dầu khởi động");
+  for (const cell of ["B88", "E90", "D103", "H110"]) assert.equal(sheet.getCell(cell).border.bottom.style, "thin");
+  assert.equal(sheet.getCell("D86").fill.fgColor.argb, "FF00B0F0");
+  assert.equal(sheet.getCell("C87").fill.fgColor.argb, "FFFFFFFF");
+});
+
+test("all six unit-event slots populate their own oil tables and survive Excel serialization", async () => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("03");
+  applyCtktktOperationEventLayout(sheet);
+  const slots = [
+    ["S1", "startup", "C88", "E88", "F90", 1],
+    ["S2", "startup", "C94", "E94", "F96", 1000],
+    ["S1", "shutdown", "C101", "D101", "C103", 1],
+    ["S2", "shutdown", "C108", "D108", "C110", 1],
+    ["S1", "incident_oil", "G101", "H101", "G103", 1],
+    ["S2", "incident_oil", "G108", "H108", "G110", 1],
+  ];
+  const events = slots.map(([unit, kind], index) => {
+    const event = createCtktktOperationEvent(unit, kind);
+    const start = kind === "startup" ? "start" : "oil_burn_start";
+    point(event, start, {time:"2026-10-04T01:00",oilFeed:String(100+index*100),oilReturn:"10"});
+    if(kind === "startup") point(event,"grid_sync",{time:"2026-10-04T02:00",oilFeed:String(120+index*100),oilReturn:"15"});
+    point(event,"oil_cut",{time:"2026-10-04T03:00",oilFeed:String(140+index*100),oilReturn:"20"});
+    return event;
+  });
+  applyCtktktOperationEvents(sheet, events);
+  const reopened = new ExcelJS.Workbook();await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
+  const restored = reopened.getWorksheet("03");
+  slots.forEach(([, , from, to, total, divisor],index)=>{
+    assert.equal(restored.getCell(from).value,100+index*100);
+    assert.equal(restored.getCell(to).value,140+index*100);
+    assert.equal(restored.getCell(total).value.result,30/divisor);
+    assert.ok(restored.getCell(total).formula);
+  });
 });

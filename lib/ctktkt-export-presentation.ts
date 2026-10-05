@@ -13,7 +13,10 @@ export function applyCtktktExportPresentation(workbook: ExcelJS.Workbook) {
           ...run, font: { ...run.font, name: "Times New Roman", family: 1, scheme: undefined },
         })) };
       }
-      if (cell.value === null || cell.value === "") cell.fill = white;
+      const eventTimeHeader = /^\d{2}$/.test(sheet.name) && [86, 92, 99, 106].includes(Number(cell.row))
+        && ((Number(cell.col) >= 2 && Number(cell.col) <= (Number(cell.row) <= 92 ? 5 : 4))
+          || (Number(cell.row) >= 99 && Number(cell.col) >= 6 && Number(cell.col) <= 8));
+      if ((cell.value === null || cell.value === "") && !eventTimeHeader) cell.fill = white;
     }));
 
     // The replacement event table exists only on daily report sheets.
@@ -39,5 +42,29 @@ export function applyCtktktExportPresentation(workbook: ExcelJS.Workbook) {
       }
     }
     sheet.getRow(59).height = Math.max(sheet.getRow(59).height || 0, 48);
+  }
+}
+
+/** Keep the three final report tables visible; retain their calculation dependencies. */
+export function hideCtktktExportScratchArea(workbook: ExcelJS.Workbook) {
+  for (const sheet of workbook.worksheets) {
+    if (!/^\d{2}$/.test(sheet.name)) continue;
+    for (let row = 166; row <= sheet.rowCount; row += 1) sheet.getRow(row).hidden = true;
+    for (let row = 155; row <= 165; row += 1) {
+      for (let column = 1; column <= sheet.columnCount; column += 1) {
+        const inTable = (column >= 3 && column <= 7 && row <= 163)
+          || (column >= 9 && column <= 12 && row <= 158)
+          || ((column === 9 || column === 10) && row >= 159 && row <= 161)
+          || (column >= 14 && column <= 18);
+        if (inTable) continue;
+        const cell = sheet.getRow(row).getCell(column);
+        // Hide display only. Deleting these formulas would break the visible report.
+        cell.numFmt = ";;;";
+        cell.font = { ...cell.font, color: { argb: "FFFFFFFF" } };
+        cell.fill = white;
+        cell.border = {};
+      }
+    }
+    sheet.pageSetup.printArea = `A1:${sheet.getColumn(sheet.columnCount).letter}165`;
   }
 }

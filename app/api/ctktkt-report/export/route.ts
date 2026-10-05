@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { applyCtktktExportPresentation } from "@/lib/ctktkt-export-presentation";
+import { applyCtktktExportPresentation, hideCtktktExportScratchArea } from "@/lib/ctktkt-export-presentation";
 import { getRawDb } from "@/db";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
@@ -216,6 +216,7 @@ export async function GET(request: Request) {
       const sheet = workbook.getWorksheet(sheetName);
       if (!sheet) continue;
       for (const cell of inputCells) sheet.getCell(cell).value = null;
+      if (/^\d{2}$/.test(sheetName)) applyCtktktOperationEventLayout(sheet);
     }
 
     const previousSheet = workbook.getWorksheet("d-1");
@@ -248,7 +249,6 @@ export async function GET(request: Request) {
       const previousSheetName = day === 1 ? "d-1" : String(day - 1).padStart(2, "0");
       normalizeCoalMeterFormulas(sheet, previousSheetName);
       prepareCtktktDaySheet(sheet, day < daysInMonth ? String(day + 1).padStart(2, "0") : null);
-      applyCtktktOperationEventLayout(sheet);
       const row = byDate.get(date) || {};
       fillDailyFallbacks(sheet, row);
       for (const [code, value] of Object.entries(row)) if (code.startsWith("KTKT:") && exportableCells.has(code.slice(5)) && !CTKTKT_BCSX_LINKED_CELLS.has(code.slice(5)) && !CTKTKT_WATER_LINKED_CELLS.has(code.slice(5))) {
@@ -277,6 +277,7 @@ export async function GET(request: Request) {
     if (totalSheet) totalSheet.getCell("A1").value = `Tổng hợp tháng ${month}/${year}`;
     workbook.calcProperties.fullCalcOnLoad = true;
     applyCtktktExportPresentation(workbook);
+    hideCtktktExportScratchArea(workbook);
     const output = new Uint8Array(await workbook.xlsx.writeBuffer());
     return new Response(output, {
       headers: {
