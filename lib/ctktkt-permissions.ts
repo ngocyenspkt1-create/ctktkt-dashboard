@@ -1,4 +1,5 @@
 import { isAdminUser, type SessionUser } from "./auth/session.ts";
+import { NH3_OPENING_STOCK_CELL } from "./ctktkt-report.ts";
 
 export type CtktktFieldGroup =
   | "kpi_summary"        // Ô I35, I36, E39, H39, W86, W87, giờ vận hành W68:Z69
@@ -366,6 +367,7 @@ export function canEditCtktktField(
   cell: string,
 ): boolean {
   if (!user) return false;
+  if (cell === NH3_OPENING_STOCK_CELL) return false;
   const group = getCtktktFieldGroup(cell);
   if (!group) {
     // Nếu ô không thuộc nhóm nào đặc định, chỉ Admin/KTV/Trưởng ca được sửa

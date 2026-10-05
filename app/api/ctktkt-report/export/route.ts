@@ -10,7 +10,7 @@ import { addDaysIso, vietnamDateIso } from "@/lib/operating-date";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/lib/ctktkt-template.generated";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
-import { deriveNh3StartLevels, type CtktktDayEntries } from "@/lib/ctktkt-report";
+import { deriveNh3StartLevels, deriveNh3OpeningStock, NH3_OPENING_STOCK_CELL, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { applyCtktktOperationEventLayout, applyCtktktOperationEvents, CTKTKT_OPERATION_EVENTS_CELL, legacyCtktktOperationEvents } from "@/lib/ctktkt-operation-events";
 import {
   applyCtktktCoalAdjustments,
@@ -60,6 +60,7 @@ function applyNh3StartLevelCarryover(
   sheet: ExcelJS.Worksheet,
   previousRow: Record<string, string> | undefined,
 ) {
+  sheet.getCell(NH3_OPENING_STOCK_CELL).value = numeric(deriveNh3OpeningStock(ktktCells(previousRow)));
   for (const [cell, value] of Object.entries(deriveNh3StartLevels(ktktCells(previousRow)))) {
     setNumber(sheet, cell, numeric(value));
   }

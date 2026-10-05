@@ -1,6 +1,6 @@
 // Node's built-in TypeScript test runner requires the explicit extension here.
 import type { CtktktDayEntries } from "./ctktkt-report.ts";
-import { calculateCtktktMeterSummary, calculateCtktktSummary, calculateNh3Summary } from "./ctktkt-report.ts";
+import { calculateCtktktMeterSummary, calculateCtktktSummary, calculateNh3Summary, deriveNh3OpeningStock, NH3_OPENING_STOCK_CELL } from "./ctktkt-report.ts";
 
 export interface CtktktEmailReportMetrics {
   // S1
@@ -137,7 +137,7 @@ export function extractCtktktEmailMetrics(
   const nh3IntakeDay = numberOf(current, "P72") ?? 0;
   const plantGrossMwh = summary.plant.grossMwh;
   const plantNetMwh = summary.plant.netMwh;
-  const nh3 = calculateNh3Summary(current, plantGrossMwh, plantNetMwh);
+  const nh3 = calculateNh3Summary({ ...current, [NH3_OPENING_STOCK_CELL]: deriveNh3OpeningStock(previous) }, plantGrossMwh, plantNetMwh);
   const nh3Stock24h = numberOf(current, "P74") ?? nh3.stock24h;
   const nh3UsedTonnes = numberOf(current, "P75") ?? nh3.usedTonnes;
   const nh3RateGross = numberOf(current, "P77") ?? nh3.rateGross;

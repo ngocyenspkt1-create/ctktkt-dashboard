@@ -16,6 +16,7 @@ import {
   calculateCtktktMeterSummary,
   calculateNh3Summary,
   NH3_DCS_START_METER_CELLS,
+  NH3_OPENING_STOCK_CELL,
   calculateOilDifferences,
   calculateSteamDifferences,
   calculateTkdDcsSummary,
@@ -208,6 +209,7 @@ export async function buildCtktktHistoryImportPackage(
     ...CTKTKT_COAL_ADJUSTMENT_FIELDS.map(field => field.cell),
   ])].filter(cell => !CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS.has(cell)
     && !NH3_DCS_START_METER_CELLS.has(cell)
+    && cell !== NH3_OPENING_STOCK_CELL
     // Giờ lũy kế luôn cộng dồn từ QLKT, không lấy theo file.
     && !(CTKTKT_OPERATING_HOURS_CELLS as readonly string[]).includes(cell));
   const warnings: CtktktHistoryImportPackage["warnings"] = [];

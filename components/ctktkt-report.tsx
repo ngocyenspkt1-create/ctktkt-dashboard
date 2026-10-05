@@ -50,6 +50,7 @@ import {
   applyNh3StartLevelCarryover,
   NH3_DCS_START_METER_CELLS,
   NH3_START_LEVEL_CELLS,
+  NH3_OPENING_STOCK_CELL,
   previousIsoDate,
   TKD_HOURS,
   OIL_HOURS,
@@ -1120,8 +1121,9 @@ export function CtktktReport() {
     const isQlktProduction = QLKT_PRODUCTION_CELLS.has(cell);
     const isFixed = cell === CTKTKT_INSTALLED_CAPACITY_CELL;
     const isNh3Carryover = NH3_START_LEVEL_CELLS.has(cell);
+    const isNh3OpeningStock = cell === NH3_OPENING_STOCK_CELL;
     const isNh3StartMeter = NH3_DCS_START_METER_CELLS.has(cell);
-    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isQlktProduction || isFixed || isNh3Carryover || isNh3StartMeter;
+    const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isQlktProduction || isFixed || isNh3Carryover || isNh3StartMeter || isNh3OpeningStock;
     const isComputed = options?.readOnlyValue !== undefined;
     const isManual = !isLinked && !isComputed;
     const canEditThis = isManual && canEditCtktktField(user, cell);
@@ -1132,7 +1134,9 @@ export function CtktktReport() {
     const tooltip = isComputed
       ? `${cell}: Tự tính, không nhập tay`
       : isLinked
-      ? isFixed
+      ? isNh3OpeningStock
+        ? `${cell}: Tồn kho NH3 00h tự lấy từ tồn kho 24h ngày D-1; thiếu dữ liệu ngày D-1 thì để trống`
+        : isFixed
         ? `${cell}: Công suất đặt cố định của NMNĐ Duyên Hải 1 (${CTKTKT_INSTALLED_CAPACITY_MW} MW)`
         : isNh3StartMeter
           ? `${cell}: Công tơ NH3 00h tự lấy từ mốc 24h ngày D-1`
@@ -3117,6 +3121,9 @@ export function CtktktReport() {
                         Tổng lượng NH3 tồn kho 00h (tấn):
                       </span>
                       {renderCellInput("P73", { group: "nh3_tank" })}
+                      <span className="mt-1 block text-[11px] text-blue-700">
+                        Tự lấy từ tồn kho 24h00 ngày {previousDate.split("-").reverse().join("/")}.
+                      </span>
                     </label>
 
                     <div className="rounded bg-white p-2 border font-mono">

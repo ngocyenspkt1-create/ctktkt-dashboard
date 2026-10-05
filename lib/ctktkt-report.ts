@@ -45,6 +45,7 @@ export type Nh3DcsSummary = {
 };
 
 export const NH3_TANK_ROWS = [69, 70, 71] as const;
+export const NH3_OPENING_STOCK_CELL = "P73";
 export const NH3_START_LEVEL_CELLS = new Set(NH3_TANK_ROWS.map(row => `N${row}`));
 export const NH3_DCS_START_METER_CELLS = new Set(["M81", "M82"]);
 
@@ -65,7 +66,12 @@ export function applyNh3StartLevelCarryover(
   entries: CtktktDayEntries,
   previous?: CtktktDayEntries,
 ): CtktktDayEntries {
-  return { ...entries, ...deriveNh3StartLevels(previous) };
+  return { ...entries, ...deriveNh3StartLevels(previous), [NH3_OPENING_STOCK_CELL]: deriveNh3OpeningStock(previous) };
+}
+
+export function deriveNh3OpeningStock(previous?: CtktktDayEntries): string {
+  const stock = calculateNh3Summary(previous || {}, null, null).stock24h;
+  return stock === null ? "" : String(stock);
 }
 
 export type CoalShiftDetail = {

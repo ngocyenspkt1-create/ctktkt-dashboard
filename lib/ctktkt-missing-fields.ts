@@ -2,7 +2,7 @@
 import { CTKTKT_CARRY_FORWARD_INPUT_CELLS, CTKTKT_OPERATING_HOURS_CELLS } from "./ctktkt-extra-fields.ts";
 import { CTKTKT_INSTALLED_CAPACITY_CELL } from "./ctktkt-defaults.ts";
 import { PMIS_PRODUCTION_CELLS } from "./ctktkt-pmis-sync.ts";
-import { NH3_DCS_START_METER_CELLS, NH3_START_LEVEL_CELLS } from "./ctktkt-report.ts";
+import { NH3_DCS_START_METER_CELLS, NH3_START_LEVEL_CELLS, NH3_OPENING_STOCK_CELL } from "./ctktkt-report.ts";
 
 /** Returns false when a blank field is filled automatically by the report rules. */
 export function shouldShowCtktktMissingField(
@@ -16,6 +16,7 @@ export function shouldShowCtktktMissingField(
     || cell === CTKTKT_INSTALLED_CAPACITY_CELL
     || NH3_START_LEVEL_CELLS.has(cell)
     || NH3_DCS_START_METER_CELLS.has(cell)
+    || cell === NH3_OPENING_STOCK_CELL
   ) return false;
   if (cell === "W86" && !isCoalStock24hStartEntryRequired(date)) return false;
   if ((CTKTKT_OPERATING_HOURS_CELLS as readonly string[]).includes(cell)) return false;
