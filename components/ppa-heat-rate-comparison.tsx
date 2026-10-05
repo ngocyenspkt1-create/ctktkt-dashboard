@@ -8,6 +8,7 @@ import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
 import { mergeDailyInputsWithCtktkt } from "@/lib/daily-source-links";
+import { PPA_OPERATING_EVENT_S1_CODE, PPA_OPERATING_EVENT_S2_CODE } from "@/lib/google-sheet-sync";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type CtktktInput = { operatingDate: string; cell: string; value: string };
@@ -30,6 +31,7 @@ export function PpaHeatRateComparison() {
   const isViewer = !hasPermission(user, "edit_ppa");
   const [operatingDate, setOperatingDate] = useState(defaultOperatingDate), [readings, setReadings] = useState<MeterReading[]>([]), [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [pastedText, setPastedText] = useState(""), [noteS1, setNoteS1] = useState(""), [noteS2, setNoteS2] = useState("");
+  const [eventS1, setEventS1] = useState(""), [eventS2, setEventS2] = useState("");
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]), [history, setHistory] = useState<StoredPpa[]>([]);
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [savingNotes, setSavingNotes] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
@@ -84,11 +86,14 @@ export function PpaHeatRateComparison() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const existing = history.find(entry => entry.operatingDate === operatingDate);
+      const dailyValue = (fieldCode: string) => dailyInputs.find(entry => entry.operatingDate === operatingDate && entry.fieldCode === fieldCode)?.value || "";
       setNoteS1(existing?.noteS1 || "");
       setNoteS2(existing?.noteS2 || "");
+      setEventS1(dailyValue(PPA_OPERATING_EVENT_S1_CODE));
+      setEventS2(dailyValue(PPA_OPERATING_EVENT_S2_CODE));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [operatingDate, history]);
+  }, [operatingDate, history, dailyInputs]);
 
   useEffect(() => {
     const payload = decodeQlktPpaSyncHash(window.location.hash);
@@ -239,12 +244,12 @@ export function PpaHeatRateComparison() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          entries: [{ operatingDate, noteS1: noteS1.trim(), noteS2: noteS2.trim() }]
+          entries: [{ operatingDate, noteS1: noteS1.trim(), noteS2: noteS2.trim(), eventS1: eventS1.trim(), eventS2: eventS2.trim() }]
         })
       });
       const body = await response.json() as { error?: string; updated?: number };
       if (!response.ok) throw new Error(body.error || "Chưa lưu được nhận xét.");
-      setMessage(`Đã lưu nhận xét tổ máy S1 & S2 cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
+      setMessage(`Đã lưu nhận xét và tình hình vận hành S1 & S2 cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
       await loadPeriod();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Chưa lưu được nhận xét.");
@@ -395,7 +400,7 @@ export function PpaHeatRateComparison() {
             onClick={saveNotesOnly}
             className="h-7 rounded-lg border border-[#4057b5] bg-white px-3 text-xs font-bold text-[#4057b5] shadow-sm hover:bg-blue-50 disabled:opacity-50"
           >
-            {savingNotes ? "Đang lưu…" : "Lưu nhận xét S1 & S2"}
+            {savingNotes ? "Đang lưu…" : "Lưu nhận xét & sự kiện S1/S2"}
           </button>
           {calculation && (
             <button
@@ -435,6 +440,36 @@ export function PpaHeatRateComparison() {
             rows={2}
             className="resize-y rounded-lg border border-slate-300 p-2 text-xs font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-1 focus:ring-[#4c78a8]"
             placeholder="Ghi nhận tình trạng vận hành S2, độ tro/xỉ, máy nghiền, chất lượng than…"
+          />
+        </label>
+      </div>
+      <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+        <label className="grid gap-1 text-xs font-bold text-slate-700">
+          <div className="flex items-center justify-between">
+            <span className="text-blue-900">Tình hình vận hành / sự kiện liên quan S1</span>
+            <span className="font-normal text-slate-400">{eventS1.length}/1000</span>
+          </div>
+          <textarea
+            value={eventS1}
+            onChange={event => setEventS1(event.target.value.slice(0, 1000))}
+            rows={2}
+            maxLength={1000}
+            className="resize-y rounded-lg border border-slate-300 p-2 text-xs font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-1 focus:ring-[#4c78a8]"
+            placeholder="Nhập tình hình vận hành hoặc sự kiện liên quan của tổ máy S1…"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-bold text-slate-700">
+          <div className="flex items-center justify-between">
+            <span className="text-amber-900">Tình hình vận hành / sự kiện liên quan S2</span>
+            <span className="font-normal text-slate-400">{eventS2.length}/1000</span>
+          </div>
+          <textarea
+            value={eventS2}
+            onChange={event => setEventS2(event.target.value.slice(0, 1000))}
+            rows={2}
+            maxLength={1000}
+            className="resize-y rounded-lg border border-slate-300 p-2 text-xs font-normal text-black outline-none focus:border-[#4c78a8] focus:ring-1 focus:ring-[#4c78a8]"
+            placeholder="Nhập tình hình vận hành hoặc sự kiện liên quan của tổ máy S2…"
           />
         </label>
       </div>

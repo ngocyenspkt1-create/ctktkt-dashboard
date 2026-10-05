@@ -1,7 +1,7 @@
 import { getRawDb } from "@/db";
 import { isFutureOperatingDate } from "@/lib/operating-date";
 import { requireAnyPermission } from "@/lib/auth/server";
-import { parseAvailableCapacity, PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE } from "@/lib/google-sheet-sync";
+import { parseAvailableCapacity, PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE, PPA_OPERATING_EVENT_S1_CODE, PPA_OPERATING_EVENT_S2_CODE } from "@/lib/google-sheet-sync";
 
 const datePattern = /^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
@@ -21,6 +21,8 @@ export async function POST(request: Request) {
       const value = item as Record<string, unknown>;
       const operatingDate = String(value.operatingDate || "");
       const noteS1 = String(value.noteS1 || "").trim(), noteS2 = String(value.noteS2 || "").trim();
+      const hasEventS1 = Object.hasOwn(value, "eventS1"), hasEventS2 = Object.hasOwn(value, "eventS2");
+      const eventS1 = String(value.eventS1 || "").trim(), eventS2 = String(value.eventS2 || "").trim();
       const hasAvailableCapacityS1 = Object.hasOwn(value, "availableCapacityS1Mw");
       const hasAvailableCapacityS2 = Object.hasOwn(value, "availableCapacityS2Mw");
       const availableCapacityS1Mw = hasAvailableCapacityS1 ? parseAvailableCapacity(value.availableCapacityS1Mw, "Công suất khả dụng S1") : null;
@@ -28,8 +30,9 @@ export async function POST(request: Request) {
       if (!datePattern.test(operatingDate) || seen.has(operatingDate)) throw new Error("Ngày đánh giá không hợp lệ hoặc bị trùng.");
       if (isFutureOperatingDate(operatingDate)) throw new Error("Không thể đánh giá hoặc lưu dữ liệu cho ngày trong tương lai.");
       if (noteS1.length > 1000 || noteS2.length > 1000) throw new Error(`Đánh giá ngày ${operatingDate} dài quá 1.000 ký tự.`);
+      if (eventS1.length > 1000 || eventS2.length > 1000) throw new Error(`Tình hình vận hành ngày ${operatingDate} dài quá 1.000 ký tự.`);
       seen.add(operatingDate);
-      return { operatingDate, noteS1, noteS2, hasAvailableCapacityS1, hasAvailableCapacityS2, availableCapacityS1Mw, availableCapacityS2Mw };
+      return { operatingDate, noteS1, noteS2, hasEventS1, hasEventS2, eventS1, eventS2, hasAvailableCapacityS1, hasAvailableCapacityS2, availableCapacityS1Mw, availableCapacityS2Mw };
     });
     const db = getRawDb();
     const statements = entries.map(entry =>
@@ -57,6 +60,16 @@ export async function POST(request: Request) {
         statements.push(value === null
           ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(entry.operatingDate, fieldCode)
           : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(entry.operatingDate, fieldCode, String(value)));
+      }
+      const events = [
+        [entry.hasEventS1, PPA_OPERATING_EVENT_S1_CODE, entry.eventS1],
+        [entry.hasEventS2, PPA_OPERATING_EVENT_S2_CODE, entry.eventS2],
+      ] as const;
+      for (const [present, fieldCode, value] of events) {
+        if (!present) continue;
+        statements.push(value === ""
+          ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(entry.operatingDate, fieldCode)
+          : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(entry.operatingDate, fieldCode, value));
       }
     }
     const results = statements.length ? await db.batch(statements) : [];

@@ -14,6 +14,7 @@ export type StoredPpaEntry = {
 export type GoogleSheetUnitPayload = {
   sanLuong: number | null;
   csKhaDung?: number | null;
+  tinhHinhVanHanh: string;
   csBinhQuan: number | null;
   suatHaoThan: number | null;
   nhietTri: number | null;
@@ -40,6 +41,8 @@ export type GoogleSheetAssessmentEntry = {
 
 export const PPA_AVAILABLE_CAPACITY_S1_CODE = "PPA_CSKD_S1";
 export const PPA_AVAILABLE_CAPACITY_S2_CODE = "PPA_CSKD_S2";
+export const PPA_OPERATING_EVENT_S1_CODE = "PPA_EVENT_S1";
+export const PPA_OPERATING_EVENT_S2_CODE = "PPA_EVENT_S2";
 export const GOOGLE_SHEET_VIEW_URL = "https://docs.google.com/spreadsheets/d/1L0NtMse98j0QBR2kjcK4E1Iob2XLDdrfNM99pBDBcyo/edit";
 
 export function mergeCtktktLinkedDailyEntries(
@@ -119,6 +122,8 @@ export function buildGoogleSheetDayPayload(
   const coalS2 = numeric(values.get("AF_ADJ")) ?? rawCoalS2;
   const availableCapacityS1 = required(parseAvailableCapacity(values.get(PPA_AVAILABLE_CAPACITY_S1_CODE), "Công suất khả dụng S1"), "Công suất khả dụng S1");
   const availableCapacityS2 = required(parseAvailableCapacity(values.get(PPA_AVAILABLE_CAPACITY_S2_CODE), "Công suất khả dụng S2"), "Công suất khả dụng S2");
+  const operatingEventS1 = String(values.get(PPA_OPERATING_EVENT_S1_CODE) || "").trim();
+  const operatingEventS2 = String(values.get(PPA_OPERATING_EVENT_S2_CODE) || "").trim();
   const ppaS1 = required(numeric(ppa.ppaS1), "SHN PPA S1"), ppaS2 = required(numeric(ppa.ppaS2), "SHN PPA S2"), ppaPlant = required(numeric(ppa.ppaPlant), "SHN PPA NMNĐ");
 
   const actualS1 = divide(coalS1 * heatingValue, netS1, 1 / 1000);
@@ -138,6 +143,7 @@ export function buildGoogleSheetDayPayload(
   ): GoogleSheetUnitPayload => ({
     sanLuong,
     csKhaDung: availableCapacity ?? null,
+    tinhHinhVanHanh: "",
     csBinhQuan,
     suatHaoThan,
     nhietTri: heatingValue,
@@ -151,8 +157,8 @@ export function buildGoogleSheetDayPayload(
   return {
     date: `${Number(month)}/${Number(day)}/${year}`,
     row: null,
-    S1: unit(grossS1, divide(grossS1, hoursS1, 1000), divide(coalS1, netS1), actualS1, ppaS1, ppa.noteS1, availableCapacityS1),
-    S2: unit(grossS2, divide(grossS2, hoursS2, 1000), divide(coalS2, netS2), actualS2, ppaS2, ppa.noteS2, availableCapacityS2),
+    S1: { ...unit(grossS1, divide(grossS1, hoursS1, 1000), divide(coalS1, netS1), actualS1, ppaS1, ppa.noteS1, availableCapacityS1), tinhHinhVanHanh: operatingEventS1 },
+    S2: { ...unit(grossS2, divide(grossS2, hoursS2, 1000), divide(coalS2, netS2), actualS2, ppaS2, ppa.noteS2, availableCapacityS2), tinhHinhVanHanh: operatingEventS2 },
     NMND: unit(grossPlantMwh, divide(grossPlantMwh, hoursS1 + hoursS2), divide(coalS1 + coalS2, netPlant), actualPlant, ppaPlant),
   };
 }

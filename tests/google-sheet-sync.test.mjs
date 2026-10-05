@@ -8,6 +8,8 @@ import {
   parseAvailableCapacity,
   PPA_AVAILABLE_CAPACITY_S1_CODE,
   PPA_AVAILABLE_CAPACITY_S2_CODE,
+  PPA_OPERATING_EVENT_S1_CODE,
+  PPA_OPERATING_EVENT_S2_CODE,
   resolveGoogleSheetRow,
   validateGoogleAppsScriptUrl,
 } from "../lib/google-sheet-sync.ts";
@@ -44,6 +46,22 @@ test("lập đúng dữ liệu Google Sheet cho S1, S2 và toàn nhà máy", () 
   assert.ok(Math.abs(payload.S1.shnThucTe - 10_476.262) < 0.01);
   assert.match(payload.S1.danhGia, /Theo công suất thực tế/);
   assert.match(payload.S2.chenhLech, /kJ\/kWh/);
+});
+
+test("đưa tình hình vận hành riêng của S1 và S2 vào payload Google Sheet", () => {
+  const payload = buildGoogleSheetDayPayload("2026-09-13", [
+    ...entries,
+    { fieldCode: PPA_OPERATING_EVENT_S1_CODE, value: "S1: dừng máy nghiền 1B kiểm tra" },
+    { fieldCode: PPA_OPERATING_EVENT_S2_CODE, value: "S2: vận hành ổn định" },
+  ], {
+    ppaPlant: 10_500,
+    ppaS1: 10_450,
+    ppaS2: 10_550,
+  });
+
+  assert.equal(payload.S1.tinhHinhVanHanh, "S1: dừng máy nghiền 1B kiểm tra");
+  assert.equal(payload.S2.tinhHinhVanHanh, "S2: vận hành ổn định");
+  assert.equal(payload.NMND.tinhHinhVanHanh, "");
 });
 
 test("xuất Google Sheet giữ đủ độ chính xác QLKT ngày 17/09", () => {
