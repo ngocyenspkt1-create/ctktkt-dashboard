@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { applyCtktktExportPresentation } from "@/lib/ctktkt-export-presentation";
 import { getRawDb } from "@/db";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
@@ -275,6 +276,7 @@ export async function GET(request: Request) {
     const totalSheet = workbook.getWorksheet("Tổng hợp tháng");
     if (totalSheet) totalSheet.getCell("A1").value = `Tổng hợp tháng ${month}/${year}`;
     workbook.calcProperties.fullCalcOnLoad = true;
+    applyCtktktExportPresentation(workbook);
     const output = new Uint8Array(await workbook.xlsx.writeBuffer());
     return new Response(output, {
       headers: {
