@@ -72,7 +72,7 @@ export const CTKTKT_GROUP_META: Record<
     label: "Tổng lượng NH3 dùng trong ngày theo công tơ DCS",
     shortLabel: "NH3 DCS",
     responsible: "Lò trưởng / Trưởng kíp điện",
-    description: "Nhập chỉ số công tơ NH3 DCS lúc 00h và 24h cho S1, S2",
+    description: "Nhập chỉ số công tơ NH3 DCS lúc 00h và 24h; hiệu chỉnh mức reset riêng cho S1, S2 nếu công tơ quay về 0",
   },
   td21: {
     label: "Công tơ điện tự dùng - TD21",
@@ -172,7 +172,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "N71", "O71", "P71",
     "P72", "P73", "P74",
   ]),
-  nh3_dcs: new Set(["N81", "N82"]),
+  nh3_dcs: new Set(["N81", "N82", "NH3_DCS_RESET_S1", "NH3_DCS_RESET_S2"]),
   td21: new Set([
     "M49", "O49", "Q49", "R49",
   ]),

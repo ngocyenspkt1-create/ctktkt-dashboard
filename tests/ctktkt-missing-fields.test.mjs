@@ -32,3 +32,8 @@ test("a carry-forward input is reported when there is no earlier usable reading"
 test("ordinary required inputs remain in the missing-data alert", () => {
   assert.equal(shouldShowCtktktMissingField("M3", "2026-09-03", {}), true);
 });
+
+test("NH3 DCS reset adjustments are optional and default to zero", () => {
+  assert.equal(shouldShowCtktktMissingField("NH3_DCS_RESET_S1", "2026-09-03", {}), false);
+  assert.equal(shouldShowCtktktMissingField("NH3_DCS_RESET_S2", "2026-09-03", {}), false);
+});

@@ -338,6 +338,17 @@ test("NH3 DCS follows the original workbook meter and production formulas", () =
   assert.ok(Math.abs(result.totalUsedTonnes - 14.82) < 1e-12);
 });
 
+test("NH3 DCS reset adjustment is applied separately to each unit", () => {
+  const result = calculateNh3DcsSummary({
+    N81: "8", N82: "2", NH3_DCS_RESET_S1: "500", NH3_DCS_RESET_S2: "500",
+    J157: "10000", K157: "9000", J158: "10000", K158: "9000",
+  }, { N81: "493", N82: "499" });
+
+  assert.equal(result.s1?.usedTonnes, 15);
+  assert.equal(result.s2?.usedTonnes, 3);
+  assert.equal(result.totalUsedTonnes, 18);
+});
+
 test("NH3 DCS leaves a unit incomplete when any required reading is missing", () => {
   const result = calculateNh3DcsSummary({
     N81: "111.84", J157: "11325.76",

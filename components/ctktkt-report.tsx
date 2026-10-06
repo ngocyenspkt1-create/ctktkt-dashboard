@@ -3208,7 +3208,7 @@ export function CtktktReport() {
                       Tổng lượng NH3 dùng trong ngày tính theo công tơ trên DCS
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Lò trưởng hoặc Trưởng kíp điện nhập chỉ số 00h và 24h. Kết quả S1, S2 tự liên kết sang Dữ liệu các tháng.
+                      Lò trưởng hoặc Trưởng kíp điện nhập chỉ số 00h và 24h. Nếu công tơ quay về 0, nhập mức reset (thường 500 tấn/lần); để trống khi không reset.
                     </p>
                   </div>
                   <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">
@@ -3223,6 +3223,7 @@ export function CtktktReport() {
                         <th className="p-2 text-left font-bold">Tổ máy</th>
                         <th className="p-2 text-center font-bold">Công tơ 24h ngày {previousDate.split("-").reverse().join("/")} · tự lấy (tấn)</th>
                         <th className="p-2 text-center font-bold">Công tơ 24h ngày {date.split("-").reverse().join("/")} (tấn)</th>
+                        <th className="p-2 text-center font-bold">Hiệu chỉnh reset (tấn)</th>
                         <th className="p-2 text-center font-bold">Đã dùng (tấn)</th>
                         <th className="p-2 text-center font-bold">Đầu cực MF (MWh)</th>
                         <th className="p-2 text-center font-bold">MBA (MWh)</th>
@@ -3233,8 +3234,8 @@ export function CtktktReport() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-mono">
                       {([
-                        { label: "S1", endCell: "N81", data: nh3Dcs.s1 },
-                        { label: "S2", endCell: "N82", data: nh3Dcs.s2 },
+                        { label: "S1", endCell: "N81", correctionCell: "NH3_DCS_RESET_S1", data: nh3Dcs.s1 },
+                        { label: "S2", endCell: "N82", correctionCell: "NH3_DCS_RESET_S2", data: nh3Dcs.s2 },
                       ] as const).map(row => (
                         <tr key={row.label}>
                           <td className="p-2 font-bold text-slate-800 font-sans">Tổ máy {row.label}</td>
@@ -3242,6 +3243,7 @@ export function CtktktReport() {
                             {format(row.data?.startTonnes ?? null)}
                           </td>
                           <td className="p-1.5 text-center text-xs">{renderCellInput(row.endCell, { group: "nh3_dcs" })}</td>
+                          <td className="p-1.5 text-center text-xs">{renderCellInput(row.correctionCell, { group: "nh3_dcs", placeholder: "0", isNumber: true })}</td>
                           <td className="p-2 text-center font-normal text-emerald-800 text-xs">{format(row.data?.usedTonnes ?? null)}</td>
                           <td className="p-2 text-center text-xs">{format(row.data?.grossMwh ?? null)}</td>
                           <td className="p-2 text-center text-xs">{format(row.data?.netMwh ?? null)}</td>
@@ -3251,7 +3253,7 @@ export function CtktktReport() {
                         </tr>
                       ))}
                       <tr className="border-t-2 border-slate-300 bg-emerald-50/70">
-                        <td className="p-2 font-black text-[#173b64] font-sans" colSpan={3}>Tổng NH3 DCS S1 + S2</td>
+                        <td className="p-2 font-black text-[#173b64] font-sans" colSpan={4}>Tổng NH3 DCS S1 + S2</td>
                         <td className="p-2 text-center font-normal text-emerald-900 text-xs">{format(nh3Dcs.totalUsedTonnes)}</td>
                         <td className="p-2" colSpan={5}></td>
                       </tr>

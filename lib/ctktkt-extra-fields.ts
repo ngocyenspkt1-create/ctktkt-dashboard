@@ -177,6 +177,11 @@ export const CTKTKT_COAL_STOCK_FIELDS = [
   { cell: "COAL_STOCK_24H_START", section: "kpi_summary", sectionLabel: "Chỉ tiêu KTKT tổng hợp", label: "Than tồn kho 24h ngày đầu tháng (t)", row: 0, column: 0 },
 ] as const;
 
+export const CTKTKT_NH3_DCS_ADJUSTMENT_FIELDS = [
+  { cell: "NH3_DCS_RESET_S1", section: "nh3_dcs", sectionLabel: "Tổng lượng NH3 dùng trong ngày theo công tơ DCS", label: "S1 · Hiệu chỉnh công tơ khi reset (tấn)", row: 0, column: 0 },
+  { cell: "NH3_DCS_RESET_S2", section: "nh3_dcs", sectionLabel: "Tổng lượng NH3 dùng trong ngày theo công tơ DCS", label: "S2 · Hiệu chỉnh công tơ khi reset (tấn)", row: 0, column: 0 },
+] as const;
+
 export const CTKTKT_TEXT_INPUT_CELLS = new Set<string>([
   ...CTKTKT_COAL_ADJUSTMENT_NOTE_FIELDS.map(field => field.cell),
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS.map(field => field.cell),
@@ -191,6 +196,7 @@ export const CTKTKT_NON_WORKBOOK_INPUT_CELLS = new Set<string>([
   ...CTKTKT_TEXT_INPUT_CELLS,
   ...CTKTKT_WATER_ADJUSTMENT_FIELDS.map(field => field.cell),
   ...CTKTKT_COAL_STOCK_FIELDS.map(field => field.cell),
+  ...CTKTKT_NH3_DCS_ADJUSTMENT_FIELDS.map(field => field.cell),
   "STARTUP_UNIT",
   "STARTUP_EVENT",
   "STARTUP_EVENTS_JSON",
@@ -239,6 +245,7 @@ export const CTKTKT_EXTRA_INPUT_FIELDS = [
   ...CTKTKT_WATER_ADJUSTMENT_FIELDS,
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS,
   ...CTKTKT_COAL_STOCK_FIELDS,
+  ...CTKTKT_NH3_DCS_ADJUSTMENT_FIELDS,
   ...CTKTKT_OPERATING_HOURS_FIELDS,
   ...CTKTKT_COAL_BLEND_FIELDS,
 ] as const;

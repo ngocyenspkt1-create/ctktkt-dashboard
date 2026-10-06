@@ -433,7 +433,8 @@ export function calculateNh3DcsSummary(
       return null;
     }
 
-    const usedTonnes = Number((endTonnes - startTonnes).toFixed(12));
+    const resetAdjustment = numberOf(entries, `NH3_DCS_RESET_${endCell === "N81" ? "S1" : "S2"}`) ?? 0;
+    const usedTonnes = Number((endTonnes - startTonnes + resetAdjustment).toFixed(12));
     const usedKg = usedTonnes * 1000;
     return {
       startTonnes,
