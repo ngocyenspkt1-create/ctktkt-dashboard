@@ -35,6 +35,22 @@ const REQUIRED_FIELDS = {
   pmis_02pd: ["C181", "D181", "F181"],
 };
 
+function missingSourceFields(source, payload) {
+  const received = new Set((payload?.entries || []).map(entry => entry.fieldCode));
+  const stoppedCodes = new Set();
+  if (source === "heatrate") {
+    for (const unit of payload?.unavailableHeatRateUnits || []) {
+      const codes = unit === "1" ? ["DA", "DC", "DE", "DG"] : unit === "2" ? ["DB", "DD", "DF", "DH"] : [];
+      // Chỉ miễn kiểm tra khi cả 4 ô trống và bộ đọc xác nhận thông báo dừng.
+      const otherCodes = REQUIRED_FIELDS.heatrate.filter(code => !codes.includes(code));
+      if (codes.length && codes.every(code => !received.has(code)) && otherCodes.every(code => received.has(code))) {
+        codes.forEach(code => stoppedCodes.add(code));
+      }
+    }
+  }
+  return REQUIRED_FIELDS[source].filter(code => !received.has(code) && !stoppedCodes.has(code));
+}
+
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function waitForTab(tabId, timeout = 60000) {
@@ -256,8 +272,7 @@ async function readSource(source, url, operatingDate) {
         throw new Error("Màn hình Công tơ PPA chưa đọc đủ 4 kênh giao và 2 kênh nhận bắt buộc.");
       }
     } else {
-      const received = new Set((result.payload?.entries || []).map(entry => entry.fieldCode));
-      const missingFields = REQUIRED_FIELDS[source].filter(fieldCode => !received.has(fieldCode));
+      const missingFields = missingSourceFields(source, result.payload);
       if (missingFields.length) {
         throw new Error(`Màn hình ${SOURCE_LABELS[source]} còn thiếu ${missingFields.length} chỉ tiêu. Tiện ích đã dừng để tránh đồng bộ thiếu dữ liệu.`);
       }

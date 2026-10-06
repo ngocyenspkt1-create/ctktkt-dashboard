@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.32";
+  const CONTENT_SCRIPT_VERSION = "0.4.33";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -263,7 +263,13 @@
   // nội dung trước/sau để biết khi nào bảng đã thực sự cập nhật xong.
   function sampleHeatRateSignature() {
     const values = findColumnTableByHeader(["trung binh"]);
-    return values ? [...values.table.rows].map(row => cleanText(row.textContent)).join("|") : "";
+    return values ? [...values.table.rows].map(row => cleanText(row.textContent)).join("|") + `|${heatRateOutageForUnit(detectHeatRateUnit())}` : "";
+  }
+
+  function heatRateOutageForUnit(unit) {
+    if (unit !== "1" && unit !== "2") return false;
+    const text = normalized(document.body?.innerText || "");
+    return new RegExp(`(?:dung|ngung) (?:su co|sua chua|bao duong|du phong)\\s*:\\s*dh1[_ -]*mf${unit}\\b`).test(text);
   }
 
   async function switchHeatRateUnit(targetUnit) {
@@ -298,7 +304,7 @@
         const cell = labels.table.rows[index].cells[symbolColumn];
         if (cell && cleanText(cell.textContent) === symbol) { rowIndex = index; break; }
       }
-      if (rowIndex === -1) continue;
+      if (rowIndex === -1) throw new Error(`Chưa thấy hàng ${symbol} trong bảng Cân bằng nhiệt.`);
       const valueCell = values.table.rows[rowIndex]?.cells[avgColumn];
       const value = valueCell ? parseNumber(valueCell.textContent) : null;
       if (value === null) continue;
@@ -318,10 +324,11 @@
         const signature = sampleHeatRateSignature();
         const entries = readHeatRateEntriesForCurrentUnit(unit);
         lastEntries = entries;
-        if (detectHeatRateUnit() === unit && entries.length === 4
+        const unavailable = entries.length === 0 && heatRateOutageForUnit(unit);
+        if (detectHeatRateUnit() === unit && (entries.length === 4 || unavailable)
           && (previousSignature === null || signature !== previousSignature)) {
           if (signature !== stableSignature) { stableSignature = signature; stableSince = Date.now(); }
-          else if (Date.now() - stableSince >= 600) return entries;
+          else if (Date.now() - stableSince >= 600) return { entries, unavailable };
         } else stableSignature = null;
       } catch { stableSignature = null; /* bảng đang được dựng lại */ }
     }
@@ -341,17 +348,19 @@
     const firstUnit = originalUnit || "1";
     if (!originalUnit) await switchHeatRateUnit(firstUnit);
     const otherUnit = firstUnit === "2" ? "1" : "2";
-    const entriesByUnit = { [firstUnit]: await waitForHeatRateEntries(firstUnit) };
+    const readingsByUnit = { [firstUnit]: await waitForHeatRateEntries(firstUnit) };
     try {
-      entriesByUnit[otherUnit] = await switchHeatRateUnit(otherUnit);
+      readingsByUnit[otherUnit] = await switchHeatRateUnit(otherUnit);
     } finally {
       if (originalUnit && detectHeatRateUnit() !== originalUnit) {
         try { await switchHeatRateUnit(originalUnit); } catch { /* đã lấy đủ dữ liệu cần thiết, bỏ qua lỗi khôi phục */ }
       }
     }
-    const entries = [...(entriesByUnit["1"] || []), ...(entriesByUnit["2"] || [])];
+    const entries = [...(readingsByUnit["1"]?.entries || []), ...(readingsByUnit["2"]?.entries || [])];
+    const unavailableHeatRateUnits = ["1", "2"].filter(unit => readingsByUnit[unit]?.unavailable);
     if (!entries.length) throw new Error("Không tìm thấy các chỉ tiêu suất hao nhiệt (công suất đầu cực, khói khô, chân không bình ngưng, nhiệt độ nước làm mát) trên màn hình này.");
-    return { version: 1, operatingDate, sourcePage: location.href, kind: "heatrate", entries };
+    return { version: 1, operatingDate, sourcePage: location.href, kind: "heatrate", entries,
+      ...(unavailableHeatRateUnits.length ? { unavailableHeatRateUnits } : {}) };
   }
 
   function extractPpaMeterPayload(operatingDate) {
