@@ -276,6 +276,8 @@ export function CtktktReport() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importingHistory, setImportingHistory] = useState(false);
+  const [historyImportMonth, setHistoryImportMonth] = useState("");
+  const [historyImportOverwrite, setHistoryImportOverwrite] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -786,20 +788,24 @@ export function CtktktReport() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("targetDate", date);
+      const selectedMonth = historyImportMonth || period;
+      formData.append("targetMonth", selectedMonth);
       const parseResponse = await fetch("/api/ctktkt-report/history-import", { method: "POST", body: formData });
       const parsed = (await parseResponse.json()) as Partial<ImportPackage> & { error?: string };
       if (!parseResponse.ok || parsed.error) throw new Error(parsed.error || "Không đọc được file Chỉ tiêu KTKT.");
       if (!/^\d{4}-\d{2}$/.test(parsed.month || "") || !Array.isArray(parsed.days) || !parsed.days.length || !parsed.totals) throw new Error("File không đúng cấu trúc Chỉ tiêu KTKT.");
       const importPackage = parsed as ImportPackage;
-      if (importPackage.days.length !== 1 || importPackage.days[0]?.date !== date) {
-        throw new Error(`File không trả đúng dữ liệu của ngày ${date.split("-").reverse().join("/")}.`);
+      if (importPackage.month !== selectedMonth || importPackage.days.some(day => !day.date.startsWith(`${selectedMonth}-`))) {
+        throw new Error("File không trả đúng dữ liệu của tháng đã chọn.");
+      }
+      if (importPackage.days.some(day => day.date > vietnamDateIso())) {
+        throw new Error("File có dữ liệu ngày trong tương lai. Hãy chọn tháng dữ liệu quá khứ.");
       }
       if (importPackage.totals.nonBlankManualValues <= 0) {
-        throw new Error(`Sheet ${importPackage.days[0].sheetName} không có dữ liệu nhập tay để tải lên.`);
+        throw new Error("Các sheet trong tháng không có dữ liệu nhập tay để tải lên.");
       }
       if (importPackage.totals.checks <= 0) {
-        throw new Error(`Sheet ${importPackage.days[0].sheetName} không có kết quả tự tính để đối chiếu.`);
+        throw new Error("File không có kết quả tự tính để đối chiếu.");
       }
       for (const day of importPackage.days) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date) || !Array.isArray(day.manualEntries) || day.manualEntries.length > 400) {
@@ -817,17 +823,9 @@ export function CtktktReport() {
         const failures = importPackage.audits.flatMap(audit => audit.failed.map(item =>
           `${audit.date.split("-").reverse().join("/")} · ${item.name} (${item.sourceCell}): Excel=${item.expected ?? "trống"}, Web=${item.actual ?? "trống"}`,
         ));
-        throw new Error(`Chưa nhập ngày ${date.split("-").reverse().join("/")} vì có ${importPackage.totals.failed}/${importPackage.totals.checks} kết quả tự tính chưa khớp:\n${failures.slice(0, 12).join("\n")}${failures.length > 12 ? `\n… và ${failures.length - 12} sai lệch khác.` : ""}`);
+        throw new Error(`Chưa nhập tháng ${selectedMonth} vì có ${importPackage.totals.failed}/${importPackage.totals.checks} kết quả tự tính chưa khớp:\n${failures.slice(0, 12).join("\n")}${failures.length > 12 ? `\n… và ${failures.length - 12} sai lệch khác.` : ""}`);
       }
-      const confirmed = window.confirm(
-        `Ngày ${date.split("-").reverse().join("/")} đã khớp 100% (${importPackage.totals.passed}/${importPackage.totals.checks} kết quả tự tính).\n\nChỉ ${importPackage.totals.nonBlankManualValues || importPackage.days[0].manualEntries.filter(entry => entry.value).length} ô nhập tay từ sheet ${importPackage.days[0].sheetName} sẽ được ghi.${supportingDays.length ? ` Ghi kèm ${importPackage.totals.supportingValues || supportingDays[0].manualEntries.length} chỉ số công tơ 24h từ sheet D-1 để tính cột Công tơ/Excel.` : ""} Các ô tự tính và ô liên kết không bị ghi đè.${importPackage.warnings.length ? `\nCó ${importPackage.warnings.length} ô trong vùng nhập tay chứa công thức nên đã bỏ qua.` : ""}\n\nTiếp tục nhập dữ liệu?`,
-      );
-      if (!confirmed) {
-        setMessage(`Ngày ${date.split("-").reverse().join("/")} đã khớp 100%. Bạn đã chọn chưa ghi dữ liệu.`);
-        return;
-      }
-
-      const writeDays = [...supportingDays, ...importPackage.days];
+      let writeDays = [...supportingDays, ...importPackage.days];
       const periods = [...new Set(writeDays.map(day => day.date.slice(0, 7)))];
       const reports: Record<string, { entries?: LoadedEntry[] }> = {};
       for (const backupPeriod of periods) {
@@ -836,6 +834,24 @@ export function CtktktReport() {
         if (!response.ok) throw new Error(body.error || `Không sao lưu được dữ liệu tháng ${backupPeriod}.`);
         reports[backupPeriod] = body;
       }
+      const existing = new Map<string, string>();
+      for (const body of Object.values(reports)) for (const entry of body.entries || []) existing.set(`${entry.operatingDate}:${entry.cell}`, entry.value);
+      let skipped = 0;
+      writeDays = writeDays.map(day => ({ ...day, manualEntries: day.manualEntries.filter(entry => {
+        if (!entry.value.trim() || !canEditCtktktField(user, entry.cell)) return false;
+        const old = existing.get(`${day.date}:${entry.cell}`);
+        if (old === entry.value || (!historyImportOverwrite && old?.trim())) { skipped += 1; return false; }
+        return true;
+      }) })).filter(day => day.manualEntries.length > 0);
+      const count = writeDays.reduce((total, day) => total + day.manualEntries.length, 0);
+      if (!count) { setMessage("Không có ô mới cần nhập theo lựa chọn hiện tại; dữ liệu đang có được giữ nguyên."); return; }
+      const confirmed = window.confirm(
+        `Tháng ${selectedMonth}: đọc ${importPackage.days.length} sheet ngày.\nSẽ ghi ${count} ô nhập tay trên ${writeDays.length} ngày (gồm công tơ hỗ trợ D-1 nếu có). Bỏ qua ${skipped} ô đã có hoặc không thay đổi.\n`
+        + `${historyImportOverwrite ? "Ghi đè các ô đã có dữ liệu." : "Chỉ bổ sung ô còn trống."} Ô trống trong file không xóa dữ liệu trên web.\n`
+        + `Đối chiếu file đạt ${importPackage.totals.passed}/${importPackage.totals.checks} kết quả. Các ô tự tính và liên kết không bị ghi đè.\n`
+        + `${importPackage.warnings.length} ô chứa công thức đã bỏ qua. Dữ liệu cũ sẽ được sao lưu trước khi ghi.\n\nTiếp tục nhập dữ liệu?`,
+      );
+      if (!confirmed) { setMessage("Đã hủy nhập tháng; chưa ghi dữ liệu."); return; }
       backup = { reports, importedDays: importPackage.days };
       const backupBlob = new Blob([JSON.stringify({ createdAt: new Date().toISOString(), ...backup }, null, 2)], { type: "application/json" });
       const backupUrl = URL.createObjectURL(backupBlob);
@@ -891,7 +907,7 @@ export function CtktktReport() {
       setDate(importPackage.days[0].date);
       dirtyCellsRef.current.clear();
       setDirty(false);
-      setMessage(`Đã nhập ngày ${date.split("-").reverse().join("/")} từ sheet ${importPackage.days[0].sheetName}; chỉ ghi ô nhập tay; dữ liệu tự tính trên web và file đã khớp 100% (${importPackage.totals.passed}/${importPackage.totals.checks}).`);
+      setMessage(`Đã nhập tháng ${selectedMonth}: ${count} ô nhập tay trên ${writeDays.length} ngày đã được đọc lại và xác nhận lưu đúng. Công thức tính giữ nguyên.`);
     } catch (reason) {
       let rollbackMessage = "";
       if (backup && completed.length) {
@@ -1241,7 +1257,7 @@ export function CtktktReport() {
 
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-              <span>Ngày báo cáo / nhập file:</span>
+              <span>Ngày báo cáo:</span>
               <DateField
                 value={date}
                 max={vietnamDateIso()}
@@ -1263,6 +1279,18 @@ export function CtktktReport() {
               />
             </label>
 
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
+              Tháng nhập
+              <input type="month" value={historyImportMonth || period} max={vietnamDateIso().slice(0, 7)}
+                onChange={event => setHistoryImportMonth(event.target.value)} disabled={importingHistory || saving}
+                className="h-9 rounded-xl border border-slate-300 bg-white px-2" />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              <input type="checkbox" checked={historyImportOverwrite} disabled={importingHistory || saving}
+                onChange={event => setHistoryImportOverwrite(event.target.checked)} />
+              Ghi đè ô đã có
+            </label>
+
             <input
               ref={importFileRef}
               type="file"
@@ -1275,10 +1303,10 @@ export function CtktktReport() {
               onClick={() => importFileRef.current?.click()}
               disabled={!userCanEditAny || importingHistory || loading}
               className="flex h-9 items-center gap-1.5 rounded-xl border border-[#c6a17d] bg-[#f3e8dc] px-3 text-xs font-bold text-[#70492d] shadow-xs transition-all hover:bg-[#ead8c5] disabled:opacity-45"
-              title={`Tự tìm sheet ngày ${date.slice(8, 10)}; chỉ lấy ô nhập tay, đối chiếu kết quả tự tính và chỉ ghi khi khớp 100%`}
+              title="Đọc tất cả sheet ngày trong tháng đã chọn; chỉ nhập ô nhập tay sau khi đối chiếu"
             >
               <Upload className="size-3.5" />
-              {importingHistory ? "Đang kiểm tra file…" : `Nhập file ngày ${date.split("-").reverse().join("/")}`}
+              {importingHistory ? "Đang kiểm tra file…" : "Nhập file tháng"}
             </button>
 
             <button

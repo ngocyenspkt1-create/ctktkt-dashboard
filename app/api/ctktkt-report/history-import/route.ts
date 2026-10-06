@@ -14,10 +14,12 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("file");
     const targetDate = String(formData.get("targetDate") || "").trim();
+    const targetMonth = String(formData.get("targetMonth") || "").trim();
     if (!(file instanceof File)) throw new Error("Hãy chọn một file Chỉ tiêu KTKT.");
     if (!/\.(xlsx|xls)$/i.test(file.name)) throw new Error("Chỉ chấp nhận file .xlsx hoặc .xls của Chỉ tiêu KTKT.");
     if (file.size <= 0 || file.size > maxFileBytes) throw new Error("File trống hoặc vượt quá 12 MB.");
-    const result = await buildCtktktHistoryImportPackage(file.name, await file.arrayBuffer(), targetDate || undefined);
+    if (targetDate && targetMonth) throw new Error("Chỉ chọn nhập theo ngày hoặc theo tháng.");
+    const result = await buildCtktktHistoryImportPackage(file.name, await file.arrayBuffer(), targetDate || undefined, targetMonth || undefined);
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Không đọc được file Chỉ tiêu KTKT." }, { status: 400 });

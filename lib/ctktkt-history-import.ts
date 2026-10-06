@@ -7,7 +7,9 @@ import {
   CTKTKT_LEGACY_UNUSED_COAL_BLEND_CELLS,
   CTKTKT_NON_WORKBOOK_INPUT_CELLS,
   CTKTKT_OPERATING_HOURS_CELLS,
+  CTKTKT_EXTRA_INPUT_FIELDS,
 } from "./ctktkt-extra-fields.ts";
+import { createCtktktOperationEvent, ctktktOperationOilCells, ctktktOperationPowerColumn, normalizeCtktktOperationEvents, CTKTKT_OPERATION_ELECTRICAL_POINTS, CTKTKT_EVENT_POWER_ROWS, CTKTKT_OPERATION_EVENTS_CELL } from "./ctktkt-operation-events.ts";
 import { CTKTKT_BCSX_LINKED_CELLS } from "./ctktkt-bcsx-link.ts";
 import { CTKTKT_WATER_LINKED_CELLS } from "./ctktkt-water-link.ts";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "./ctktkt-defaults.ts";
@@ -184,17 +186,21 @@ export async function buildCtktktHistoryImportPackage(
   fileName: string,
   bytes: ArrayBuffer,
   targetDate?: string,
+  targetMonth?: string,
 ): Promise<CtktktHistoryImportPackage> {
   const workbook = XLSX.read(bytes, { type: "array", cellFormula: true, cellDates: true });
   const requested = targetDate ? validatedIsoDate(targetDate) : null;
-  const named = requested ? null : monthFromFileName(fileName);
-  const period = requested?.period ?? named!.period;
+  if (targetMonth && !/^20\d{2}-(0[1-9]|1[0-2])$/.test(targetMonth)) throw new Error("Tháng nhập dữ liệu không hợp lệ.");
+  const named = requested || targetMonth ? null : monthFromFileName(fileName);
+  const period = requested?.period ?? targetMonth ?? named!.period;
   const numericSheets = workbook.SheetNames.map(name => Number(name.trim())).filter(day => Number.isInteger(day) && day >= 1 && day <= 31);
-  const throughDay = requested?.day ?? Math.min(named!.throughDay, Math.max(...numericSheets, 0));
+  const [importYear, importMonth] = period.split("-").map(Number);
+  const throughDay = requested?.day ?? (targetMonth ? new Date(Date.UTC(importYear, importMonth, 0)).getUTCDate() : Math.min(named!.throughDay, Math.max(...numericSheets, 0)));
   if (!throughDay) throw new Error("File không có các sheet ngày 01, 02, ... để nhập.");
 
   // Hourly meters, HFO tanks and TD21 readings exist in the source but not in the old template's input list.
   const workbookExtraCells = [
+    ...(targetMonth ? CTKTKT_EXTRA_INPUT_FIELDS.filter(field => field.section !== "startup_shutdown" && /^[A-Z]+\d+$/.test(field.cell) && !["E39", "H39"].includes(field.cell)).map(field => field.cell) : []),
     ...CTKTKT_CARRY_FORWARD_INPUT_CELLS,
     ...CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS.filter(field => field.section === "power_meters").map(field => field.cell),
   ];
@@ -232,8 +238,13 @@ export async function buildCtktktHistoryImportPackage(
     sheets.push({ sheetName: targetSheetName, date: requested.date, importDay: true });
   } else {
     const priorSheetName = workbook.SheetNames.find(name => name.trim().toLocaleLowerCase("vi-VN") === "d-1");
-    if (priorSheetName) sheets.push({ sheetName: priorSheetName, date: previousMonthEnd(period), importDay: true });
-    for (let day = 1; day <= throughDay; day++) sheets.push({ sheetName: String(day).padStart(2, "0"), date: `${period}-${String(day).padStart(2, "0")}`, importDay: true });
+    if (priorSheetName) sheets.push({ sheetName: priorSheetName, date: previousMonthEnd(period), importDay: !targetMonth });
+    for (let day = 1; day <= throughDay; day++) {
+      const date = `${period}-${String(day).padStart(2, "0")}`;
+      const sheetName = targetMonth ? findSheetForDate(workbook.SheetNames, date) : String(day).padStart(2, "0");
+      if (sheetName) sheets.push({ sheetName, date, importDay: true });
+    }
+    if (targetMonth && !sheets.some(item => item.importDay)) throw new Error("File không có sheet ngày thuộc tháng đã chọn.");
   }
 
   const days: CtktktHistoryImportPackage["days"] = [];
@@ -280,8 +291,46 @@ export async function buildCtktktHistoryImportPackage(
     }
     entriesByDate.set(item.date, entries);
     if (item.importDay) {
-      days.push({ date: item.date, sheetName: actualSheetName!, manualEntries: manualCells.map(cell => ({ cell, value: entries[cell] ?? "" })) });
-    } else if (requested) {
+      const manualEntries = manualCells.filter(cell => !targetMonth || (cell !== CTKTKT_INSTALLED_CAPACITY_CELL && (cell !== "W86" || item.date.endsWith("-01")))).map(cell => ({ cell, value: entries[cell] ?? "" }));
+      // Current source event layout stores six slots in one JSON field on the web.
+      if (targetMonth && String(sheet.B85?.v || "").includes("Khởi động tổ máy S1")) {
+        const events = [];
+        for (const unit of ["S1", "S2"] as const) for (const kind of ["startup", "shutdown", "incident_oil"] as const) {
+          const event = createCtktktOperationEvent(unit, kind);
+          let hasReading = false;
+          for (const mapping of ctktktOperationOilCells(event)) {
+            const reading = event.points[mapping.point]!;
+            for (const [property, address] of [["oilFeed", mapping.feedCell], ["oilReturn", mapping.returnCell]] as const) {
+              const source = rawCellValue(sheet, address!);
+              if (!source.isFormula) reading[property] = storageValue(source.value);
+              if (reading[property] !== "") hasReading = true;
+            }
+            const time = mapping.timeCell ? sheet[mapping.timeCell] : undefined;
+            if (time && !time.f) {
+              if (time.v instanceof Date) reading.time = time.v.toISOString().slice(0, 16);
+              else if (typeof time.v === "number") reading.time = new Date((time.v - 25569) * 86400000).toISOString().slice(0, 16);
+              else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(time.v))) reading.time = String(time.v).slice(0, 16);
+              if (reading.time) hasReading = true;
+            }
+          }
+          for (const point of CTKTKT_OPERATION_ELECTRICAL_POINTS[kind]) {
+            const column = ctktktOperationPowerColumn(event, point)!;
+            const reading = event.points[point]!;
+            const headerTime = String(sheet[`${column}59`]?.v || "").match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})/);
+            if (headerTime) { reading.time = `${headerTime[3]}-${headerTime[2]}-${headerTime[1]}T${headerTime[4]}`; hasReading = true; }
+            for (const {row} of CTKTKT_EVENT_POWER_ROWS) {
+              if (row === 83 && point !== "grid_sync") continue;
+              const source = rawCellValue(sheet, `${column}${row}`);
+              if (!source.isFormula) reading.power[String(row)] = storageValue(source.value);
+              if (reading.power[String(row)]) hasReading = true;
+            }
+          }
+          if (hasReading) events.push(event);
+        }
+        if (events.length) manualEntries.push({cell:CTKTKT_OPERATION_EVENTS_CELL,value:normalizeCtktktOperationEvents(events)});
+      }
+      if (!targetMonth || manualEntries.some(entry => entry.value !== "")) days.push({ date: item.date, sheetName: actualSheetName!, manualEntries: targetMonth ? manualEntries.filter(entry => entry.value !== "") : manualEntries });
+    } else if (requested || targetMonth) {
       supportingDays.push({
         date: item.date,
         sheetName: actualSheetName!,

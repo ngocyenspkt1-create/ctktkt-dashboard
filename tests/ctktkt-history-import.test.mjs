@@ -16,6 +16,41 @@ function workbookBytes(sheets) {
   return XLSX.write(workbook, { type: "array", bookType: "xlsx" });
 }
 
+test("month import reads all matching day sheets, preserves zero and skips blank sheets and other months",async()=>{
+ const bytes=workbookBytes({"d-1":{AB8:100},"01":{W8:120},"Ngày 02":{W8:0},"03":{},"04.08.2026":{W8:999},"30":{W8:150},"31":{W8:300},"Tổng hợp tháng":{W8:800}});
+ const result=await buildCtktktHistoryImportPackage("file.xlsx",bytes,undefined,"2026-09");
+ assert.deepEqual(result.days.map(day=>day.date),["2026-09-01","2026-09-02","2026-09-30"]);
+ assert.equal(result.days[1].manualEntries.find(entry=>entry.cell==="W8").value,"0");
+ assert.ok(result.days.every(day=>day.manualEntries.every(entry=>entry.value!==""&&entry.cell!=="C181")));
+ assert.equal(result.supportingDays[0].date,"2026-08-31");
+ assert.equal(result.supportingDays[0].manualEntries[0].cell,"AB8");
+});
+
+test("month import skips formulas and linked cells instead of preparing blank overwrite entries",async()=>{
+ const workbook=XLSX.utils.book_new();
+ const sheet={W8:{t:"n",v:123,f:"1+122"},W9:{t:"n",v:234},M3:{t:"n",v:456},"!ref":"A1:AV181"};
+ XLSX.utils.book_append_sheet(workbook,sheet,"01");
+ const result=await buildCtktktHistoryImportPackage("file.xlsx",XLSX.write(workbook,{type:"array",bookType:"xlsx"}),undefined,"2026-09");
+ assert.equal(result.days[0].manualEntries.some(entry=>entry.cell==="W8"),false);
+ assert.equal(result.days[0].manualEntries.some(entry=>entry.cell==="M3"),false);
+ assert.equal(result.days[0].manualEntries.find(entry=>entry.cell==="W9").value,"234");
+ assert.ok(result.warnings.some(item=>item.cell==="W8"));
+ await assert.rejects(()=>buildCtktktHistoryImportPackage("file.xlsx",new ArrayBuffer(0),undefined,"2026-13"));
+});
+
+test("month import includes additional manual fields and converts source event tables to normalized events",async()=>{
+ const bytes=workbookBytes({"01":{I35:2,W86:100,B85:"Khởi động tổ máy S1",C88:100,C89:10,E88:140,E89:20,C61:123,E59:"Hòa lưới S1\n01/09/2026 04:30"},"02":{W86:999,I35:0}});
+ const result=await buildCtktktHistoryImportPackage("file.xlsx",bytes,undefined,"2026-09");
+ assert.equal(result.days[0].manualEntries.find(entry=>entry.cell==="I35").value,"2");
+ assert.equal(result.days[1].manualEntries.some(entry=>entry.cell==="W86"),false);
+ const events=JSON.parse(result.days[0].manualEntries.find(entry=>entry.cell==="STARTUP_EVENTS_JSON").value);
+ assert.equal(events.length,1);
+ assert.equal(events[0].unit,"S1");
+ assert.equal(events[0].points.start.oilFeed,"100");
+ assert.equal(events[0].points.start.power['61'],"123");
+ assert.equal(events[0].points.grid_sync.time,"2026-09-01T04:30");
+});
+
 test("history import selects only the requested day and recognizes Vietnamese sheet names", async () => {
   const bytes = workbookBytes({
     "Ngày 16": {},
