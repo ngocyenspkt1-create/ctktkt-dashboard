@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.33";
+  const CONTENT_SCRIPT_VERSION = "0.4.34";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -341,6 +341,16 @@
   // "Tổ máy" sang Tổ máy còn lại, chờ bảng nạp lại xong (AJAX), đọc tiếp, rồi khôi phục lại đúng
   // Tổ máy ban đầu — để người dùng chỉ cần bấm 1 nút đồng bộ trên web Chỉ tiêu KTKT.
   async function extractHeatRatePayload(operatingDate) {
+    const controlsDeadline = Date.now() + 12000;
+    while (true) {
+      const select = findMainAssetSelect();
+      const units = new Set([...(select?.options || [])].map(optionHeatRateUnit).filter(Boolean));
+      if (units.has("1") && units.has("2")) break;
+      if (Date.now() >= controlsDeadline) {
+        throw new Error(`Màn hình Cân bằng nhiệt chưa có danh sách DH1_MF1/DH1_MF2 sau 12 giây. Trang đang mở: ${location.href}`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
     const originalUnit = detectHeatRateUnit();
     // Không phụ thuộc nhãn đang chọn: một số phiên bản PrimeFaces chỉ cập nhật
     // nhãn widget, khiến selectedIndex của <select> ẩn không xác định. Khi đó

@@ -14,6 +14,7 @@ const DEFAULT_METER_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/solieucto.jsf
 const DEFAULT_PRODUCTION_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/rpt_a_production_day.jsf";
 const DEFAULT_OPERATION_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/rpt_hour_operation.jsf";
 const DEFAULT_PMIS_02PD_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/report/rpt_CT_QLKT_02_PD_New.jsf";
+const DEFAULT_HEATRATE_URL = "http://qlkt.tpcduyenhai.com.vn/qlkt/sxd/can_bang_nhiet.jsf";
 const SOURCE_LABELS = {
   production: "Sản lượng",
   fuel: "Nhiên liệu",
@@ -232,7 +233,7 @@ async function readSource(source, url, operatingDate) {
       }
     });
     if (existingSourceTab?.id) {
-        tab = await chrome.tabs.update(existingSourceTab.id, { active: true });
+        tab = await chrome.tabs.update(existingSourceTab.id, { active: true, ...(source === "heatrate" ? { url } : {}) });
         if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
     }
     if (!tab) {
@@ -244,6 +245,9 @@ async function readSource(source, url, operatingDate) {
     await waitForTab(tabId);
     const current = await chrome.tabs.get(tabId);
     if (!QLKT_PATTERN.test(current.url || "")) throw new Error("Phiên đăng nhập QLKT đã hết hạn. Hãy đăng nhập lại rồi thử lại.");
+    if (source === "heatrate" && new URL(current.url).pathname.toLowerCase() !== targetUrl.pathname.toLowerCase()) {
+      throw new Error(`QLKT đã chuyển khỏi màn hình Cân bằng nhiệt (${new URL(current.url).pathname}). Hãy kiểm tra phiên đăng nhập QLKT rồi thử lại.`);
+    }
     const prepared = await prepareDateWithRetry(tabId, operatingDate);
     if (!prepared?.ok) throw new Error(prepared?.error || `Không đặt được ngày tại màn hình ${SOURCE_LABELS[source]}.`);
     // Màn hình Công tơ PPA (bảng ExtSheet 4 điểm đo × 48 chu kỳ) thường mất
@@ -334,14 +338,10 @@ async function syncPpa(operatingDate) {
 }
 
 async function syncHeatRate(operatingDate) {
-  const { qlktPages = {} } = await chrome.storage.local.get({ qlktPages: {} });
-  if (!qlktPages.heatrate) {
-    throw new Error("Chưa ghi nhớ địa chỉ màn hình Cân bằng nhiệt. Hãy mở màn hình đó trên QLKT một lần rồi thử lại.");
-  }
   // content.js tự đổi dropdown "Tổ máy" trên màn hình Cân bằng nhiệt và đọc lần lượt cả S1 + S2
   // trong 1 lần gọi READ_QLKT_VALUES, nên chỉ cần đọc 1 nguồn "heatrate" duy nhất — không cần mở
   // hoặc chọn lại tổ máy thủ công như trước.
-  return readSource("heatrate", qlktPages.heatrate, operatingDate);
+  return readSource("heatrate", DEFAULT_HEATRATE_URL, operatingDate);
 }
 
 async function syncBcsxEvents(operatingDate) {

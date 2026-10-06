@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { validateQlktSyncPayload } from '../lib/qlkt-sync.ts';
 
 // Exercise the real reader against a PrimeFaces table that clears during AJAX.
-function reader({ initialDelay = 0, neverLoads = false, outageUnit, initialUnit = '1', partialOutage = false, wrongWarning = false } = {}) {
+function reader({ initialDelay = 0, neverLoads = false, outageUnit, initialUnit = '1', partialOutage = false, wrongWarning = false, controlsDelay = 0 } = {}) {
   const source = readFileSync(new URL('../browser-extension/qlkt-sync/content.js', import.meta.url), 'utf8');
   let now = 0, readyAt = initialDelay;
   const cell = textContent => ({ textContent });
@@ -24,7 +24,7 @@ function reader({ initialDelay = 0, neverLoads = false, outageUnit, initialUnit 
     } },
     getElementById() { return null; },
     querySelectorAll(selector) {
-      if (selector === 'select') return [select];
+      if (selector === 'select') return now >= controlsDelay ? [select] : [];
       if (selector === 'table') {
         const ready = now >= readyAt && !neverLoads;
         const numbers = select.value === 'MF1' ? ['500,12', '4,58', '-93,21', '29,96'] : ['510,34', '4,68', '-93,38', '29,60'];
@@ -57,6 +57,14 @@ test('heat-rate sync waits for all four values after AJAX clears the other unit 
 test('heat-rate sync also waits for the initially selected unit after date refresh', async () => {
   const fixture = reader({ initialDelay: 1500 });
   assert.equal((await fixture.read()).entries.length, 8);
+});
+
+test('heat-rate sync waits for the unit selector to render before reading either unit', async () => {
+  assert.equal((await reader({ controlsDelay: 1800 }).read()).entries.length, 8);
+});
+
+test('missing selector reports the actual source page after bounded waiting', async () => {
+  await assert.rejects(reader({ controlsDelay: Infinity }).read(), /Trang đang mở: http:\/\/qlkt\/can_bang_nhiet.jsf/);
 });
 
 test('heat-rate sync rejects missing values instead of returning a partial successful payload', async () => {
