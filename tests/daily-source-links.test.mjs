@@ -12,7 +12,7 @@ function fillRange(target, column, value) {
 }
 
 test("monthly data derives duplicated production values from CTKTKT", () => {
-  const previous = { AB13: "100", AB14: "20", AL13: "200", AL14: "40", N81: "103.84", N82: "479.43" };
+  const previous = { AB13: "100", AB14: "20", AL13: "200", AL14: "40", N81: "103.84", N82: "479.43", P74: "117.891" };
   previous.X72 = "6845.42";
   previous.X73 = "1529.27";
   fillRange(previous, "AB", 0);
@@ -61,6 +61,14 @@ test("monthly data derives duplicated production values from CTKTKT", () => {
   assert.equal(linked.CE, "0");
   assert.equal(linked.CF, "200");
   assert.ok(Number(linked.AJ) > 0);
+});
+
+test("monthly NH3 uses prior-day closing stock when current opening stock is derived", () => {
+  const linked = deriveDailyValuesFromCtktkt(
+    { P72: "0", P74: "93.218" },
+    { P69: "7.554", P70: "32.872", P71: "68.315", P72: "0", P74: "108.741" },
+  );
+  assert.equal(linked.BN, "15.523");
 });
 
 test("monthly HFO remains blank when the selected oil event is incomplete", () => {

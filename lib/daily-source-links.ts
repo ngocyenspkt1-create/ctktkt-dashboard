@@ -4,6 +4,7 @@ import {
   calculateOilEventSummary,
   calculateNh3DcsSummary,
   calculateNh3Summary,
+  applyNh3StartLevelCarryover,
   type CtktktDayEntries,
 } from "./ctktkt-report.ts";
 import { isCtktktOilEventCode } from "./ctktkt-oil-event.ts";
@@ -75,7 +76,7 @@ export function deriveDailyValuesFromCtktkt(
     : null;
   setNumber(result, "X", oilEvent?.totalTonnes);
 
-  const nh3 = calculateNh3Summary(current, null, null);
+  const nh3 = calculateNh3Summary(applyNh3StartLevelCarryover(current, previous), null, null);
   setNumber(result, "BN", nh3.usedTonnes);
   setNumber(result, "CN", numberOf(current, "P72"));
 
