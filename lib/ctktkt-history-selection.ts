@@ -26,12 +26,12 @@ export function isCtktktHistoryCellSelected(ranges: CtktktHistoryRange[], date: 
   return ranges.some(range => range.group === group && date >= range.from && date <= range.to);
 }
 
-export function selectCtktktHistoryDays<T extends {date: string; manualEntries: {cell: string; value: string}[]}>(days: T[], ranges: CtktktHistoryRange[]) {
+export function selectCtktktHistoryDays<T extends {date: string; manualEntries: {cell: string; value: string; sourceCell?: string}[]}>(days: T[], ranges: CtktktHistoryRange[]) {
   return days.map(day => ({...day, manualEntries: day.manualEntries.filter(entry => isCtktktHistoryCellSelected(ranges, day.date, entry.cell)).map(entry => {
     if (entry.cell === CTKTKT_OPERATION_EVENTS_CELL) return {...entry, value: normalizeCtktktOperationEvents(entry.value)};
     if (CTKTKT_TEXT_INPUT_CELLS.has(entry.cell) || entry.cell === "T181") return entry;
     const value = entry.value.trim().replaceAll(" ", "").replace(",", ".");
-    if (!/^-?\d+(?:\.\d+)?$/.test(value) || !Number.isFinite(Number(value))) throw new Error(`Ngày ${day.date.split("-").reverse().join("/")}, ô ${entry.cell}: dữ liệu nhập tay không phải số hợp lệ. Hãy sửa file hoặc bỏ ngày/cụm này khỏi lựa chọn.`);
+    if (!/^-?\d+(?:\.\d+)?$/.test(value) || !Number.isFinite(Number(value))) throw new Error(`Ngày ${day.date.split("-").reverse().join("/")}, ô ${entry.sourceCell || entry.cell}: dữ liệu nhập tay không phải số hợp lệ. Hãy sửa file hoặc bỏ ngày/cụm này khỏi lựa chọn.`);
     return {...entry, value};
   })})).filter(day => day.manualEntries.length > 0);
 }

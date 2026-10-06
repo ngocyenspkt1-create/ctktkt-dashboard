@@ -26,6 +26,22 @@ test("month import reads all matching day sheets, preserves zero and skips blank
  assert.equal(result.supportingDays[0].manualEntries[0].cell,"AB8");
 });
 
+test("HFO shifted rows are matched by tank labels and headers never become manual readings",async()=>{
+ const bytes=workbookBytes({"10":{L53:"Mực bồn dầu HFO 1",M53:1.035,L54:"Mực bồn dầu HFO 2",M54:0.69,L55:"Mực bồn dầu HFO 3",M55:3.008,L56:"Mực bồn dầu HFO 4",M56:4.378,L57:"Mực bồn dầu HFO 5",M57:5.178,M60:"Mức dầu",N60:"Nhiệt độ",L61:"Bồn dầu HFO 1",M61:1.035,N61:59,L62:"Bồn dầu HFO 2",M62:0.69,N62:53,L63:"Bồn dầu HFO 3",M63:3.008,N63:30,L64:"Bồn dầu HFO 4",M64:4.378,N64:78,L65:"Bồn dầu HFO 5",M65:5.178,N65:77}});
+ const result=await buildCtktktHistoryImportPackage("file.xls",bytes,undefined,"2026-08",[{group:"other",from:"2026-08-10",to:"2026-08-10"}]);
+ const entries=new Map(result.days[0].manualEntries.map(entry=>[entry.cell,entry]));
+ assert.equal(entries.get('M52').value,'1.035');
+ assert.equal(entries.get('M54').value,'3.008');
+ assert.equal(entries.get('M56').value,'5.178');
+ assert.deepEqual(entries.get('M60'),{cell:'M60',sourceCell:'M61',value:'1.035'});
+ assert.equal(entries.get('N60').value,'59');
+ assert.equal(entries.get('M64').value,'5.178');
+ assert.equal(entries.get('N64').value,'77');
+ assert.ok(result.days[0].manualEntries.every(entry=>!['Mức dầu','Nhiệt độ'].includes(entry.value)));
+ const badBytes=workbookBytes({"10":{L61:"Bồn dầu HFO 1",M61:"bad"}});
+ await assert.rejects(()=>buildCtktktHistoryImportPackage("file.xls",badBytes,undefined,"2026-08",[{group:"other",from:"2026-08-10",to:"2026-08-10"}]),/ô M61:/);
+});
+
 test("independent ranges import only chosen groups and dates despite wrong data elsewhere",async()=>{
  const bytes=workbookBytes({"d-1":{AB8:100},"01":{P74:10,W8:"wrong",E20:999},"02":{P74:20,W8:120},"03":{P74:"wrong",W8:130},"04":{P74:40,W8:"wrong"}});
  const ranges=[{group:"nh3_tank",from:"2026-09-01",to:"2026-09-02"},{group:"tpd_tcd_power",from:"2026-09-02",to:"2026-09-03"}];

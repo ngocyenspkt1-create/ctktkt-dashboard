@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { ctktktHistoryHfoCellMap } from "./ctktkt-history-layout.ts";
 import { isCtktktHistoryCellSelected, selectCtktktHistoryDays, validateCtktktHistoryRanges, type CtktktHistoryRange } from "./ctktkt-history-selection.ts";
 import { CTKTKT_DAY03_INPUT_CELLS } from "./ctktkt-fields.generated.ts";
 import {
@@ -26,7 +27,7 @@ import {
   type CtktktDayEntries,
 } from "./ctktkt-report.ts";
 
-export type CtktktImportEntry = { cell: string; value: string };
+export type CtktktImportEntry = { cell: string; value: string; sourceCell?: string };
 export type CtktktFormulaCheck = {
   name: string;
   sourceCell: string;
@@ -257,8 +258,11 @@ export async function buildCtktktHistoryImportPackage(
     const sheet = actualSheetName ? workbook.Sheets[actualSheetName] : undefined;
     if (!sheet) throw new Error(`Thiếu sheet ngày ${item.sheetName}.`);
     const entries: CtktktDayEntries = {};
+    const hfoCells = ctktktHistoryHfoCellMap(sheet);
     for (const cell of inputCells) {
-      const source = rawCellValue(sheet, cell);
+      const sourceCell = hfoCells.has(cell) ? hfoCells.get(cell) : cell;
+      if (!sourceCell) continue;
+      const source = rawCellValue(sheet, sourceCell);
       if (source.isFormula) {
         if (item.importDay) warnings.push({ ...item, cell, message: "Ô thuộc nhóm nhập tay nhưng file chứa công thức; đã bỏ qua." });
         continue;
@@ -294,7 +298,7 @@ export async function buildCtktktHistoryImportPackage(
     }
     entriesByDate.set(item.date, entries);
     if (item.importDay) {
-      const manualEntries = manualCells.filter(cell => !targetMonth || (cell !== CTKTKT_INSTALLED_CAPACITY_CELL && (cell !== "W86" || item.date.endsWith("-01")))).map(cell => ({ cell, value: entries[cell] ?? "" }));
+      const manualEntries: CtktktImportEntry[] = manualCells.filter(cell => !targetMonth || (cell !== CTKTKT_INSTALLED_CAPACITY_CELL && (cell !== "W86" || item.date.endsWith("-01")))).map(cell => ({ cell, value: entries[cell] ?? "", ...(hfoCells.get(cell) && hfoCells.get(cell) !== cell ? {sourceCell: hfoCells.get(cell)!} : {}) }));
       // Current source event layout stores six slots in one JSON field on the web.
       if (targetMonth && (!ranges || isCtktktHistoryCellSelected(ranges, item.date, CTKTKT_OPERATION_EVENTS_CELL)) && String(sheet.B85?.v || "").includes("Khởi động tổ máy S1")) {
         const events = [];
