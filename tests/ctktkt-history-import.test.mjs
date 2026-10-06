@@ -26,6 +26,17 @@ test("month import reads all matching day sheets, preserves zero and skips blank
  assert.equal(result.supportingDays[0].manualEntries[0].cell,"AB8");
 });
 
+test("historical shared coal quality imports original manual cells instead of unit total labels",async()=>{
+ const bytes=workbookBytes({'01':{AJ82:'Ẩm toàn phần, Wtp (%)',AL82:'Nhiệt trị khô (Qk)',AF83:'0h-08h',AF84:'08h-16h',AF85:'16h-24h',AJ83:8.3,AJ84:7.9,AJ85:7.7,AL83:5225.5,AL84:5221,AL85:5200,AJ87:'Than tiêu thụ S1',AJ90:'Than tiêu thụ S2'}});
+ const result=await buildCtktktHistoryImportPackage('file.xls',bytes,undefined,'2026-03',[{group:'coal_blend_pmis',from:'2026-03-01',to:'2026-03-01'}]);
+ const entries=new Map(result.days[0].manualEntries.map(entry=>[entry.cell,entry]));
+ assert.deepEqual(entries.get('AJ87'),{cell:'AJ87',sourceCell:'AJ83',value:'8.3'});
+ assert.equal(entries.get('AJ90').value,'8.3');
+ assert.equal(entries.get('AK89').value,'5200');
+ assert.equal(entries.get('AK92').value,'5200');
+ assert.ok(result.days[0].manualEntries.every(entry=>!entry.value.includes('Than tiêu thụ')));
+});
+
 test("HFO shifted rows are matched by tank labels and headers never become manual readings",async()=>{
  const bytes=workbookBytes({"10":{L53:"Mực bồn dầu HFO 1",M53:1.035,L54:"Mực bồn dầu HFO 2",M54:0.69,L55:"Mực bồn dầu HFO 3",M55:3.008,L56:"Mực bồn dầu HFO 4",M56:4.378,L57:"Mực bồn dầu HFO 5",M57:5.178,M60:"Mức dầu",N60:"Nhiệt độ",L61:"Bồn dầu HFO 1",M61:1.035,N61:59,L62:"Bồn dầu HFO 2",M62:0.69,N62:53,L63:"Bồn dầu HFO 3",M63:3.008,N63:30,L64:"Bồn dầu HFO 4",M64:4.378,N64:78,L65:"Bồn dầu HFO 5",M65:5.178,N65:77}});
  const result=await buildCtktktHistoryImportPackage("file.xls",bytes,undefined,"2026-08",[{group:"other",from:"2026-08-10",to:"2026-08-10"}]);
