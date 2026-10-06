@@ -21,6 +21,7 @@ import {
   Camera,
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
+import { CTKTKT_HISTORY_GROUPS, type CtktktHistoryRange } from "@/lib/ctktkt-history-selection";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
 import { CoalMeterPhotoImport } from "@/components/coal-meter-photo-import";
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
@@ -278,6 +279,8 @@ export function CtktktReport() {
   const [importingHistory, setImportingHistory] = useState(false);
   const [historyImportMonth, setHistoryImportMonth] = useState("");
   const [historyImportOverwrite, setHistoryImportOverwrite] = useState(false);
+  const [pendingHistoryFile, setPendingHistoryFile] = useState<{file: File; month: string; lastDate: string} | null>(null);
+  const [historyRanges, setHistoryRanges] = useState<Array<CtktktHistoryRange & {enabled: boolean}>>([]);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -762,7 +765,7 @@ export function CtktktReport() {
     }, window.location.origin);
   };
 
-  const handleHistoryImport = async (file: File | undefined) => {
+  const handleHistoryImport = async (file: File | undefined, ranges: CtktktHistoryRange[], selectedMonth: string) => {
     if (!file || !userCanEditAny) return;
     if (dirtyCellsRef.current.size > 0 || saving) {
       setError("Hãy lưu số liệu đang nhập trước khi nhập dữ liệu từ file.");
@@ -788,12 +791,12 @@ export function CtktktReport() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const selectedMonth = historyImportMonth || period;
       formData.append("targetMonth", selectedMonth);
+      formData.append("ranges", JSON.stringify(ranges));
       const parseResponse = await fetch("/api/ctktkt-report/history-import", { method: "POST", body: formData });
       const parsed = (await parseResponse.json()) as Partial<ImportPackage> & { error?: string };
       if (!parseResponse.ok || parsed.error) throw new Error(parsed.error || "Không đọc được file Chỉ tiêu KTKT.");
-      if (!/^\d{4}-\d{2}$/.test(parsed.month || "") || !Array.isArray(parsed.days) || !parsed.days.length || !parsed.totals) throw new Error("File không đúng cấu trúc Chỉ tiêu KTKT.");
+      if (!/^\d{4}-\d{2}$/.test(parsed.month || "") || !Array.isArray(parsed.days) || !parsed.totals) throw new Error("File không đúng cấu trúc Chỉ tiêu KTKT.");
       const importPackage = parsed as ImportPackage;
       if (importPackage.month !== selectedMonth || importPackage.days.some(day => !day.date.startsWith(`${selectedMonth}-`))) {
         throw new Error("File không trả đúng dữ liệu của tháng đã chọn.");
@@ -802,10 +805,7 @@ export function CtktktReport() {
         throw new Error("File có dữ liệu ngày trong tương lai. Hãy chọn tháng dữ liệu quá khứ.");
       }
       if (importPackage.totals.nonBlankManualValues <= 0) {
-        throw new Error("Các sheet trong tháng không có dữ liệu nhập tay để tải lên.");
-      }
-      if (importPackage.totals.checks <= 0) {
-        throw new Error("File không có kết quả tự tính để đối chiếu.");
+        throw new Error("Không có dữ liệu nhập tay trong các cụm/ngày đã chọn. Hãy đổi khoảng ngày hoặc chọn cụm khác.");
       }
       for (const day of importPackage.days) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date) || !Array.isArray(day.manualEntries) || day.manualEntries.length > 400) {
@@ -819,7 +819,7 @@ export function CtktktReport() {
         }
       }
 
-      if (importPackage.totals.failed > 0 || importPackage.totals.checks !== importPackage.totals.passed) {
+      if (!ranges.length && (importPackage.totals.failed > 0 || importPackage.totals.checks !== importPackage.totals.passed)) {
         const failures = importPackage.audits.flatMap(audit => audit.failed.map(item =>
           `${audit.date.split("-").reverse().join("/")} · ${item.name} (${item.sourceCell}): Excel=${item.expected ?? "trống"}, Web=${item.actual ?? "trống"}`,
         ));
@@ -844,11 +844,11 @@ export function CtktktReport() {
         return true;
       }) })).filter(day => day.manualEntries.length > 0);
       const count = writeDays.reduce((total, day) => total + day.manualEntries.length, 0);
-      if (!count) { setMessage("Không có ô mới cần nhập theo lựa chọn hiện tại; dữ liệu đang có được giữ nguyên."); return; }
+      if (!count) { setMessage("Không có ô mới cần nhập theo lựa chọn hiện tại; dữ liệu đang có được giữ nguyên."); setPendingHistoryFile(null); return; }
       const confirmed = window.confirm(
         `Tháng ${selectedMonth}: đọc ${importPackage.days.length} sheet ngày.\nSẽ ghi ${count} ô nhập tay trên ${writeDays.length} ngày (gồm công tơ hỗ trợ D-1 nếu có). Bỏ qua ${skipped} ô đã có hoặc không thay đổi.\n`
         + `${historyImportOverwrite ? "Ghi đè các ô đã có dữ liệu." : "Chỉ bổ sung ô còn trống."} Ô trống trong file không xóa dữ liệu trên web.\n`
-        + `Đối chiếu file đạt ${importPackage.totals.passed}/${importPackage.totals.checks} kết quả. Các ô tự tính và liên kết không bị ghi đè.\n`
+        + `Chỉ nhập các cụm và khoảng ngày đã chọn. Dữ liệu nhập tay đã kiểm tra định dạng; web tự tính theo công thức hiện có. Các ô tự tính và liên kết không bị ghi đè.\n`
         + `${importPackage.warnings.length} ô chứa công thức đã bỏ qua. Dữ liệu cũ sẽ được sao lưu trước khi ghi.\n\nTiếp tục nhập dữ liệu?`,
       );
       if (!confirmed) { setMessage("Đã hủy nhập tháng; chưa ghi dữ liệu."); return; }
@@ -908,6 +908,7 @@ export function CtktktReport() {
       dirtyCellsRef.current.clear();
       setDirty(false);
       setMessage(`Đã nhập tháng ${selectedMonth}: ${count} ô nhập tay trên ${writeDays.length} ngày đã được đọc lại và xác nhận lưu đúng. Công thức tính giữ nguyên.`);
+      setPendingHistoryFile(null);
     } catch (reason) {
       let rollbackMessage = "";
       if (backup && completed.length) {
@@ -1296,7 +1297,17 @@ export function CtktktReport() {
               type="file"
               accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden"
-              onChange={event => void handleHistoryImport(event.target.files?.[0])}
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                const month = historyImportMonth || period;
+                const [year, monthNumber] = month.split("-").map(Number);
+                const end = `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2,"0")}`;
+                setHistoryRanges(CTKTKT_HISTORY_GROUPS.map(({group}) => ({group, from: `${month}-01`, to: end > vietnamDateIso() ? vietnamDateIso() : end, enabled: group === "other" ? canEditCtktktField(user,"I35") : canEditCtktktGroup(user, group as CtktktFieldGroup)})));
+                setError("");
+                setPendingHistoryFile({file, month, lastDate: end > vietnamDateIso() ? vietnamDateIso() : end});
+                event.target.value = "";
+              }}
             />
             <button
               type="button"
@@ -3945,6 +3956,42 @@ export function CtktktReport() {
           </span>
         </div>
       </div>
+
+      {pendingHistoryFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="history-range-title" className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-xl">
+            <div className="border-b p-5">
+              <h2 id="history-range-title" className="text-lg font-bold text-[#173b64]">Chọn cụm bảng và ngày cần nhập</h2>
+              <p className="mt-1 break-words text-sm text-slate-600">{pendingHistoryFile.file.name} · Tháng {pendingHistoryFile.month.split("-").reverse().join("/")}</p>
+              <p className="mt-2 text-sm text-slate-600">Mỗi cụm chọn khoảng ngày riêng. Bỏ chọn cụm không cần nhập. Chỉ lấy ô nhập tay, giữ nguyên công thức; không nhập dữ liệu ngoài khoảng đã chọn.</p>
+            </div>
+            <div className="overflow-auto p-5">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100 text-left"><tr><th className="p-3">Nhập</th><th className="p-3">Cụm bảng</th><th className="p-3">Từ ngày</th><th className="p-3">Đến ngày</th></tr></thead>
+                <tbody>{historyRanges.map((range, index) => {
+                  const label = CTKTKT_HISTORY_GROUPS.find(group => group.group === range.group)!.label;
+                  const allowed = range.group === "other" ? canEditCtktktField(user,"I35") : canEditCtktktGroup(user, range.group as CtktktFieldGroup);
+                  const change = (values: Partial<typeof range>) => setHistoryRanges(old => old.map((item, i) => i === index ? {...item,...values} : item));
+                  return <tr key={range.group} className="border-b border-slate-100">
+                    <td className="p-3"><input type="checkbox" aria-label={`Nhập ${label}`} checked={range.enabled} disabled={importingHistory || !allowed} onChange={event => change({enabled:event.target.checked})} /></td>
+                    <td className="p-3 font-medium">{label}{!allowed && <span className="ml-2 text-xs text-slate-400">Không có quyền nhập</span>}</td>
+                    <td className="p-3"><input type="date" aria-label={`Từ ngày ${label}`} value={range.from} min={`${pendingHistoryFile.month}-01`} max={range.to} disabled={!range.enabled || importingHistory} onChange={event => change({from:event.target.value})} className="rounded-lg border border-slate-300 px-2 py-2 disabled:bg-slate-50" /></td>
+                    <td className="p-3"><input type="date" aria-label={`Đến ngày ${label}`} value={range.to} min={range.from} max={pendingHistoryFile.lastDate} disabled={!range.enabled || importingHistory} onChange={event => change({to:event.target.value})} className="rounded-lg border border-slate-300 px-2 py-2 disabled:bg-slate-50" /></td>
+                  </tr>;
+                })}</tbody>
+              </table>
+              {error && <p role="alert" className="mt-4 whitespace-pre-line rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t p-5">
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={historyImportOverwrite} disabled={importingHistory} onChange={event => setHistoryImportOverwrite(event.target.checked)} />Ghi đè ô đã có (mặc định chỉ bổ sung ô trống)</label>
+              <div className="flex gap-2">
+                <button type="button" disabled={importingHistory} onClick={() => setPendingHistoryFile(null)} className="rounded-xl border px-4 py-2 text-sm">Đóng</button>
+                <button type="button" disabled={importingHistory || !historyRanges.some(range => range.enabled)} onClick={() => void handleHistoryImport(pendingHistoryFile.file, historyRanges.filter(range => range.enabled).map(({group,from,to}) => ({group,from,to})), pendingHistoryFile.month)} className="rounded-xl bg-[#4057b5] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{importingHistory ? "Đang kiểm tra và nhập…" : "Kiểm tra và nhập phần đã chọn"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showEmailModal && (
         <CtktktEmailModal

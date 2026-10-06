@@ -1,6 +1,8 @@
 import { getSessionUser } from "@/lib/auth/server";
 import { buildCtktktHistoryImportPackage } from "@/lib/ctktkt-history-import";
 import { canEditAnyCtktktField } from "@/lib/ctktkt-permissions";
+import { validateCtktktHistoryRanges } from "@/lib/ctktkt-history-selection";
+import { vietnamDateIso } from "@/lib/operating-date";
 
 const maxFileBytes = 12 * 1024 * 1024;
 
@@ -19,7 +21,10 @@ export async function POST(request: Request) {
     if (!/\.(xlsx|xls)$/i.test(file.name)) throw new Error("Chỉ chấp nhận file .xlsx hoặc .xls của Chỉ tiêu KTKT.");
     if (file.size <= 0 || file.size > maxFileBytes) throw new Error("File trống hoặc vượt quá 12 MB.");
     if (targetDate && targetMonth) throw new Error("Chỉ chọn nhập theo ngày hoặc theo tháng.");
-    const result = await buildCtktktHistoryImportPackage(file.name, await file.arrayBuffer(), targetDate || undefined, targetMonth || undefined);
+    const rangesText = formData.get("ranges");
+    const ranges = rangesText ? validateCtktktHistoryRanges(JSON.parse(String(rangesText)), targetMonth) : undefined;
+    if (ranges?.some(range => range.to > vietnamDateIso())) throw new Error("Không thể nhập dữ liệu cho ngày trong tương lai.");
+    const result = await buildCtktktHistoryImportPackage(file.name, await file.arrayBuffer(), targetDate || undefined, targetMonth || undefined, ranges);
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Không đọc được file Chỉ tiêu KTKT." }, { status: 400 });

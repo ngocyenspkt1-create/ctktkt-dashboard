@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { isCtktktHistoryCellSelected, selectCtktktHistoryDays, validateCtktktHistoryRanges, type CtktktHistoryRange } from "./ctktkt-history-selection.ts";
 import { CTKTKT_DAY03_INPUT_CELLS } from "./ctktkt-fields.generated.ts";
 import {
   CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS,
@@ -187,12 +188,14 @@ export async function buildCtktktHistoryImportPackage(
   bytes: ArrayBuffer,
   targetDate?: string,
   targetMonth?: string,
+  selectedRanges?: CtktktHistoryRange[],
 ): Promise<CtktktHistoryImportPackage> {
   const workbook = XLSX.read(bytes, { type: "array", cellFormula: true, cellDates: true });
   const requested = targetDate ? validatedIsoDate(targetDate) : null;
   if (targetMonth && !/^20\d{2}-(0[1-9]|1[0-2])$/.test(targetMonth)) throw new Error("Tháng nhập dữ liệu không hợp lệ.");
   const named = requested || targetMonth ? null : monthFromFileName(fileName);
   const period = requested?.period ?? targetMonth ?? named!.period;
+  const ranges = selectedRanges ? validateCtktktHistoryRanges(selectedRanges, period) : undefined;
   const numericSheets = workbook.SheetNames.map(name => Number(name.trim())).filter(day => Number.isInteger(day) && day >= 1 && day <= 31);
   const [importYear, importMonth] = period.split("-").map(Number);
   const throughDay = requested?.day ?? (targetMonth ? new Date(Date.UTC(importYear, importMonth, 0)).getUTCDate() : Math.min(named!.throughDay, Math.max(...numericSheets, 0)));
@@ -293,7 +296,7 @@ export async function buildCtktktHistoryImportPackage(
     if (item.importDay) {
       const manualEntries = manualCells.filter(cell => !targetMonth || (cell !== CTKTKT_INSTALLED_CAPACITY_CELL && (cell !== "W86" || item.date.endsWith("-01")))).map(cell => ({ cell, value: entries[cell] ?? "" }));
       // Current source event layout stores six slots in one JSON field on the web.
-      if (targetMonth && String(sheet.B85?.v || "").includes("Khởi động tổ máy S1")) {
+      if (targetMonth && (!ranges || isCtktktHistoryCellSelected(ranges, item.date, CTKTKT_OPERATION_EVENTS_CELL)) && String(sheet.B85?.v || "").includes("Khởi động tổ máy S1")) {
         const events = [];
         for (const unit of ["S1", "S2"] as const) for (const kind of ["startup", "shutdown", "incident_oil"] as const) {
           const event = createCtktktOperationEvent(unit, kind);
@@ -341,20 +344,22 @@ export async function buildCtktktHistoryImportPackage(
     }
   }
 
-  const audits = days.filter(day => day.date.startsWith(period)).map(day => {
+  const selectedDays = ranges ? selectCtktktHistoryDays(days, ranges) : days;
+  if (ranges) supportingDays.length = 0; // D-1 is read for calculations only, never silently written outside selected dates.
+  const audits = (ranges ? [] : days).filter(day => day.date.startsWith(period)).map(day => {
     const sheet = workbook.Sheets[day.sheetName]!;
     const priorDate = new Date(`${day.date}T12:00:00Z`); priorDate.setUTCDate(priorDate.getUTCDate() - 1);
     const checks = auditDay(sheet, entriesByDate.get(day.date) || {}, entriesByDate.get(priorDate.toISOString().slice(0, 10)));
     return { date: day.date, total: checks.length, passed: checks.filter(check => check.passed).length, failed: checks.filter(check => !check.passed) };
   });
   const totals = {
-    dates: days.length,
-    manualCellsPrepared: days.reduce((sum, day) => sum + day.manualEntries.length, 0),
-    nonBlankManualValues: days.reduce((sum, day) => sum + day.manualEntries.filter(entry => entry.value !== "").length, 0),
+    dates: selectedDays.length,
+    manualCellsPrepared: selectedDays.reduce((sum, day) => sum + day.manualEntries.length, 0),
+    nonBlankManualValues: selectedDays.reduce((sum, day) => sum + day.manualEntries.filter(entry => entry.value !== "").length, 0),
     supportingValues: supportingDays.reduce((sum, day) => sum + day.manualEntries.length, 0),
     checks: audits.reduce((sum, audit) => sum + audit.total, 0),
     passed: audits.reduce((sum, audit) => sum + audit.passed, 0),
     failed: audits.reduce((sum, audit) => sum + audit.failed.length, 0),
   };
-  return { fileName, month: period, throughDay, days, supportingDays, audits, totals, warnings };
+  return { fileName, month: period, throughDay, days: selectedDays, supportingDays, audits, totals, warnings: ranges ? warnings.filter(item => isCtktktHistoryCellSelected(ranges, item.date, item.cell)) : warnings };
 }

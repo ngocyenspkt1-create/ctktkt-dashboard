@@ -26,6 +26,17 @@ test("month import reads all matching day sheets, preserves zero and skips blank
  assert.equal(result.supportingDays[0].manualEntries[0].cell,"AB8");
 });
 
+test("independent ranges import only chosen groups and dates despite wrong data elsewhere",async()=>{
+ const bytes=workbookBytes({"d-1":{AB8:100},"01":{P74:10,W8:"wrong",E20:999},"02":{P74:20,W8:120},"03":{P74:"wrong",W8:130},"04":{P74:40,W8:"wrong"}});
+ const ranges=[{group:"nh3_tank",from:"2026-09-01",to:"2026-09-02"},{group:"tpd_tcd_power",from:"2026-09-02",to:"2026-09-03"}];
+ const result=await buildCtktktHistoryImportPackage("file.xlsx",bytes,undefined,"2026-09",ranges);
+ assert.deepEqual(result.days.map(day=>day.date),["2026-09-01","2026-09-02","2026-09-03"]);
+ assert.deepEqual(result.days.map(day=>day.manualEntries.map(entry=>entry.cell)),[["P74"],["W8","P74"],["W8"]]);
+ assert.equal(result.audits.length,0);
+ assert.deepEqual(result.supportingDays,[]);
+ await assert.rejects(()=>buildCtktktHistoryImportPackage("file.xlsx",bytes,undefined,"2026-09",[{group:"nh3_tank",from:"2026-09-03",to:"2026-09-03"}]),/03\/09\/2026, ô P74/);
+});
+
 test("month import skips formulas and linked cells instead of preparing blank overwrite entries",async()=>{
  const workbook=XLSX.utils.book_new();
  const sheet={W8:{t:"n",v:123,f:"1+122"},W9:{t:"n",v:234},M3:{t:"n",v:456},"!ref":"A1:AV181"};
