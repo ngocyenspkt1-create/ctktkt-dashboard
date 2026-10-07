@@ -6,12 +6,12 @@ import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXT
 import '../public/qlkt-sync-extension/meter-extract.js';
 
 test('web blocks old QLKT extensions and prefers reload over downloading again', () => {
-  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.37');
-  assert.equal(isQlktExtensionOutdated('0.4.36'), true);
-  assert.equal(isQlktExtensionOutdated('0.4.37'), false);
+  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.38');
+  assert.equal(isQlktExtensionOutdated('0.4.37'), true);
   assert.equal(isQlktExtensionOutdated('0.4.38'), false);
+  assert.equal(isQlktExtensionOutdated('0.4.39'), false);
   assert.equal(isQlktExtensionOutdated(''), false);
-  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.37/);
+  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.38/);
   const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
   assert.match(dailySource, /Ưu tiên Reload — không cần tải lại mỗi lần/);
   assert.match(dailySource, /Đã Reload — kiểm tra lại/);
@@ -276,6 +276,7 @@ test('web app accepts only a complete same-date unified QLKT payload', () => {
   const runningS2 = { ...payload.heatRate, entries: ['DB', 'DD', 'DF', 'DH'].map(entry) };
   assert.equal(validateQlktUnifiedSyncPayload({ ...payload, heatRate: runningS2 }), null);
   assert.ok(validateQlktUnifiedSyncPayload({ ...payload, heatRate: { ...runningS2, unavailableHeatRateUnits: ['1'] } }));
+  assert.ok(validateQlktUnifiedSyncPayload({ ...payload, heatRate: { ...payload.heatRate, entries: [], unavailableHeatRateUnits: ['1', '2'] } }));
   assert.equal(validateQlktUnifiedSyncPayload({ ...payload, heatRate: { ...runningS2, entries: runningS2.entries.slice(1), unavailableHeatRateUnits: ['1'] } }), null);
 });
 

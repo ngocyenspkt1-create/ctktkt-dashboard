@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { validateQlktSyncPayload } from '../lib/qlkt-sync.ts';
 
 // Exercise the real reader against a PrimeFaces table that clears during AJAX.
-function reader({ initialDelay = 0, neverLoads = false, neverLoadsSecond = false, outageUnit, initialUnit = '1', hiddenUnit = initialUnit, partialOutage = false, wrongWarning = false, controlsDelay = 0, inputSuffix = '' } = {}) {
+function reader({ initialDelay = 0, neverLoads = false, neverLoadsSecond = false, outageUnit, bothStopped = false, noWarning = false, zeroLoad = false, initialUnit = '1', hiddenUnit = initialUnit, partialOutage = false, wrongWarning = false, controlsDelay = 0, inputSuffix = '' } = {}) {
   const source = readFileSync(new URL('../browser-extension/qlkt-sync/content.js', import.meta.url), 'utf8');
   let now = 0, readyAt = initialDelay;
   let widgetUnit = initialUnit;
@@ -22,7 +22,7 @@ function reader({ initialDelay = 0, neverLoads = false, neverLoadsSecond = false
   };
   const document = {
     body: { get innerText() {
-      return now >= readyAt && widgetUnit === outageUnit
+      return !noWarning && now >= readyAt && widgetUnit === outageUnit
         ? `Dừng sự cố: DH1_MF${wrongWarning ? '2' : outageUnit} (2026-09-21 09:56:00 - 2026-09-25 03:30:00)` : '';
     } },
     getElementById(id) { return id === 'formMain:cbSelectMainAsset_label' ? { textContent: `DH1_MF${widgetUnit}` } : null; },
@@ -32,14 +32,15 @@ function reader({ initialDelay = 0, neverLoads = false, neverLoadsSecond = false
         const ready = now >= readyAt && !neverLoads && !(neverLoadsSecond && widgetUnit === '2');
         const numbers = widgetUnit === '1' ? ['500,12', '4,58', '-93,21', '29,96'] : ['510,34', '4,68', '-93,38', '29,60'];
         return [labels, { rows: [row(['Trung bình']), ...numbers.map((value, index) => row([
-          ready && (widgetUnit !== outageUnit || (partialOutage && index === 0)) ? value : '',
+          ready && !bothStopped && (widgetUnit !== outageUnit || (partialOutage && index === 0)) ? value : (index === 0 && zeroLoad ? '0,00' : ''),
         ]))] }];
       }
       return [];
     },
   };
   const page = vm.createContext({ document,
-    PrimeFaces: { getWidgetById(id) { return id === 'formMain:cbSelectMainAsset' ? { selectValue(value) {
+    Date: { now: () => now }, setTimeout(callback, ms) { now += ms; callback(); },
+    PrimeFaces: { ajax: { Queue: { isEmpty: () => now >= readyAt && !neverLoads && !(neverLoadsSecond && widgetUnit === '2') } }, getWidgetById(id) { return id === 'formMain:cbSelectMainAsset' ? { selectValue(value) {
       widgetSelections.push(value);
       select.value = value;
       widgetUnit = value.endsWith('2') ? '2' : '1';
@@ -51,9 +52,11 @@ function reader({ initialDelay = 0, neverLoads = false, neverLoadsSecond = false
   });
   const background = readFileSync(new URL('../browser-extension/qlkt-sync/background.js', import.meta.url), 'utf8');
   vm.runInContext(background.slice(background.indexOf('function selectHeatRateUnitInPage'), background.indexOf('async function selectHeatRateUnitForTab')) + '\nglobalThis.selectUnit = selectHeatRateUnitInPage;', page);
+  vm.runInContext(background.slice(background.indexOf('async function waitForHeatRateAjaxInPage'), background.indexOf('async function waitForHeatRateAjaxForTab')) + '\nglobalThis.waitReady = waitForHeatRateAjaxInPage;', page);
   // The extension's isolated world deliberately has no PrimeFaces global.
   const context = vm.createContext({ document, location: { href: 'http://qlkt/can_bang_nhiet.jsf' },
     chrome: { runtime: { async sendMessage(message) {
+      if (message.type === 'WAIT_QLKT_HEATRATE_READY') return page.waitReady().catch(error => ({ ok: false, error: error.message }));
       assert.equal(message.type, 'SELECT_QLKT_HEATRATE_UNIT');
       return page.selectUnit(message.unit);
     } } },
@@ -99,7 +102,7 @@ test('isolated reader triggers real page AJAX for a PrimeFaces _input selector',
 
 test('S2 timeout restores selection immediately rather than waiting through another timeout', async () => {
   const fixture = reader({ neverLoadsSecond: true });
-  await assert.rejects(fixture.read(), /DH1_MF2.*DB, DD, DF, DH/);
+  await assert.rejects(fixture.read(), /DH1_MF2.*vẫn đang tải/);
   assert.equal(fixture.selected(), 'MF1');
   assert.ok(fixture.elapsed() < 15000);
 });
@@ -135,9 +138,39 @@ test('S2 outage does not block S1 and never fabricates zeros for S2', async () =
   assert.deepEqual(Array.from(payload.unavailableHeatRateUnits), ['2']);
 });
 
-test('outage warning does not excuse partial values or a warning for the wrong unit', async () => {
+test('running PG still rejects incomplete metrics; missing PG does not require an outage banner', async () => {
   await assert.rejects(reader({ outageUnit: '1', partialOutage: true }).read(), /DH1_MF1/);
-  await assert.rejects(reader({ outageUnit: '1', wrongWarning: true }).read(), /DH1_MF1/);
+  assert.deepEqual(Array.from((await reader({ outageUnit: '1', wrongWarning: true }).read()).unavailableHeatRateUnits), ['1']);
+});
+
+test('06/10 S2 with blank or zero PG and no outage banner synchronizes S1 only', async () => {
+  for (const zeroLoad of [false, true]) {
+    const payload = await reader({ outageUnit: '2', noWarning: true, zeroLoad }).read();
+    assert.deepEqual(Array.from(payload.unavailableHeatRateUnits), ['2']);
+    assert.deepEqual(Array.from(payload.entries, entry => entry.fieldCode), ['DA', 'DC', 'DE', 'DG']);
+    assert.ok(validateQlktSyncPayload(payload));
+  }
+});
+
+test('both stopped with identical blank tables is a valid read without fabricated values', async () => {
+  const payload = await reader({ bothStopped: true, noWarning: true }).read();
+  assert.equal(payload.entries.length, 0);
+  assert.deepEqual(Array.from(payload.unavailableHeatRateUnits), ['1', '2']);
+  assert.ok(validateQlktSyncPayload(payload));
+  assert.equal(validateQlktSyncPayload({ ...payload, unavailableHeatRateUnits: ['1'] }), null);
+});
+
+test('empty AJAX request queue with an in-flight XHR is not a completed table load', async () => {
+  const background = readFileSync(new URL('../browser-extension/qlkt-sync/background.js', import.meta.url), 'utf8');
+  let now = 0;
+  const queue = { isEmpty: () => true, xhrs: [{}] };
+  const page = vm.createContext({ PrimeFaces: { ajax: { Queue: queue } }, Date: { now: () => now },
+    setTimeout(callback, ms) { now += ms; if (now >= 450) queue.xhrs = []; callback(); },
+  });
+  vm.runInContext(background.slice(background.indexOf('async function waitForHeatRateAjaxInPage'), background.indexOf('async function waitForHeatRateAjaxForTab')) + '\nglobalThis.waitReady = waitForHeatRateAjaxInPage;', page);
+  const result = await page.waitReady();
+  assert.equal(result.ajaxVerified, true);
+  assert.equal(now, 450);
 });
 
 test('background permits missing stopped-unit fields only with all four running-unit fields', () => {
@@ -148,7 +181,7 @@ test('background permits missing stopped-unit fields only with all four running-
   assert.equal(context.check('heatrate', { entries: s2, unavailableHeatRateUnits: ['1'] }).length, 0);
   assert.equal(context.check('heatrate', { entries: s2 }).length, 4);
   assert.ok(context.check('heatrate', { entries: s2.slice(1), unavailableHeatRateUnits: ['1'] }).length);
-  assert.ok(context.check('heatrate', { entries: [], unavailableHeatRateUnits: ['1', '2'] }).length);
+  assert.equal(context.check('heatrate', { entries: [], unavailableHeatRateUnits: ['1', '2'] }).length, 0);
   assert.equal(validateQlktSyncPayload({ version: 1, operatingDate: '2026-09-25', sourcePage: 'QLKT',
     entries: s2, unavailableHeatRateUnits: ['2'] }), null);
 });

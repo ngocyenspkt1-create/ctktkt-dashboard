@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.37";
+  const CONTENT_SCRIPT_VERSION = "0.4.38";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -203,13 +203,40 @@
   // PrimeFaces vẽ riêng 1 bảng "chỉ có dòng tiêu đề" (để giữ cố định khi cuộn) TÁCH KHỎI bảng dữ
   // liệu thật — cả 2 đều khớp cùng tên cột, nên phải chọn bảng có NHIỀU HÀNG NHẤT trong số các bảng
   // khớp (bảng tiêu đề giả chỉ có 1–2 hàng), nếu không sẽ vô tình vớ phải bảng rỗng không có dữ liệu.
-  function findColumnTableByHeader(headerNames) {
+  function findColumnTableByHeader(headerNames, expectedRoot = null) {
     let best = null;
     for (const table of document.querySelectorAll("table")) {
-      for (let rowIndex = 0; rowIndex < table.rows.length; rowIndex++) {
-        const cells = [...table.rows[rowIndex].cells].map(cell => normalized(cell.textContent));
-        if (headerNames.every(name => cells.includes(name)) && (!best || table.rows.length > best.table.rows.length)) {
-          best = { table, headerRowIndex: rowIndex, headerCells: cells };
+      const root = table.closest?.(".ui-datatable") || null;
+      if (expectedRoot && root !== expectedRoot) continue;
+      const rows = [...table.rows];
+      const headerRows = table.tHead ? [...table.tHead.rows] : rows;
+      const grid = [];
+      for (let rowIndex = 0; rowIndex < headerRows.length; rowIndex++) {
+        grid[rowIndex] ||= [];
+        let column = 0;
+        for (const cell of headerRows[rowIndex].cells) {
+          while (grid[rowIndex][column] !== undefined) column++;
+          for (let r = 0; r < (cell.rowSpan || 1); r++) {
+            grid[rowIndex + r] ||= [];
+            for (let c = 0; c < (cell.colSpan || 1); c++) grid[rowIndex + r][column + c] = normalized(cell.textContent);
+          }
+          column += cell.colSpan || 1;
+        }
+        const cells = grid[rowIndex];
+        if (!headerNames.every(name => cells.includes(name))) continue;
+        // Scrollable PrimeFaces headers and bodies are separate tables. For
+        // frozen columns, resolve each side inside its own layout container.
+        const side = table.closest?.(".ui-datatable-frozenlayout-left, .ui-datatable-frozenlayout-right");
+        const scope = side || root;
+        const bodyTables = scope ? [...scope.querySelectorAll(".ui-datatable-scrollable-body table")]
+          .filter(candidate => candidate.closest(".ui-datatable") === root) : [];
+        if (bodyTables.length > 1) throw new Error("Có nhiều vùng dữ liệu cùng tiêu đề; chưa thể ghép bảng an toàn.");
+        const bodyTable = bodyTables[0] || table;
+        const dataRows = bodyTable.tBodies?.length
+          ? [...bodyTable.tBodies].flatMap(body => [...body.rows])
+          : [...bodyTable.rows].slice(bodyTable === table ? rows.indexOf(headerRows[rowIndex]) + 1 : 0);
+        if (!best || dataRows.length > best.dataRows.length) {
+          best = { table, bodyTable, root, dataRows, headerRowIndex: rowIndex, headerCells: cells };
         }
       }
     }
@@ -275,8 +302,14 @@
   // khi đổi Tổ máy, không đổi URL và cũng không có sự kiện "load" rõ ràng để chờ, nên phải so sánh
   // nội dung trước/sau để biết khi nào bảng đã thực sự cập nhật xong.
   function sampleHeatRateSignature() {
-    const values = findColumnTableByHeader(["trung binh"]);
-    return values ? [...values.table.rows].map(row => cleanText(row.textContent)).join("|") + `|${heatRateOutageForUnit(detectHeatRateUnit())}` : "";
+    const labels = findColumnTableByHeader(["ky hieu", "ten dai luong"]);
+    const values = findColumnTableByHeader(["trung binh"], labels?.root);
+    return values ? values.dataRows.map(row => [...row.cells].map(readHeatRateCell).join(";")).join("|") + `|${heatRateOutageForUnit(detectHeatRateUnit())}` : "";
+  }
+
+  function readHeatRateCell(cell) {
+    const input = cell?.querySelector?.("input:not([type='hidden']):not([type='checkbox']):not([type='radio']), textarea");
+    return input ? readValue(input) : cleanText(cell?.textContent);
   }
 
   function heatRateOutageForUnit(unit) {
@@ -292,65 +325,92 @@
     if (!targetOption) throw new Error(`Không tìm thấy Tổ máy DH1_MF${targetUnit} trong danh sách chọn.`);
     if (detectHeatRateUnit() === targetUnit) return waitForHeatRateEntries(targetUnit);
     const before = sampleHeatRateSignature();
-    await requestHeatRateUnit(targetUnit);
-    return waitForHeatRateEntries(targetUnit, before);
+    const selection = await requestHeatRateUnit(targetUnit);
+    return waitForHeatRateEntries(targetUnit, before, selection.ajaxStarted === true);
   }
 
   async function requestHeatRateUnit(unit) {
     const response = await chrome.runtime.sendMessage({ type: "SELECT_QLKT_HEATRATE_UNIT", unit });
     if (!response?.ok) throw new Error(response?.error || "QLKT chưa xác nhận chuyển Tổ máy.");
+    return response;
   }
 
   // 4 chỉ tiêu mới của báo cáo "THEO PMIS" (Trung bình công suất đầu cực, Tổn thất khói khô trung
   // bình, Trung bình chân không bình ngưng, Trung bình nhiệt độ nước làm mát tuần hoàn) đọc từ cột
   // "Trung bình" của bảng kết quả, khớp đúng hàng theo Ký hiệu (PG/L1/Pbn/T) — đã đối chiếu trực
   // tiếp với màn hình QLKT thật (Vận hành › Tính toán hiệu suất lò/suất hao nhiệt, "Theo Ngày").
-  function readHeatRateEntriesForCurrentUnit(unit) {
+  function readHeatRateSnapshotForCurrentUnit(unit) {
     const labels = findColumnTableByHeader(["ky hieu", "ten dai luong"]);
     if (!labels) throw new Error("Không tìm thấy bảng \"Ký hiệu\" chỉ tiêu trên màn hình này.");
-    const values = findColumnTableByHeader(["trung binh"]);
+    const values = findColumnTableByHeader(["trung binh"], labels.root);
     if (!values) throw new Error("Không tìm thấy cột \"Trung bình\" trên màn hình này — hãy chắc chắn đang chọn \"Theo Ngày\".");
     const symbolColumn = labels.headerCells.indexOf("ky hieu");
     const avgColumn = values.headerCells.indexOf("trung binh");
+    if (values.headerCells.filter(name => name === "trung binh").length !== 1) {
+      throw new Error("Tiêu đề Trung bình không xác định duy nhất một cột dữ liệu.");
+    }
+    if (labels.dataRows.length !== values.dataRows.length) {
+      throw new Error(`Số hàng hai vùng không khớp: Ký hiệu ${labels.dataRows.length}, Trung bình ${values.dataRows.length}.`);
+    }
     const codeByMetric = unit === "2" ? { PG: "DB", L1: "DD", Pbn: "DF", T: "DH" } : { PG: "DA", L1: "DC", Pbn: "DE", T: "DG" };
     const entries = [];
     for (const [symbol, fieldCode] of Object.entries(codeByMetric)) {
       let rowIndex = -1;
-      for (let index = 0; index < labels.table.rows.length; index++) {
-        const cell = labels.table.rows[index].cells[symbolColumn];
+      for (let index = 0; index < labels.dataRows.length; index++) {
+        const cell = labels.dataRows[index].cells[symbolColumn];
         if (cell && cleanText(cell.textContent) === symbol) { rowIndex = index; break; }
       }
       if (rowIndex === -1) throw new Error(`Chưa thấy hàng ${symbol} trong bảng Cân bằng nhiệt.`);
-      const valueCell = values.table.rows[rowIndex]?.cells[avgColumn];
-      const value = valueCell ? parseNumber(valueCell.textContent) : null;
+      const labelRow = labels.dataRows[rowIndex];
+      const rowKey = labelRow.getAttribute?.("data-ri") ?? labelRow.getAttribute?.("data-rk");
+      const keyed = rowKey != null && values.dataRows.some(row => row.getAttribute?.("data-ri") != null || row.getAttribute?.("data-rk") != null);
+      const valueRow = keyed ? values.dataRows.find(row => (row.getAttribute?.("data-ri") ?? row.getAttribute?.("data-rk")) === rowKey) : values.dataRows[rowIndex];
+      if (!valueRow) throw new Error(`Không ghép được hàng ${symbol} giữa vùng Ký hiệu và Trung bình.`);
+      const valueCell = valueRow.cells[avgColumn];
+      if (!valueCell) throw new Error(`Hàng ${symbol} không có cột Trung bình tại vị trí ${avgColumn + 1}.`);
+      const rawValue = readHeatRateCell(valueCell);
+      const value = parseNumber(rawValue);
+      // User rule: after the table has loaded, blank/zero PG means stopped.
+      // Never infer a stop from a missing PG row or a missing average column.
+      if (symbol === "PG" && (/^[\s\-–—]*$/.test(rawValue) || (value !== null && Number(value) === 0))) return { entries: [], unavailable: true };
+      if (symbol === "PG" && value === null) throw new Error("Ô Trung bình PG có nội dung không phải số; chưa thể xác định tải tổ máy.");
       if (value === null) continue;
       entries.push({ fieldCode, value, sourceLabel: `QLKT · DH1_MF${unit} · Trung bình` });
     }
-    return entries;
+    return { entries, unavailable: false };
   }
 
   // AJAX có thể xóa bảng trước khi điền số liệu: chữ ký đổi chưa có nghĩa
   // bảng đã sẵn sàng. Chỉ đọc khi đủ 4 chỉ tiêu, đúng tổ máy và ổn định.
-  async function waitForHeatRateEntries(unit, previousSignature = null) {
+  async function waitForHeatRateEntries(unit, previousSignature = null, ajaxStarted = false) {
     const deadline = Date.now() + 12000;
-    let stableSignature = null, stableSince = 0, lastEntries = [];
+    const readiness = await chrome.runtime.sendMessage({ type: "WAIT_QLKT_HEATRATE_READY" });
+    if (!readiness?.ok) throw new Error(`QLKT DH1_MF${unit}: ${readiness?.error || "Chưa xác nhận được tải bảng."}`);
+    let stableSignature = null, stableSince = 0, lastEntries = [], lastReadError = "";
     while (Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 300));
       try {
         const signature = sampleHeatRateSignature();
-        const entries = readHeatRateEntriesForCurrentUnit(unit);
+        const snapshot = readHeatRateSnapshotForCurrentUnit(unit);
+        const entries = snapshot.entries;
+        lastReadError = "";
         lastEntries = entries;
-        const unavailable = entries.length === 0 && heatRateOutageForUnit(unit);
+        const unavailable = snapshot.unavailable;
+        if (unavailable && !readiness.ajaxVerified) throw new Error("PG trống nhưng chưa xác nhận AJAX đã tải xong; chưa thể kết luận tổ máy ngừng.");
         if (detectHeatRateUnit() === unit && (entries.length === 4 || unavailable)
-          && (previousSignature === null || signature !== previousSignature)) {
+          && (previousSignature === null || signature !== previousSignature || (ajaxStarted && readiness.ajaxVerified))) {
           if (signature !== stableSignature) { stableSignature = signature; stableSince = Date.now(); }
           else if (Date.now() - stableSince >= 600) return { entries, unavailable };
         } else stableSignature = null;
-      } catch { stableSignature = null; /* bảng đang được dựng lại */ }
+      } catch (error) {
+        stableSignature = null;
+        lastReadError = error instanceof Error ? error.message : String(error);
+      }
     }
     const required = unit === "2" ? ["DB", "DD", "DF", "DH"] : ["DA", "DC", "DE", "DG"];
     const missing = required.filter(code => !lastEntries.some(entry => entry.fieldCode === code));
-    throw new Error(`QLKT DH1_MF${unit} chưa nạp đủ/ổn định 4 chỉ tiêu Trung bình${missing.length ? ` (thiếu ${missing.join(", ")})` : ""}. Bộ đọc v${CONTENT_SCRIPT_VERSION}; tổ máy đang chọn: ${detectHeatRateUnit() ? `DH1_MF${detectHeatRateUnit()}` : "chưa xác định"}. Hãy kiểm tra bảng của tổ máy này và thử đồng bộ lại.`);
+    const detail = lastReadError ? ` Lỗi đọc bảng: ${lastReadError}` : ` Đã thấy đủ hàng nhưng đọc được ${lastEntries.length}/4 ô Trung bình.`;
+    throw new Error(`QLKT DH1_MF${unit} chưa nạp đủ/ổn định 4 chỉ tiêu Trung bình${missing.length ? ` (thiếu ${missing.join(", ")})` : ""}. Bộ đọc v${CONTENT_SCRIPT_VERSION}; tổ máy đang chọn: ${detectHeatRateUnit() ? `DH1_MF${detectHeatRateUnit()}` : "chưa xác định"}.${detail}`);
   }
 
   // Đọc cả 2 Tổ máy (S1+S2) trong 1 lần gọi: đọc Tổ máy đang chọn trước, rồi tự chuyển dropdown
@@ -385,7 +445,7 @@
     }
     const entries = [...(readingsByUnit["1"]?.entries || []), ...(readingsByUnit["2"]?.entries || [])];
     const unavailableHeatRateUnits = ["1", "2"].filter(unit => readingsByUnit[unit]?.unavailable);
-    if (!entries.length) throw new Error("Không tìm thấy các chỉ tiêu suất hao nhiệt (công suất đầu cực, khói khô, chân không bình ngưng, nhiệt độ nước làm mát) trên màn hình này.");
+    if (!entries.length && unavailableHeatRateUnits.length !== 2) throw new Error("Không tìm thấy các chỉ tiêu suất hao nhiệt trên màn hình này.");
     return { version: 1, operatingDate, sourcePage: location.href, kind: "heatrate", entries,
       ...(unavailableHeatRateUnits.length ? { unavailableHeatRateUnits } : {}) };
   }

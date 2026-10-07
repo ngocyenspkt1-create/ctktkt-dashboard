@@ -42,9 +42,10 @@ function missingSourceFields(source, payload) {
   if (source === "heatrate") {
     for (const unit of payload?.unavailableHeatRateUnits || []) {
       const codes = unit === "1" ? ["DA", "DC", "DE", "DG"] : unit === "2" ? ["DB", "DD", "DF", "DH"] : [];
-      // Chỉ miễn kiểm tra khi cả 4 ô trống và bộ đọc xác nhận thông báo dừng.
       const otherCodes = REQUIRED_FIELDS.heatrate.filter(code => !codes.includes(code));
-      if (codes.length && codes.every(code => !received.has(code)) && otherCodes.every(code => received.has(code))) {
+      const otherStopped = payload?.unavailableHeatRateUnits?.includes(unit === "1" ? "2" : "1")
+        && otherCodes.every(code => !received.has(code));
+      if (codes.length && codes.every(code => !received.has(code)) && (otherStopped || otherCodes.every(code => received.has(code)))) {
         codes.forEach(code => stoppedCodes.add(code));
       }
     }
@@ -143,12 +144,12 @@ function selectHeatRateUnitInPage(targetUnit) {
     // selectValue is silent in PrimeFaces; explicitly notify its AJAX handler.
     widget.selectValue(option.value);
     widget.triggerChange();
-    return { ok: true, method: "PrimeFaces.triggerChange" };
+    return { ok: true, method: "PrimeFaces.triggerChange", ajaxStarted: typeof pf?.ajax?.Queue?.isEmpty === "function" && (!pf.ajax.Queue.isEmpty() || (pf.ajax.Queue.xhrs?.length || 0) > 0) };
   }
   if (typeof widget?.selectItem === "function" && typeof widget?.selectItemFromOption === "function") {
     const widgetOption = widget.options.filter(function () { return this.value === option.value; });
     widget.selectItem(widget.selectItemFromOption(widgetOption), false);
-    return { ok: true, method: "PrimeFaces.selectItem" };
+    return { ok: true, method: "PrimeFaces.selectItem", ajaxStarted: typeof pf?.ajax?.Queue?.isEmpty === "function" && (!pf.ajax.Queue.isEmpty() || (pf.ajax.Queue.xhrs?.length || 0) > 0) };
   }
   if (document.getElementById(`${baseId}_label`)) {
     throw new Error("Widget Tổ máy QLKT chưa sẵn sàng; chưa kích hoạt tải bảng.");
@@ -169,6 +170,27 @@ async function selectHeatRateUnitForTab(sender, targetUnit) {
     target: { tabId: sender.tab.id }, world: "MAIN", func: selectHeatRateUnitInPage, args: [targetUnit],
   });
   if (!executions?.[0]?.result?.ok) throw new Error("QLKT chưa xác nhận thao tác chọn Tổ máy.");
+  return executions[0].result;
+}
+
+async function waitForHeatRateAjaxInPage() {
+  const queue = globalThis.PrimeFaces?.ajax?.Queue;
+  if (typeof queue?.isEmpty !== "function") return { ok: true, ajaxVerified: false };
+  const deadline = Date.now() + 10000;
+  while (!queue.isEmpty() || (queue.xhrs?.length || 0) > 0) {
+    if (Date.now() >= deadline) throw new Error("QLKT vẫn đang tải Cân bằng nhiệt; chưa xác nhận được dữ liệu ngày này.");
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  return { ok: true, ajaxVerified: true };
+}
+
+async function waitForHeatRateAjaxForTab(sender) {
+  if (!Number.isInteger(sender?.tab?.id) || sender.frameId !== 0 || !QLKT_PATTERN.test(sender.url || "")
+    || new URL(sender.url).pathname.toLowerCase() !== new URL(DEFAULT_HEATRATE_URL).pathname.toLowerCase()) {
+    throw new Error("Chỉ màn hình Cân bằng nhiệt QLKT được phép kiểm tra tải bảng.");
+  }
+  const executions = await chrome.scripting.executeScript({ target: { tabId: sender.tab.id }, world: "MAIN", func: waitForHeatRateAjaxInPage });
+  if (!executions?.[0]?.result?.ok) throw new Error("Chưa xác nhận được trạng thái tải bảng QLKT.");
   return executions[0].result;
 }
 
@@ -533,6 +555,12 @@ async function syncUnified(operatingDate) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "WAIT_QLKT_HEATRATE_READY") {
+    waitForHeatRateAjaxForTab(sender)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Chưa xác nhận được tải bảng QLKT." }));
+    return true;
+  }
   if (message?.type === "SELECT_QLKT_HEATRATE_UNIT") {
     selectHeatRateUnitForTab(sender, message.unit)
       .then(result => sendResponse(result))

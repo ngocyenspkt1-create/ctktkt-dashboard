@@ -165,6 +165,12 @@ export function PmisReport() {
       if (!data.result?.ok) { setError(data.result?.error || "Chưa đồng bộ được dữ liệu từ QLKT."); return; }
       const payload = validateQlktSyncPayload(data.result.payload);
       if (!payload) { setError("Dữ liệu tiện ích trả về không có chỉ tiêu nào của báo cáo này."); return; }
+      if (!payload.entries.length) {
+        setPendingSync(null); setError("");
+        setMessage("QLKT: S1 và S2 ngừng (không có tải tổ máy); không có số liệu vận hành để cập nhật.");
+        return;
+      }
+      if (payload.unavailableHeatRateUnits?.length) setMessage(`QLKT: ${payload.unavailableHeatRateUnits.map(unit => `S${unit}`).join(", ")} ngừng (không có tải tổ máy); chỉ lấy số liệu tổ máy còn vận hành.`);
       setPendingSync(payload); setSelectedSyncCodes(new Set(payload.entries.map(entry => entry.fieldCode))); setError("");
     };
     window.addEventListener("message", handleMessage);
@@ -223,6 +229,7 @@ export function PmisReport() {
     cancelRangeRef.current = false;
     setSyncingRange(true);
     const saved: string[] = [];
+    const stopped: { date: string; units: string[] }[] = [];
     const failed: { date: string; error: string }[] = [];
     for (let index = 0; index < dateList.length; index += 1) {
       if (cancelRangeRef.current) break;
@@ -231,7 +238,9 @@ export function PmisReport() {
       const result = await requestHeatRateSync(date);
       if (!result.ok) { failed.push({ date, error: result.error || "Lỗi không rõ." }); continue; }
       const payload = validateQlktSyncPayload(result.payload);
-      if (!payload || !payload.entries.length) { failed.push({ date, error: "Không có chỉ tiêu nào." }); continue; }
+      if (!payload) { failed.push({ date, error: "Dữ liệu tiện ích không hợp lệ." }); continue; }
+      if (payload.unavailableHeatRateUnits?.length) stopped.push({ date, units: payload.unavailableHeatRateUnits });
+      if (!payload.entries.length) continue;
       try {
         const period = payload.operatingDate.slice(0, 7);
         const entries = payload.entries.map(entry => ({ operatingDate: payload.operatingDate, fieldCode: entry.fieldCode, value: normalizeQlktValue(entry.value), note: "" }));
@@ -244,7 +253,8 @@ export function PmisReport() {
     setRangeProgress(""); setSyncingRange(false);
     const cancelled = cancelRangeRef.current;
     const failedSummary = failed.length ? ` Lỗi ${failed.length} ngày: ${failed.slice(0, 5).map(item => `${item.date.split("-").reverse().join("/")} (${item.error})`).join("; ")}${failed.length > 5 ? "…" : ""}` : "";
-    if (saved.length) setMessage(`Đã đồng bộ${cancelled ? " (dừng giữa chừng)" : ""} ${saved.length}/${dateList.length} ngày vào kho dữ liệu.${failedSummary}`);
+    const stoppedSummary = stopped.length ? ` Tổ máy ngừng (không có tải): ${stopped.slice(0, 5).map(item => `${item.date.split("-").reverse().join("/")} (${item.units.map(unit => `S${unit}`).join(", ")})`).join("; ")}${stopped.length > 5 ? "…" : ""}.` : "";
+    if (saved.length || stopped.length) setMessage(`Đã lưu${cancelled ? " (dừng giữa chừng)" : ""} số liệu vận hành ${saved.length}/${dateList.length} ngày vào kho dữ liệu.${stoppedSummary}${failedSummary}`);
     else setError(`Không đồng bộ được ngày nào.${failedSummary}`);
     await reloadForBothRanges();
   }
@@ -261,7 +271,8 @@ export function PmisReport() {
       const body = await response.json() as { error?: string; saved?: number };
       if (!response.ok) throw new Error(body.error || "Chưa lưu được dữ liệu.");
       setPendingSync(null);
-      setMessage(`Đã lưu ${body.saved ?? selected.length} số liệu QLKT vào ngày ${pendingSync.operatingDate.split("-").reverse().join("/")}.`);
+      const stoppedNote = pendingSync.unavailableHeatRateUnits?.length ? ` ${pendingSync.unavailableHeatRateUnits.map(unit => `S${unit}`).join(", ")} ngừng (không có tải tổ máy).` : "";
+      setMessage(`Đã lưu ${body.saved ?? selected.length} số liệu QLKT vào ngày ${pendingSync.operatingDate.split("-").reverse().join("/")}.${stoppedNote}`);
       if ((pendingSync.operatingDate >= fromDate && pendingSync.operatingDate <= toDate) || (pendingSync.operatingDate >= chartFromDate && pendingSync.operatingDate <= chartToDate)) await reloadForBothRanges();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Chưa lưu được dữ liệu."); }
     finally { setSavingSync(false); }

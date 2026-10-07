@@ -130,7 +130,8 @@ export function validateQlktSyncPayload(value: unknown): QlktSyncPayload | null 
       || unavailableHeatRateUnits.some(unit => unit !== "1" && unit !== "2"))) return null;
     if (unavailableHeatRateUnits?.some(unit => (unit === "1" ? ["DA", "DC", "DE", "DG"] : ["DB", "DD", "DF", "DH"])
       .some(code => entries.some(entry => entry.fieldCode === code)))) return null;
-    return entries.length ? { version: 1, operatingDate: raw.operatingDate, sourcePage: raw.sourcePage.slice(0, 500), entries,
+    const bothStopped = unavailableHeatRateUnits?.includes("1") && unavailableHeatRateUnits.includes("2") && raw.entries.length === 0;
+    return entries.length || bothStopped ? { version: 1, operatingDate: raw.operatingDate, sourcePage: raw.sourcePage.slice(0, 500), entries,
       ...(unavailableHeatRateUnits?.length ? { unavailableHeatRateUnits: [...new Set(unavailableHeatRateUnits)] } : {}) } : null;
   } catch {
     return null;
@@ -204,7 +205,6 @@ export function validateQlktUnifiedSyncPayload(value: unknown): QlktUnifiedSyncP
     if (!hasCodes(daily, ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"])) return null;
     const hasS1HeatRate = hasCodes(heatRate, ["DA", "DC", "DE", "DG"]);
     const hasS2HeatRate = hasCodes(heatRate, ["DB", "DD", "DF", "DH"]);
-    if (!hasS1HeatRate && !hasS2HeatRate) return null;
     if (!hasS1HeatRate && !heatRate.unavailableHeatRateUnits?.includes("1")) return null;
     if (!hasS2HeatRate && !heatRate.unavailableHeatRateUnits?.includes("2")) return null;
     if (!hasCodes(pmis02Pd, ["J157", "K157", "J158", "K158", "C181", "D181", "F181"])) return null;
