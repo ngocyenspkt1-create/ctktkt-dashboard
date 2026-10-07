@@ -8,6 +8,11 @@ import {
   type CtktktDayEntries,
 } from "./ctktkt-report.ts";
 import { isCtktktOilEventCode } from "./ctktkt-oil-event.ts";
+import {
+  calculateCtktktOperationEventOil,
+  CTKTKT_OPERATION_EVENTS_CELL,
+  parseCtktktOperationEvents,
+} from "./ctktkt-operation-events.ts";
 
 export const CTKTKT_LINKED_DAILY_CODES = new Set([
   "B", "C", "H", "I", "X", "AE", "AF", "AE_ADJ", "AF_ADJ", "AJ", "AT", "BN", "BQ", "BR", "CJ", "CN", "CC", "CD", "CE", "CF", "Q181",
@@ -70,11 +75,21 @@ export function deriveDailyValuesFromCtktkt(
   setNumber(result, "AT", numberOf(current, "W87"));
   setNumber(result, "CJ", calculateDailyAverageMoisture(current, previous));
 
-  const oilEventCode = current.STARTUP_EVENT || "";
-  const oilEvent = isCtktktOilEventCode(oilEventCode)
-    ? calculateOilEventSummary(current, oilEventCode)
-    : null;
-  setNumber(result, "X", oilEvent?.totalTonnes);
+  const operationEvents = parseCtktktOperationEvents(current[CTKTKT_OPERATION_EVENTS_CELL]);
+  if (operationEvents.length > 0) {
+    const eventTotals = operationEvents.map(event => calculateCtktktOperationEventOil(event).total);
+    const allEventsComplete = eventTotals.every((value): value is number => value !== null);
+    setNumber(result, "X", allEventsComplete
+      ? eventTotals.reduce((total, value) => total + value, 0)
+      : null);
+  } else {
+    // Giữ liên kết cho dữ liệu cũ chưa có danh sách STARTUP_EVENTS_JSON.
+    const oilEventCode = current.STARTUP_EVENT || "";
+    const oilEvent = isCtktktOilEventCode(oilEventCode)
+      ? calculateOilEventSummary(current, oilEventCode)
+      : null;
+    setNumber(result, "X", oilEvent?.totalTonnes);
+  }
 
   const nh3 = calculateNh3Summary(applyNh3StartLevelCarryover(current, previous), null, null);
   setNumber(result, "BN", nh3.usedTonnes);

@@ -6,6 +6,7 @@ import {
   deriveDailyValuesFromCtktkt,
   mergeDailyInputsWithCtktkt,
 } from "../lib/daily-source-links.ts";
+import { createCtktktOperationEvent } from "../lib/ctktkt-operation-events.ts";
 
 function fillRange(target, column, value) {
   for (let row = 16; row <= 27; row += 1) target[`${column}${row}`] = String(value);
@@ -83,6 +84,28 @@ test("monthly HFO uses the total shown in CTKTKT unit event group", () => {
 
   const linked = deriveDailyValuesFromCtktkt(current);
   assert.equal(linked.X, "30");
+});
+
+test("monthly HFO sums completed event totals for both units on the same day", () => {
+  const s1 = createCtktktOperationEvent("S1", "shutdown");
+  s1.points.oil_burn_start = { time: "2026-10-06T00:15", power: {}, oilFeed: "100", oilReturn: "10" };
+  s1.points.oil_cut = { time: "2026-10-06T02:55", power: {}, oilFeed: "130", oilReturn: "15" };
+  const s2 = createCtktktOperationEvent("S2", "shutdown");
+  s2.points.oil_burn_start = { time: "2026-10-06T00:15", power: {}, oilFeed: "1000", oilReturn: "100" };
+  s2.points.oil_cut = { time: "2026-10-06T02:55", power: {}, oilFeed: "1040", oilReturn: "110" };
+
+  const linked = deriveDailyValuesFromCtktkt({ STARTUP_EVENTS_JSON: JSON.stringify([s1, s2]) });
+  assert.equal(linked.X, "55");
+});
+
+test("monthly HFO stays blank when any saved event has incomplete oil meters", () => {
+  const complete = createCtktktOperationEvent("S1", "incident_oil");
+  complete.points.oil_burn_start = { time: "2026-10-06T00:15", power: {}, oilFeed: "100", oilReturn: "10" };
+  complete.points.oil_cut = { time: "2026-10-06T02:55", power: {}, oilFeed: "130", oilReturn: "15" };
+  const incomplete = createCtktktOperationEvent("S2", "shutdown");
+
+  const linked = deriveDailyValuesFromCtktkt({ STARTUP_EVENTS_JSON: JSON.stringify([complete, incomplete]) });
+  assert.equal(linked.X, undefined);
 });
 
 test("QLKT monthly synchronization excludes fields already linked from CTKTKT", () => {
