@@ -119,6 +119,59 @@ async function prepareDateWithRetry(tabId, operatingDate, attempts = 20, interva
   return result;
 }
 
+// Executed in MAIN: the isolated content script cannot access QLKT's widgets.
+function selectHeatRateUnitInPage(targetUnit) {
+  if (targetUnit !== "1" && targetUnit !== "2") throw new Error("Tổ máy không hợp lệ.");
+  const unitOf = option => {
+    const text = `${option.textContent || ""} ${option.value || ""}`.toLowerCase();
+    return /(?:dh1[_ -]*)?mf[_ -]*2\b/.test(text) ? "2" : /(?:dh1[_ -]*)?mf[_ -]*1\b/.test(text) ? "1" : null;
+  };
+  const selects = [...document.querySelectorAll("select")];
+  const select = selects.find(item => /cbSelectMainAsset/i.test(item.id || item.name || ""))
+    || selects.find(item => ["1", "2"].every(unit => [...item.options].some(option => unitOf(option) === unit)));
+  const option = [...(select?.options || [])].find(item => unitOf(item) === targetUnit);
+  if (!select || !option) throw new Error(`Không tìm thấy danh sách DH1_MF${targetUnit}.`);
+  const baseId = (select.id || "").replace(/_input$/, "");
+  const pf = globalThis.PrimeFaces;
+  let widget;
+  for (const id of [baseId, select.id]) {
+    try { widget = pf?.getWidgetById?.(id); } catch { /* older PrimeFaces */ }
+    if (widget) break;
+  }
+  widget ||= Object.values(pf?.widgets || {}).find(item => item?.id === baseId || item?.input?.[0] === select);
+  if (typeof widget?.selectValue === "function" && typeof widget?.triggerChange === "function") {
+    // selectValue is silent in PrimeFaces; explicitly notify its AJAX handler.
+    widget.selectValue(option.value);
+    widget.triggerChange();
+    return { ok: true, method: "PrimeFaces.triggerChange" };
+  }
+  if (typeof widget?.selectItem === "function" && typeof widget?.selectItemFromOption === "function") {
+    const widgetOption = widget.options.filter(function () { return this.value === option.value; });
+    widget.selectItem(widget.selectItemFromOption(widgetOption), false);
+    return { ok: true, method: "PrimeFaces.selectItem" };
+  }
+  if (document.getElementById(`${baseId}_label`)) {
+    throw new Error("Widget Tổ máy QLKT chưa sẵn sàng; chưa kích hoạt tải bảng.");
+  }
+  select.value = option.value;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  return { ok: true, method: "native.change" };
+}
+
+async function selectHeatRateUnitForTab(sender, targetUnit) {
+  if (!Number.isInteger(sender?.tab?.id) || sender.frameId !== 0
+    || !QLKT_PATTERN.test(sender.url || "")
+    || new URL(sender.url).pathname.toLowerCase() !== new URL(DEFAULT_HEATRATE_URL).pathname.toLowerCase()) {
+    throw new Error("Chỉ màn hình Cân bằng nhiệt QLKT được phép chọn Tổ máy.");
+  }
+  if (targetUnit !== "1" && targetUnit !== "2") throw new Error("Tổ máy không hợp lệ.");
+  const executions = await chrome.scripting.executeScript({
+    target: { tabId: sender.tab.id }, world: "MAIN", func: selectHeatRateUnitInPage, args: [targetUnit],
+  });
+  if (!executions?.[0]?.result?.ok) throw new Error("QLKT chưa xác nhận thao tác chọn Tổ máy.");
+  return executions[0].result;
+}
+
 async function readMeterFromPageWorld(tabId, operatingDate, sourcePage) {
   const executions = await chrome.scripting.executeScript({
     target: { tabId },
@@ -233,7 +286,7 @@ async function readSource(source, url, operatingDate) {
       }
     });
     if (existingSourceTab?.id) {
-        tab = await chrome.tabs.update(existingSourceTab.id, { active: true, ...(source === "heatrate" ? { url } : {}) });
+        tab = await chrome.tabs.update(existingSourceTab.id, { active: true });
         if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
     }
     if (!tab) {
@@ -269,7 +322,7 @@ async function readSource(source, url, operatingDate) {
           result = { ...result, error: `${result?.error || "Không đọc được màn hình Công tơ PPA."} [Đọc trực tiếp widget: ${pageWorldError}] [${prepInfo}]` };
         }
       }
-    } else result = await readValuesWithRetry(tabId, operatingDate, source === "heatrate" ? 2 : 24);
+    } else result = await readValuesWithRetry(tabId, operatingDate, source === "heatrate" ? 1 : 24);
     if (!result?.ok) throw new Error(`Màn hình ${SOURCE_LABELS[source]}: ${result?.error || "không đọc được dữ liệu."}`);
     if (source === "meter") {
       if (result.payload?.kind !== "ppa-meter" || result.payload?.readings?.length !== 6) {
@@ -479,7 +532,13 @@ async function syncUnified(operatingDate) {
   };
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "SELECT_QLKT_HEATRATE_UNIT") {
+    selectHeatRateUnitForTab(sender, message.unit)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không chuyển được Tổ máy QLKT." }));
+    return true;
+  }
   const task = message?.type === "SYNC_UNIFIED_QLKT" ? syncUnified
     : message?.type === "SYNC_ALL_QLKT" ? syncAll
     : message?.type === "SYNC_PPA_QLKT" ? syncPpa

@@ -30,7 +30,7 @@ async function navigate({ existing = false, redirect = false } = {}) {
   const context = vm.createContext({ chrome, URL, QLKT_PATTERN: /^http:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\//,
     SOURCE_LABELS: { heatrate: 'Cân bằng nhiệt' },
     waitForTab: async () => {}, prepareDateWithRetry: async () => ({ ok: true }), wait: async () => {},
-    readValuesWithRetry: async () => ({ ok: true, payload: { operatingDate: '2026-09-25', entries } }),
+    readValuesWithRetry: async (_tabId, _date, attempts) => { calls.push({ action: 'read', attempts }); return { ok: true, payload: { operatingDate: '2026-09-25', entries } }; },
     missingSourceFields: () => [],
   });
   vm.runInContext(source.slice(source.indexOf('async function readSource'), source.indexOf('async function syncAll')) + '\nglobalThis.run = readSource;', context);
@@ -44,9 +44,28 @@ test('missing heat-rate tab is opened automatically', async () => {
   assert.equal(payload.entries.length, 8);
 });
 
-test('existing heat-rate tab is navigated to the canonical URL before reading', async () => {
+test('existing canonical heat-rate tab is reused without a full reload or nested read retries', async () => {
   const { calls } = await navigate({ existing: true });
-  assert.ok(calls.some(call => call.action === 'update' && call.id === 2 && call.url === url));
+  assert.ok(calls.some(call => call.action === 'update' && call.id === 2 && call.active && !call.url));
+  assert.ok(calls.some(call => call.action === 'read' && call.attempts === 1));
+});
+
+test('unit selection executes in MAIN only for the originating heat-rate tab and allowed units', async () => {
+  const executions = [];
+  const context = vm.createContext({ URL, QLKT_PATTERN: /^https?:\/\/qlkt\.tpcduyenhai\.com\.vn\/qlkt\//i,
+    DEFAULT_HEATRATE_URL: url,
+    chrome: { scripting: { executeScript: async request => { executions.push(request); return [{ result: { ok: true } }]; } } },
+  });
+  vm.runInContext(source.slice(source.indexOf('function selectHeatRateUnitInPage'), source.indexOf('async function readMeterFromPageWorld')) + '\nglobalThis.choose = selectHeatRateUnitForTab;', context);
+  const sender = { tab: { id: 2 }, frameId: 0, url };
+  await context.choose(sender, '2');
+  assert.equal(executions[0].world, 'MAIN');
+  assert.equal(executions[0].target.tabId, 2);
+  assert.deepEqual(Array.from(executions[0].args), ['2']);
+  await assert.rejects(context.choose(sender, '3'), /không hợp lệ/);
+  await assert.rejects(context.choose({ ...sender, url: 'https://ctktkt-dashboard.vercel.app/pmis-report' }, '2'), /Chỉ màn hình/);
+  await assert.rejects(context.choose({ ...sender, frameId: 1 }, '2'), /Chỉ màn hình/);
+  assert.equal(executions.length, 1);
 });
 
 test('internal QLKT redirect is reported before trying to read a unit selector', async () => {

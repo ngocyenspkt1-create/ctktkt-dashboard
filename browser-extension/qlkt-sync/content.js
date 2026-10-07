@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.36";
+  const CONTENT_SCRIPT_VERSION = "0.4.37";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -292,15 +292,13 @@
     if (!targetOption) throw new Error(`Không tìm thấy Tổ máy DH1_MF${targetUnit} trong danh sách chọn.`);
     if (detectHeatRateUnit() === targetUnit) return waitForHeatRateEntries(targetUnit);
     const before = sampleHeatRateSignature();
-    const widget = globalThis.PrimeFaces?.getWidgetById?.(select.id);
-    if (typeof widget?.selectValue === "function") {
-      widget.selectValue(targetOption.value);
-    } else {
-      select.value = targetOption.value;
-      select.dispatchEvent(new Event("input", { bubbles: true }));
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    }
+    await requestHeatRateUnit(targetUnit);
     return waitForHeatRateEntries(targetUnit, before);
+  }
+
+  async function requestHeatRateUnit(unit) {
+    const response = await chrome.runtime.sendMessage({ type: "SELECT_QLKT_HEATRATE_UNIT", unit });
+    if (!response?.ok) throw new Error(response?.error || "QLKT chưa xác nhận chuyển Tổ máy.");
   }
 
   // 4 chỉ tiêu mới của báo cáo "THEO PMIS" (Trung bình công suất đầu cực, Tổn thất khói khô trung
@@ -352,7 +350,7 @@
     }
     const required = unit === "2" ? ["DB", "DD", "DF", "DH"] : ["DA", "DC", "DE", "DG"];
     const missing = required.filter(code => !lastEntries.some(entry => entry.fieldCode === code));
-    throw new Error(`QLKT DH1_MF${unit} chưa nạp đủ/ổn định 4 chỉ tiêu Trung bình${missing.length ? ` (thiếu ${missing.join(", ")})` : ""}. Hãy kiểm tra bảng của tổ máy này và thử đồng bộ lại.`);
+    throw new Error(`QLKT DH1_MF${unit} chưa nạp đủ/ổn định 4 chỉ tiêu Trung bình${missing.length ? ` (thiếu ${missing.join(", ")})` : ""}. Bộ đọc v${CONTENT_SCRIPT_VERSION}; tổ máy đang chọn: ${detectHeatRateUnit() ? `DH1_MF${detectHeatRateUnit()}` : "chưa xác định"}. Hãy kiểm tra bảng của tổ máy này và thử đồng bộ lại.`);
   }
 
   // Đọc cả 2 Tổ máy (S1+S2) trong 1 lần gọi: đọc Tổ máy đang chọn trước, rồi tự chuyển dropdown
@@ -381,7 +379,8 @@
       readingsByUnit[otherUnit] = await switchHeatRateUnit(otherUnit);
     } finally {
       if (originalUnit && detectHeatRateUnit() !== originalUnit) {
-        try { await switchHeatRateUnit(originalUnit); } catch { /* đã lấy đủ dữ liệu cần thiết, bỏ qua lỗi khôi phục */ }
+        // Restore the user's selection without waiting to read this unit again.
+        try { await requestHeatRateUnit(originalUnit); } catch { /* giữ nguyên kết quả/lỗi đọc trước đó */ }
       }
     }
     const entries = [...(readingsByUnit["1"]?.entries || []), ...(readingsByUnit["2"]?.entries || [])];
