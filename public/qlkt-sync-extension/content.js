@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.35";
+  const CONTENT_SCRIPT_VERSION = "0.4.36";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -232,7 +232,20 @@
   }
 
   function detectHeatRateUnit() {
+    const mainSelect = findMainAssetSelect();
+    if (mainSelect) {
+      // PrimeFaces can leave the hidden <select> value ahead of the displayed
+      // SelectOneMenu label while an AJAX update is still pending. The visible
+      // label represents the selection that the user/widget actually applied.
+      const label = mainSelect.id ? document.getElementById(`${mainSelect.id.replace(/_input$/, "")}_label`) : null;
+      const labelUnit = heatRateUnitFromText(label?.textContent || "");
+      if (labelUnit) return labelUnit;
+      const selected = mainSelect.options?.[mainSelect.selectedIndex];
+      const selectedUnit = optionHeatRateUnit(selected) || heatRateUnitFromText(mainSelect.value);
+      if (selectedUnit) return selectedUnit;
+    }
     for (const select of document.querySelectorAll("select")) {
+      if (select === mainSelect) continue;
       const selected = select.options?.[select.selectedIndex];
       const unit = optionHeatRateUnit(selected) || heatRateUnitFromText(select.value);
       if (unit) return unit;
@@ -277,7 +290,7 @@
     if (!select) throw new Error("Không tìm thấy danh sách chọn Tổ máy trên màn hình này.");
     const targetOption = [...select.options].find(option => optionHeatRateUnit(option) === targetUnit);
     if (!targetOption) throw new Error(`Không tìm thấy Tổ máy DH1_MF${targetUnit} trong danh sách chọn.`);
-    if (select.value === targetOption.value) return waitForHeatRateEntries(targetUnit);
+    if (detectHeatRateUnit() === targetUnit) return waitForHeatRateEntries(targetUnit);
     const before = sampleHeatRateSignature();
     const widget = globalThis.PrimeFaces?.getWidgetById?.(select.id);
     if (typeof widget?.selectValue === "function") {

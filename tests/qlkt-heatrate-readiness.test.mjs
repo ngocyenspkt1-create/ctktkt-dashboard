@@ -5,32 +5,33 @@ import vm from 'node:vm';
 import { validateQlktSyncPayload } from '../lib/qlkt-sync.ts';
 
 // Exercise the real reader against a PrimeFaces table that clears during AJAX.
-function reader({ initialDelay = 0, neverLoads = false, outageUnit, initialUnit = '1', partialOutage = false, wrongWarning = false, controlsDelay = 0 } = {}) {
+function reader({ initialDelay = 0, neverLoads = false, outageUnit, initialUnit = '1', hiddenUnit = initialUnit, partialOutage = false, wrongWarning = false, controlsDelay = 0 } = {}) {
   const source = readFileSync(new URL('../browser-extension/qlkt-sync/content.js', import.meta.url), 'utf8');
   let now = 0, readyAt = initialDelay;
+  let widgetUnit = initialUnit;
   const widgetSelections = [];
   const cell = textContent => ({ textContent });
   const row = texts => ({ cells: texts.map(cell), textContent: texts.join(' ') });
   const labels = { rows: [row(['Tên đại lượng', 'Ký hiệu']), ...['PG', 'L1', 'Pbn', 'T'].map(symbol => row(['Thông số', symbol]))] };
   const select = {
-    id: 'formMain:cbSelectMainAsset', value: `MF${initialUnit}`,
+    id: 'formMain:cbSelectMainAsset', value: `MF${hiddenUnit}`,
     options: [{ value: 'MF1', textContent: 'DH1_MF1' }, { value: 'MF2', textContent: 'DH1_MF2' }],
     get selectedIndex() { return this.value === 'MF1' ? 0 : 1; },
     dispatchEvent(event) { if (event.type === 'change') readyAt = now + 1500; },
   };
   const document = {
     body: { get innerText() {
-      return now >= readyAt && select.value === `MF${outageUnit}`
+      return now >= readyAt && widgetUnit === outageUnit
         ? `Dừng sự cố: DH1_MF${wrongWarning ? '2' : outageUnit} (2026-09-21 09:56:00 - 2026-09-25 03:30:00)` : '';
     } },
-    getElementById() { return null; },
+    getElementById(id) { return id === `${select.id}_label` ? { textContent: `DH1_MF${widgetUnit}` } : null; },
     querySelectorAll(selector) {
       if (selector === 'select') return now >= controlsDelay ? [select] : [];
       if (selector === 'table') {
         const ready = now >= readyAt && !neverLoads;
-        const numbers = select.value === 'MF1' ? ['500,12', '4,58', '-93,21', '29,96'] : ['510,34', '4,68', '-93,38', '29,60'];
+        const numbers = widgetUnit === '1' ? ['500,12', '4,58', '-93,21', '29,96'] : ['510,34', '4,68', '-93,38', '29,60'];
         return [labels, { rows: [row(['Trung bình']), ...numbers.map((value, index) => row([
-          ready && (select.value !== `MF${outageUnit}` || (partialOutage && index === 0)) ? value : '',
+          ready && (widgetUnit !== outageUnit || (partialOutage && index === 0)) ? value : '',
         ]))] }];
       }
       return [];
@@ -40,6 +41,7 @@ function reader({ initialDelay = 0, neverLoads = false, outageUnit, initialUnit 
     PrimeFaces: { getWidgetById(id) { return id === select.id ? { selectValue(value) {
       widgetSelections.push(value);
       select.value = value;
+      widgetUnit = value.endsWith('2') ? '2' : '1';
       select.dispatchEvent(new Event('change'));
     } } : null; } },
     Date: { now: () => now }, Event: class { constructor(type) { this.type = type; } },
@@ -63,6 +65,15 @@ test('heat-rate sync waits for all four values after AJAX clears the other unit 
 test('heat-rate sync also waits for the initially selected unit after date refresh', async () => {
   const fixture = reader({ initialDelay: 1500 });
   assert.equal((await fixture.read()).entries.length, 8);
+});
+
+test('heat-rate sync follows visible PrimeFaces unit when hidden select is already ahead', async () => {
+  const fixture = reader({ initialUnit: '1', hiddenUnit: '2' });
+  const payload = await fixture.read();
+  assert.equal(payload.entries.length, 8);
+  assert.equal(payload.entries.find(entry => entry.fieldCode === 'DD').value, '4.68');
+  assert.ok(fixture.widgetSelections.includes('MF2'));
+  assert.equal(fixture.selected(), 'MF1');
 });
 
 test('heat-rate sync waits for the unit selector to render before reading either unit', async () => {
