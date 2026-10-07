@@ -98,11 +98,22 @@ test("monthly HFO sums completed event totals for both units on the same day", (
   assert.equal(linked.X, "55");
 });
 
-test("monthly HFO stays blank when any saved event has incomplete oil meters", () => {
+test("monthly HFO ignores an empty event shell when another event is complete", () => {
+  const complete = createCtktktOperationEvent("S1", "incident_oil");
+  complete.points.oil_burn_start = { time: "2026-10-06T00:15", power: {}, oilFeed: "100", oilReturn: "10" };
+  complete.points.oil_cut = { time: "2026-10-06T02:55", power: {}, oilFeed: "130", oilReturn: "15" };
+  const emptyShell = createCtktktOperationEvent("S2", "startup");
+
+  const linked = deriveDailyValuesFromCtktkt({ STARTUP_EVENTS_JSON: JSON.stringify([complete, emptyShell]) });
+  assert.equal(linked.X, "25");
+});
+
+test("monthly HFO stays blank when an event with entered oil meters is incomplete", () => {
   const complete = createCtktktOperationEvent("S1", "incident_oil");
   complete.points.oil_burn_start = { time: "2026-10-06T00:15", power: {}, oilFeed: "100", oilReturn: "10" };
   complete.points.oil_cut = { time: "2026-10-06T02:55", power: {}, oilFeed: "130", oilReturn: "15" };
   const incomplete = createCtktktOperationEvent("S2", "shutdown");
+  incomplete.points.oil_burn_start = { time: "2026-10-06T00:15", power: {}, oilFeed: "200", oilReturn: "" };
 
   const linked = deriveDailyValuesFromCtktkt({ STARTUP_EVENTS_JSON: JSON.stringify([complete, incomplete]) });
   assert.equal(linked.X, undefined);

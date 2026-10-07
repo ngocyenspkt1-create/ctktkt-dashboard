@@ -77,10 +77,18 @@ export function deriveDailyValuesFromCtktkt(
 
   const operationEvents = parseCtktktOperationEvents(current[CTKTKT_OPERATION_EVENTS_CELL]);
   if (operationEvents.length > 0) {
-    const eventTotals = operationEvents.map(event => calculateCtktktOperationEventOil(event).total);
-    const allEventsComplete = eventTotals.every((value): value is number => value !== null);
-    setNumber(result, "X", allEventsComplete
-      ? eventTotals.reduce((total, value) => total + value, 0)
+    // Bỏ qua bản ghi sự kiện chưa nhập công tơ dầu nào; nếu đã nhập một phần,
+    // giữ tổng ở trạng thái chưa hoàn tất thay vì âm thầm cộng thiếu.
+    const enteredEventTotals = operationEvents.flatMap(event => {
+      const hasOilMeterInput = Object.values(event.points).some(point =>
+        Boolean(point.oilFeed?.trim() || point.oilReturn?.trim()),
+      );
+      return hasOilMeterInput ? [calculateCtktktOperationEventOil(event).total] : [];
+    });
+    const allEnteredEventsComplete = enteredEventTotals.length > 0
+      && enteredEventTotals.every((value): value is number => value !== null);
+    setNumber(result, "X", allEnteredEventsComplete
+      ? enteredEventTotals.reduce((total, value) => total + value, 0)
       : null);
   } else {
     // Giữ liên kết cho dữ liệu cũ chưa có danh sách STARTUP_EVENTS_JSON.
