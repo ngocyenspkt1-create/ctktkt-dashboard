@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.34";
+  const CONTENT_SCRIPT_VERSION = "0.4.35";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -279,9 +279,14 @@
     if (!targetOption) throw new Error(`Không tìm thấy Tổ máy DH1_MF${targetUnit} trong danh sách chọn.`);
     if (select.value === targetOption.value) return waitForHeatRateEntries(targetUnit);
     const before = sampleHeatRateSignature();
-    select.value = targetOption.value;
-    select.dispatchEvent(new Event("input", { bubbles: true }));
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    const widget = globalThis.PrimeFaces?.getWidgetById?.(select.id);
+    if (typeof widget?.selectValue === "function") {
+      widget.selectValue(targetOption.value);
+    } else {
+      select.value = targetOption.value;
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
     return waitForHeatRateEntries(targetUnit, before);
   }
 

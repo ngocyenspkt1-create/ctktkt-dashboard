@@ -8,6 +8,7 @@ import { validateQlktSyncPayload } from '../lib/qlkt-sync.ts';
 function reader({ initialDelay = 0, neverLoads = false, outageUnit, initialUnit = '1', partialOutage = false, wrongWarning = false, controlsDelay = 0 } = {}) {
   const source = readFileSync(new URL('../browser-extension/qlkt-sync/content.js', import.meta.url), 'utf8');
   let now = 0, readyAt = initialDelay;
+  const widgetSelections = [];
   const cell = textContent => ({ textContent });
   const row = texts => ({ cells: texts.map(cell), textContent: texts.join(' ') });
   const labels = { rows: [row(['Tên đại lượng', 'Ký hiệu']), ...['PG', 'L1', 'Pbn', 'T'].map(symbol => row(['Thông số', symbol]))] };
@@ -36,13 +37,18 @@ function reader({ initialDelay = 0, neverLoads = false, outageUnit, initialUnit 
     },
   };
   const context = vm.createContext({ document, location: { href: 'http://qlkt/can_bang_nhiet.jsf' },
+    PrimeFaces: { getWidgetById(id) { return id === select.id ? { selectValue(value) {
+      widgetSelections.push(value);
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+    } } : null; } },
     Date: { now: () => now }, Event: class { constructor(type) { this.type = type; } },
     setTimeout(callback, ms) { now += ms; callback(); },
   });
   const helpers = source.slice(source.indexOf('  const cleanText'), source.indexOf('  const normalizeQlktNumber'));
   const functions = source.slice(source.indexOf('  function findColumnTableByHeader'), source.indexOf('  function extractPpaMeterPayload'));
   vm.runInContext(`${helpers}\n${functions}\nglobalThis.read = extractHeatRatePayload;`, context);
-  return { read: () => context.read('2026-09-25'), selected: () => select.value };
+  return { read: () => context.read('2026-09-25'), selected: () => select.value, widgetSelections };
 }
 
 test('heat-rate sync waits for all four values after AJAX clears the other unit table', async () => {
@@ -79,6 +85,7 @@ test('S1 outage with four blank averages does not block complete S2 readings', a
     assert.deepEqual(Array.from(payload.unavailableHeatRateUnits), ['1']);
     assert.equal(payload.entries.find(item => item.fieldCode === 'DD').value, '4.68');
     assert.equal(fixture.selected(), `MF${initialUnit}`);
+    assert.ok(fixture.widgetSelections.includes('MF2'));
     assert.equal(validateQlktSyncPayload(payload)?.entries.length, 4);
   }
 });
