@@ -13,11 +13,11 @@ function normalize(text: string) {
 
 function NavList({ active, isAdmin, onNavigate }: { active: string; isAdmin: boolean; onNavigate?: () => void }) {
   return (
-    <nav aria-label="Chức năng" className="flex flex-col gap-5">
+    <nav aria-label="Chức năng" className="app-nav flex flex-col gap-6">
       {visibleGroups(isAdmin).map(group => (
         <div key={group.title}>
-          <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{group.title}</p>
-          <ul className="flex flex-col gap-0.5">
+          <p className="app-nav-group px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{group.title}</p>
+          <ul className="flex flex-col gap-1">
             {group.items.map(item => {
               const selected = item.key === active;
               const Icon = item.icon;
@@ -27,7 +27,7 @@ function NavList({ active, isAdmin, onNavigate }: { active: string; isAdmin: boo
                     href={item.href}
                     onClick={onNavigate}
                     aria-current={selected ? "page" : undefined}
-                    className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    className={`app-nav-link group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
                       selected ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     }`}
                   >
@@ -58,9 +58,9 @@ export function MobileNav({ active, isAdmin, brand }: { active: string; isAdmin:
           <Menu className="size-5" aria-hidden />
         </button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 gap-0 bg-white p-0">
+      <SheetContent side="left" className="app-mobile-nav w-72 gap-0 p-0">
         <SheetTitle className="sr-only">Danh mục chức năng</SheetTitle>
-        <div className="border-b border-slate-100 p-4">{brand}</div>
+        <div className="app-sidebar-brand p-4">{brand}</div>
         <div className="flex-1 overflow-y-auto p-3">
           <NavList active={active} isAdmin={isAdmin} onNavigate={() => setOpen(false)} />
         </div>
