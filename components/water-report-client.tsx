@@ -457,7 +457,7 @@ export function WaterReportClient() {
 
 
   return (
-    <div className="space-y-4">
+    <div className="module-report water-workspace space-y-3">
       <ExportMissingDialog
         open={exportMissingOpen}
         items={missingWaterShifts}
@@ -469,9 +469,9 @@ export function WaterReportClient() {
       />
       <MissingDataAlert items={missingWaterShifts} loading={loading} scope={`theo dõi nước tháng ${month.slice(5, 7)}/${month.slice(0, 4)}`} />
       {/* 1. Header & Điều khiển tháng */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="module-hero flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="module-heading-copy">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xl">💧</span>
             <h1 className="text-xl font-extrabold tracking-tight text-slate-800">
               BẢNG THEO DÕI LƯỢNG NƯỚC SỬ DỤNG
@@ -701,7 +701,7 @@ export function WaterReportClient() {
         </div>
 
         {/* Khung cuộn bảng */}
-        <div className="overflow-x-auto max-h-[70vh]">
+        <div className="module-table-scroll water-table-scroll overflow-x-auto max-h-[70vh]">
           <table className="w-full border-collapse text-[11px] text-slate-800 select-text">
             {/* Header 2 tầng: Nền xanh lá #00B050 chuẩn file gốc */}
             <thead className="sticky top-0 z-20 bg-[#00b050] text-black font-extrabold shadow-sm">

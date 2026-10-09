@@ -610,7 +610,7 @@ export function BcsxReport() {
     const needDummyRow = (endIdx - startIdx) < 16;
 
     return (
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="module-shift-card overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {title && (
           <div className={`flex items-center justify-between border-b px-2.5 py-1.5 ${headerClass || "bg-[#dcebf5] text-[#173b64]"}`}>
             <span className="font-extrabold text-xs tracking-tight">{title}</span>
@@ -695,7 +695,7 @@ export function BcsxReport() {
     if (target) void exportFile(target);
   }
 
-  return <div className="flex flex-col gap-3">
+  return <div className="module-report bcsx-workspace flex flex-col gap-3">
     <ExportMissingDialog
       open={exportMissingOpen}
       items={exportMissingItems}
@@ -707,9 +707,9 @@ export function BcsxReport() {
     />
     <MissingDataAlert items={bcsxMissing} loading={loading} scope={`BCSX ngày ${operatingDate.split("-").reverse().join("/")}`} />
     {/* Header trang tinh gọn */}
-    <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
+    <div className="module-hero rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div>
+        <div className="module-heading-copy">
           <h1 className="text-base font-extrabold text-[#173b64]">Nhập liệu vận hành theo ca — Xuất BCSX NMĐ</h1>
           <p className="text-xs text-slate-500">Nhập 1 lần trên web, xuất lại đúng định dạng file BCSX gửi Điều độ NSMO cho cả 3 tổ máy A0/S1/S2.</p>
         </div>
@@ -732,7 +732,7 @@ export function BcsxReport() {
 
     {/* 1. Bảng thông số nửa giờ — 3 Ca song song không cần cuộn */}
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+      <div className="module-section-heading flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#173b64]">
             1. Bảng thông số nửa giờ — tổ máy {unit}

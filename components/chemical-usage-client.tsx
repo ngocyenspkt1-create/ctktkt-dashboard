@@ -209,10 +209,10 @@ export function ChemicalUsageClient() {
   }
 
   return (
-    <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="module-report chemical-workspace mx-auto flex w-full min-w-0 flex-col gap-3">
+      <section className="module-hero rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
+          <div className="module-heading-copy">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-700">
               <Beaker className="size-4" aria-hidden /> Theo dõi theo ngày
             </div>
@@ -229,7 +229,7 @@ export function ChemicalUsageClient() {
         </div>
       </section>
 
-      <section aria-label="Lọc nhật ký theo loại hóa chất" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section aria-label="Lọc nhật ký theo loại hóa chất" className="module-stat-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {catalog.map(item => (
           <button
             key={item.code}
@@ -252,8 +252,8 @@ export function ChemicalUsageClient() {
         ))}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="chemical-content-grid grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="chemical-entry-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <h3 className="font-semibold text-slate-900">{editingId === null ? "Nhập lượng sử dụng" : `Chỉnh sửa bản ghi #${editingId}`}</h3>
             {editingId !== null && <button type="button" onClick={cancelEdit} className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"><X className="size-4" /> Hủy sửa</button>}

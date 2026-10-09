@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SpreadsheetInputBehavior } from "@/components/spreadsheet-input-behavior";
 import "./interface.css";
+import "./engineering-workspace.css";
 
 export const metadata: Metadata = {
   title: "Quản lý chỉ tiêu KTKT PXVH1",

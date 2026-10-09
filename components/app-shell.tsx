@@ -70,7 +70,7 @@ export async function AppShell({ children, active }: { children: ReactNode; acti
               <LogoutButton />
             </div>
           </header>
-          <main className="app-content px-3 py-4 sm:px-5 lg:px-6 lg:py-6" data-module={active}>{children}</main>
+          <main className={`app-content ${active !== "data" ? "engineering-workspace" : ""} px-3 py-4 sm:px-5 lg:px-6 lg:py-6`} data-module={active}>{children}</main>
         </div>
       </div>
     </SessionProvider>

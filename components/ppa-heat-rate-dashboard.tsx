@@ -550,8 +550,8 @@ export function PpaHeatRateDashboard() {
       onFillMissing={() => { setExportMissingOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
       onExportAnyway={continuePpaExport}
     />
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div>
+    <div className="module-hero flex flex-wrap items-end justify-between gap-3">
+      <div className="module-heading-copy">
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Theo dõi hiệu suất vận hành</p>
         <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">So sánh trực quan SHN Thực tế và PPA</h1>
         <p className="mt-1 text-sm text-slate-500">Tổng hợp từ kết quả đã lưu theo ngày. Chọn khoảng thời gian để xem biểu đồ và bảng chi tiết.</p>
@@ -586,7 +586,7 @@ export function PpaHeatRateDashboard() {
       </ul>}
     </div>}
 
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="module-chart-grid grid gap-3 lg:grid-cols-3">
       {(["s1", "s2", "plant"] as UnitKey[]).map(unit => {
         const meta = UNIT_META[unit], summary = summaryFor(unit);
         const unitChartData = chartData(unit);
@@ -636,7 +636,7 @@ export function PpaHeatRateDashboard() {
 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2></div>
-      {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="w-full overflow-hidden">
+      {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="module-table-scroll w-full overflow-auto">
         <table className="report-data-table w-full table-fixed border-collapse text-[10px] [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-slate-200 xl:text-[11px]">
           <colgroup>
             <col style={{ width: "5%" }}/>

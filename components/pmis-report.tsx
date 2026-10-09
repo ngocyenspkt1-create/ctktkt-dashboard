@@ -294,12 +294,12 @@ export function PmisReport() {
     return n(metric.codes![unit]);
   }
 
-  return <section className="flex min-h-[calc(100vh-88px)] flex-col gap-2">
-    <h1 className="text-xl font-extrabold tracking-tight text-[#18233d]">Bảng thông số tổn thất khói</h1>
+  return <section className="module-report pmis-workspace flex min-h-[calc(100vh-88px)] flex-col gap-3">
+    <div className="module-heading-copy pmis-title"><p className="module-eyebrow">Phân tích hiệu suất · S1 / S2</p><h1 className="text-xl font-extrabold tracking-tight text-[#18233d]">Bảng thông số tổn thất khói</h1></div>
 
     {/* Cả 2 nhóm điều khiển (xem báo cáo + đồng bộ nhiều ngày) gộp vào đúng 1 hàng trên cùng để
         nhường tối đa chiều cao còn lại cho bảng và biểu đồ bên dưới. */}
-    <div className="flex flex-wrap items-end gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+    <div className="module-filter-bar flex flex-wrap items-end gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
       <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">TỪ NGÀY<DateField value={fromDate} max={toDate} onChange={setFromDate} className="h-8 w-[128px]"/></label>
       <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">ĐẾN NGÀY<DateField value={toDate} min={fromDate} max={today} onChange={setToDate} className="h-8 w-[128px]"/></label>
       <button type="button" onClick={applyManualRange} className="h-8 rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-3 text-xs font-bold text-[#354a9f]">Áp dụng</button>
@@ -346,7 +346,7 @@ type ValueFor = (unit: Unit, metric: typeof METRICS[number], date: string) => nu
 function PmisTable({ dates, valueFor }: { dates: string[]; valueFor: ValueFor }) {
   if (!dates.length) return <div className="grid min-h-40 place-items-center rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">Chưa chọn khoảng ngày hợp lệ.</div>;
   const dateColClass = `${HEADER_ROW_H} min-w-14 border border-[#c9791a] bg-[#e8973a] px-1.5 text-center align-middle text-[11px] font-extrabold text-white`;
-  return <div className="shrink-0 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+  return <div className="module-table-scroll pmis-table-scroll shrink-0 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
     <table className="w-full border-collapse text-xs" style={{ minWidth: `${LABEL_COL_PX + Math.max(dates.length, 12) * 56}px` }}>
       <thead><tr>
         <th className={`${HEADER_ROW_H} ${LABEL_COL} sticky left-0 z-10 border border-[#1d3f7a] bg-[#1d3f7a] px-1.5 text-left align-middle text-xs font-extrabold text-white`}>THEO PMIS</th>
@@ -408,7 +408,7 @@ function metricTooltipFormatter(value: unknown, name?: string | number) {
 // thị riêng). Nét vẽ tô đậm (strokeWidth 3, màu bão hòa cao) để dễ phân biệt.
 function PmisCharts({ dates, valueFor }: { dates: string[]; valueFor: ValueFor }) {
   if (!dates.length) return null;
-  return <div className="grid min-h-[360px] flex-1 grid-cols-2 gap-2">
+  return <div className="module-chart-grid grid min-h-[360px] flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
     {(["s1", "s2"] as Unit[]).map(unit => {
       const data = chartDataForUnit(unit, dates, valueFor);
       return <div key={unit} className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">

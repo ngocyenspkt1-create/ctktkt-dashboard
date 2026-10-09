@@ -1228,7 +1228,7 @@ export function CtktktReport() {
   }, [user, editableGroups]);
 
   return (
-    <section className="mx-auto grid w-full min-w-0 max-w-full gap-3 xl:max-w-[1600px]">
+    <section className="module-report ktkt-workspace mx-auto grid w-full min-w-0 max-w-full gap-3">
       <ExportMissingDialog
         open={exportMissingOpen}
         items={exportMissingItems}
@@ -1239,10 +1239,10 @@ export function CtktktReport() {
         onExportAnyway={continueCtktktOutput}
       />
       {/* 1. THANH TIÊU ĐỀ, CHỌN NGÀY VÀ ĐIỀU HÀNH */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
+      <div className="module-hero module-toolbar-card rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="module-heading-copy">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wider text-indigo-800 uppercase">
                 Báo cáo gốc · Tự tính theo công thức
               </span>
@@ -1422,7 +1422,7 @@ export function CtktktReport() {
 
       {/* 2. BẢNG KẾT QUẢ TÍNH TỰ ĐỘNG KPI & Ô NHẬP TAY CỤM 1 (I35, I36, W87) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="flex items-center justify-between border-b bg-[#f8faff] px-4 py-2.5">
+        <div className="module-section-heading flex flex-wrap items-center justify-between gap-2 border-b bg-[#f8faff] px-4 py-2.5">
           <div className="flex items-center gap-2">
             <h2 className="text-xs font-black text-[#173b64] uppercase tracking-wider">
               Cụm 1 · Thống kê chỉ tiêu KTKT NMNĐ Duyên Hải 1
@@ -1463,7 +1463,7 @@ export function CtktktReport() {
 
         {!isKpiCollapsed ? (
           <div>
-            <div className="overflow-x-auto">
+            <div className="module-table-scroll ktkt-kpi-scroll">
               <table className="report-data-table w-full text-xs">
                 <thead>
                   <tr className="border-b bg-[#e9f2fa] text-[#173b64]">
