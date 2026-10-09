@@ -1486,22 +1486,22 @@ export function CtktktReport() {
                   {metricRows.map(row => (
                     <tr key={row.key} className="hover:bg-slate-50/70">
                       <td className="p-2 font-medium text-slate-800">{row.label}</td>
-                      <td className="bg-cyan-50/30 p-2 text-center font-normal font-mono tabular-nums text-[#173b64] text-xs">
+                      <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
                         {format(summary.s1[row.key])}
                       </td>
-                      <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-xs">
+                      <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
                         {meterComparisonKeys.has(row.key) ? format(meterSummary.s1[row.key]) : "—"}
                       </td>
-                      <td className="bg-cyan-50/30 p-2 text-center font-normal font-mono tabular-nums text-[#173b64] text-xs">
+                      <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
                         {format(summary.s2[row.key])}
                       </td>
-                      <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-xs">
+                      <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
                         {meterComparisonKeys.has(row.key) ? format(meterSummary.s2[row.key]) : "—"}
                       </td>
-                      <td className="bg-blue-50/40 p-2 text-center font-normal font-mono tabular-nums text-indigo-900 text-xs">
+                      <td className="bg-blue-50/40 p-2 text-center font-mono tabular-nums text-indigo-900 text-sm font-semibold">
                         {format(summary.plant[row.key])}
                       </td>
-                      <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-xs">
+                      <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
                         {meterComparisonKeys.has(row.key) ? format(meterSummary.plant[row.key]) : "—"}
                       </td>
                       <td className="p-2 text-center font-medium text-slate-500 text-xs">{row.unit}</td>

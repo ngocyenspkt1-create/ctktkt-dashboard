@@ -51,6 +51,10 @@
 .water-table-scroll > table { min-width: 1250px; }
 .ktkt-kpi-scroll > table { min-width: 980px; }
 .ktkt-workspace .module-heading-copy { padding: 12px 16px; }
+.ktkt-workspace .module-heading-copy { background: linear-gradient(110deg, #edf5fb, #e5f1f7); border-color: #c9dbe8; color: #173b64; }
+.ktkt-workspace .module-heading-copy :is(h1,h2) { color: #173b64; }
+.ktkt-workspace .module-heading-copy :is(p,span):not([class*="bg-"]) { color: #475569; }
+.ktkt-workspace .module-heading-copy :is(p,span)[class*="uppercase"] { color: #3730a3; }
 .ktkt-workspace .module-toolbar-card > div:first-child { align-items: center; }
 .ktkt-workspace .module-toolbar-card > div:first-child > div:last-child { flex: 1 1 360px; justify-content: flex-end; align-content: center; }
 .ktkt-workspace .module-section-heading > div:first-child { flex-wrap: wrap; }
