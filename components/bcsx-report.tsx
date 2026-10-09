@@ -642,7 +642,7 @@ export function BcsxReport() {
                         onKeyDown={e => handleKeyDown(m.key, i, e)}
                         onPaste={e => handleCellPaste(m.key, i, e)}
                         inputMode="decimal"
-                        className="h-7 w-full rounded border border-slate-200 bg-white px-1 text-center font-mono text-[20px] font-semibold text-black outline-none transition focus:border-[#334785] focus:bg-blue-50/50 focus:ring-1 focus:ring-[#334785]/20"
+                        className="h-8 w-full rounded border border-slate-200 bg-white px-1 text-center font-mono text-[24px] font-bold text-black outline-none transition focus:border-[#334785] focus:bg-blue-50/50 focus:ring-1 focus:ring-[#334785]/20"
                         placeholder="—"
                       />
                     </td>
@@ -871,7 +871,7 @@ export function BcsxReport() {
                           onKeyDown={e => handleKeyDown(m.key, i, e)}
                           onPaste={e => handleCellPaste(m.key, i, e)}
                           inputMode="decimal"
-                          className="h-7 w-full rounded border border-slate-200 px-1 text-center font-mono text-[20px] font-semibold text-black outline-none focus:border-[#334785]"
+                          className="h-8 w-full rounded border border-slate-200 px-1 text-center font-mono text-[24px] font-bold text-black outline-none focus:border-[#334785]"
                         />
                       </td>
                     ))}
