@@ -5,7 +5,7 @@ import {
   recalculateWaterShiftChain,
   type WaterShiftLog,
 } from "@/lib/water-report/calculations";
-import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/permissions";
+import { canEditAnyWaterField, canEditWaterField, canDeleteWaterShift } from "@/lib/water-report/permissions";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 
 const monthPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
@@ -329,14 +329,8 @@ export async function DELETE(request: Request) {
     return Response.json({ error: "Vui lòng đăng nhập." }, { status: 401 });
   }
 
-  const isLeader =
-    user.role === "admin" ||
-    user.role === "supervisor" ||
-    user.permissions?.includes("manage_users") ||
-    (user.position || "").toLowerCase().includes("trưởng ca");
-
-  if (!isLeader) {
-    return Response.json({ error: "Chỉ Quản trị viên hoặc Trưởng ca mới có quyền xoá ca." }, { status: 403 });
+  if (!canDeleteWaterShift(user)) {
+    return Response.json({ error: "Chỉ Quản trị hoặc Trưởng ca được cấp toàn quyền Nước mới được xóa ca." }, { status: 403 });
   }
 
   const url = new URL(request.url);

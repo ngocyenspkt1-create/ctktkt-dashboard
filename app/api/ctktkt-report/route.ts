@@ -158,7 +158,7 @@ export async function POST(request: Request) {
 
     // Chỉ lưu những ô mà người dùng có thẩm quyền theo cương vị / vai trò
     const authorizedEntries = clean.filter(entry => canEditCtktktField(user, entry.cell));
-    if (authorizedEntries.length === 0 && clean.length > 0) {
+    if (authorizedEntries.length !== clean.length) {
       return Response.json({ error: "Bạn không có quyền sửa các ô dữ liệu đã gửi." }, { status: 403 });
     }
 

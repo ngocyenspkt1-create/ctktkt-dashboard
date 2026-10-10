@@ -78,7 +78,7 @@ export function findChemical(code: string): ChemicalCatalogItem | undefined {
   return CHEMICAL_CATALOG.find(item => item.code === code);
 }
 
-export function canEnterChemical(user: SessionUser | null | undefined, chemicalCode: string): boolean {
+export function legacyCanEnterChemical(user: SessionUser | null | undefined, chemicalCode: string): boolean {
   if (!user) return false;
   if (isAdminUser(user)) return true;
   const chemical = findChemical(chemicalCode);
@@ -89,4 +89,9 @@ export function canEnterChemical(user: SessionUser | null | undefined, chemicalC
 
 export function editableChemicalsFor(user: SessionUser | null | undefined): ChemicalCatalogItem[] {
   return CHEMICAL_CATALOG.filter(item => canEnterChemical(user, item.code));
+}
+
+export function canEnterChemical(user: SessionUser | null | undefined, chemicalCode: string): boolean {
+  const chemical = findChemical(chemicalCode);
+  return Boolean(user && chemical && (isAdminUser(user) || user.permissions.includes("edit_chemical") || user.permissions.includes(`chemical_${chemical.code}`)));
 }

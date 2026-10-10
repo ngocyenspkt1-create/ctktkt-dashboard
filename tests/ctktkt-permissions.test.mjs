@@ -1,8 +1,9 @@
+import { migrateLegacyPermissions } from "../lib/auth/permission-migration.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  canEditCtktktGroup,
-  canEditCtktktField,
+  canEditCtktktGroup as currentCanEditCtktktGroup,
+  canEditCtktktField as currentCanEditCtktktField,
   getCtktktFieldGroup,
 } from "../lib/ctktkt-permissions.ts";
 import { canViewPreAdjustmentHeatRate } from "../lib/auth/session.ts";
@@ -142,3 +143,8 @@ test("Than nhập 06h (W87) do Trưởng kíp điện nhập cùng nhóm I35, I3
   assert.equal(canEditCtktktField(tkd, "W87"), true);
   assert.equal(canEditCtktktField(loPho, "W87"), false);
 });
+
+// Legacy positional fixtures are converted before exercising the explicit grants.
+function migrated(user) { return user ? { ...user, permissions: migrateLegacyPermissions(user) } : user; }
+function canEditCtktktGroup(user, group) { return currentCanEditCtktktGroup(migrated(user), group); }
+function canEditCtktktField(user, cell) { return currentCanEditCtktktField(migrated(user), cell); }

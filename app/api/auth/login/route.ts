@@ -1,8 +1,9 @@
+import { loadCurrentUser } from "@/lib/auth/current-user";
 import { cookies } from "next/headers";
 import { getRawDb } from "@/db";
 import { clearFailedLogins, clientIp, loginRetryAfter, recordFailedLogin } from "@/lib/auth/login-throttle";
 import { verifyPassword } from "@/lib/auth/password";
-import { createSessionToken, PERMISSIONS, ROLES, SESSION_COOKIE, SESSION_MAX_AGE, type Permission, type Role } from "@/lib/auth/session";
+import { createSessionToken, ROLES, SESSION_COOKIE, SESSION_MAX_AGE, type Role } from "@/lib/auth/session";
 import { ensureUserSchema } from "@/lib/auth/user-schema";
 
 type UserRow = {
@@ -56,50 +57,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "Tài khoản của bạn đã bị tạm khóa. Vui lòng liên hệ Quản trị viên." }, { status: 403 });
   }
 
-  // Nạp quyền từ cấu hình Cương vị (position_permissions)
-  let permissions: Permission[] = [];
-  if (row.position) {
-    try {
-      const posRow = await db
-        .prepare("SELECT permissions FROM position_permissions WHERE position = ?")
-        .bind(row.position)
-        .first() as { permissions: string } | null;
-      if (posRow?.permissions) {
-        const parsed = JSON.parse(posRow.permissions);
-        if (Array.isArray(parsed)) {
-          permissions = parsed.filter(p => PERMISSIONS.includes(p));
-        }
-      }
-    } catch {
-      // Bỏ qua nếu bảng chưa sẵn sàng, dùng fallback bên dưới
-    }
-  }
+  let currentUser;
+  try { currentUser = await loadCurrentUser(db, row.id); }
+  catch { return Response.json({ error: "Chưa truy cập được cấu hình phân quyền. Hãy thử lại." }, { status: 503 }); }
+  if (!currentUser) return Response.json({ error: "Tài khoản không còn khả dụng." }, { status: 403 });
+  const permissions = currentUser.permissions;
 
-  // Fallback quyền mặc định nếu chưa cấu hình trong DB
-  if (permissions.length === 0) {
-    if (row.role === "admin") {
-      permissions = [...PERMISSIONS];
-    } else if (row.role === "supervisor") {
-      permissions = ["view_all", "edit_bcsx", "edit_daily_inputs", "edit_water", "sync_qlkt"];
-    } else if (row.role === "technician") {
-      permissions = ["view_all", "edit_monthly_kpi", "edit_daily_inputs", "edit_ppa", "edit_pmis", "edit_water", "sync_qlkt", "sync_google_sheet"];
-    } else if (row.role === "editor") {
-      permissions = ["view_all", "edit_monthly_kpi", "edit_daily_inputs", "edit_ppa", "edit_pmis", "edit_bcsx", "sync_qlkt"];
-    } else {
-      permissions = ["view_all"];
-    }
-  }
-
-  const token = await createSessionToken({
-    id: row.id,
-    username: row.username,
-    displayName: row.displayName,
-    role: row.role as Role,
-    position: row.position,
-    employeeCode: row.employeeCode,
-    permissions,
-    mustChangePassword,
-  });
+  const token = await createSessionToken(currentUser);
 
   const store = await cookies();
   store.set(SESSION_COOKIE, token, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: SESSION_MAX_AGE });

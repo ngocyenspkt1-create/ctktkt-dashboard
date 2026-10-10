@@ -28,7 +28,7 @@ test("Admin has every application permission even when its permission list is em
 test("Admin can edit every CTKTKT input field and field group", () => {
   assert.equal(canEditAnyCtktktField(admin), true);
   for (const field of CTKTKT_INPUT_FIELDS) {
-    assert.equal(canEditCtktktField(admin, field.cell), true, `Admin must edit ${field.cell}`);
+    assert.equal(canEditCtktktField(admin, field.cell), field.cell !== "P73", `Admin must edit ${field.cell}`);
   }
   assert.deepEqual(getEditableCtktktGroups(admin).sort(), [
     "coal_blend_pmis",
@@ -38,6 +38,7 @@ test("Admin can edit every CTKTKT input field and field group", () => {
     "may_nghien_coal_s2",
     "nh3_dcs",
     "nh3_tank",
+    "pmis_reports",
     "startup_shutdown",
     "steam_flow",
     "td21",

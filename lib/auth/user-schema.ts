@@ -43,6 +43,14 @@ export async function ensureUserSchema(rawDb: ReturnType<typeof import("@/db").g
       await rawDb.prepare(sql).run();
     } catch {}
   }
+  const columns = await rawDb.prepare("PRAGMA table_info(position_permissions)").all();
+  if (!columns.results.some(column => column.name === "permissions_version")) {
+    try { await rawDb.prepare("ALTER TABLE position_permissions ADD COLUMN permissions_version integer DEFAULT 1 NOT NULL").run(); }
+    catch (error) {
+      const check = await rawDb.prepare("PRAGMA table_info(position_permissions)").all();
+      if (!check.results.some(column => column.name === "permissions_version")) throw error;
+    }
+  }
   schemaEnsured = true;
 }
 

@@ -1,4 +1,5 @@
 "use client";
+import { PERMISSION_MODULES } from "@/lib/auth/permission-modules";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -126,11 +127,17 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
       const copy = [...prev];
       const target = { ...copy[posIndex] };
       const currentPerms = new Set(target.permissions);
-      if (currentPerms.has(perm)) {
-        currentPerms.delete(perm);
-      } else {
-        currentPerms.add(perm);
+      const module = PERMISSION_MODULES.find(item => item.permission === perm);
+      const parent = PERMISSION_MODULES.find(item => item.scopes.includes(perm));
+      if (parent && currentPerms.has(parent.permission)) {
+        currentPerms.delete(parent.permission);
+        parent.scopes.forEach(scope => currentPerms.add(scope));
       }
+      if (module && (currentPerms.has(perm) || module.scopes.some(scope => currentPerms.has(scope)))) {
+        currentPerms.delete(perm);
+        module.scopes.forEach(scope => currentPerms.delete(scope));
+      } else if (currentPerms.has(perm)) currentPerms.delete(perm);
+      else currentPerms.add(perm);
       target.permissions = Array.from(currentPerms);
       copy[posIndex] = target;
       return copy;
@@ -158,11 +165,12 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
         target.permissions = [...PERMISSIONS];
       } else if (preset === "shift") {
         target.role = "supervisor";
-        target.permissions = ["view_all", "edit_bcsx", "edit_daily_inputs", "edit_water", "sync_qlkt"];
+        target.permissions = ["view_all", "edit_ctktkt", "edit_bcsx", "edit_daily_inputs", "edit_water", "sync_qlkt"];
       } else if (preset === "tech") {
         target.role = "technician";
         target.permissions = [
           "view_all",
+          "edit_ctktkt",
           "edit_monthly_kpi",
           "edit_daily_inputs",
           "edit_ppa",
@@ -196,6 +204,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
       setMessage({ text: "Đã lưu cấu hình phân quyền Cương vị thành công!", type: "success" });
       setHasUnsavedChanges(false);
       refreshUsers();
+      window.dispatchEvent(new Event("permissions-updated"));
     } catch (e) {
       setMessage({ text: e instanceof Error ? e.message : "Không lưu được phân quyền.", type: "error" });
     } finally {
@@ -475,40 +484,32 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
 
           {/* Hướng dẫn ngắn */}
           <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-slate-700 leading-relaxed">
-            💡 <strong>Hướng dẫn phân quyền:</strong> Tích chọn các quyền chức năng cho từng Cương vị dưới đây. Khi bạn bấm <strong>&quot;Lưu phân quyền Cương vị&quot;</strong>, toàn bộ nhân sự thuộc cương vị đó sẽ tự động kế thừa các quyền được chọn khi họ đăng nhập.
+            💡 <strong>Hướng dẫn phân quyền:</strong> Tích chọn các quyền chức năng cho từng Cương vị dưới đây. Khi bạn bấm <strong>&quot;Lưu phân quyền Cương vị&quot;</strong>, toàn bộ nhân sự thuộc cương vị đó sẽ tự động kế thừa các quyền được chọn ngay ở lần thao tác tiếp theo; màn hình cập nhật khi quay lại cửa sổ hoặc trong vòng 1 phút. KTKT, Nước và Hóa chất có thể cấp riêng từng nhóm bằng mục Chi tiết. Quản trị có toàn quyền; quyền đồng bộ cần đi kèm quyền nhập của mục nhận dữ liệu.
           </div>
 
           {/* Bảng Ma trận Phân quyền */}
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <table className="report-data-table w-full min-w-[1120px] text-xs">
+            <table className="report-data-table w-full min-w-[1450px] text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-[#f4f6fb] text-left text-slate-700">
                   <th className="p-3 font-bold">Cương vị</th>
                   <th className="p-3 font-bold text-center">Khối</th>
                   <th className="p-3 font-bold text-center">Nhân sự</th>
                   <th className="p-3 font-bold">Vai trò đại diện</th>
-                  <th className="p-2 text-center font-bold text-indigo-900" title="Quản trị tài khoản & phân quyền">Quản trị</th>
-                  <th className="p-2 text-center font-bold text-blue-900" title="Nhập và tính 7 chỉ tiêu KTKT tháng">Chỉ tiêu tháng</th>
-                  <th className="p-2 text-center font-bold text-sky-900" title="Nhập số liệu sản xuất hàng ngày">Số liệu ngày</th>
-                  <th className="p-2 text-center font-bold text-teal-900" title="Quản lý Suất hao nhiệt PPA">SHN PPA</th>
-                  <th className="p-2 text-center font-bold text-purple-900" title="Quản lý Báo cáo PMIS">PMIS</th>
-                  <th className="p-2 text-center font-bold text-emerald-900" title="Nhập 48 điểm nửa giờ & xuất BCSX">BCSX</th>
-                  <th className="p-2 text-center font-bold text-cyan-900" title="Quản lý theo dõi lượng nước theo ca">Nước</th>
-                  <th className="p-2 text-center font-bold text-amber-900" title="Kích hoạt đồng bộ tự động từ QLKT">ĐB QLKT</th>
-                  <th className="p-2 text-center font-bold text-green-900" title="Đồng bộ Google Sheet">G-Sheet</th>
+                  {PERMISSION_MODULES.map(module => <th key={module.permission} className="p-2 text-center font-bold text-blue-900" title={PERMISSION_LABELS[module.permission]}>{module.label}</th>)}
                   <th className="p-3 text-right font-bold">Gán nhanh</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loadingPositions ? (
                   <tr>
-                    <td colSpan={14} className="p-8 text-center text-slate-400">
+                    <td colSpan={16} className="p-8 text-center text-slate-400">
                       Đang tải danh sách cương vị…
                     </td>
                   </tr>
                 ) : filteredPositions.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="p-8 text-center text-slate-400">
+                    <td colSpan={16} className="p-8 text-center text-slate-400">
                       Không tìm thấy cương vị nào phù hợp bộ lọc.
                     </td>
                   </tr>
@@ -554,97 +555,17 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
                           </select>
                         </td>
 
-                        {/* 8 Checkbox quyền chức năng */}
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={pos.role === "admin" || perms.has("manage_users")}
-                            disabled={pos.role === "admin"}
-                            onChange={() => togglePermission(originalIndex, "manage_users")}
-                            className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500"
-                            title="Quản trị hệ thống & phân quyền"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={pos.role === "admin" || perms.has("edit_monthly_kpi")}
-                            disabled={pos.role === "admin"}
-                            onChange={() => togglePermission(originalIndex, "edit_monthly_kpi")}
-                            className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
-                            title="Nhập chỉ tiêu KTKT tháng"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={pos.role === "admin" || perms.has("edit_daily_inputs")}
-                            disabled={pos.role === "admin"}
-                            onChange={() => togglePermission(originalIndex, "edit_daily_inputs")}
-                            className="h-4 w-4 rounded text-sky-600 focus:ring-sky-500"
-                            title="Nhập số liệu ngày"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={pos.role === "admin" || perms.has("edit_ppa")}
-                            disabled={pos.role === "admin"}
-                            onChange={() => togglePermission(originalIndex, "edit_ppa")}
-                            className="h-4 w-4 rounded text-teal-600 focus:ring-teal-500"
-                            title="Suất hao nhiệt PPA"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={pos.role === "admin" || perms.has("edit_pmis")}
-                            disabled={pos.role === "admin"}
-                            onChange={() => togglePermission(originalIndex, "edit_pmis")}
-                            className="h-4 w-4 rounded text-purple-600 focus:ring-purple-500"
-                            title="Báo cáo PMIS"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={pos.role === "admin" || perms.has("edit_bcsx")}
-                            disabled={pos.role === "admin"}
-                            onChange={() => togglePermission(originalIndex, "edit_bcsx")}
-                            className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
-                            title="Nhập 48 điểm nửa giờ & xuất BCSX"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={pos.role === "admin" || perms.has("edit_water")}
-                            disabled={pos.role === "admin"}
-                            onChange={() => togglePermission(originalIndex, "edit_water")}
-                            className="h-4 w-4 rounded text-cyan-600 focus:ring-cyan-500"
-                            title="Quản lý theo dõi lượng nước theo ca"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={pos.role === "admin" || perms.has("sync_qlkt")}
-                            disabled={pos.role === "admin"}
-                            onChange={() => togglePermission(originalIndex, "sync_qlkt")}
-                            className="h-4 w-4 rounded text-amber-600 focus:ring-amber-500"
-                            title="Đồng bộ tự động từ QLKT"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={pos.role === "admin" || perms.has("sync_google_sheet")}
-                            disabled={pos.role === "admin"}
-                            onChange={() => togglePermission(originalIndex, "sync_google_sheet")}
-                            className="h-4 w-4 rounded text-green-600 focus:ring-green-500"
-                            title="Đồng bộ Google Sheet"
-                          />
-                        </td>
+                        {PERMISSION_MODULES.map(module => {
+                          const allAccess = pos.role === "admin" || perms.has("manage_users");
+                          const full = allAccess || perms.has(module.permission);
+                          const selected = module.scopes.filter(scope => full || perms.has(scope)).length;
+                          return <td key={module.permission} className="p-2 text-center align-top">
+                            <input type="checkbox" aria-label={`${module.label}: ${pos.position}`} checked={full || (module.scopes.length > 0 && selected > 0)} ref={element => { if (element) element.indeterminate = !full && selected > 0; }} disabled={pos.role === "admin" || (allAccess && module.permission !== "manage_users")} onChange={() => togglePermission(originalIndex, module.permission)} className="h-4 w-4 rounded text-blue-700" title={PERMISSION_LABELS[module.permission]} />
+                            {module.scopes.length > 0 && <details className="mt-1 min-w-24 text-left"><summary className="cursor-pointer text-center text-[11px] text-blue-800">{full ? "Toàn bộ" : `${selected}/${module.scopes.length}`} · Chi tiết</summary><div className="mt-2 grid min-w-48 gap-2 rounded-lg border bg-slate-50 p-2">
+                              {module.scopes.map(scope => <label key={scope} className="flex items-start gap-2 text-xs"><input type="checkbox" checked={full || perms.has(scope)} disabled={allAccess} onChange={() => togglePermission(originalIndex, scope)} className="mt-0.5" />{PERMISSION_LABELS[scope]}</label>)}
+                            </div></details>}
+                          </td>;
+                        })}
 
                         {/* Nút gán mẫu nhanh */}
                         <td className="p-3 text-right">

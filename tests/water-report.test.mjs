@@ -1,3 +1,4 @@
+import { migrateLegacyPermissions } from "../lib/auth/permission-migration.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -6,7 +7,7 @@ import {
   getShiftSortKey,
   recalculateWaterShiftChain,
 } from "../lib/water-report/calculations.ts";
-import { canEditWaterField } from "../lib/water-report/permissions.ts";
+import { canEditWaterField as currentCanEditWaterField } from "../lib/water-report/permissions.ts";
 
 test("getShiftSortKey correctly orders shifts within and across days", () => {
   const k1 = getShiftSortKey("2026-09-01", "06h00");
@@ -272,3 +273,5 @@ test("scanWorkbookBuffer and extractWorkbookShifts accurately read plant multi-m
   assert.equal(extracted.months[0], "2026-08"); // Có mốc 31/08/2026 22h00
   assert.equal(extracted.months[1], "2026-09");
 });
+
+function canEditWaterField(user, group) { return currentCanEditWaterField(user ? { ...user, permissions: migrateLegacyPermissions(user) } : user, group); }

@@ -1,10 +1,12 @@
+import { migrateLegacyPermissions } from "../lib/auth/permission-migration.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { CHEMICAL_CATALOG, canEnterChemical, editableChemicalsFor } from "../lib/chemical-usage/catalog.ts";
 
 function user(position, role = "viewer") {
-  return { id: 1, username: "test", displayName: "Test", role, position, permissions: ["view_all"] };
+  const account = { id: 1, username: "test", displayName: "Test", role, position, permissions: ["view_all"] };
+  return { ...account, permissions: migrateLegacyPermissions(account) };
 }
 
 test("chemical catalog matches the five normalized materials from the source sheet", () => {

@@ -1,3 +1,5 @@
+import { requireAdmin } from "@/lib/auth/server";
+import { redirect } from "next/navigation";
 import { getRawDb } from "@/db";
 import { AppShell } from "@/components/app-shell";
 import { AdminUsersPanel, type UserRow } from "@/components/admin-users-panel";
@@ -6,6 +8,8 @@ import { PERMISSIONS, type Permission, type Role } from "@/lib/auth/session";
 export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
+  const guard = await requireAdmin();
+  if (!guard.ok) redirect("/");
   let initialUsers: UserRow[] = [];
 
   try {

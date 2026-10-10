@@ -1,13 +1,21 @@
+import { cache } from "react";
+import { getRawDb } from "@/db";
+import { ensureUserSchema } from "./user-schema";
+import { loadCurrentUser } from "./current-user";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifySessionToken, hasPermission, isAdminUser, type SessionUser, type Role, type Permission } from "./session";
 
 /** Any valid session, including one that must change its password first. */
-export async function getSessionUserForPasswordChange(): Promise<SessionUser | null> {
+export const getSessionUserForPasswordChange = cache(async (): Promise<SessionUser | null> => {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  return verifySessionToken(token);
-}
+  const claims = await verifySessionToken(token);
+  if (!claims) return null;
+  const db = getRawDb();
+  await ensureUserSchema(db);
+  return loadCurrentUser(db, claims.id);
+});
 
 /** A session allowed to use the application (password change not pending). */
 export async function getSessionUser(): Promise<SessionUser | null> {

@@ -1,3 +1,5 @@
+import { positionPermissions } from "@/lib/auth/current-user";
+import { migrateLegacyPermissions } from "@/lib/auth/permission-migration";
 import { getRawDb } from "@/db";
 import { requireAdmin } from "@/lib/auth/server";
 import { DEFAULT_POSITIONS } from "@/lib/auth/initial-users-data";
@@ -43,7 +45,7 @@ export async function GET() {
       .prepare("SELECT id, position, role, permissions, description, updated_at FROM position_permissions ORDER BY id")
       .all();
     dbRows = results as typeof dbRows;
-  } catch {}
+  } catch { return Response.json({ error: "Không đọc được cấu hình phân quyền." }, { status: 503 }); }
 
   // Đếm số lượng nhân sự theo từng cương vị
   const userCountMap = new Map<string, number>();
@@ -65,8 +67,8 @@ export async function GET() {
     if (existing) {
       let parsedPerms: Permission[] = [];
       try {
-        parsedPerms = JSON.parse(existing.permissions);
-      } catch {}
+        parsedPerms = await positionPermissions(db, existing.position) || [];
+      } catch { return Response.json({ error: "Không đọc được cấu hình phân quyền." }, { status: 503 }); }
       positions.push({
         id: existing.id,
         position: existing.position,
@@ -79,17 +81,18 @@ export async function GET() {
       });
       existingMap.delete(def.position);
     } else {
+      const defaultPermissions = migrateLegacyPermissions({ id: 0, username: "", displayName: "", position: def.position, role: def.role, permissions: def.permissions });
       // Tự động lưu giá trị mặc định vào DB
       try {
         await db.prepare(
-          "INSERT OR IGNORE INTO position_permissions (position, role, permissions, description) VALUES (?, ?, ?, ?)"
-        ).bind(def.position, def.role, JSON.stringify(def.permissions), def.description).run();
-      } catch {}
+          "INSERT OR IGNORE INTO position_permissions (position, role, permissions, description, permissions_version) VALUES (?, ?, ?, ?, 2)"
+        ).bind(def.position, def.role, JSON.stringify(defaultPermissions), def.description).run();
+      } catch { return Response.json({ error: "Không đọc được cấu hình phân quyền." }, { status: 503 }); }
       positions.push({
         position: def.position,
         category: def.category,
         role: def.role,
-        permissions: def.permissions,
+        permissions: defaultPermissions,
         description: def.description,
         userCount: userCountMap.get(def.position) || 0,
       });
@@ -100,8 +103,8 @@ export async function GET() {
   for (const [, extra] of existingMap) {
     let parsedPerms: Permission[] = [];
     try {
-      parsedPerms = JSON.parse(extra.permissions);
-    } catch {}
+      parsedPerms = await positionPermissions(db, extra.position) || [];
+    } catch { return Response.json({ error: "Không đọc được cấu hình phân quyền." }, { status: 503 }); }
     positions.push({
       id: extra.id,
       position: extra.position,
@@ -155,7 +158,9 @@ export async function PUT(request: Request) {
 
   try {
     await ensureUserSchema(db);
+    const statements: Parameters<typeof db.batch>[0] = [];
     for (const item of listToUpdate) {
+      if (!item || typeof item.position !== "string" || !Array.isArray(item.permissions) || item.permissions.some(p => !PERMISSIONS.includes(p as Permission)) || !ROLES.includes(item.role as Role)) return Response.json({ error: "Cương vị, vai trò hoặc quyền không hợp lệ." }, { status: 400 });
       const posName = item.position.trim();
       if (!posName) continue;
       const validRole = ROLES.includes(item.role as Role) ? item.role : "viewer";
@@ -163,19 +168,32 @@ export async function PUT(request: Request) {
 
       const existing = await db.prepare("SELECT id FROM position_permissions WHERE position = ?").bind(posName).first();
       if (existing) {
-        await db.prepare(
-          "UPDATE position_permissions SET role = ?, permissions = ?, description = COALESCE(?, description), updated_at = CURRENT_TIMESTAMP WHERE position = ?"
-        ).bind(validRole, JSON.stringify(validPerms), item.description || null, posName).run();
+        statements.push(db.prepare(
+          "UPDATE position_permissions SET role = ?, permissions = ?, permissions_version = 2, description = COALESCE(?, description), updated_at = CURRENT_TIMESTAMP WHERE position = ?"
+        ).bind(validRole, JSON.stringify(validPerms), item.description || null, posName));
       } else {
-        await db.prepare(
-          "INSERT INTO position_permissions (position, role, permissions, description) VALUES (?, ?, ?, ?)"
-        ).bind(posName, validRole, JSON.stringify(validPerms), item.description || "").run();
+        statements.push(db.prepare(
+          "INSERT INTO position_permissions (position, role, permissions, description, permissions_version) VALUES (?, ?, ?, ?, 2)"
+        ).bind(posName, validRole, JSON.stringify(validPerms), item.description || ""));
       }
 
       // Tự động đồng bộ vai trò (role) cho tất cả nhân sự thuộc Cương vị này trong bảng users
-      await db.prepare("UPDATE users SET role = ? WHERE position = ?").bind(validRole, posName).run();
+      statements.push(db.prepare("UPDATE users SET role = ? WHERE position = ?").bind(validRole, posName));
     }
 
+    const { results: accounts } = await db.prepare("SELECT role, position, status FROM users").all();
+    const { results: configs } = await db.prepare("SELECT position, permissions FROM position_permissions").all();
+    const updates = new Map(listToUpdate.map(item => [item.position.trim(), item]));
+    const stored = new Map(configs.map(config => [String(config.position), JSON.parse(String(config.permissions)) as string[]]));
+    const hasAdministrator = accounts.some(account => {
+      if (account.status === "locked") return false;
+      const update = updates.get(String(account.position || ""));
+      const role = update?.role || account.role;
+      const permissions = update?.permissions || stored.get(String(account.position || "")) || [];
+      return role === "admin" || permissions.includes("manage_users");
+    });
+    if (!hasAdministrator) return Response.json({ error: "Phải giữ ít nhất một tài khoản quản trị đang hoạt động." }, { status: 409 });
+    if (statements.length) await db.batch(statements);
     return Response.json({ ok: true, updatedCount: listToUpdate.length });
   } catch (error) {
     console.error("Không lưu được phân quyền.", error);

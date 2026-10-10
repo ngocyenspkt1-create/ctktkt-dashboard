@@ -22,6 +22,30 @@ export const PERMISSIONS = [
   "sync_qlkt",
   "sync_google_sheet",
   "view_all",
+  "edit_ctktkt",
+  "edit_chemical",
+  "ctktkt_kpi_summary",
+  "ctktkt_tkd_trend",
+  "ctktkt_tpd_tcd_power",
+  "ctktkt_lo_pho_oil",
+  "ctktkt_may_nghien_coal_s1",
+  "ctktkt_may_nghien_coal_s2",
+  "ctktkt_steam_flow",
+  "ctktkt_nh3_tank",
+  "ctktkt_nh3_dcs",
+  "ctktkt_td21",
+  "ctktkt_startup_shutdown",
+  "ctktkt_coal_blend_pmis",
+  "ctktkt_pmis_reports",
+  "water_meta",
+  "water_electricity",
+  "water_water_intake",
+  "water_resin_water",
+  "chemical_PAC_LIQUID",
+  "chemical_NAOCL",
+  "chemical_NH4OH_20",
+  "chemical_HCL_31",
+  "chemical_NAOH_31",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -36,6 +60,31 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   sync_qlkt: "Đồng bộ tự động từ QLKT",
   sync_google_sheet: "Đồng bộ dữ liệu Google Sheet",
   view_all: "Xem toàn bộ báo cáo & dữ liệu",
+  edit_ctktkt: "Nhập toàn bộ Báo cáo Chỉ tiêu KTKT",
+  edit_chemical: "Nhập toàn bộ hóa chất",
+  ctktkt_kpi_summary: "Chỉ tiêu KTKT tổng hợp",
+  ctktkt_tkd_trend: "Bảng TKĐ trend DCS",
+  ctktkt_tpd_tcd_power: "Công tơ điện Tổ máy (S1 & S2)",
+  ctktkt_lo_pho_oil: "Công tơ dầu cấp / về bồn (F1 - F2)",
+  ctktkt_may_nghien_coal_s1: "Công tơ than Tổ máy S1 (12 cân A1..F2)",
+  ctktkt_may_nghien_coal_s2: "Công tơ than Tổ máy S2 (12 cân A1..F2)",
+  ctktkt_steam_flow: "Lưu lượng hơi (S1 & S2)",
+  ctktkt_nh3_tank: "Tổng lượng NH3 dùng trong ngày",
+  ctktkt_nh3_dcs: "Tổng lượng NH3 dùng trong ngày theo công tơ DCS",
+  ctktkt_td21: "Công tơ điện tự dùng - TD21",
+  ctktkt_startup_shutdown: "Khởi động / Ngừng tổ máy",
+  ctktkt_coal_blend_pmis: "Bảng nhập PMIS than trộn 6A10 & Sub bitum",
+  ctktkt_pmis_reports: "Báo cáo PMIS 02-PĐ & Đối chiếu ngày",
+  water_meta: "Ngày, ca, kíp",
+  water_electricity: "Công tơ điện",
+  water_water_intake: "Nước nhận ca / bình ngưng",
+  water_resin_water: "Nước tái sinh hạt",
+  chemical_PAC_LIQUID: "PAC lỏng",
+  chemical_NAOCL: "NaOCl",
+  chemical_NH4OH_20: "NH4OH 20%",
+  chemical_HCL_31: "HCl 31%",
+  chemical_NAOH_31: "NaOH 31%",
+
 };
 
 export type SessionUser = {
@@ -80,7 +129,7 @@ export function hasPermission(user: SessionUser | null | undefined, permission: 
 export const SESSION_COOKIE = "session";
 export const CHANGE_PASSWORD_PATH = "/doi-mat-khau";
 /** Routes reachable while a password change is pending. */
-export const PASSWORD_CHANGE_ALLOWED_PATHS = new Set([CHANGE_PASSWORD_PATH, "/api/auth/change-password", "/api/auth/logout"]);
+export const PASSWORD_CHANGE_ALLOWED_PATHS = new Set([CHANGE_PASSWORD_PATH, "/api/auth/change-password", "/api/auth/logout", "/api/auth/session"]);
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 ngày
 
 function getSecretKey() {

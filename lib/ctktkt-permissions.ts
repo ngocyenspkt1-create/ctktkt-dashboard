@@ -238,7 +238,7 @@ export function getGroupCells(group: CtktktFieldGroup): Set<string> {
  * - VHV NH3 - Lò hơi phụ:
  *   + Cụm 8: Tổng lượng NH3
  */
-export function canEditCtktktGroup(
+export function legacyCanEditCtktktGroup(
   user: SessionUser | null | undefined,
   group: CtktktFieldGroup,
 ): boolean {
@@ -372,10 +372,7 @@ export function canEditCtktktField(
   if (!group) {
     // Nếu ô không thuộc nhóm nào đặc định, chỉ Admin/KTV/Trưởng ca được sửa
     return (
-      isAdminUser(user) ||
-      user.role === "technician" ||
-      user.role === "supervisor" ||
-      (user.position || "").toLowerCase().includes("trưởng ca")
+isAdminUser(user) || user.permissions.includes("edit_ctktkt")
     );
   }
   return canEditCtktktGroup(user, group);
@@ -385,51 +382,14 @@ export function canEditCtktktField(
  * Kiểm tra xem người dùng có ít nhất một quyền nhập liệu trên trang CTKTKT hay không
  */
 export function canEditAnyCtktktField(user: SessionUser | null | undefined): boolean {
-  if (!user) return false;
-  if (
-    isAdminUser(user) ||
-    user.role === "supervisor" ||
-    user.role === "technician" ||
-    user.role === "editor" ||
-    user.permissions?.includes("edit_daily_inputs")
-  ) {
-    return true;
-  }
-  const allGroups: CtktktFieldGroup[] = [
-    "kpi_summary",
-    "tkd_trend",
-    "tpd_tcd_power",
-    "lo_pho_oil",
-    "may_nghien_coal_s1",
-    "may_nghien_coal_s2",
-    "steam_flow",
-    "nh3_tank",
-    "nh3_dcs",
-    "td21",
-    "startup_shutdown",
-    "coal_blend_pmis",
-  ];
-  return allGroups.some(group => canEditCtktktGroup(user, group));
+  return Boolean(user && (isAdminUser(user) || user.permissions.includes("edit_ctktkt") || getEditableCtktktGroups(user).length));
 }
 
-/**
- * Lấy danh sách các nhóm mà người dùng có quyền sửa
- */
 export function getEditableCtktktGroups(user: SessionUser | null | undefined): CtktktFieldGroup[] {
-  if (!user) return [];
-  const allGroups: CtktktFieldGroup[] = [
-    "kpi_summary",
-    "tkd_trend",
-    "tpd_tcd_power",
-    "lo_pho_oil",
-    "may_nghien_coal_s1",
-    "may_nghien_coal_s2",
-    "steam_flow",
-    "nh3_tank",
-    "nh3_dcs",
-    "td21",
-    "startup_shutdown",
-    "coal_blend_pmis",
-  ];
-  return allGroups.filter(g => canEditCtktktGroup(user, g));
+  return (Object.keys(CTKTKT_GROUP_META) as CtktktFieldGroup[]).filter(group => canEditCtktktGroup(user, group));
+}
+
+/** Only explicit grants are authoritative after legacy conversion. */
+export function canEditCtktktGroup(user: SessionUser | null | undefined, group: CtktktFieldGroup): boolean {
+  return Boolean(user && (isAdminUser(user) || user.permissions.includes("edit_ctktkt") || user.permissions.includes(`ctktkt_${group}`)));
 }

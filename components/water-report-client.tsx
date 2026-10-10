@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSessionUser } from "@/components/session-context";
 import { isAdminUser } from "@/lib/auth/session";
 import { formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/lib/water-report/calculations";
-import { canEditAnyWaterField, canEditWaterField } from "@/lib/water-report/permissions";
+import { canEditAnyWaterField, canEditWaterField, canDeleteWaterShift } from "@/lib/water-report/permissions";
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/lib/water-report/schema";
 import { defaultOperatingDate } from "@/lib/operating-date";
 import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
@@ -313,6 +313,7 @@ export function WaterReportClient() {
 
   // Xóa ca
   async function handleDeleteShift(shift: WaterShiftLog) {
+    if (!canDeleteWaterShift(user)) return;
     if (!confirm(`Bạn có chắc muốn xoá ca ${shift.shiftTime} ngày ${formatIsoToDmy(shift.logDate)} không?`)) {
       return;
     }
@@ -1011,7 +1012,7 @@ export function WaterReportClient() {
                             >
                               Sửa
                             </button>
-                            {(isAdmin || canEditMeta) && (
+                            {canDeleteWaterShift(user) && (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteShift(shift)}

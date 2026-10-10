@@ -34,9 +34,9 @@ test("Water adjustment fields are properly configured in extra fields and permis
   // Trưởng kíp điện có quyền chỉnh sửa
   const tkdUser = {
     username: "tkd_user",
-    role: "user",
+    role: "viewer",
     position: "Trưởng kíp điện",
-    permissions: [],
+    permissions: ["ctktkt_tkd_trend"],
   };
   assert.equal(canEditCtktktField(tkdUser, "WATER_ADJ_S1"), true);
   assert.equal(canEditCtktktField(tkdUser, "WATER_ADJ_S2"), true);

@@ -6,31 +6,9 @@ function hashPassword(password: string): string {
   return `${salt}:${hash}`;
 }
 
-export type Role = "admin" | "supervisor" | "technician" | "editor" | "viewer";
-export type Permission =
-  | "manage_users"
-  | "edit_monthly_kpi"
-  | "edit_daily_inputs"
-  | "edit_ppa"
-  | "edit_pmis"
-  | "edit_bcsx"
-  | "edit_water"
-  | "sync_qlkt"
-  | "sync_google_sheet"
-  | "view_all";
-
-export const PERMISSIONS: Permission[] = [
-  "manage_users",
-  "edit_monthly_kpi",
-  "edit_daily_inputs",
-  "edit_ppa",
-  "edit_pmis",
-  "edit_bcsx",
-  "edit_water",
-  "sync_qlkt",
-  "sync_google_sheet",
-  "view_all",
-];
+import { PERMISSIONS, type Permission, type Role } from "./session.ts";
+export { PERMISSIONS };
+export type { Permission, Role };
 
 export type PositionSeed = {
   position: string;

@@ -170,7 +170,7 @@ test('each report keeps its intended data action and NH3 overlaps link from CTKT
   assert.match(dailySource, /Than nhập 06h \(PMIS\)/);
   assert.match(linkSource, /setNumber\(result, "CC", deminWaterUsage\(current, previous, "72"\)\)/);
   assert.match(linkSource, /setNumber\(result, "CF", numberOf\(current, "Z73"\)\)/);
-  assert.match(dailySource, /disabled=\{isLinked\}/);
+  assert.match(dailySource, /disabled=\{isLinked\|\|!canEdit\}/);
   assert.match(dailySource, /Tổng tháng/);
   assert.match(ctktktSource, /combined\[CTKTKT_INSTALLED_CAPACITY_CELL\] = CTKTKT_INSTALLED_CAPACITY_MW/);
   assert.match(ctktktSource, /parseLocaleNumber\(entries\[cell\] \|\| ""\)/);

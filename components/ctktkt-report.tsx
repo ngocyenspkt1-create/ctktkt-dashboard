@@ -1016,14 +1016,7 @@ export function CtktktReport() {
   // Danh tính và thông báo cương vị người dùng
   const userRoleDescription = useMemo(() => {
     if (!user) return "Chưa đăng nhập (Chỉ xem)";
-    const pos = user.position || "";
-    const isLeader =
-      user.role === "admin" ||
-      user.role === "supervisor" ||
-      user.role === "technician" ||
-      user.role === "editor" ||
-      pos.toLowerCase().includes("trưởng ca") ||
-      pos.toLowerCase().includes("quản đốc");
+    const isLeader = isAdminUser(user) || user.permissions.includes("edit_ctktkt");
 
     if (isLeader) {
       return "Toàn quyền quản lý, nhập liệu và phê duyệt số liệu";

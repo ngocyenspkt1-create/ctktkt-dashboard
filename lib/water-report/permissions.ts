@@ -14,7 +14,7 @@ export type WaterColumnGroup =
  * - Lượng nước tái sinh hạt S1/S2: VHV trợ thủ (hoặc Trợ thủ).
  * - Trưởng ca: Được quản lý phân ca, chọn Trưởng ca, Kíp.
  */
-export function canEditWaterField(user: SessionUser | null | undefined, group: WaterColumnGroup): boolean {
+export function legacyCanEditWaterField(user: SessionUser | null | undefined, group: WaterColumnGroup): boolean {
   if (!user) return false;
 
   // 1. Quản trị hệ thống hoặc Ban Quản đốc có toàn quyền
@@ -67,4 +67,12 @@ export function canEditAnyWaterField(user: SessionUser | null | undefined): bool
     canEditWaterField(user, "water_intake") ||
     canEditWaterField(user, "resin_water")
   );
+}
+
+export function canEditWaterField(user: SessionUser | null | undefined, group: WaterColumnGroup): boolean {
+  return Boolean(user && (isAdminUser(user) || user.permissions.includes("edit_water") || user.permissions.includes(`water_${group}`)));
+}
+
+export function canDeleteWaterShift(user: SessionUser | null | undefined): boolean {
+  return Boolean(user && (isAdminUser(user) || (user.permissions.includes("edit_water") && (user.role === "supervisor" || (user.position || "").toLowerCase().includes("trưởng ca")))));
 }

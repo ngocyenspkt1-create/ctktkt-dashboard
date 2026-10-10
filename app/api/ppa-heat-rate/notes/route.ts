@@ -7,7 +7,7 @@ import { parseAvailableCapacity, PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_C
 const datePattern = /^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
 export async function POST(request: Request) {
-  const guard = await requireAnyPermission("edit_ppa", "sync_google_sheet"); if (!guard.ok) return guard.response;
+  const guard = await requireAnyPermission("edit_ppa"); if (!guard.ok) return guard.response;
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
