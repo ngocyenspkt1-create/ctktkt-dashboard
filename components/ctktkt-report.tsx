@@ -17,16 +17,15 @@ import {
   UserCheck,
   RefreshCw,
   Mail,
-  Upload,
   Camera,
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
-import { CTKTKT_HISTORY_GROUPS, type CtktktHistoryRange } from "@/lib/ctktkt-history-selection";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
 import { CoalMeterPhotoImport } from "@/components/coal-meter-photo-import";
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 import { useSessionUser } from "@/components/session-context";
-import { defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
+import { canEditOperatingDate, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
+import { isAdminUser } from "@/lib/auth/session";
 import {
   canEditAnyCtktktField,
   canEditCtktktField,
@@ -68,7 +67,6 @@ import {
 } from "@/lib/ctktkt-extra-fields";
 import { parseSpreadsheetClipboard } from "@/lib/spreadsheet-grid";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/lib/ctktkt-defaults";
-import { findCtktktHistoryReadbackMismatch } from "@/lib/ctktkt-history-readback";
 import { isQlktExtensionOutdated } from "@/lib/qlkt-extension-version";
 import {
   PMIS_PRODUCTION_CELLS,
@@ -98,18 +96,6 @@ import type { MissingDataItem } from "@/components/missing-data-alert";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
 type LinkWarning = { operatingDate: string; cell: string; message: string };
-type ImportEntry = { cell: string; value: string };
-type ImportDay = { date: string; sheetName: string; manualEntries: ImportEntry[] };
-type ImportPackage = {
-  fileName: string;
-  month: string;
-  throughDay: number;
-  days: ImportDay[];
-  supportingDays?: ImportDay[];
-  audits: Array<{ date: string; total: number; passed: number; failed: Array<{ name: string; sourceCell: string; expected: number | null; actual: number | null }> }>;
-  totals: { failed: number; checks: number; passed: number; nonBlankManualValues: number; supportingValues?: number };
-  warnings: Array<{ date: string; cell: string; message: string }>;
-};
 
 type MainTab =
   | "tkd_dcs"
@@ -259,10 +245,11 @@ function num(entries: CtktktDayEntries, cell: string): number | null {
 
 export function CtktktReport() {
   const user = useSessionUser();
-  const userCanEditAny = canEditAnyCtktktField(user);
   const editableGroups = useMemo(() => getEditableCtktktGroups(user), [user]);
 
   const [date, setDate] = useState(defaultOperatingDate);
+  const canEditSelectedDate = canEditOperatingDate(date, isAdminUser(user));
+  const userCanEditAny = canEditAnyCtktktField(user) && canEditSelectedDate;
   const [byDate, setByDate] = useState<Record<string, CtktktDayEntries>>({});
   const [linkedByDate, setLinkedByDate] = useState<Record<string, CtktktDayEntries>>({});
   const [linkWarnings, setLinkWarnings] = useState<LinkWarning[]>([]);
@@ -276,11 +263,6 @@ export function CtktktReport() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [importingHistory, setImportingHistory] = useState(false);
-  const [historyImportMonth, setHistoryImportMonth] = useState("");
-  const [historyImportOverwrite, setHistoryImportOverwrite] = useState(false);
-  const [pendingHistoryFile, setPendingHistoryFile] = useState<{file: File; month: string; lastDate: string} | null>(null);
-  const [historyRanges, setHistoryRanges] = useState<Array<CtktktHistoryRange & {enabled: boolean}>>([]);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -291,12 +273,11 @@ export function CtktktReport() {
   const [exportMissingItems, setExportMissingItems] = useState<MissingDataItem[]>([]);
   const [pendingReportOutput, setPendingReportOutput] = useState<"excel" | "email" | null>(null);
   const [coalPhotoOpen, setCoalPhotoOpen] = useState(false);
-  const canEditCoalCell = useCallback((cell: string) => canEditCtktktField(user, cell), [user]);
+  const canEditCoalCell = useCallback((cell: string) => canEditSelectedDate && canEditCtktktField(user, cell), [user, canEditSelectedDate]);
   const [extensionVersion, setExtensionVersion] = useState("");
   const extensionOutdated = isQlktExtensionOutdated(extensionVersion);
   const [syncingPmis, setSyncingPmis] = useState(false);
   const pmisRequestRef = useRef<{ id: string; timer: number; operatingDate: string } | null>(null);
-  const importFileRef = useRef<HTMLInputElement | null>(null);
   const dirtyCellsRef = useRef(new Set<string>());
 
   useEffect(() => {
@@ -546,7 +527,7 @@ export function CtktktReport() {
   );
   const selectedOperationEvent = operationEvents.find(event => event.unit === operationUnit && event.kind === operationKind) || null;
   const selectedOperationOil = selectedOperationEvent ? calculateCtktktOperationEventOil(selectedOperationEvent) : null;
-  const canEditOperationEvents = canEditCtktktField(user, CTKTKT_OPERATION_EVENTS_CELL);
+  const canEditOperationEvents = canEditSelectedDate && canEditCtktktField(user, CTKTKT_OPERATION_EVENTS_CELL);
 
   const selectedWarnings = useMemo(
     () => linkWarnings.filter(item => item.operatingDate === date),
@@ -642,6 +623,7 @@ export function CtktktReport() {
   const nh3Dcs = useMemo(() => calculateNh3DcsSummary(current, previous), [current, previous]);
 
   const update = (cell: string, value: string) => {
+    if (!canEditSelectedDate || !canEditCtktktField(user, cell)) return;
     setByDate(old => ({
       ...old,
       [date]: { ...(old[date] || {}), [cell]: value },
@@ -736,7 +718,7 @@ export function CtktktReport() {
   const syncPmis02PdFromQlkt = () => {
     setError("");
     setMessage("");
-    if (!canEditCtktktGroup(user, "pmis_reports") && !userCanEditAny) {
+    if (!canEditSelectedDate || (!canEditCtktktGroup(user, "pmis_reports") && !userCanEditAny)) {
       setError("Tài khoản chưa được phân quyền cập nhật nhóm Báo cáo PMIS 02-PĐ.");
       return;
     }
@@ -763,179 +745,6 @@ export function CtktktReport() {
       requestId,
       operatingDate: date,
     }, window.location.origin);
-  };
-
-  const handleHistoryImport = async (file: File | undefined, ranges: CtktktHistoryRange[], selectedMonth: string) => {
-    if (!file || !userCanEditAny) return;
-    if (dirtyCellsRef.current.size > 0 || saving) {
-      setError("Hãy lưu số liệu đang nhập trước khi nhập dữ liệu từ file.");
-      if (importFileRef.current) importFileRef.current.value = "";
-      return;
-    }
-    setImportingHistory(true);
-    setError("");
-    setMessage("");
-    const completed: ImportDay[] = [];
-    let backup: { reports: Record<string, { entries?: LoadedEntry[] }>; importedDays: ImportDay[] } | null = null;
-
-    const postJson = async (url: string, body: unknown) => {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const result = (await response.json()) as { error?: string };
-      if (!response.ok || result.error) throw new Error(result.error || `Không ghi được ${url}.`);
-    };
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("targetMonth", selectedMonth);
-      formData.append("ranges", JSON.stringify(ranges));
-      const parseResponse = await fetch("/api/ctktkt-report/history-import", { method: "POST", body: formData });
-      const parsed = (await parseResponse.json()) as Partial<ImportPackage> & { error?: string };
-      if (!parseResponse.ok || parsed.error) throw new Error(parsed.error || "Không đọc được file Chỉ tiêu KTKT.");
-      if (!/^\d{4}-\d{2}$/.test(parsed.month || "") || !Array.isArray(parsed.days) || !parsed.totals) throw new Error("File không đúng cấu trúc Chỉ tiêu KTKT.");
-      const importPackage = parsed as ImportPackage;
-      if (importPackage.month !== selectedMonth || importPackage.days.some(day => !day.date.startsWith(`${selectedMonth}-`))) {
-        throw new Error("File không trả đúng dữ liệu của tháng đã chọn.");
-      }
-      if (importPackage.days.some(day => day.date > vietnamDateIso())) {
-        throw new Error("File có dữ liệu ngày trong tương lai. Hãy chọn tháng dữ liệu quá khứ.");
-      }
-      if (importPackage.totals.nonBlankManualValues <= 0) {
-        throw new Error("Không có dữ liệu nhập tay trong các cụm/ngày đã chọn. Hãy đổi khoảng ngày hoặc chọn cụm khác.");
-      }
-      for (const day of importPackage.days) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date) || !Array.isArray(day.manualEntries) || day.manualEntries.length > 400) {
-          throw new Error(`Dữ liệu ngày ${day.date || "không rõ"} không hợp lệ.`);
-        }
-      }
-      const supportingDays = importPackage.supportingDays || [];
-      for (const day of supportingDays) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date) || !Array.isArray(day.manualEntries) || day.manualEntries.length > 8) {
-          throw new Error(`Dữ liệu công tơ hỗ trợ ngày ${day.date || "không rõ"} không hợp lệ.`);
-        }
-      }
-
-      if (!ranges.length && (importPackage.totals.failed > 0 || importPackage.totals.checks !== importPackage.totals.passed)) {
-        const failures = importPackage.audits.flatMap(audit => audit.failed.map(item =>
-          `${audit.date.split("-").reverse().join("/")} · ${item.name} (${item.sourceCell}): Excel=${item.expected ?? "trống"}, Web=${item.actual ?? "trống"}`,
-        ));
-        throw new Error(`Chưa nhập tháng ${selectedMonth} vì có ${importPackage.totals.failed}/${importPackage.totals.checks} kết quả tự tính chưa khớp:\n${failures.slice(0, 12).join("\n")}${failures.length > 12 ? `\n… và ${failures.length - 12} sai lệch khác.` : ""}`);
-      }
-      let writeDays = [...supportingDays, ...importPackage.days];
-      const periods = [...new Set(writeDays.map(day => day.date.slice(0, 7)))];
-      const reports: Record<string, { entries?: LoadedEntry[] }> = {};
-      for (const backupPeriod of periods) {
-        const response = await fetch(`/api/ctktkt-report?period=${encodeURIComponent(backupPeriod)}`, { cache: "no-store" });
-        const body = (await response.json()) as { entries?: LoadedEntry[]; error?: string };
-        if (!response.ok) throw new Error(body.error || `Không sao lưu được dữ liệu tháng ${backupPeriod}.`);
-        reports[backupPeriod] = body;
-      }
-      const existing = new Map<string, string>();
-      for (const body of Object.values(reports)) for (const entry of body.entries || []) existing.set(`${entry.operatingDate}:${entry.cell}`, entry.value);
-      let skipped = 0;
-      writeDays = writeDays.map(day => ({ ...day, manualEntries: day.manualEntries.filter(entry => {
-        if (!entry.value.trim() || !canEditCtktktField(user, entry.cell)) return false;
-        const old = existing.get(`${day.date}:${entry.cell}`);
-        if (old === entry.value || (!historyImportOverwrite && old?.trim())) { skipped += 1; return false; }
-        return true;
-      }) })).filter(day => day.manualEntries.length > 0);
-      const count = writeDays.reduce((total, day) => total + day.manualEntries.length, 0);
-      if (!count) { setMessage("Không có ô mới cần nhập theo lựa chọn hiện tại; dữ liệu đang có được giữ nguyên."); setPendingHistoryFile(null); return; }
-      const confirmed = window.confirm(
-        `Tháng ${selectedMonth}: đọc ${importPackage.days.length} sheet ngày.\nSẽ ghi ${count} ô nhập tay trên ${writeDays.length} ngày (gồm công tơ hỗ trợ D-1 nếu có). Bỏ qua ${skipped} ô đã có hoặc không thay đổi.\n`
-        + `${historyImportOverwrite ? "Ghi đè các ô đã có dữ liệu." : "Chỉ bổ sung ô còn trống."} Ô trống trong file không xóa dữ liệu trên web.\n`
-        + `Chỉ nhập các cụm và khoảng ngày đã chọn. Dữ liệu nhập tay đã kiểm tra định dạng; web tự tính theo công thức hiện có. Các ô tự tính và liên kết không bị ghi đè.\n`
-        + `${importPackage.warnings.length} ô chứa công thức đã bỏ qua. Dữ liệu cũ sẽ được sao lưu trước khi ghi.\n\nTiếp tục nhập dữ liệu?`,
-      );
-      if (!confirmed) { setMessage("Đã hủy nhập tháng; chưa ghi dữ liệu."); return; }
-      backup = { reports, importedDays: importPackage.days };
-      const backupBlob = new Blob([JSON.stringify({ createdAt: new Date().toISOString(), ...backup }, null, 2)], { type: "application/json" });
-      const backupUrl = URL.createObjectURL(backupBlob);
-      const backupLink = document.createElement("a");
-      backupLink.href = backupUrl;
-      backupLink.download = `CTKTKT_BACKUP_${importPackage.month}.json`;
-      backupLink.click();
-      URL.revokeObjectURL(backupUrl);
-
-      for (const day of writeDays) {
-        completed.push(day);
-        await postJson("/api/ctktkt-report", { operatingDate: day.date, entries: day.manualEntries });
-      }
-
-      let verifiedByPeriod: Record<string, { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[] }> = {};
-      let readbackMismatch: ReturnType<typeof findCtktktHistoryReadbackMismatch> = null;
-      for (let attempt = 1; attempt <= 6; attempt += 1) {
-        verifiedByPeriod = {};
-        for (const verifyPeriod of periods) {
-          const response = await fetch(`/api/ctktkt-report?period=${encodeURIComponent(verifyPeriod)}&verify=${Date.now()}`, { cache: "no-store" });
-          const body = (await response.json()) as { entries?: LoadedEntry[]; linkedEntries?: LoadedEntry[]; warnings?: LinkWarning[]; error?: string };
-          if (!response.ok) throw new Error(body.error || `Không đọc lại được dữ liệu tháng ${verifyPeriod}.`);
-          verifiedByPeriod[verifyPeriod] = body;
-        }
-        readbackMismatch = findCtktktHistoryReadbackMismatch(
-          writeDays,
-          Object.values(verifiedByPeriod).flatMap(body => body.entries || []),
-        );
-        if (!readbackMismatch) break;
-        if (attempt < 6) await new Promise(resolve => window.setTimeout(resolve, 750));
-      }
-      if (readbackMismatch) {
-        throw new Error(
-          `Đọc lại không khớp ô ${readbackMismatch.cell}, ngày ${readbackMismatch.date}: `
-          + `file=${readbackMismatch.expected || "trống"}, web=${readbackMismatch.actual ?? "trống"}.`,
-        );
-      }
-
-      const verified = verifiedByPeriod[importPackage.month];
-      const next: Record<string, CtktktDayEntries> = {};
-      for (const entry of verified.entries || []) {
-        next[entry.operatingDate] ||= {};
-        next[entry.operatingDate][entry.cell] = entry.value;
-      }
-      const nextLinked: Record<string, CtktktDayEntries> = {};
-      for (const entry of verified.linkedEntries || []) {
-        nextLinked[entry.operatingDate] ||= {};
-        nextLinked[entry.operatingDate][entry.cell] = entry.value;
-      }
-      setByDate(next);
-      setLinkedByDate(nextLinked);
-      setLinkWarnings(verified.warnings || []);
-      setDate(importPackage.days[0].date);
-      dirtyCellsRef.current.clear();
-      setDirty(false);
-      setMessage(`Đã nhập tháng ${selectedMonth}: ${count} ô nhập tay trên ${writeDays.length} ngày đã được đọc lại và xác nhận lưu đúng. Công thức tính giữ nguyên.`);
-      setPendingHistoryFile(null);
-    } catch (reason) {
-      let rollbackMessage = "";
-      if (backup && completed.length) {
-        try {
-          const oldByDate = new Map<string, Record<string, string>>();
-          for (const body of Object.values(backup.reports)) for (const entry of body.entries || []) {
-            const values = oldByDate.get(entry.operatingDate) || {};
-            values[entry.cell] = entry.value;
-            oldByDate.set(entry.operatingDate, values);
-          }
-          for (const day of [...completed].reverse()) {
-            const oldManual = oldByDate.get(day.date) || {};
-            await postJson("/api/ctktkt-report", {
-              operatingDate: day.date,
-              entries: day.manualEntries.map(entry => ({ cell: entry.cell, value: oldManual[entry.cell] || "" })),
-            });
-          }
-          rollbackMessage = " Đã hoàn nguyên các ngày đã ghi.";
-        } catch {
-          rollbackMessage = " Hoàn nguyên tự động không trọn vẹn; dùng file CTKTKT_BACKUP vừa tải để phục hồi.";
-        }
-      }
-      setError(`${reason instanceof Error ? reason.message : "Không nhập được dữ liệu lịch sử."}${rollbackMessage}`);
-    } finally {
-      setImportingHistory(false);
-      if (importFileRef.current) importFileRef.current.value = "";
-    }
   };
 
   // Điều hướng bằng bàn phím (Phím mũi tên ← ↑ → ↓, Enter, Tab) tương tự Excel
@@ -1146,7 +955,7 @@ export function CtktktReport() {
     const isLinked = CTKTKT_BCSX_LINKED_CELLS.has(cell) || isWaterLinked || isQlktProduction || isFixed || isNh3Carryover || isNh3StartMeter || isNh3OpeningStock;
     const isComputed = options?.readOnlyValue !== undefined;
     const isManual = !isLinked && !isComputed;
-    const canEditThis = isManual && canEditCtktktField(user, cell);
+    const canEditThis = isManual && canEditSelectedDate && canEditCtktktField(user, cell);
     const value = isComputed ? options.readOnlyValue ?? "" : current[cell] || "";
     const isMissingEditableValue = canEditThis && missingCtktkt.has(cell) && isMissingValue(value);
 
@@ -1262,7 +1071,7 @@ export function CtktktReport() {
               <DateField
                 value={date}
                 max={vietnamDateIso()}
-                disabled={saving || importingHistory || syncingPmis}
+                disabled={saving || syncingPmis}
                 onChange={value => {
                   if (value === date) return;
                   if (dirtyCellsRef.current.size > 0 || saving) {
@@ -1279,46 +1088,6 @@ export function CtktktReport() {
                 className="w-36"
               />
             </label>
-
-            <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-              Tháng nhập
-              <input type="month" value={historyImportMonth || period} max={vietnamDateIso().slice(0, 7)}
-                onChange={event => setHistoryImportMonth(event.target.value)} disabled={importingHistory || saving}
-                className="h-9 rounded-xl border border-slate-300 bg-white px-2" />
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
-              <input type="checkbox" checked={historyImportOverwrite} disabled={importingHistory || saving}
-                onChange={event => setHistoryImportOverwrite(event.target.checked)} />
-              Ghi đè ô đã có
-            </label>
-
-            <input
-              ref={importFileRef}
-              type="file"
-              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              className="hidden"
-              onChange={event => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                const month = historyImportMonth || period;
-                const [year, monthNumber] = month.split("-").map(Number);
-                const end = `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2,"0")}`;
-                setHistoryRanges(CTKTKT_HISTORY_GROUPS.map(({group}) => ({group, from: `${month}-01`, to: end > vietnamDateIso() ? vietnamDateIso() : end, enabled: group === "other" ? canEditCtktktField(user,"I35") : canEditCtktktGroup(user, group as CtktktFieldGroup)})));
-                setError("");
-                setPendingHistoryFile({file, month, lastDate: end > vietnamDateIso() ? vietnamDateIso() : end});
-                event.target.value = "";
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => importFileRef.current?.click()}
-              disabled={!userCanEditAny || importingHistory || loading}
-              className="flex h-9 items-center gap-1.5 rounded-xl border border-[#c6a17d] bg-[#f3e8dc] px-3 text-xs font-bold text-[#70492d] shadow-xs transition-all hover:bg-[#ead8c5] disabled:opacity-45"
-              title="Đọc tất cả sheet ngày trong tháng đã chọn; chỉ nhập ô nhập tay sau khi đối chiếu"
-            >
-              <Upload className="size-3.5" />
-              {importingHistory ? "Đang kiểm tra file…" : "Nhập file tháng"}
-            </button>
 
             <button
               type="button"
@@ -1386,6 +1155,14 @@ export function CtktktReport() {
             </span>
           </div>
         </div>
+
+        {!canEditSelectedDate && !loading && (
+          <p role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
+            {date === vietnamDateIso()
+              ? "Ngày D đang khóa nhập. Chỉ nhập số liệu từ ngày D-1 trở về trước."
+              : "Ngày trước D-1 chỉ tài khoản quản trị được chỉnh sửa; tài khoản hiện tại chỉ xem."}
+          </p>
+        )}
 
         {!hasPreviousManualData && !loading && (
           <p className="mt-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
@@ -3570,7 +3347,7 @@ export function CtktktReport() {
             const kSum = (k157 ?? 0) + (k158 ?? 0);
             const lSum = (l157 ?? 0) + (l158 ?? 0);
 
-            const canEditPmis = userCanEditAny || canEditCtktktGroup(user, "pmis_reports");
+            const canEditPmis = canEditSelectedDate && (userCanEditAny || canEditCtktktGroup(user, "pmis_reports"));
 
             return (
               <div className="space-y-6">
@@ -3902,7 +3679,7 @@ export function CtktktReport() {
                     );
                   })
                   .map(f => {
-                    const canEditThis = canEditCtktktField(user, f.cell);
+                    const canEditThis = canEditSelectedDate && canEditCtktktField(user, f.cell);
                     return (
                       <div
                         key={f.cell}
@@ -3958,42 +3735,6 @@ export function CtktktReport() {
           </span>
         </div>
       </div>
-
-      {pendingHistoryFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
-          <div role="dialog" aria-modal="true" aria-labelledby="history-range-title" className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-xl">
-            <div className="border-b p-5">
-              <h2 id="history-range-title" className="text-lg font-bold text-[#173b64]">Chọn cụm bảng và ngày cần nhập</h2>
-              <p className="mt-1 break-words text-sm text-slate-600">{pendingHistoryFile.file.name} · Tháng {pendingHistoryFile.month.split("-").reverse().join("/")}</p>
-              <p className="mt-2 text-sm text-slate-600">Mỗi cụm chọn khoảng ngày riêng. Bỏ chọn cụm không cần nhập. Chỉ lấy ô nhập tay, giữ nguyên công thức; không nhập dữ liệu ngoài khoảng đã chọn.</p>
-            </div>
-            <div className="overflow-auto p-5">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-100 text-left"><tr><th className="p-3">Nhập</th><th className="p-3">Cụm bảng</th><th className="p-3">Từ ngày</th><th className="p-3">Đến ngày</th></tr></thead>
-                <tbody>{historyRanges.map((range, index) => {
-                  const label = CTKTKT_HISTORY_GROUPS.find(group => group.group === range.group)!.label;
-                  const allowed = range.group === "other" ? canEditCtktktField(user,"I35") : canEditCtktktGroup(user, range.group as CtktktFieldGroup);
-                  const change = (values: Partial<typeof range>) => setHistoryRanges(old => old.map((item, i) => i === index ? {...item,...values} : item));
-                  return <tr key={range.group} className="border-b border-slate-100">
-                    <td className="p-3"><input type="checkbox" aria-label={`Nhập ${label}`} checked={range.enabled} disabled={importingHistory || !allowed} onChange={event => change({enabled:event.target.checked})} /></td>
-                    <td className="p-3 font-medium">{label}{!allowed && <span className="ml-2 text-xs text-slate-400">Không có quyền nhập</span>}</td>
-                    <td className="p-3"><input type="date" aria-label={`Từ ngày ${label}`} value={range.from} min={`${pendingHistoryFile.month}-01`} max={range.to} disabled={!range.enabled || importingHistory} onChange={event => change({from:event.target.value})} className="rounded-lg border border-slate-300 px-2 py-2 disabled:bg-slate-50" /></td>
-                    <td className="p-3"><input type="date" aria-label={`Đến ngày ${label}`} value={range.to} min={range.from} max={pendingHistoryFile.lastDate} disabled={!range.enabled || importingHistory} onChange={event => change({to:event.target.value})} className="rounded-lg border border-slate-300 px-2 py-2 disabled:bg-slate-50" /></td>
-                  </tr>;
-                })}</tbody>
-              </table>
-              {error && <p role="alert" className="mt-4 whitespace-pre-line rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t p-5">
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={historyImportOverwrite} disabled={importingHistory} onChange={event => setHistoryImportOverwrite(event.target.checked)} />Ghi đè ô đã có (mặc định chỉ bổ sung ô trống)</label>
-              <div className="flex gap-2">
-                <button type="button" disabled={importingHistory} onClick={() => setPendingHistoryFile(null)} className="rounded-xl border px-4 py-2 text-sm">Đóng</button>
-                <button type="button" disabled={importingHistory || !historyRanges.some(range => range.enabled)} onClick={() => void handleHistoryImport(pendingHistoryFile.file, historyRanges.filter(range => range.enabled).map(({group,from,to}) => ({group,from,to})), pendingHistoryFile.month)} className="rounded-xl bg-[#4057b5] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{importingHistory ? "Đang kiểm tra và nhập…" : "Kiểm tra và nhập phần đã chọn"}</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showEmailModal && (
         <CtktktEmailModal

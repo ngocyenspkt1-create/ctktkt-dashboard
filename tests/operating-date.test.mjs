@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addDaysIso, defaultOperatingDate, isFutureOperatingDate, vietnamDateIso } from "../lib/operating-date.ts";
+import { addDaysIso, canEditOperatingDate, defaultOperatingDate, isFutureOperatingDate, vietnamDateIso } from "../lib/operating-date.ts";
 
 test("ngày vận hành mặc định là D-1 theo múi giờ Việt Nam", () => {
   const instant = new Date("2026-09-21T00:30:00Z"); // 07:30 ngày 21/09 tại Việt Nam
@@ -19,4 +19,14 @@ test("ngày hiện tại và quá khứ được phép; ngày tương lai bị c
   assert.equal(isFutureOperatingDate("2026-10-03", today), false);
   assert.equal(isFutureOperatingDate("2026-10-04", today), false);
   assert.equal(isFutureOperatingDate("2026-10-05", today), true);
+});
+
+test("chỉ quản trị được sửa ngày cũ hơn D-1; không ai sửa được ngày D", () => {
+  const today = "2026-10-10";
+  assert.equal(canEditOperatingDate("2026-10-10", true, today), false);
+  assert.equal(canEditOperatingDate("2026-10-10", false, today), false);
+  assert.equal(canEditOperatingDate("2026-10-09", true, today), true);
+  assert.equal(canEditOperatingDate("2026-10-09", false, today), true);
+  assert.equal(canEditOperatingDate("2026-10-08", true, today), true);
+  assert.equal(canEditOperatingDate("2026-10-08", false, today), false);
 });

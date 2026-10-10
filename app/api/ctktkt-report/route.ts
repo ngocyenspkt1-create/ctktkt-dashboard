@@ -1,7 +1,8 @@
 import { auditedDailyBatch } from "@/lib/daily-input-audit";
 import { getRawDb } from "@/db";
 import { getSessionUser } from "@/lib/auth/server";
-import { isFutureOperatingDate, vietnamDateIso } from "@/lib/operating-date";
+import { canEditOperatingDate, isFutureOperatingDate, vietnamDateIso } from "@/lib/operating-date";
+import { isAdminUser } from "@/lib/auth/session";
 import { canEditAnyCtktktField, canEditCtktktField } from "@/lib/ctktkt-permissions";
 import { BCSX_COAL_STOCK_24H_CODE, CTKTKT_BCSX_LINKED_CELLS, CTKTKT_COAL_STOCK_24H_CELL, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/lib/ctktkt-water-link";
@@ -121,8 +122,11 @@ export async function POST(request: Request) {
     if (typeof body.operatingDate !== "string" || !datePattern.test(body.operatingDate) || !Array.isArray(body.entries) || body.entries.length > 400) {
       throw new Error("Ngày hoặc danh sách ô nhập không hợp lệ.");
     }
-    if (isFutureOperatingDate(body.operatingDate)) {
-      return Response.json({ error: "Không thể nhập số liệu cho ngày trong tương lai." }, { status: 400 });
+    if (body.operatingDate >= vietnamDateIso()) {
+      return Response.json({ error: "Không được nhập số liệu cho ngày D hoặc ngày trong tương lai; chỉ nhập từ ngày D-1 trở về trước." }, { status: 400 });
+    }
+    if (!canEditOperatingDate(body.operatingDate, isAdminUser(user))) {
+      return Response.json({ error: "Chỉ tài khoản quản trị được chỉnh sửa ngày trước D-1; tài khoản khác chỉ được nhập ngày D-1." }, { status: 403 });
     }
     const clean = body.entries.map(item => {
       if (!item || typeof item !== "object") throw new Error("Một ô dữ liệu không hợp lệ.");
