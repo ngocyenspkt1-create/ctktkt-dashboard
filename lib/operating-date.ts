@@ -2,7 +2,7 @@ const VN_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
 export function canEditOperatingDate(iso: string, isAdmin: boolean, today = vietnamDateIso()) {
   const latestEditableDate = addDaysIso(today, -1);
-  return iso <= latestEditableDate && (isAdmin || iso === latestEditableDate);
+  return iso <= today && (isAdmin || iso >= latestEditableDate);
 }
 
 export function vietnamDateIso(date = new Date()) {

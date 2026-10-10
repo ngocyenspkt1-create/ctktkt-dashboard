@@ -21,12 +21,14 @@ test("ngày hiện tại và quá khứ được phép; ngày tương lai bị c
   assert.equal(isFutureOperatingDate("2026-10-05", today), true);
 });
 
-test("chỉ quản trị được sửa ngày cũ hơn D-1; không ai sửa được ngày D", () => {
+test("tài khoản có quyền được sửa D và D-1; ngày cũ chỉ admin; ngày tương lai bị chặn", () => {
   const today = "2026-10-10";
-  assert.equal(canEditOperatingDate("2026-10-10", true, today), false);
-  assert.equal(canEditOperatingDate("2026-10-10", false, today), false);
+  assert.equal(canEditOperatingDate("2026-10-10", true, today), true);
+  assert.equal(canEditOperatingDate("2026-10-10", false, today), true);
   assert.equal(canEditOperatingDate("2026-10-09", true, today), true);
   assert.equal(canEditOperatingDate("2026-10-09", false, today), true);
   assert.equal(canEditOperatingDate("2026-10-08", true, today), true);
   assert.equal(canEditOperatingDate("2026-10-08", false, today), false);
+  assert.equal(canEditOperatingDate("2026-10-11", true, today), false);
+  assert.equal(canEditOperatingDate("2026-10-11", false, today), false);
 });
