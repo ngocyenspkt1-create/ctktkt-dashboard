@@ -1,3 +1,4 @@
+import { auditedDailyBatch } from "@/lib/daily-input-audit";
 import { getRawDb } from "@/db";
 import { getSessionUser } from "@/lib/auth/server";
 import { isFutureOperatingDate, vietnamDateIso } from "@/lib/operating-date";
@@ -161,7 +162,7 @@ export async function POST(request: Request) {
     const statements = authorizedEntries.map(entry => entry.value === ""
       ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${entry.cell}`)
       : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(body.operatingDate, `KTKT:${entry.cell}`, entry.value));
-    if (statements.length) await db.batch(statements);
+    if (statements.length) await auditedDailyBatch(db, user, "ctktkt-report", statements);
     return Response.json({ saved: authorizedEntries.filter(entry => entry.value !== "").length });
   } catch (error) {
     return Response.json({ error: error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ." }, { status: 400 });

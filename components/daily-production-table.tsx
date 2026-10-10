@@ -9,7 +9,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
 import { useSessionUser } from "@/components/session-context";
-import { canViewPreAdjustmentHeatRate, hasPermission } from "@/lib/auth/session";
+import { canViewPreAdjustmentHeatRate, hasPermission, isAdminUser } from "@/lib/auth/session";
 import { defaultOperatingDate, isFutureOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { CTKTKT_LINKED_DAILY_CODES, deriveDailyValuesFromCtktkt, QLKT_DIRECT_DAILY_CODES } from "@/lib/daily-source-links";
@@ -325,6 +325,7 @@ export function DailyProductionTable() {
   const overviewField = overviewFields.find(field => field.code === overviewCode) ?? overviewFields[0];
 
   return <section className="monthly-workspace space-y-5">
+    {user && isAdminUser(user) && <a href={`/admin/data-history?date=${syncDate}`} className="inline-block text-sm font-semibold text-blue-700 underline">Nhật ký thay đổi dữ liệu</a>}
     <div className="monthly-heading">
       <div className="monthly-heading-icon"><Database className="size-6" aria-hidden /></div>
       <div className="min-w-0 flex-1"><p className="monthly-eyebrow">Dữ liệu vận hành · Duyên Hải 1</p><h2 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Dữ liệu các tháng</h2><p className="mt-1 text-sm text-slate-500">Quản lý số liệu hằng ngày, theo dõi chỉ tiêu và đối chiếu kết quả trong tháng.</p></div>

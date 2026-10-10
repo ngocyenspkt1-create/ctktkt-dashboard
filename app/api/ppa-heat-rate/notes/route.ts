@@ -1,3 +1,4 @@
+import { auditedDailyBatch } from "@/lib/daily-input-audit";
 import { getRawDb } from "@/db";
 import { isFutureOperatingDate } from "@/lib/operating-date";
 import { requireAnyPermission } from "@/lib/auth/server";
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
           : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(entry.operatingDate, fieldCode, value));
       }
     }
-    const results = statements.length ? await db.batch(statements) : [];
+    const results = statements.length ? await auditedDailyBatch(db, guard.user, "ppa-heat-rate/notes", statements) : [];
     const updated = results.slice(0, noteStatementCount).reduce((sum, result) => sum + Number(result.meta.changes || 0), 0);
     return Response.json({ received: entries.length, updated, skipped: entries.length - updated });
   } catch (error) {

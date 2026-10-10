@@ -1,3 +1,4 @@
+import { auditedDailyBatch } from "@/lib/daily-input-audit";
 import { getRawDb } from "@/db";
 import { EVENT_TYPES, validateOperatingEventDateRange, type OperatingEvent } from "@/lib/bcsx";
 import { requirePermission } from "@/lib/auth/server";
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
         ).bind(date, event.startAt, event.endAt, event.eventType, event.description)),
       ] : []),
     ];
-    await db.batch(statements);
+    await auditedDailyBatch(db, guard.user, "bcsx-sync", statements);
     return Response.json({
       savedTotals: entriesToPersist.length,
       savedS1Events: s1Events.length,

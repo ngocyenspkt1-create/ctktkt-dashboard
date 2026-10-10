@@ -1,3 +1,4 @@
+import { auditedDailyBatch } from "@/lib/daily-input-audit";
 import { getRawDb } from "@/db";
 import { requirePermission } from "@/lib/auth/server";
 import { BCSX_COAL_STOCK_24H_CODE } from "@/lib/ctktkt-bcsx-link";
@@ -19,9 +20,10 @@ export async function POST(request: Request) {
     if (!datePattern.test(operatingDate)) throw new Error("Ngày vận hành không hợp lệ.");
     if (isFutureOperatingDate(operatingDate)) throw new Error("Không thể lưu dữ liệu cho ngày trong tương lai.");
     if (!valueText || !Number.isFinite(value) || value < 0 || value > 10_000_000) throw new Error("Than tồn kho 24h phải là số không âm hợp lệ.");
-    await getRawDb().prepare(
+    const db = getRawDb();
+    await auditedDailyBatch(db, guard.user, "bcsx-coal-stock", [db.prepare(
       "INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
-    ).bind(operatingDate, BCSX_COAL_STOCK_24H_CODE, String(value)).run();
+    ).bind(operatingDate, BCSX_COAL_STOCK_24H_CODE, String(value))]);
     return Response.json({ saved: true, value: String(value) });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Không lưu được than tồn kho 24h." }, { status: 400 });
