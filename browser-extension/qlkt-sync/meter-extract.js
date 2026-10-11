@@ -23,8 +23,16 @@
     { meter: "DH1_283M", channel: "kWhGiao", label: "Điểm bán S2" },
     { meter: "DH1_283M", channel: "kWhNhan", label: "Điện nhận lưới S2" },
   ];
-  const stopped = (target, options) => target.channel === "kWhGiao" &&
+  const confirmedStopped = (target, options) =>
     (options?.stoppedUnits || []).includes(["DHA_S1", "DH1_285M"].includes(target.meter) ? "S1" : "S2");
+  const stopped = (target, options) => target.channel === "kWhGiao" && confirmedStopped(target, options);
+  function meterPayload(readings, operatingDate, sourcePage) {
+    const actual = readings.filter(Boolean);
+    const missingReceiveMeters = required.filter(target => target.channel === "kWhNhan" &&
+      !actual.some(reading => reading.meter === target.meter && reading.channel === target.channel)).map(target => target.meter);
+    return { version: 1, kind: "ppa-meter", operatingDate, sourcePage, readings: actual,
+      ...(missingReceiveMeters.length ? { missingReceiveMeters } : {}) };
+  }
   function stoppedReading(target, operatingDate, sourcePage) {
     return { meter: target.meter, channel: target.channel, operatingDate, total: 0,
       intervals: Array(48).fill(0), sourceName: `${sourcePage} · xác nhận tổ máy ngừng cả ngày` };
@@ -71,6 +79,7 @@
           return actual >= 0 && normalized(candidate[channelIndex + offset]) === normalized(target.channel) && dateIndex >= 0 && normalizeDate(candidate[dateIndex + offset]) !== operatingDate;
         });
         if (stopped(target, options) && !stale) return stoppedReading(target, operatingDate, sourcePage);
+        if (target.channel === "kWhNhan" && confirmedStopped(target, options) && !stale) return null;
         throw new Error(`Không tìm thấy ${target.meter} / ${target.channel} cho ngày đã chọn.`);
       }
       const offset = row.findIndex(cell => normalized(cell) === normalized(target.meter)) - meterIndex;
@@ -85,7 +94,7 @@
       if (Math.abs(intervalTotal - reportedTotal) > tolerance) throw new Error(`${target.meter}: tổng H1–H48 không khớp cột Tổng.`);
       return { meter: target.meter, channel: target.channel, operatingDate, total: reportedTotal, intervals: numericIntervals, sourceName: sourcePage };
     });
-    return { version: 1, kind: "ppa-meter", operatingDate, sourcePage, readings };
+    return meterPayload(readings, operatingDate, sourcePage);
   }
 
   // --- Cách 2 (chính): đọc thẳng dữ liệu đầy đủ mà QLKT đã nhúng sẵn trong
@@ -157,6 +166,7 @@
         const meterRowsAnyChannel = rows.filter(candidate => normalized(candidate[0]) === normalized(target.meter));
         const stale = meterRowsAnyChannel.some(candidate => normalized(candidate[1]) === normalized(target.channel) && normalizeDate(candidate[2]) !== operatingDate);
         if (stopped(target, options) && !stale) return stoppedReading(target, operatingDate, sourcePage);
+        if (target.channel === "kWhNhan" && confirmedStopped(target, options) && !stale) return null;
         const channelsFound = [...new Set(meterRowsAnyChannel.map(candidate => candidate[1]))];
         const datesFound = [...new Set(meterRowsAnyChannel.map(candidate => candidate[2]))];
         throw new Error(`Không tìm thấy ${target.meter} / ${target.channel} cho ngày đã chọn. (Tìm thấy ${meterRowsAnyChannel.length} dòng của ${target.meter}, kênh: ${channelsFound.join(", ") || "không có"}; ngày: ${datesFound.join(", ") || "không có"}.)`);
@@ -171,7 +181,7 @@
       if (Math.abs(intervalTotal - reportedTotal) > tolerance) throw new Error(`${target.meter}: tổng H1–H48 không khớp cột Tổng.`);
       return { meter: target.meter, channel: target.channel, operatingDate, total: reportedTotal, intervals, sourceName: sourcePage };
     });
-    return { version: 1, kind: "ppa-meter", operatingDate, sourcePage, readings };
+    return meterPayload(readings, operatingDate, sourcePage);
   }
 
   function extractPpaMeterReadingsFromDataArrays(arrays, operatingDate, sourcePage = "QLKT · Số liệu đo đếm công tơ", options = {}) {

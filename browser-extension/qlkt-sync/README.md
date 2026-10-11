@@ -29,8 +29,8 @@ Tiện ích không đọc trường mật khẩu, không lưu thông tin đăng 
 3. Hằng ngày vào **Dữ liệu các tháng**, chọn ngày và bấm **Đồng bộ toàn bộ QLKT**. Tiện ích lần lượt lấy dữ liệu ngày, công tơ PPA, PMIS, nhật ký BCSX và báo cáo 02-PĐ rồi web tự lưu các nhóm hợp lệ.
 
 Khi phiên QLKT hết hạn, đăng nhập QLKT lại rồi bấm đồng bộ. Tiện ích chỉ trả kết quả khi tất cả nguồn bắt buộc đúng ngày và đủ cấu trúc; web tự lưu từng nhóm và báo rõ nhóm nào thành công hoặc lỗi.
-# Hỗ trợ tổ ngừng — phiên bản 0.4.39
+# Hỗ trợ tổ ngừng — phiên bản 0.4.40
 
-Trong Suất hao nhiệt PPA, chọn đúng ngày rồi tích S1/S2 tại **Xác nhận tổ ngừng cả ngày** trước khi lấy công tơ. Chỉ dùng khi tổ không phát điện suốt ngày; đổi ngày sẽ xóa xác nhận. Tiện ích tạo giá trị 0 cho các kênh giao bị thiếu của tổ đã xác nhận, ghi rõ nguồn là xác nhận ngừng. Không thay đổi số liệu tổ đang chạy, không bỏ qua dòng sai ngày, giá trị sai, tổng không khớp hay mâu thuẫn có điện phát. Kênh điện nhận lưới vẫn phải có số thực; không suy ra 0 từ trạng thái ngừng.
+Trong Suất hao nhiệt PPA, chọn đúng ngày rồi tích S1/S2 tại **Xác nhận tổ ngừng cả ngày** trước khi lấy công tơ. Chỉ dùng khi tổ không phát điện suốt ngày; đổi ngày sẽ xóa xác nhận. Tiện ích tạo giá trị 0 cho các kênh giao bị thiếu của tổ đã xác nhận, ghi rõ nguồn là xác nhận ngừng. Không thay đổi số liệu tổ đang chạy, không bỏ qua dòng sai ngày, giá trị sai, tổng không khớp hay mâu thuẫn có điện phát. Kênh điện nhận bị thiếu của tổ ngừng được báo riêng, không tạo số 0 và không chặn tính PPA. Đồng bộ toàn bộ chỉ tiêu/điện tự dùng vẫn yêu cầu đủ điện nhận thực; không dùng kết quả thiếu để cập nhật điện tự dùng.
 
 Cập nhật thư mục tiện ích bằng gói ZIP mới, Reload tại chrome://extensions rồi Ctrl+F5 trang PPA. Công thức chỉ tiêu không thay đổi.

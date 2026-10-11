@@ -80,6 +80,7 @@ export type QlktPpaSyncPayload = {
   operatingDate: string;
   sourcePage: string;
   readings: QlktPpaReading[];
+  missingReceiveMeters?: string[];
 };
 
 export type QlktOperatingEvent = {
@@ -165,7 +166,18 @@ export function validateQlktPpaSyncPayload(value: unknown): QlktPpaSyncPayload |
       seen.add(key);
       return [{ meter, channel: channelKey === "kwhnhan" ? "kWhNhan" : "kWhGiao", operatingDate: raw.operatingDate, total, intervals, sourceName: String(item.sourceName || "QLKT · Số liệu đo đếm công tơ").slice(0, 500) }];
     });
-    return readings.length === requiredReadings.size ? { version: 1, kind: "ppa-meter", operatingDate: raw.operatingDate, sourcePage: raw.sourcePage.slice(0, 500), readings } : null;
+    const missingReceiveMeters = raw.missingReceiveMeters === undefined ? [] : raw.missingReceiveMeters;
+    if (!Array.isArray(missingReceiveMeters) || new Set(missingReceiveMeters).size !== missingReceiveMeters.length) return null;
+    for (const meter of missingReceiveMeters) {
+      if (!["DH1_285M", "DH1_283M"].includes(meter) || seen.has(`${meter}|kwhnhan`) ||
+        raw.readings.some(item => item && String(item.meter).toUpperCase() === meter && String(item.channel).toLowerCase() === "kwhnhan")) return null;
+      const grossMeter = meter === "DH1_285M" ? "DHA_S1" : "DHA_S2";
+      if (![meter, grossMeter].every(code => readings.some(item => item.meter === code && item.channel === "kWhGiao" && item.total === 0 && item.intervals.every(value => value === 0)))) return null;
+      requiredReadings.delete(`${meter}|kwhnhan`);
+    }
+    return readings.length === requiredReadings.size && [...requiredReadings].every(key => seen.has(key))
+      ? { version: 1, kind: "ppa-meter", operatingDate: raw.operatingDate, sourcePage: raw.sourcePage.slice(0, 500), readings,
+        ...(missingReceiveMeters.length ? { missingReceiveMeters } : {}) } : null;
   } catch {
     return null;
   }
@@ -199,7 +211,7 @@ export function validateQlktUnifiedSyncPayload(value: unknown): QlktUnifiedSyncP
     const heatRate = validateQlktSyncPayload(raw.heatRate);
     const events = validateEventPayload(raw.events, raw.operatingDate);
     const pmis02Pd = validateQlktSyncPayload(raw.pmis02Pd);
-    if (!daily || !ppa || !heatRate || !events || !pmis02Pd) return null;
+    if (!daily || !ppa || ppa.readings.length !== 6 || !heatRate || !events || !pmis02Pd) return null;
     if ([daily.operatingDate, ppa.operatingDate, heatRate.operatingDate, pmis02Pd.operatingDate].some(date => date !== raw.operatingDate)) return null;
     const hasCodes = (payload: QlktSyncPayload, codes: string[]) => codes.every(code => payload.entries.some(entry => entry.fieldCode === code));
     if (!hasCodes(daily, ["F", "L", "AR", "CC", "CD", "CS", "CT", "CU", "CV"])) return null;

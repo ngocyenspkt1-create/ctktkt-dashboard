@@ -6,12 +6,13 @@ import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXT
 import '../public/qlkt-sync-extension/meter-extract.js';
 
 test('web blocks old QLKT extensions and prefers reload over downloading again', () => {
-  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.39');
+  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.40');
   assert.equal(isQlktExtensionOutdated('0.4.37'), true);
   assert.equal(isQlktExtensionOutdated('0.4.38'), true);
-  assert.equal(isQlktExtensionOutdated('0.4.39'), false);
+  assert.equal(isQlktExtensionOutdated('0.4.39'), true);
+  assert.equal(isQlktExtensionOutdated('0.4.40'), false);
   assert.equal(isQlktExtensionOutdated(''), false);
-  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.39/);
+  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.40/);
   const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
   assert.match(dailySource, /Ưu tiên Reload — không cần tải lại mỗi lần/);
   assert.match(dailySource, /Đã Reload — kiểm tra lại/);
@@ -207,9 +208,14 @@ test('confirmed stopped S2 fills only absent delivery channels and preserves rec
   }
 });
 
-test('stopped confirmation does not hide missing received electricity, stale rows or positive generation', () => {
+test('stopped confirmation separates missing receive data but rejects stale rows or positive generation', () => {
   const extract = rows => globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays([rows.map(row => row.slice(1))], '2026-09-14', 'QLKT', { stoppedUnits:['S2'] });
-  assert.throws(() => extract(meterRows.filter((_, i) => i < 3)), /DH1_283M.*kWhNhan/);
+  const missingReceive = extract(meterRows.filter((_, i) => i < 3));
+  assert.equal(missingReceive.readings.length, 5);
+  assert.deepEqual(missingReceive.missingReceiveMeters, ['DH1_283M']);
+  assert.equal(missingReceive.readings.some(item => item.meter === 'DH1_283M' && item.channel === 'kWhNhan'), false);
+  assert.ok(validateQlktPpaSyncPayload(missingReceive));
+  assert.equal(validateQlktPpaSyncPayload({...missingReceive, missingReceiveMeters:undefined}), null);
   assert.throws(() => extract(meterRows), /có điện phát/);
   const stale = meterRows.map(row => [...row]); stale[3][3] = '13/09/2026';
   assert.throws(() => extract(stale), /DHA_S2/);
@@ -223,6 +229,25 @@ test('confirmed stopped S1 and both units also preserve actual grid imports', ()
     assert.equal(payload.readings[2].total,Number(meterRows[2][5]));
     assert.equal(payload.readings[5].total,Number(meterRows[5][5]));
   }
+});
+
+test('HTML fallback reports missing stopped-unit receive without inventing a reading', () => {
+  const rows = meterRows.filter((_, i) => i < 3);
+  const payload = globalThis.QlktMeterExtractor.extractPpaMeterReadings([[headers, ...rows]], '2026-09-14', 'QLKT', {stoppedUnits:['S2']});
+  assert.equal(payload.readings.length, 5);
+  assert.ok(validateQlktPpaSyncPayload(payload));
+  assert.deepEqual(payload.missingReceiveMeters, ['DH1_283M']);
+  assert.throws(() => globalThis.QlktMeterExtractor.extractPpaMeterReadings([[headers, ...rows]], '2026-09-14'), /DHA_S2/);
+});
+
+test('missing receive marker cannot exempt a running unit or malformed receive data', () => {
+  const payload = globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays([meterRows.map(row => row.slice(1))], '2026-09-14');
+  const withoutReceive = {...payload, readings:payload.readings.filter(item => !(item.meter==='DH1_283M' && item.channel==='kWhNhan')), missingReceiveMeters:['DH1_283M']};
+  assert.equal(validateQlktPpaSyncPayload(withoutReceive), null);
+  assert.equal(validateQlktPpaSyncPayload({...payload, missingReceiveMeters:['DH1_283M']}), null);
+  assert.equal(validateQlktPpaSyncPayload({...payload, missingReceiveMeters:['unknown']}), null);
+  const stopped = globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays([meterRows.filter((_,i)=>i<3).map(row=>row.slice(1))], '2026-09-14', 'QLKT', {stoppedUnits:['S2']});
+  assert.equal(validateQlktPpaSyncPayload({...stopped, readings:[...stopped.readings,{meter:'DH1_283M',channel:'kWhNhan',operatingDate:'2026-09-14',total:0,intervals:[]}]}), null);
 });
 
 test('extracts four PPA delivery channels, two received-grid channels and all 48 intervals from the QLKT table', () => {

@@ -347,8 +347,10 @@ async function readSource(source, url, operatingDate, options = {}) {
     } else result = await readValuesWithRetry(tabId, operatingDate, source === "heatrate" ? 1 : 24);
     if (!result?.ok) throw new Error(`Màn hình ${SOURCE_LABELS[source]}: ${result?.error || "không đọc được dữ liệu."}`);
     if (source === "meter") {
-      if (result.payload?.kind !== "ppa-meter" || result.payload?.readings?.length !== 6) {
-        throw new Error("Màn hình Công tơ PPA chưa đọc đủ 4 kênh giao và 2 kênh nhận bắt buộc.");
+      const deliveryKeys = ["DHA_S1", "DH1_285M", "DHA_S2", "DH1_283M"];
+      if (result.payload?.kind !== "ppa-meter" || !deliveryKeys.every(meter =>
+        result.payload?.readings?.some(reading => reading.meter === meter && reading.channel === "kWhGiao"))) {
+        throw new Error("Màn hình Công tơ PPA chưa đọc đủ 4 kênh giao bắt buộc.");
       }
     } else {
       const missingFields = missingSourceFields(source, result.payload);

@@ -113,7 +113,9 @@ export function PpaHeatRateComparison() {
         setSourceFiles(["QLKT · Số liệu đo đếm công tơ"]);
         setOperatingDate(payload.operatingDate);
         setError("");
-        setMessage("Đã nhận 4 kênh giao PPA và 2 kênh nhận lưới × 48 chu kỳ từ QLKT. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
+        setMessage(payload.missingReceiveMeters?.length
+          ? `Đã nhận đủ 4 kênh giao để tính PPA. Chưa có điện nhận lưới: ${payload.missingReceiveMeters.join(", ")}; không gán bằng 0 và không dùng để cập nhật điện tự dùng.`
+          : "Đã nhận 4 kênh giao PPA và 2 kênh nhận lưới × 48 chu kỳ từ QLKT. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
         window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Không đọc được dữ liệu công tơ từ QLKT.");
@@ -142,7 +144,7 @@ export function PpaHeatRateComparison() {
       }
       const payload = validateQlktPpaSyncPayload(data.result.payload);
       if (!payload) {
-        setError("Dữ liệu tiện ích trả về chưa đủ 4 kênh giao, 2 kênh nhận lưới và 48 chu kỳ.");
+        setError("Dữ liệu tiện ích trả về chưa đủ kênh giao PPA hoặc chưa xác định rõ điện nhận lưới bị thiếu.");
         return;
       }
       try {
@@ -152,7 +154,9 @@ export function PpaHeatRateComparison() {
         setSourceFiles(["QLKT · Số liệu đo đếm công tơ"]);
         setOperatingDate(payload.operatingDate);
         setError("");
-        setMessage("Đồng bộ QLKT thành công: đã nhận 4 kênh giao PPA và 2 kênh nhận lưới × 48 chu kỳ. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
+        setMessage(payload.missingReceiveMeters?.length
+          ? `Đồng bộ PPA thành công. Chưa có điện nhận lưới: ${payload.missingReceiveMeters.join(", ")}; không gán bằng 0 và không dùng để cập nhật điện tự dùng.`
+          : "Đồng bộ QLKT thành công: đã nhận 4 kênh giao PPA và 2 kênh nhận lưới × 48 chu kỳ. Suất hao nhiệt thực tế tự liên kết từ Chỉ tiêu KTKT.");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Không đọc được dữ liệu công tơ từ QLKT.");
       }
@@ -326,7 +330,7 @@ export function PpaHeatRateComparison() {
           onChange={event => setStoppedUnits(previous => event.target.checked ? [...previous, unit] : previous.filter(value => value !== unit))} />
         {unit}
       </label>)}
-      <span>Chỉ dùng khi tổ không phát điện suốt ngày; điện nhận lưới vẫn lấy số thực.</span>
+      <span>Chỉ dùng khi tổ không phát điện suốt ngày; điện nhận lưới thiếu sẽ được báo riêng, không gán 0.</span>
     </div>
     {/* 2. Dải trạng thái nguồn tính tinh gọn */}
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2 text-xs">
