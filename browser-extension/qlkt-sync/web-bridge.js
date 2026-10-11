@@ -28,7 +28,8 @@
       : "SYNC_ALL_RESULT";
     if (!runtimeType || !/^\d{4}-\d{2}-\d{2}$/.test(String(message.operatingDate || ""))) return;
     try {
-      const result = await chrome.runtime.sendMessage({ type: runtimeType, operatingDate: message.operatingDate });
+      const result = await chrome.runtime.sendMessage({ type: runtimeType, operatingDate: message.operatingDate,
+        ...(message.type === "SYNC_PPA" ? { stoppedUnits: Array.isArray(message.stoppedUnits) ? message.stoppedUnits.filter(unit => ["S1", "S2"].includes(unit)) : [] } : {}) });
       post({ type: resultType, requestId: message.requestId, result });
     } catch (error) {
       post({ type: resultType, requestId: message.requestId, result: { ok: false, error: error instanceof Error ? error.message : "Không kết nối được với tiện ích QLKT." } });

@@ -6,12 +6,12 @@ import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXT
 import '../public/qlkt-sync-extension/meter-extract.js';
 
 test('web blocks old QLKT extensions and prefers reload over downloading again', () => {
-  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.38');
+  assert.equal(REQUIRED_QLKT_EXTENSION_VERSION, '0.4.39');
   assert.equal(isQlktExtensionOutdated('0.4.37'), true);
-  assert.equal(isQlktExtensionOutdated('0.4.38'), false);
+  assert.equal(isQlktExtensionOutdated('0.4.38'), true);
   assert.equal(isQlktExtensionOutdated('0.4.39'), false);
   assert.equal(isQlktExtensionOutdated(''), false);
-  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.38/);
+  assert.match(QLKT_EXTENSION_DOWNLOAD_URL, /qlkt-sync-extension\.zip\?v=0\.4\.39/);
   const dailySource = readFileSync(new URL('../components/daily-production-table.tsx', import.meta.url), 'utf8');
   assert.match(dailySource, /Ưu tiên Reload — không cần tải lại mỗi lần/);
   assert.match(dailySource, /Đã Reload — kiểm tra lại/);
@@ -188,6 +188,41 @@ const requiredMeterChannels = [
 const meterRows = requiredMeterChannels.map(([meter, channel], readingIndex) => {
   const intervals = Array.from({ length: 48 }, (_, index) => 200000 + readingIndex * 1000 + index);
   return ['', meter, channel, '14/09/2026', 'File CSV', String(intervals.reduce((sum, value) => sum + value, 0)), ...intervals.map(String)];
+});
+
+test('confirmed stopped S2 fills only absent delivery channels and preserves received electricity', () => {
+  const rows = meterRows.filter((_, i) => ![3, 4].includes(i));
+  assert.throws(() => globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays([rows.map(row => row.slice(1))], '2026-09-14'), /DHA_S2/);
+  for (const payload of [
+    globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays([rows.map(row => row.slice(1))], '2026-09-14', 'QLKT', { stoppedUnits:['S2'] }),
+    globalThis.QlktMeterExtractor.extractPpaMeterReadings([[headers, ...rows]], '2026-09-14', 'QLKT', { stoppedUnits:['S2'] }),
+  ]) {
+    assert.equal(payload.readings.length, 6);
+    assert.ok(validateQlktPpaSyncPayload(payload));
+    assert.equal(payload.readings[3].total, 0);
+    assert.deepEqual(payload.readings[4].intervals, Array(48).fill(0));
+    assert.equal(payload.readings[5].total, Number(meterRows[5][5]));
+    assert.equal(payload.readings[0].total, Number(meterRows[0][5]));
+    assert.match(payload.readings[3].sourceName, /ngừng cả ngày/);
+  }
+});
+
+test('stopped confirmation does not hide missing received electricity, stale rows or positive generation', () => {
+  const extract = rows => globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays([rows.map(row => row.slice(1))], '2026-09-14', 'QLKT', { stoppedUnits:['S2'] });
+  assert.throws(() => extract(meterRows.filter((_, i) => i < 3)), /DH1_283M.*kWhNhan/);
+  assert.throws(() => extract(meterRows), /có điện phát/);
+  const stale = meterRows.map(row => [...row]); stale[3][3] = '13/09/2026';
+  assert.throws(() => extract(stale), /DHA_S2/);
+});
+
+test('confirmed stopped S1 and both units also preserve actual grid imports', () => {
+  for (const units of [['S1'], ['S1','S2']]) {
+    const rows=meterRows.filter((row,i)=> !((units.includes('S1') && [0,1].includes(i)) || (units.includes('S2') && [3,4].includes(i))));
+    const payload=globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays([rows.map(row=>row.slice(1))], '2026-09-14', 'QLKT', {stoppedUnits:units});
+    assert.equal(payload.readings[0].total,0);
+    assert.equal(payload.readings[2].total,Number(meterRows[2][5]));
+    assert.equal(payload.readings[5].total,Number(meterRows[5][5]));
+  }
 });
 
 test('extracts four PPA delivery channels, two received-grid channels and all 48 intervals from the QLKT table', () => {

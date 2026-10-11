@@ -23,11 +23,17 @@
     { meter: "DH1_283M", channel: "kWhGiao", label: "Điểm bán S2" },
     { meter: "DH1_283M", channel: "kWhNhan", label: "Điện nhận lưới S2" },
   ];
+  const stopped = (target, options) => target.channel === "kWhGiao" &&
+    (options?.stoppedUnits || []).includes(["DHA_S1", "DH1_285M"].includes(target.meter) ? "S1" : "S2");
+  function stoppedReading(target, operatingDate, sourcePage) {
+    return { meter: target.meter, channel: target.channel, operatingDate, total: 0,
+      intervals: Array(48).fill(0), sourceName: `${sourcePage} · xác nhận tổ máy ngừng cả ngày` };
+  }
 
   // --- Cách 1 (dự phòng): dò bảng HTML đã hiển thị đủ cột H1–H48 trong DOM.
   // Trang QLKT thật thường KHÔNG render đủ 48 cột cùng lúc (bảng ảo hoá theo
   // chiều ngang lẫn chiều dọc), nên cách này chỉ còn dùng khi cách 2 thất bại.
-  function extractPpaMeterReadings(tables, operatingDate, sourcePage = "QLKT · Số liệu đo đếm công tơ") {
+  function extractPpaMeterReadings(tables, operatingDate, sourcePage = "QLKT · Số liệu đo đếm công tơ", options = {}) {
     let header = null, dataRows = [], headerTableIndex = -1, headerRowIndex = -1;
     for (let tableIndex = 0; tableIndex < tables.length; tableIndex += 1) {
       const rows = tables[tableIndex];
@@ -59,7 +65,14 @@
         return actualMeterIndex >= 0 && normalized(candidate[channelIndex + offset]) === normalized(target.channel)
           && (dateIndex < 0 || normalizeDate(candidate[dateIndex + offset]) === operatingDate);
       });
-      if (!row) throw new Error(`Không tìm thấy ${target.meter} / ${target.channel} cho ngày đã chọn.`);
+      if (!row) {
+        const stale = dataRows.some(candidate => {
+          const actual = candidate.findIndex(cell => normalized(cell) === normalized(target.meter)), offset = actual - meterIndex;
+          return actual >= 0 && normalized(candidate[channelIndex + offset]) === normalized(target.channel) && dateIndex >= 0 && normalizeDate(candidate[dateIndex + offset]) !== operatingDate;
+        });
+        if (stopped(target, options) && !stale) return stoppedReading(target, operatingDate, sourcePage);
+        throw new Error(`Không tìm thấy ${target.meter} / ${target.channel} cho ngày đã chọn.`);
+      }
       const offset = row.findIndex(cell => normalized(cell) === normalized(target.meter)) - meterIndex;
       const intervals = hourIndexes.map(index => parseNumber(row[index + offset]));
       if (intervals.some(value => value === null || value < 0)) throw new Error(`${target.meter}: thiếu hoặc sai giá trị trong H1–H48.`);
@@ -67,6 +80,7 @@
       const intervalTotal = numericIntervals.reduce((sum, value) => sum + value, 0);
       const reportedTotal = parseNumber(row[totalIndex + offset]);
       if (reportedTotal === null) throw new Error(`${target.meter}: không đọc được cột Tổng.`);
+      if (stopped(target, options) && reportedTotal > 0) throw new Error(`${target.meter}: có điện phát, không khớp xác nhận ngừng cả ngày.`);
       const tolerance = Math.max(50, Math.abs(reportedTotal) * 0.000005);
       if (Math.abs(intervalTotal - reportedTotal) > tolerance) throw new Error(`${target.meter}: tổng H1–H48 không khớp cột Tổng.`);
       return { meter: target.meter, channel: target.channel, operatingDate, total: reportedTotal, intervals: numericIntervals, sourceName: sourcePage };
@@ -117,7 +131,7 @@
     return arrays;
   }
 
-  function extractPpaMeterReadingsFromScripts(scriptTexts, operatingDate, sourcePage = "QLKT · Số liệu đo đếm công tơ") {
+  function extractPpaMeterReadingsFromScripts(scriptTexts, operatingDate, sourcePage = "QLKT · Số liệu đo đếm công tơ", options = {}) {
     const arrays = extractDataArraysFromScripts(scriptTexts);
     if (!arrays.length) {
       // Ghi thêm thông tin chẩn đoán vào thông báo lỗi để không cần dò lại
@@ -141,6 +155,8 @@
       });
       if (!row) {
         const meterRowsAnyChannel = rows.filter(candidate => normalized(candidate[0]) === normalized(target.meter));
+        const stale = meterRowsAnyChannel.some(candidate => normalized(candidate[1]) === normalized(target.channel) && normalizeDate(candidate[2]) !== operatingDate);
+        if (stopped(target, options) && !stale) return stoppedReading(target, operatingDate, sourcePage);
         const channelsFound = [...new Set(meterRowsAnyChannel.map(candidate => candidate[1]))];
         const datesFound = [...new Set(meterRowsAnyChannel.map(candidate => candidate[2]))];
         throw new Error(`Không tìm thấy ${target.meter} / ${target.channel} cho ngày đã chọn. (Tìm thấy ${meterRowsAnyChannel.length} dòng của ${target.meter}, kênh: ${channelsFound.join(", ") || "không có"}; ngày: ${datesFound.join(", ") || "không có"}.)`);
@@ -150,6 +166,7 @@
       const intervalTotal = intervals.reduce((sum, value) => sum + value, 0);
       const reportedTotal = parseNumber(row[row.length - 49]);
       if (reportedTotal === null) throw new Error(`${target.meter}: không đọc được cột Tổng.`);
+      if (stopped(target, options) && reportedTotal > 0) throw new Error(`${target.meter}: có điện phát, không khớp xác nhận ngừng cả ngày.`);
       const tolerance = Math.max(50, Math.abs(reportedTotal) * 0.000005);
       if (Math.abs(intervalTotal - reportedTotal) > tolerance) throw new Error(`${target.meter}: tổng H1–H48 không khớp cột Tổng.`);
       return { meter: target.meter, channel: target.channel, operatingDate, total: reportedTotal, intervals, sourceName: sourcePage };
@@ -157,9 +174,9 @@
     return { version: 1, kind: "ppa-meter", operatingDate, sourcePage, readings };
   }
 
-  function extractPpaMeterReadingsFromDataArrays(arrays, operatingDate, sourcePage = "QLKT · Số liệu đo đếm công tơ") {
+  function extractPpaMeterReadingsFromDataArrays(arrays, operatingDate, sourcePage = "QLKT · Số liệu đo đếm công tơ", options = {}) {
     const scriptTexts = (Array.isArray(arrays) ? arrays : []).map(data => `ExtSheet data:${JSON.stringify(data)}`);
-    return extractPpaMeterReadingsFromScripts(scriptTexts, operatingDate, sourcePage);
+    return extractPpaMeterReadingsFromScripts(scriptTexts, operatingDate, sourcePage, options);
   }
 
   globalThis.QlktMeterExtractor = { extractPpaMeterReadings, extractPpaMeterReadingsFromScripts, extractPpaMeterReadingsFromDataArrays };

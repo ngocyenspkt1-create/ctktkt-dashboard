@@ -100,10 +100,10 @@ async function sendWithRetry(tabId, message, attempts = 10) {
   throw lastError || new Error("Không kết nối được với màn hình QLKT.");
 }
 
-async function readValuesWithRetry(tabId, operatingDate, attempts = 24, intervalMs = 500) {
+async function readValuesWithRetry(tabId, operatingDate, attempts = 24, intervalMs = 500, options = {}) {
   let result;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    result = await sendWithRetry(tabId, { type: "READ_QLKT_VALUES", operatingDate });
+    result = await sendWithRetry(tabId, { type: "READ_QLKT_VALUES", operatingDate, stoppedUnits: options.stoppedUnits || [] });
     if (result?.ok) return result;
     await wait(intervalMs);
   }
@@ -194,7 +194,7 @@ async function waitForHeatRateAjaxForTab(sender) {
   return executions[0].result;
 }
 
-async function readMeterFromPageWorld(tabId, operatingDate, sourcePage) {
+async function readMeterFromPageWorld(tabId, operatingDate, sourcePage, options = {}) {
   const executions = await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
@@ -246,7 +246,7 @@ async function readMeterFromPageWorld(tabId, operatingDate, sourcePage) {
     return { ok: false, error: `Không đọc được mảng dữ liệu từ widget QLKT. (PrimeFaces: ${snapshot?.hasPrimeFaces ? "có" : "không"}; widgets: ${(snapshot?.widgetNames || []).join(", ") || "không có"}. ${dateInfo})` };
   }
   try {
-    const payload = globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays(snapshot.arrays, operatingDate, sourcePage);
+    const payload = globalThis.QlktMeterExtractor.extractPpaMeterReadingsFromDataArrays(snapshot.arrays, operatingDate, sourcePage, options);
     return { ok: true, payload };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Không đọc được dữ liệu widget công tơ QLKT.";
@@ -267,18 +267,18 @@ async function readMeterFromPageWorld(tabId, operatingDate, sourcePage) {
 // thời gian vượt quá dự tính nếu máy chủ QLKT chậm bất thường — trong khi web
 // Chỉ tiêu KTKT chỉ chờ tối đa một khoảng thời gian cố định trước khi tự báo
 // "QLKT phản hồi quá lâu" (xem components/ppa-heat-rate-comparison.tsx).
-async function readMeterFromPageWorldWithRetry(tabId, operatingDate, sourcePage, timeoutMs = 35000, intervalMs = 1000) {
+async function readMeterFromPageWorldWithRetry(tabId, operatingDate, sourcePage, timeoutMs = 35000, intervalMs = 1000, options = {}) {
   const deadline = Date.now() + timeoutMs;
   let result;
   do {
-    result = await readMeterFromPageWorld(tabId, operatingDate, sourcePage);
+    result = await readMeterFromPageWorld(tabId, operatingDate, sourcePage, options);
     if (result?.ok) return result;
     await wait(intervalMs);
   } while (Date.now() < deadline);
   return result;
 }
 
-async function readSource(source, url, operatingDate) {
+async function readSource(source, url, operatingDate, options = {}) {
   let tabId;
   let createdTab = false;
   const isMeter = source === "meter";
@@ -332,13 +332,13 @@ async function readSource(source, url, operatingDate) {
     await wait(isMeter ? 3000 : 1200);
     let result;
     if (isMeter) {
-      result = await readMeterFromPageWorldWithRetry(tabId, operatingDate, current.url || url);
+      result = await readMeterFromPageWorldWithRetry(tabId, operatingDate, current.url || url, 35000, 1000, options);
       if (!result?.ok) {
         const pageWorldError = result?.error || "Không đọc được widget QLKT.";
         // Cách đọc dự phòng (dò thẻ <script> tĩnh) hầu như không còn tác dụng
         // trên QLKT hiện tại (dữ liệu ExtSheet luôn nạp bằng AJAX, không nhúng
         // sẵn trong HTML) nên chỉ thử vài lần cho chắc thay vì chờ lâu vô ích.
-        result = await readValuesWithRetry(tabId, operatingDate, 5, 500);
+        result = await readValuesWithRetry(tabId, operatingDate, 5, 500, options);
         if (!result?.ok) {
           const prepInfo = `Đã bấm nút cập nhật ngày: ${prepared.refreshed ? `có (${prepared.controlInfo || "?"})` : "không (ngày đã đúng sẵn khi kiểm tra)"}.`;
           result = { ...result, error: `${result?.error || "Không đọc được màn hình Công tơ PPA."} [Đọc trực tiếp widget: ${pageWorldError}] [${prepInfo}]` };
@@ -405,11 +405,11 @@ async function syncAll(operatingDate, providedMeterPayload = null) {
   };
 }
 
-async function syncPpa(operatingDate) {
+async function syncPpa(operatingDate, options = {}) {
   // Luôn mở thẳng địa chỉ cố định của màn hình công tơ, không dùng địa chỉ đã
   // "ghi nhớ" trước đó nữa — địa chỉ ghi nhớ có thể sai hoặc trỏ tới một biến
   // thể khác của trang, gây mất thời gian dò mà không ra dữ liệu.
-  return readSource("meter", DEFAULT_METER_URL, operatingDate);
+  return readSource("meter", DEFAULT_METER_URL, operatingDate, options);
 }
 
 async function syncHeatRate(operatingDate) {
@@ -569,7 +569,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   const task = message?.type === "SYNC_UNIFIED_QLKT" ? syncUnified
     : message?.type === "SYNC_ALL_QLKT" ? syncAll
-    : message?.type === "SYNC_PPA_QLKT" ? syncPpa
+    : message?.type === "SYNC_PPA_QLKT" ? date => syncPpa(date, { stoppedUnits: Array.isArray(message.stoppedUnits) ? message.stoppedUnits.filter(unit => ["S1", "S2"].includes(unit)) : [] })
     : message?.type === "SYNC_HEATRATE_QLKT" ? syncHeatRate
     : message?.type === "SYNC_BCSX_QLKT" ? syncBcsx
     : message?.type === "SYNC_BCSX_EVENTS_QLKT" ? syncBcsxEvents

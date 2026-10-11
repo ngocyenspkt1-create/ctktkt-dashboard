@@ -2,7 +2,7 @@
   const cleanText = value => String(value || "").replace(/\s+/g, " ").trim();
   const normalized = value => cleanText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   const readValue = input => cleanText(input.value || input.getAttribute("value") || "");
-  const CONTENT_SCRIPT_VERSION = "0.4.38";
+  const CONTENT_SCRIPT_VERSION = "0.4.39";
   const PREPARED_DATE_KEY = "ctktktPreparedOperatingDate";
   const PREPARED_REFRESH_AT_KEY = "ctktktPreparedRefreshAt";
   const parseNumber = raw => {
@@ -450,7 +450,7 @@
       ...(unavailableHeatRateUnits.length ? { unavailableHeatRateUnits } : {}) };
   }
 
-  function extractPpaMeterPayload(operatingDate) {
+  function extractPpaMeterPayload(operatingDate, options = {}) {
     const extractors = globalThis.QlktMeterExtractor;
     if (!extractors) throw new Error("Bộ đọc công tơ PPA chưa được nạp. Hãy tải lại tiện ích.");
 
@@ -460,7 +460,7 @@
     if (typeof extractors.extractPpaMeterReadingsFromScripts === "function") {
       try {
         const scriptTexts = [...document.querySelectorAll("script")].map(script => script.textContent || "");
-        return extractors.extractPpaMeterReadingsFromScripts(scriptTexts, operatingDate, location.href);
+        return extractors.extractPpaMeterReadingsFromScripts(scriptTexts, operatingDate, location.href, options);
       } catch (error) {
         scriptError = error instanceof Error ? error.message : String(error);
       }
@@ -474,7 +474,7 @@
           const input = cell.querySelector("input:not([type='checkbox']):not([type='radio']):not([type='hidden'])");
           return input ? readValue(input) : cleanText(cell.textContent);
         })));
-        return extractors.extractPpaMeterReadings(tables, operatingDate, location.href);
+        return extractors.extractPpaMeterReadings(tables, operatingDate, location.href, options);
       } catch (error) {
         tableError = error instanceof Error ? error.message : String(error);
       }
@@ -981,7 +981,7 @@
       // nhiệt (phải chuyển dropdown Tổ máy và chờ AJAX) — bọc trong Promise.resolve().then() để xử lý
       // đúng cả 2 trường hợp mà không cần biết trước extract() trả về gì.
       Promise.resolve()
-        .then(() => extract(message.operatingDate))
+        .then(() => pageKind() === "meter" ? extractPpaMeterPayload(message.operatingDate, { stoppedUnits: message.stoppedUnits || [] }) : extract(message.operatingDate))
         .then(payload => sendResponse({ ok: true, payload, pageKind: pageKind() }))
         .catch(error => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Không đọc được dữ liệu QLKT." }));
       return true;

@@ -5,6 +5,7 @@ import { DateField } from "@/components/ui/date-field";
 import { NkvhPpaSyncButton } from "@/components/nkvh-ppa-sync-button";
 import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource, type MeterReading, type PpaResult } from "@/lib/ppa-heat-rate";
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from "@/lib/qlkt-sync";
+import { isQlktExtensionOutdated, REQUIRED_QLKT_EXTENSION_VERSION } from "@/lib/qlkt-extension-version";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { defaultOperatingDate } from "@/lib/operating-date";
@@ -37,6 +38,8 @@ export function PpaHeatRateComparison() {
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]), [history, setHistory] = useState<StoredPpa[]>([]);
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [savingNotes, setSavingNotes] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
+  const [stoppedUnits, setStoppedUnits] = useState<string[]>([]);
+  useEffect(() => { setStoppedUnits([]); }, [operatingDate]);
   const fileRef = useRef<HTMLInputElement>(null);
   const qlktRequestRef = useRef<{ id: string; timer: number } | null>(null);
   const loadPeriodControllerRef = useRef<AbortController | null>(null);
@@ -229,6 +232,10 @@ export function PpaHeatRateComparison() {
       return;
     }
     if (qlktRequestRef.current) window.clearTimeout(qlktRequestRef.current.timer);
+    if (isQlktExtensionOutdated(extensionVersion)) {
+      setError(`Hãy cập nhật tiện ích QLKT ${REQUIRED_QLKT_EXTENSION_VERSION}, Reload tiện ích và Ctrl+F5 trang web để hỗ trợ tổ ngừng.`);
+      return;
+    }
     const requestId = crypto.randomUUID();
     const timer = window.setTimeout(() => {
       if (qlktRequestRef.current?.id !== requestId) return;
@@ -238,7 +245,7 @@ export function PpaHeatRateComparison() {
     }, 90000);
     qlktRequestRef.current = { id: requestId, timer };
     setSyncingQlkt(true);
-    window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "SYNC_PPA", requestId, operatingDate }, window.location.origin);
+    window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "SYNC_PPA", requestId, operatingDate, stoppedUnits }, window.location.origin);
   }
 
   async function persistDayDetails() {
@@ -312,6 +319,15 @@ export function PpaHeatRateComparison() {
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-800">{error}</p>}
     {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900">{message}</p>}
 
+    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+      <span>Xác nhận tổ ngừng cả ngày:</span>
+      {["S1", "S2"].map(unit => <label key={unit} className="flex items-center gap-1">
+        <input type="checkbox" checked={stoppedUnits.includes(unit)} disabled={syncingQlkt}
+          onChange={event => setStoppedUnits(previous => event.target.checked ? [...previous, unit] : previous.filter(value => value !== unit))} />
+        {unit}
+      </label>)}
+      <span>Chỉ dùng khi tổ không phát điện suốt ngày; điện nhận lưới vẫn lấy số thực.</span>
+    </div>
     {/* 2. Dải trạng thái nguồn tính tinh gọn */}
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2 text-xs">
       <div className="flex flex-wrap items-center gap-3">
