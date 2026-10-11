@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { NkvhPpaSyncButton } from "@/components/nkvh-ppa-sync-button";
 import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource, type MeterReading, type PpaResult } from "@/lib/ppa-heat-rate";
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from "@/lib/qlkt-sync";
@@ -39,7 +40,8 @@ export function PpaHeatRateComparison() {
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [savingNotes, setSavingNotes] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   const [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
   const [stoppedUnits, setStoppedUnits] = useState<string[]>([]);
-  useEffect(() => { setStoppedUnits([]); }, [operatingDate]);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  useEffect(() => { setStoppedUnits([]); setStopDialogOpen(false); }, [operatingDate]);
   const fileRef = useRef<HTMLInputElement>(null);
   const qlktRequestRef = useRef<{ id: string; timer: number } | null>(null);
   const loadPeriodControllerRef = useRef<AbortController | null>(null);
@@ -229,6 +231,7 @@ export function PpaHeatRateComparison() {
   function clearImport() { setReadings([]); setSourceFiles([]); setPastedText(""); setMessage(""); setError(""); }
 
   function syncFromQlkt() {
+    setStopDialogOpen(false);
     setError(""); setMessage("");
     if (!extensionVersion) {
       window.postMessage({ channel: "ctktkt-qlkt-sync", sender: "ctktkt-web", type: "PING" }, window.location.origin);
@@ -314,7 +317,7 @@ export function PpaHeatRateComparison() {
       <div className="flex items-center gap-2">
         <span className="text-xs font-bold text-slate-600">Ngày:</span>
         <DateField value={operatingDate} onChange={value => { setOperatingDate(value); clearImport(); }} className="w-[145px]" />
-        <button type="button" disabled={syncingQlkt || isViewer} onClick={syncFromQlkt} className="rounded-lg bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3 py-1.5 text-xs font-bold text-white shadow-sm disabled:opacity-50">
+        <button type="button" disabled={syncingQlkt || isViewer} onClick={() => setStopDialogOpen(true)} className="rounded-lg bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-3 py-1.5 text-xs font-bold text-white shadow-sm disabled:opacity-50">
           {syncingQlkt ? "Đang lấy công tơ PPA…" : "⚡ Lấy công tơ PPA từ QLKT"}
         </button>
       </div>
@@ -323,15 +326,30 @@ export function PpaHeatRateComparison() {
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-800">{error}</p>}
     {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900">{message}</p>}
 
-    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-      <span>Xác nhận tổ ngừng cả ngày:</span>
-      {["S1", "S2"].map(unit => <label key={unit} className="flex items-center gap-1">
-        <input type="checkbox" checked={stoppedUnits.includes(unit)} disabled={syncingQlkt}
-          onChange={event => setStoppedUnits(previous => event.target.checked ? [...previous, unit] : previous.filter(value => value !== unit))} />
-        {unit}
-      </label>)}
-      <span>Chỉ dùng khi tổ không phát điện suốt ngày; điện nhận lưới thiếu sẽ được báo riêng, không gán 0.</span>
-    </div>
+    <Dialog open={stopDialogOpen} onOpenChange={setStopDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Xác nhận trước khi lấy công tơ PPA</DialogTitle>
+          <DialogDescription>
+            Ngày {operatingDate.split("-").reverse().join("/")}. Chọn tổ máy không phát điện suốt ngày. Nếu cả hai tổ đều phát điện, để trống và xác nhận.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-2">
+          {["S1", "S2"].map(unit => <label key={unit} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700">
+            <input type="checkbox" checked={stoppedUnits.includes(unit)}
+              onChange={event => setStoppedUnits(previous => event.target.checked ? [...previous, unit] : previous.filter(value => value !== unit))}
+              className="h-4 w-4 accent-[#4057b5]" />
+            Tổ máy {unit} ngừng cả ngày
+          </label>)}
+        </div>
+        <p className="text-xs text-slate-500">Điện nhận lưới thiếu sẽ được báo riêng, không tự gán bằng 0.</p>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setStopDialogOpen(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-600">Hủy</button>
+          <button type="button" onClick={syncFromQlkt} disabled={syncingQlkt || isViewer}
+            className="rounded-lg bg-[#4057b5] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Xác nhận & đồng bộ</button>
+        </div>
+      </DialogContent>
+    </Dialog>
     {/* 2. Dải trạng thái nguồn tính tinh gọn */}
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2 text-xs">
       <div className="flex flex-wrap items-center gap-3">
