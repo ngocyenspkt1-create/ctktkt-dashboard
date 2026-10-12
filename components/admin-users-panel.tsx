@@ -127,15 +127,15 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
       const copy = [...prev];
       const target = { ...copy[posIndex] };
       const currentPerms = new Set(target.permissions);
-      const module = PERMISSION_MODULES.find(item => item.permission === perm);
+      const permissionModule = PERMISSION_MODULES.find(item => item.permission === perm);
       const parent = PERMISSION_MODULES.find(item => item.scopes.includes(perm));
       if (parent && currentPerms.has(parent.permission)) {
         currentPerms.delete(parent.permission);
         parent.scopes.forEach(scope => currentPerms.add(scope));
       }
-      if (module && (currentPerms.has(perm) || module.scopes.some(scope => currentPerms.has(scope)))) {
+      if (permissionModule && (currentPerms.has(perm) || permissionModule.scopes.some(scope => currentPerms.has(scope)))) {
         currentPerms.delete(perm);
-        module.scopes.forEach(scope => currentPerms.delete(scope));
+        permissionModule.scopes.forEach(scope => currentPerms.delete(scope));
       } else if (currentPerms.has(perm)) currentPerms.delete(perm);
       else currentPerms.add(perm);
       target.permissions = Array.from(currentPerms);

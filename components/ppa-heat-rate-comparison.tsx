@@ -41,7 +41,12 @@ export function PpaHeatRateComparison() {
   const [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
   const [stoppedUnits, setStoppedUnits] = useState<string[]>([]);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
-  useEffect(() => { setStoppedUnits([]); setStopDialogOpen(false); }, [operatingDate]);
+  const [confirmationDate, setConfirmationDate] = useState(operatingDate);
+  if (confirmationDate !== operatingDate) {
+    setConfirmationDate(operatingDate);
+    setStoppedUnits([]);
+    setStopDialogOpen(false);
+  }
   const fileRef = useRef<HTMLInputElement>(null);
   const qlktRequestRef = useRef<{ id: string; timer: number } | null>(null);
   const loadPeriodControllerRef = useRef<AbortController | null>(null);

@@ -7,7 +7,11 @@ const SessionContext = createContext<SessionUser | null>(null);
 
 export function SessionProvider({ user, children }: { user: SessionUser; children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState(user);
-  useEffect(() => { setCurrentUser(user); }, [user]);
+  const [serverUser, setServerUser] = useState(user);
+  if (serverUser !== user) {
+    setServerUser(user);
+    setCurrentUser(user);
+  }
   useEffect(() => {
     let active = true;
     const refresh = async () => {

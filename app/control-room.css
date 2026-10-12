@@ -36,7 +36,8 @@
 .app-header h1 { font-weight: 600; letter-spacing: -.025em; }
 .app-header input[role="combobox"] { background: #f4f3ee; border-color: #d9dfd8; border-radius: 6px; }
 .app-content { min-width: 0; }
-.app-workspace :is(button,a,input,select,textarea):focus-visible { outline: 2px solid #14665b; outline-offset: 3px; }
+.app-workspace :is(button,a,input,select,textarea):focus-visible,
+.app-content :is(input,select,textarea):not(:disabled):not([readonly]):focus-visible { outline: 2px solid #14665b; outline-offset: 3px; box-shadow: 0 0 0 3px rgb(20 102 91 / 12%); }
 .app-workspace :is(input,select,textarea) { accent-color: #14665b; }
 .app-workspace ::selection { background: #c7e5d8; color: #183c32; }
 .app-workspace .bg-blue-600 { background-color: #14665b; }
@@ -94,6 +95,6 @@
 }
 @media print {
   .app-content .monthly-heading, .engineering-workspace .module-heading-copy { background: white; border: 0; color: black; }
-  .app-content .monthly-heading :is(h2,p), .engineering-workspace .module-heading-copy :is(h1,h2,p,span) { color: black; }
+  .app-content .monthly-heading :is(h2,p), .engineering-workspace .module-heading-copy :is(h1,h2,p,span) { color: black !important; }
   .app-content .monthly-heading::before, .app-content .monthly-heading::after { display: none; }
 }

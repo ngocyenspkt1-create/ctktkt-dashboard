@@ -521,9 +521,10 @@ export function CtktktReport() {
   // Giờ lũy kế cộng dồn từ QLKT kể từ 01/01/2026; chỉ tính các ngày QLKT chưa có tới ngày đang xem.
   const hoursMissingUpToDate = useMemo(() => hoursMissingDates.filter(day => day <= date), [hoursMissingDates, date]);
 
+  const operationEventsValue = current[CTKTKT_OPERATION_EVENTS_CELL];
   const operationEvents = useMemo(
-    () => parseCtktktOperationEvents(current[CTKTKT_OPERATION_EVENTS_CELL]),
-    [current[CTKTKT_OPERATION_EVENTS_CELL]],
+    () => parseCtktktOperationEvents(operationEventsValue),
+    [operationEventsValue],
   );
   const selectedOperationEvent = operationEvents.find(event => event.unit === operationUnit && event.kind === operationKind) || null;
   const selectedOperationOil = selectedOperationEvent ? calculateCtktktOperationEventOil(selectedOperationEvent) : null;

@@ -10,7 +10,9 @@ export function NkvhPpaSyncButton({ operatingDate, disabled, onApply }: Props) {
   const [opening, setOpening] = useState(false);
   const request = useRef<{ id: string; date: string; timer: number } | null>(null);
   const current = useRef({ operatingDate, disabled, onApply });
-  current.current = { operatingDate, disabled, onApply };
+  useEffect(() => {
+    current.current = { operatingDate, disabled, onApply };
+  }, [operatingDate, disabled, onApply]);
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {

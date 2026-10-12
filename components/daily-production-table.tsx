@@ -317,7 +317,9 @@ export function DailyProductionTable() {
           }
         }catch(reason){failed.push(`${displayDate(date)}: ${reason instanceof Error?reason.message:"không lưu được"}`);}
       }
-      setRangeState(state=>state&&{...state,done:index+1,saved,failed:[...failed]});
+      const savedSnapshot = saved;
+      const failedSnapshot = [...failed];
+      setRangeState(state=>state&&{...state,done:index+1,saved:savedSnapshot,failed:failedSnapshot});
     }
     try{await wakeLock?.release();}catch{}
     setRangeState(state=>state&&{...state,running:false});

@@ -42,3 +42,16 @@ Chưa sửa logic ứng dụng vì chưa có lỗi runtime/test nào tái hiện
 - Có breakpoint mobile, focus bàn phím, màu cảnh báo đỏ và stylesheet in.
 - `git diff --check` đạt. Lint bị treo do dependency/môi trường hiện tại; chưa xác nhận build hay visual QA trong trình duyệt.
 - AI tiếp theo: khôi phục dependency sạch, chạy lint/build rồi kiểm tra giao diện đăng nhập, dashboard và báo cáo ở 390px/1440px với phiên đăng nhập hợp lệ.
+
+### Khôi phục môi trường và sửa stylesheet
+
+- Cài sạch bằng `npm ci --ignore-scripts --no-audit --no-fund` thành công (785 package). Các lỗi EPERM trước đây liên quan đến sandbox; chạy kiểm tra với quyền thích hợp.
+- Dùng package-lock.json làm lockfile chính; pnpm-lock.yaml phát sinh trong lần điều tra được giữ local, không commit.
+- Sửa specificity của focus ô nhập để stylesheet cũ không ghi đè màu xanh ngọc; bảo đảm chữ trong phần tiêu đề báo cáo được in màu đen.
+- Thêm `npm test` để AI tiếp theo chạy suite bằng một lệnh trên Windows hoặc Linux.
+- Sửa 8 lỗi lint: đổi tên biến `module` trong phân quyền; tách dependency memo sự kiện; lấy snapshot tiến độ đồng bộ trước callback React; cập nhật ref NKVH trong effect; reset xác nhận dừng tổ máy và phiên người dùng khi prop thay đổi.
+- `npm run lint`: exit 0, còn 16 warnings (navigation hard reload và biến không dùng trong extension/export). Chưa loại bỏ các hard reload vì đang dùng để bảo vệ dữ liệu chưa lưu/phiên đăng nhập.
+- `node node_modules/typescript/bin/tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, đủ 5 giai đoạn client/server/RSC/SSR.
+- Test đồng bộ NKVH, khoảng ngày và phân quyền: 12/12 đạt. Kiểm tra cuối bằng `npm test`: 344/344 đạt, 0 fail (28.7 giây), bao gồm test export từng bị thiếu jszip.
+- Visual QA trên trình duyệt và luồng dữ liệu production vẫn cần phiên đăng nhập và dữ liệu thật; chưa tuyên bố đã xác minh các luồng này.
