@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/auth/server";
 import ExcelJS from "exceljs";
 import { applyCtktktExportPresentation, hideCtktktExportScratchArea } from "@/lib/ctktkt-export-presentation";
 import { getRawDb } from "@/db";
@@ -132,6 +133,7 @@ function normalizeCoalMeterFormulas(sheet: ExcelJS.Worksheet, previousSheetName:
 }
 
 export async function GET(request: Request) {
+  const session = await requireSession(); if (!session.ok) return session.response;
   const period = new URL(request.url).searchParams.get("period") || "";
   if (!periodPattern.test(period)) return Response.json({ error: "Tháng không hợp lệ." }, { status: 400 });
   const today = vietnamDateIso();

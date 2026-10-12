@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/auth/server";
 import { getRawDb } from "@/db";
 import { calculateCoalStock24h } from "@/lib/coal-stock";
 import { buildBcsxWorkbook, deriveA0Readings, fileNameFor, SHIFT_METRICS, SHIFT_TIME_SLOTS, type ExportUnit, type OperatingEvent, type ShiftMetric, type UnitTotals } from "@/lib/bcsx";
@@ -87,6 +88,7 @@ function sumMaybe(a: number | null | undefined, b: number | null | undefined) {
 }
 
 export async function GET(request: Request) {
+  const session = await requireSession(); if (!session.ok) return session.response;
   const url = new URL(request.url);
   const date = url.searchParams.get("date") || "";
   const unit = (url.searchParams.get("unit") || "") as ExportUnit;

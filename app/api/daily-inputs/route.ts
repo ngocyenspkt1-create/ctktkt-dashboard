@@ -2,7 +2,7 @@ import { canEditDailyInput } from "@/lib/auth/daily-input-permissions";
 import { auditedDailyBatch } from "@/lib/daily-input-audit";
 import { getRawDb } from "@/db";
 import { CTKTKT_LINKED_DAILY_CODES } from "@/lib/daily-source-links";
-import { requireAnyPermission } from "@/lib/auth/server";
+import { requireAnyPermission, requireSession } from "@/lib/auth/server";
 import { canEditOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 import { isAdminUser } from "@/lib/auth/session";
 
@@ -12,6 +12,7 @@ const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const unavailable = () => Response.json({ error: "Chưa truy cập được kho dữ liệu. Nội dung trên màn hình vẫn được giữ để bạn thử lưu lại." }, { status: 503 });
 
 export async function GET(request: Request) {
+  const session = await requireSession(); if (!session.ok) return session.response;
   const period = new URL(request.url).searchParams.get("period") || "";
   if (!periodPattern.test(period)) return Response.json({ error: "Tháng theo dõi không hợp lệ." }, { status: 400 });
   const [year, month] = period.split("-").map(Number); const next = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;

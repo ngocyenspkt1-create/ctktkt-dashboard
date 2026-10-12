@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/auth/server";
 import ExcelJS from "exceljs";
 import { getRawDb } from "@/db";
 import {
@@ -37,6 +38,7 @@ function rowToLog(row: Record<string, unknown>): WaterShiftLog {
 }
 
 export async function GET(request: Request) {
+  const session = await requireSession(); if (!session.ok) return session.response;
   const url = new URL(request.url);
   const month = url.searchParams.get("month") || "";
 

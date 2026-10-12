@@ -1,7 +1,9 @@
+import { requireSession } from "@/lib/auth/server";
 import { getRawDb } from "@/db";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 
 export async function GET() {
+  const session = await requireSession(); if (!session.ok) return session.response;
   try {
     const rawDb = getRawDb();
     await ensureWaterSchema(rawDb);

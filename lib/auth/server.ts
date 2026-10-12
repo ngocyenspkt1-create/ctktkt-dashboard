@@ -25,6 +25,13 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
 type Guard = { ok: true; user: SessionUser } | { ok: false; response: Response };
 
+/** Any active account (re-checked against the database, so locked/deleted accounts with a still-valid cookie are rejected). */
+export async function requireSession(): Promise<Guard> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, response: Response.json({ error: "Chưa đăng nhập hoặc tài khoản không còn hiệu lực." }, { status: 401 }) };
+  return { ok: true, user };
+}
+
 export async function requireRole(...allowed: Role[]): Promise<Guard> {
   const user = await getSessionUser();
   if (!user) return { ok: false, response: Response.json({ error: "Chưa đăng nhập." }, { status: 401 }) };

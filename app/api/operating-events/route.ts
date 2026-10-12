@@ -1,6 +1,6 @@
 import { getRawDb } from "@/db";
 import { EVENT_TYPES } from "@/lib/bcsx";
-import { requirePermission } from "@/lib/auth/server";
+import { requirePermission, requireSession } from "@/lib/auth/server";
 
 const units = new Set(["S1", "S2"]);
 const eventTypes = new Set(EVENT_TYPES.map(t => t.code));
@@ -9,6 +9,7 @@ const timestampPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01]) ([01]
 const unavailable = () => Response.json({ error: "Chưa truy cập được kho dữ liệu. Nội dung trên màn hình vẫn được giữ để bạn thử lưu lại." }, { status: 503 });
 
 export async function GET(request: Request) {
+  const session = await requireSession(); if (!session.ok) return session.response;
   const date = new URL(request.url).searchParams.get("date") || "";
   if (!datePattern.test(date)) return Response.json({ error: "Ngày không hợp lệ." }, { status: 400 });
   try {

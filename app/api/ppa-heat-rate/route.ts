@@ -1,7 +1,7 @@
 import { getRawDb } from "@/db";
 import { calculatePpaHeatRate, type PpaSourceData } from "@/lib/ppa-heat-rate";
 import { PPA_HEAT_RATE_UPSERT_SQL } from "@/lib/ppa-heat-rate-persistence";
-import { requireAnyPermission } from "@/lib/auth/server";
+import { requireAnyPermission, requireSession } from "@/lib/auth/server";
 
 const datePattern = /^(20\d{2})-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const periodPattern = /^20\d{2}-(0[1-9]|1[0-2])$/;
@@ -18,6 +18,7 @@ function cleanSource(value: unknown): PpaSourceData {
 }
 
 export async function GET(request: Request) {
+  const session = await requireSession(); if (!session.ok) return session.response;
   const url = new URL(request.url);
   const period = url.searchParams.get("period") || "";
   const includeSource = url.searchParams.get("includeSource") === "1";

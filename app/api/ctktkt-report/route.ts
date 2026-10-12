@@ -1,6 +1,6 @@
 import { auditedDailyBatch } from "@/lib/daily-input-audit";
 import { getRawDb } from "@/db";
-import { getSessionUser } from "@/lib/auth/server";
+import { getSessionUser, requireSession } from "@/lib/auth/server";
 import { canEditOperatingDate, isFutureOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 import { isAdminUser } from "@/lib/auth/session";
 import { canEditAnyCtktktField, canEditCtktktField } from "@/lib/ctktkt-permissions";
@@ -35,6 +35,7 @@ function monthBounds(period: string) {
 }
 
 export async function GET(request: Request) {
+  const session = await requireSession(); if (!session.ok) return session.response;
   const period = new URL(request.url).searchParams.get("period") || "";
   if (!periodPattern.test(period)) return Response.json({ error: "Tháng không hợp lệ." }, { status: 400 });
   const { from, next } = monthBounds(period);

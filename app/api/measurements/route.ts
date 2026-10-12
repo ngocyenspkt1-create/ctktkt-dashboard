@@ -1,10 +1,11 @@
 import { getRawDb } from "../../../db";
 import { validateMeasurement } from "../../../lib/metrics";
-import { requireAnyPermission } from "../../../lib/auth/server";
+import { requireAnyPermission, requireSession } from "../../../lib/auth/server";
 
 const unavailable = () => Response.json({ error: "Chưa truy cập được kho dữ liệu. Số liệu chưa được lưu; hãy giữ nội dung nhập và thử lại." }, { status: 503 });
 const columns = "id, metric_code AS metricCode, metric_name AS metricName, period, actual, limit_value AS limitValue, note, created_at AS createdAt";
 export async function GET(request: Request) {
+  const session = await requireSession(); if (!session.ok) return session.response;
   const period = new URL(request.url).searchParams.get("period");
   if (!period || !/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/.test(period)) return Response.json({ error: "Kỳ không hợp lệ." }, { status: 400 });
   try {

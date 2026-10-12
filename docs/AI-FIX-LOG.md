@@ -120,3 +120,39 @@ Chưa sửa logic ứng dụng vì chưa có lỗi runtime/test nào tái hiện
 - Chưa commit/push; không thực hiện đẩy Google Sheet thật trong quá trình thử giao diện.
 - Người dùng đã duyệt và yêu cầu đẩy GitHub: xuất bản nhận xét nổi, toolbar PPA gọn và sửa SVG hydration cùng ảnh minh họa. Các ghi chú local phía trên phản ánh thời điểm trước lần xuất bản này.
 - Người dùng yêu cầu đẩy GitHub: xuất bản tối ưu preview và các thiết kế PPA/PMIS cùng test, tài liệu và ảnh. Các ghi chú “chưa push” phía trên là trạng thái tại thời điểm triển khai; lần xuất bản này bao gồm cả ba phần. Cache `.sites-runtime` và pnpm-lock.yaml điều tra không được đưa vào commit.
+# 2026-10-12 — Gom biểu đồ PPA (local, chưa đẩy GitHub)
+
+> Cập nhật xuất bản: người dùng yêu cầu đẩy cả biểu đồ và bản sửa Claude lên `origin/main`. TypeScript và toàn bộ test chạy lại thành công; pnpm-lock.yaml không được đưa vào commit. Các nhãn “chưa đẩy” dưới đây ghi lại trạng thái lúc sửa.
+
+- Mỗi thẻ S1/S2/toàn nhà máy dùng một biểu đồ kết hợp đường SHN thực tế/PPA và cột CL đỏ (vượt), xanh (đạt), thay cho hai biểu đồ tách rời.
+- SHN theo trục trái, CL theo trục phải; ghi rõ hai trục co độc lập để tránh hiểu nhầm. Giữ nguyên công thức, giá trị 0, khoảng trống thiếu dữ liệu và bảng số liệu mở rộng.
+- Giảm khoảng cách phần KPI, tiêu đề, chú giải và số ngày. Không thêm thư viện hay hiệu ứng chuyển động.
+- Kiểm tra ESLint component thành công; cập nhật cache `/wb-preview` bằng `npm run preview:design`.
+
+
+# 2026-10-12 — Claude rà soát toàn dự án (local, chưa đẩy GitHub)
+
+## Kết quả kiểm tra trước khi sửa
+- `npx tsc --noEmit`: sạch. `npm run build`: thành công. `node --test tests/*.test.mjs`: 350/350 đạt.
+- `npm run lint`: 0 lỗi, 16 cảnh báo (đa số cố ý: hàm tiêm vào trang của tiện ích, tham số `_isDaySheet` giữ chữ ký, `window.location.assign` để tải lại cứng sau đăng nhập/đăng xuất).
+- Lưu ý: chạy test phải dùng `node --test tests/*.test.mjs` (lệnh `node --test tests/` báo lỗi giả vì coi thư mục là file).
+
+## Lỗi đã sửa
+1. **Bảo mật — các API GET không kiểm tra lại tài khoản trong CSDL.** `proxy.ts` chỉ xác minh chữ ký JWT (hạn 30 ngày), nên tài khoản đã bị **khóa/xóa** vẫn đọc và xuất được toàn bộ số liệu bằng cookie cũ cho tới khi hết hạn (các POST thì đã kiểm tra lại qua `loadCurrentUser`).
+   - Thêm `requireSession()` vào `lib/auth/server.ts` (dùng `getSessionUser()` → đọc lại trạng thái tài khoản, chặn cả tài khoản đang bắt buộc đổi mật khẩu).
+   - Gắn ở dòng đầu hàm `GET` của: `ppa-heat-rate`, `daily-inputs`, `measurements`, `shift-readings`, `operating-events`, `ctktkt-report`, `ctktkt-report/export`, `water-report`, `water-report/leaders`, `water-report/compare`, `water-report/export`, `bcsx-export`.
+   - Thêm test hồi quy trong `tests/auth-security.test.mjs` bảo đảm các GET này luôn có guard.
+2. **Cảnh báo ESLint giả trong tiện ích QLKT sync**: chú thích `/* global not found */` bị ESLint hiểu là chỉ thị khai báo biến toàn cục `not`, `found`. Đổi lời chú thích trong `browser-extension/qlkt-sync/background.js` và bản sao `public/qlkt-sync-extension/background.js` (chỉ đổi comment, không đổi hành vi; không cần đóng gói lại `.zip`/tăng phiên bản).
+
+Sau khi sửa: tsc sạch, lint 0 lỗi/12 cảnh báo, test 351/351 đạt.
+
+## Phát hiện chưa sửa (cần người dùng quyết định)
+- **Nhiệt trị trước chỉnh (CX)** chỉ bị ẩn ở giao diện (`components/daily-production-table.tsx`, `canViewPreAdjustmentHeatRate`), nhưng `GET /api/daily-inputs` vẫn trả CX cho mọi tài khoản, và AP/AQ (tính từ CX) cũng để lộ giá trị. Nếu CX thật sự cần bảo mật theo cương vị, phải lọc ở server và tính AP/AQ ở server.
+- `clientIp()` (`lib/auth/login-throttle.ts`) tin phần tử đầu `x-forwarded-for`; trên hạ tầng không ghi đè header này, kẻ tấn công có thể né giới hạn theo IP (giới hạn theo tên đăng nhập vẫn hoạt động).
+- `proxy.ts` chặn `/admin` dựa trên quyền trong JWT (có thể cũ); route handler/trang vẫn kiểm tra lại bằng CSDL nên không thành lỗ hổng, chỉ là quyền mới cấp phải đăng nhập lại mới vào được `/admin`.
+
+## Hướng dẫn đẩy GitHub (cho GPT/Codex)
+- Commit các file: `lib/auth/server.ts`, 12 file `app/api/**/route.ts` nêu trên, `tests/auth-security.test.mjs`, 2 file `background.js`, `docs/AI-FIX-LOG.md`.
+- Thay đổi `components/ppa-unit-card.{tsx,css}` là phần “Gom biểu đồ PPA” có từ trước, không thuộc lần rà soát này — commit riêng nếu người dùng muốn.
+- Không commit `pnpm-lock.yaml` (dự án dùng `package-lock.json`).
+- Kiểm tra lại trước khi push: `npx tsc --noEmit`, `npm run lint`, `node --test tests/*.test.mjs`.

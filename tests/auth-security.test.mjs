@@ -66,3 +66,10 @@ test("no plaintext passwords, public data endpoints or header-trusting auth rema
     assert.match(source, /requireAnyPermission\("/, route);
   }
 });
+
+test("every GET data endpoint re-checks the account against the database", () => {
+  for (const route of ["ppa-heat-rate", "daily-inputs", "measurements", "shift-readings", "operating-events", "ctktkt-report", "ctktkt-report/export", "water-report", "water-report/leaders", "water-report/compare", "water-report/export", "bcsx-export"]) {
+    const source = readFileSync(new URL(`../app/api/${route}/route.ts`, import.meta.url), "utf8");
+    assert.match(source, /export async function GET\([^)]*\) \{\r?\n\s+const session = await requireSession\(\); if \(!session\.ok\) return session\.response;/, route);
+  }
+});

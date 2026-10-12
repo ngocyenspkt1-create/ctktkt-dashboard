@@ -227,7 +227,7 @@ async function readMeterFromPageWorld(tabId, operatingDate, sourcePage, options 
       collect(widgets, 4);
       for (const name of ["sheetWidget", "widget_sheetWidget"]) {
         try { collect(typeof globalThis.PF === "function" ? globalThis.PF(name) : null, 4); } catch { /* widget not found */ }
-        try { collect(globalThis[name], 4); } catch { /* global not found */ }
+        try { collect(globalThis[name], 4); } catch { /* biến toàn cục không tồn tại */ }
       }
       // Chẩn đoán thêm: ô ngày đang HIỂN THỊ trên trang lúc đọc — để phân biệt
       // 2 tình huống khác nhau khi dữ liệu vẫn sai ngày: (a) ô ngày đã đúng

@@ -1,5 +1,5 @@
 import { getRawDb } from "@/db";
-import { getSessionUser } from "@/lib/auth/server";
+import { getSessionUser, requireSession } from "@/lib/auth/server";
 import {
   calculateMonthlyWaterSummary,
   recalculateWaterShiftChain,
@@ -40,6 +40,7 @@ function rowToLog(row: Record<string, unknown>): WaterShiftLog {
 }
 
 export async function GET(request: Request) {
+  const session = await requireSession(); if (!session.ok) return session.response;
   const url = new URL(request.url);
   const month = url.searchParams.get("month") || "";
 
