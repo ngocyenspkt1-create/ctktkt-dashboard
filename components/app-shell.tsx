@@ -12,10 +12,10 @@ import { SpreadsheetInputBehavior } from "@/components/spreadsheet-input-behavio
 function Brand() {
   return (
     <Link href="/" className="app-brand flex items-center gap-3">
-      <span className="control-brand-mark grid size-10 place-items-center"><Zap className="size-5" aria-hidden /></span>
+      <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-blue-900/20"><Zap className="size-5" aria-hidden /></span>
       <span className="leading-tight">
-        <span className="app-brand-title block text-base font-bold">DUYÊN HẢI 1</span>
-        <span className="app-brand-subtitle block text-xs">Phân xưởng Vận hành 1</span>
+        <span className="app-brand-title block text-base font-bold">Vận hành 1</span>
+        <span className="app-brand-subtitle block text-xs">NMNĐ Duyên Hải 1</span>
       </span>
     </Link>
   );
@@ -37,7 +37,6 @@ export async function AppShell({ children, active }: { children: ReactNode; acti
       <div className="app-workspace min-h-screen bg-[var(--app-bg)] text-slate-900">
         <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-64 flex-col lg:flex">
           <div className="app-sidebar-brand flex h-20 items-center px-5"><Brand /></div>
-          <div className="control-workspace-label">KHÔNG GIAN LÀM VIỆC <span>PXVH1</span></div>
           <div className="flex-1 overflow-y-auto px-3 py-5">
             <SidebarNav active={active} isAdmin={isAdmin} />
           </div>
@@ -46,8 +45,8 @@ export async function AppShell({ children, active }: { children: ReactNode; acti
             <div className="app-user-card flex items-center gap-2 rounded-xl p-2.5">
               <span className="app-user-avatar grid size-9 shrink-0 place-items-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">{initials}</span>
               <div className="min-w-0 flex-1">
-                <p className="app-user-name truncate text-sm font-medium">{user.displayName}</p>
-                <p className="app-user-role truncate text-[11px]" title={roleLabel}>{roleLabel}</p>
+                <p className="app-user-name truncate text-sm font-medium text-slate-100">{user.displayName}</p>
+                <p className="app-user-role truncate text-[11px] text-slate-300" title={roleLabel}>{roleLabel}</p>
               </div>
               <Link href="/doi-mat-khau" title="Đổi mật khẩu" aria-label="Đổi mật khẩu" className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700">
                 <KeyRound className="size-4" aria-hidden />
