@@ -97,11 +97,8 @@
   .chemical-entry-panel { position: static; }
 }
 
-/* Half-hour BCSX section: 1.5 times its measured original font sizes. */
-.bcsx-half-hour-font { font-size: 1.5em; }
-.bcsx-half-hour-font .text-xs { font-size: 18px; }
-.bcsx-half-hour-font [class~="text-[10px]"] { font-size: 15px; }
-.bcsx-half-hour-font [class~="text-[11px]"] { font-size: 16.5px; }
-.bcsx-half-hour-font .module-section-heading h2 { font-size: 19.5px; }
-.bcsx-half-hour-font .module-shift-card input { font-size: 18px; min-height: 36px; }
+/* Use one consistent font size throughout the half-hour BCSX section. */
+.bcsx-half-hour-font,
+.bcsx-half-hour-font * { font-size: 15px !important; }
+.bcsx-half-hour-font .module-shift-card input { min-height: 36px; }
 .bcsx-half-hour-font .module-shift-card th:first-child { width: 64px; }
