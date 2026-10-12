@@ -93,4 +93,12 @@ Chưa sửa logic ứng dụng vì chưa có lỗi runtime/test nào tái hiện
 - Toolbar ngày được sắp lại với tiêu đề, hướng dẫn và số ngày riêng.
 - Preview `/wb-preview#pmis-design` cùng component, dữ liệu minh họa. Ảnh `wb/pmis-redesign.png`; desktop 1440px và mobile 390px đã kiểm tra, không tràn toàn trang.
 - Lint/TypeScript đạt; build production đạt; suite 350 test đạt, gồm 2 test domain NH3/âm/zero/null mới. Chưa commit/push.
+
+### Bảng PPA gọn và màu chênh lệch
+
+- Theo yêu cầu người dùng, bỏ 3 cột TT trong bảng web; còn 17 cột (ngày, 14 số liệu, 2 nhận xét), colspan nhóm 4/5/5 và dòng tháng 17.
+- CL kJ/kWh và CL % tô đỏ khi compareHeatRate trả Vượt PPA, xanh khi Đạt (bao gồm CL=0), thiếu dữ liệu màu xám. Có chú giải và title trạng thái.
+- Bỏ min-width 2600px, dùng bảng 100% với min-width 1000px, tỷ lệ cột và chữ 11px; ngày dd/MM, năm ở nhóm tháng và tooltip ngày đầy đủ. Nhận xét vẫn mở rộng/được sửa theo quyền hiện có.
+- Preview desktop 1440px: table 1124.7px nằm trong container 1125px, đủ 17 cột. Màn hình nhỏ vẫn cuộn riêng bảng; chưa đổi format xuất Excel hoặc API.
+- Lint component, TypeScript, build production và 350 test đạt; ảnh `wb/ppa-table-compact.png`. Người dùng đã duyệt và yêu cầu đẩy GitHub.
 - Người dùng yêu cầu đẩy GitHub: xuất bản tối ưu preview và các thiết kế PPA/PMIS cùng test, tài liệu và ảnh. Các ghi chú “chưa push” phía trên là trạng thái tại thời điểm triển khai; lần xuất bản này bao gồm cả ba phần. Cache `.sites-runtime` và pnpm-lock.yaml điều tra không được đưa vào commit.

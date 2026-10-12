@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { PpaUnitCard } from "@/components/ppa-unit-card";
+import "./ppa-detail-table.css";
 import { DateField } from "@/components/ui/date-field";
 import { GoogleSheetSyncButton } from "@/components/google-sheet-sync-button";
 import { CAPACITY_KW, calculateActualHeatRate, calculatePpaHeatRateDetailed, compareHeatRate, ppaCurveForYear, type PpaSourceData, type UnitDetail } from "@/lib/ppa-heat-rate";
@@ -583,34 +584,37 @@ export function PpaHeatRateDashboard() {
     </div>
 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2><span className="text-xs text-slate-500">Cuộn ngang để xem đầy đủ các cột</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2><span className="ppa-detail-legend"><span className="ppa-legend-over">CL đỏ: vượt PPA</span><span className="ppa-legend-met">CL xanh: đạt PPA</span><span>SHN: kJ/kWh · CS: MW</span></span></div>
       {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="module-table-scroll w-full min-w-0 max-w-full overflow-x-scroll overflow-y-auto" tabIndex={0} role="region" aria-label="Bảng PPA theo ngày, cuộn ngang để xem các cột">
-        <table className="report-data-table w-full min-w-[2600px] table-fixed border-collapse text-sm leading-5 [&_td]:border-r [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-2 [&_td]:tabular-nums [&_td:nth-child(-n+18)]:whitespace-nowrap [&_th]:border-r [&_th]:border-slate-200 [&_th]:px-2 [&_th]:py-2">
+        <table className="report-data-table ppa-detail-table">
           <colgroup>
-            <col style={{ width: 136 }}/>
-            {Array.from({ length: 17 }, (_, index) => <col key={index} style={{ width: 112 }}/>) }
-            <col style={{ width: 280 }}/>
-            <col style={{ width: 280 }}/>
+            <col style={{ width: "6%" }}/>
+            {Array.from({ length: 14 }, (_, index) => <col key={index} style={{ width: "5.5%" }}/>) }
+            <col style={{ width: "8.5%" }}/>
+            <col style={{ width: "8.5%" }}/>
           </colgroup>
           <thead>
             <tr className="bg-[#dcebf5] text-[#173b64]">
               <th rowSpan={2} className="px-1 py-2 text-center align-bottom">Ngày</th>
-              <th colSpan={5} className="border-l border-white/60 p-2 text-center text-purple-900">Chung 2 tổ</th>
-              <th colSpan={6} className="border-l border-white/60 p-2 text-center text-blue-900">Tổ máy S1</th>
-              <th colSpan={6} className="border-l border-white/60 p-2 text-center text-amber-900">Tổ máy S2</th>
+              <th colSpan={4} className="border-l border-white/60 p-2 text-center text-purple-900">Chung 2 tổ</th>
+              <th colSpan={5} className="border-l border-white/60 p-2 text-center text-blue-900">Tổ máy S1</th>
+              <th colSpan={5} className="border-l border-white/60 p-2 text-center text-amber-900">Tổ máy S2</th>
               <th rowSpan={2} className="border-l border-white/60 bg-blue-100 px-1 py-2 text-left align-bottom text-blue-950">Nhận xét S1</th>
               <th rowSpan={2} className="border-l border-white/60 bg-amber-100 px-1 py-2 text-left align-bottom text-amber-950">Nhận xét S2</th>
             </tr>
             <tr className="bg-[#eaf3fa] text-[#173b64]">
-              {["Thực tế", "PPA", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CS khả dụng", "CL kJ/kWh", "CL %", "TT", "Thực tế", "PPA", "CS khả dụng", "CL kJ/kWh", "CL %", "TT"].map((label, index) => <th key={index} className="border-l border-white/60 px-0.5 py-1.5 text-center font-semibold leading-tight">{label}</th>)}
+              {["Thực tế", "PPA", "CL kJ/kWh", "CL %", "Thực tế", "PPA", "CS khả dụng", "CL kJ/kWh", "CL %", "Thực tế", "PPA", "CS khả dụng", "CL kJ/kWh", "CL %"].map((label, index) => <th key={index} className="border-l border-white/60 px-0.5 py-1.5 text-center font-semibold leading-tight">{label}</th>)}
             </tr>
           </thead>
           <tbody>
             {rowsByMonth.map(([period, monthRows]) => <Fragment key={period}>
-              <tr className="bg-slate-100"><td colSpan={20} className="px-2 py-1.5 text-left text-[13px] font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
+              <tr className="bg-slate-100"><td colSpan={17} className="ppa-month-label px-2 py-1.5 text-left font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
               {monthRows.map(row => {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
-                const statusBadge = (status: string) => <span className={`rounded-full px-2 py-0.5 text-[13px] font-extrabold ${status === "Đạt" ? "bg-emerald-100 text-emerald-800" : status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-500"}`}>{status === "Chưa đủ dữ liệu" ? "—" : status === "Vượt PPA" ? "Vượt" : "Đạt"}</span>;
+                const differenceCells = (comparison: ReturnType<typeof compareHeatRate>) => {
+                  const tone = comparison.status === "Vượt PPA" ? "ppa-cl-over" : comparison.status === "Đạt" ? "ppa-cl-met" : "ppa-cl-empty";
+                  return <><td className={tone} title={comparison.status}>{format(comparison.difference)}</td><td className={tone} title={comparison.status}>{formatPercent(comparison.percent)}</td></>;
+                };
                 return <tr id={`ppa-row-${row.date}`} key={row.date} className="border-t border-slate-200 hover:bg-slate-50/60">
                   <td className="whitespace-nowrap px-0.5 py-1 text-center font-bold text-black">
                     {canEdit ? (
@@ -620,19 +624,17 @@ export function PpaHeatRateDashboard() {
                         className="text-center font-bold text-[#18233d] hover:text-[#4057b5] hover:underline"
                         title={`Bấm để xem hoặc chỉnh sửa nhận xét ngày ${fullDate(row.date)}`}
                       >
-                        <span className="hidden xl:inline">{fullDate(row.date)}</span>
-                        <span className="xl:hidden">{shortDate(row.date)}</span>
+                        <span>{shortDate(row.date)}</span>
                       </button>
                     ) : (
                       <>
-                        <span className="hidden xl:inline">{fullDate(row.date)}</span>
-                        <span className="xl:hidden">{shortDate(row.date)}</span>
+                        <span title={fullDate(row.date)}>{shortDate(row.date)}</span>
                       </>
                     )}
                   </td>
-                  <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualPlant)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaPlant)}</td><td className="px-0.5 py-1 text-center text-black">{format(plant.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(plant.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(plant.status)}</td>
-                  <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualS1)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaS1)}</td><td className="bg-blue-50/50 px-0.5 py-1 text-center font-semibold text-blue-900">{format(row.availableCapacityS1Mw)}</td><td className="px-0.5 py-1 text-center text-black">{format(s1.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(s1.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(s1.status)}</td>
-                  <td className="border-l px-0.5 py-1 text-center text-black">{format(row.actualS2)}</td><td className="px-0.5 py-1 text-center text-black">{format(row.ppaS2)}</td><td className="bg-amber-50/50 px-0.5 py-1 text-center font-semibold text-amber-900">{format(row.availableCapacityS2Mw)}</td><td className="px-0.5 py-1 text-center text-black">{format(s2.difference)}</td><td className="px-0.5 py-1 text-center text-black">{formatPercent(s2.percent)}</td><td className="px-0.5 py-1 text-center">{statusBadge(s2.status)}</td>
+                  <td>{format(row.actualPlant)}</td><td>{format(row.ppaPlant)}</td>{differenceCells(plant)}
+                  <td>{format(row.actualS1)}</td><td>{format(row.ppaS1)}</td><td className="bg-blue-50/50 text-blue-900">{format(row.availableCapacityS1Mw)}</td>{differenceCells(s1)}
+                  <td>{format(row.actualS2)}</td><td>{format(row.ppaS2)}</td><td className="bg-amber-50/50 text-amber-900">{format(row.availableCapacityS2Mw)}</td>{differenceCells(s2)}
                   <td className="border-l bg-blue-50/40 p-1 align-middle text-slate-700">
                     <div className="flex items-center justify-between gap-1">
                       <div className="min-w-0 flex-1">
