@@ -65,3 +65,32 @@ Chưa sửa logic ứng dụng vì chưa có lỗi runtime/test nào tái hiện
 - Lint các file sửa và TypeScript đạt. Không commit/push theo yêu cầu duyệt local trước.
 - Build production và toàn suite 344 test đạt sau thay đổi /wb.
 - Người dùng đã yêu cầu đẩy GitHub sau khi xem local; xuất bản theme /wb, trang preview development và tài liệu/ảnh tham khảo. Không đưa pnpm-lock.yaml phát sinh trong điều tra vào commit.
+
+### Tối ưu preview local khi người dùng báo giật
+
+- Người dùng xác nhận ngay cả `/wb-preview` tĩnh về nội dung cũng chậm. Log Vite ghi nhận tải trang 955ms và HMR; HTML trước sửa khoảng 141KB gồm runtime/RSC, còn phải tải CSS và JS framework.
+- Thêm `npm run preview:design` để tạo cache HTML/CSS đã dựng sẵn; middleware Vite chỉ phục vụ route preview khi development, không áp dụng cho API/trang nghiệp vụ. Cache gitignored, cập nhật bằng lệnh trên sau mỗi lần sửa giao diện; `?live=1` dùng kiểm tra đối chứng.
+- Cache có gzip 44.708 bytes; DOM xác nhận 0 script, 0 external stylesheet. Không hydration/HMR trên preview. Đây là tối ưu preview local, không phải kết luận về hiệu năng dữ liệu production.
+- Chuyển SpreadsheetInputBehavior từ RootLayout sang AppShell, tránh nạp bộ xử lý bảng ở preview/login. Bỏ backdrop blur header và các lớp blur trang đăng nhập để giảm công việc vẽ.
+- Đo HTTP 5 lần mỗi chế độ trên cùng máy: live [1014.5,184.6,147.0,183.3,136.3]ms; static [16.4,11.3,11.2,11.5,11.7]ms. Trung vị 183.3 → 11.5ms. Đây là thời gian phản hồi HTTP, không phải FPS hoặc INP.
+- TypeScript, lint file sửa, build production và suite 346 test đạt (thêm 2 test strip runtime/escape CSS). Trực quan preview còn đủ nội dung; ảnh `wb/performance-preview.png`.
+- Bản sửa hiện local, chưa push. Cần người dùng thử lại cuộn trên máy; chưa đo FPS thực tế hay nghiệp vụ production.
+
+### Thiết kế lại cụm PPA S1/S2/toàn nhà máy
+
+- Theo ảnh người dùng, thay cụm 3 biểu đồ hai trục bằng `PpaUnitCard`: KPI có đơn vị và định nghĩa TB ngày, chênh lệch có dấu, nhãn vượt/đạt riêng, biểu đồ SHN và chênh lệch tách riêng.
+- Giữ nguyên summaryFor/compareHeatRate, dữ liệu và xuất Excel. Không đổi phép tính trung bình hiện hành; hiển thị rõ đây là trung bình cộng của các ngày đủ cặp số liệu, không phải bình quân gia quyền.
+- SVG thuần, không animation/ResizeObserver và không import Recharts trong dashboard PPA. Mỗi điểm có title số liệu, có bảng mở rộng; giá trị null ngắt đường, zero được giữ nguyên, trục chênh lệch bao gồm 0.
+- Preview sử dụng cùng component tại `/wb-preview#ppa-design`, dữ liệu minh họa; summary lấy từ chính các điểm minh họa.
+- Đã kiểm tra desktop 1440px, mobile 390px không tràn trang; ảnh `wb/ppa-redesign.png`. Lint/TypeScript đạt, build đạt trước sửa nhỏ tick nhãn và dữ liệu preview; suite 348 test đạt sau sửa cuối.
+- Chưa commit/push; để người dùng duyệt local. Không kết luận tốc độ production từ việc đổi biểu đồ.
+
+### Thiết kế lại khu biểu đồ PMIS
+
+- Theo ảnh người dùng, thay 5 đường khác đơn vị/trục Y ẩn trong mỗi tổ máy bằng 5 biểu đồ nhỏ có nhãn, đơn vị và giá trị gần nhất kèm ngày. Giữ hai cột S1/S2 trên desktop, một cột mobile.
+- `PmisTrendPanels` sử dụng cùng domain cho cùng chỉ tiêu của cả S1/S2, tính từ dữ liệu thật, giữ giá trị zero/âm và biên độ NH3 nhỏ. Thay thang PG cố định 400–625 bằng domain chung có đệm để không cắt số liệu nằm ngoài khoảng.
+- Thiếu dữ liệu ngắt đường; không còn connectNulls. Giữ nguyên kho dữ liệu, công thức, bộ lọc, đồng bộ và bảng chi tiết. SVG không animation/Recharts; điểm có title số liệu.
+- Toolbar ngày được sắp lại với tiêu đề, hướng dẫn và số ngày riêng.
+- Preview `/wb-preview#pmis-design` cùng component, dữ liệu minh họa. Ảnh `wb/pmis-redesign.png`; desktop 1440px và mobile 390px đã kiểm tra, không tràn toàn trang.
+- Lint/TypeScript đạt; build production đạt; suite 350 test đạt, gồm 2 test domain NH3/âm/zero/null mới. Chưa commit/push.
+- Người dùng yêu cầu đẩy GitHub: xuất bản tối ưu preview và các thiết kế PPA/PMIS cùng test, tài liệu và ảnh. Các ghi chú “chưa push” phía trên là trạng thái tại thời điểm triển khai; lần xuất bản này bao gồm cả ba phần. Cache `.sites-runtime` và pnpm-lock.yaml điều tra không được đưa vào commit.

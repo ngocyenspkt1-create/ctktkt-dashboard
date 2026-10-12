@@ -7,6 +7,7 @@ import { navItemFor } from "@/lib/navigation";
 import { SessionProvider } from "@/components/session-context";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileNav, QuickSearch, SidebarNav } from "@/components/app-navigation";
+import { SpreadsheetInputBehavior } from "@/components/spreadsheet-input-behavior";
 
 function Brand() {
   return (
@@ -32,6 +33,7 @@ export async function AppShell({ children, active }: { children: ReactNode; acti
 
   return (
     <SessionProvider user={user}>
+      <SpreadsheetInputBehavior />
       <div className="app-workspace min-h-screen bg-[var(--app-bg)] text-slate-900">
         <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-64 flex-col lg:flex">
           <div className="app-sidebar-brand flex h-20 items-center px-5"><Brand /></div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { PpaUnitCard } from "@/components/ppa-unit-card";
 import { DateField } from "@/components/ui/date-field";
 import { GoogleSheetSyncButton } from "@/components/google-sheet-sync-button";
 import { CAPACITY_KW, calculateActualHeatRate, calculatePpaHeatRateDetailed, compareHeatRate, ppaCurveForYear, type PpaSourceData, type UnitDetail } from "@/lib/ppa-heat-rate";
@@ -44,18 +44,6 @@ type Row = {
   noteS1: string; noteS2: string;
 };
 
-// Màu đường "thực tế" đậm nhất (đường chính), đường "theo PPA" dùng màu accent của tổ máy — đậm hơn
-// hẳn bản trước để 2 đường không bị nhạt nhòe trên nền biểu đồ. Cột chênh lệch không còn dùng 1 màu
-// cố định theo tổ máy nữa mà tô theo dấu: barUnder (xanh) khi thực tế dưới/đúng PPA, barOver (đỏ
-// nhạt) khi vượt PPA — xem renderBarColor bên dưới.
-const UNIT_META: Record<UnitKey, { label: string; accent: string; border: string; bg: string; text: string; gradient: string; lineActual: string; linePpa: string }> = {
-  s1: { label: "Tổ máy S1", accent: "#2f6fb0", border: "border-blue-200", bg: "bg-blue-50", text: "text-blue-800", gradient: "from-[#2f6fb0] to-[#5fa3e0]", lineActual: "#0f2d52", linePpa: "#2f6fb0" },
-  s2: { label: "Tổ máy S2", accent: "#b9860f", border: "border-amber-200", bg: "bg-amber-50", text: "text-amber-800", gradient: "from-[#b9860f] to-[#e0ad3d]", lineActual: "#5c4106", linePpa: "#b9860f" },
-  plant: { label: "Chung 2 tổ", accent: "#6b4fa0", border: "border-purple-200", bg: "bg-purple-50", text: "text-purple-800", gradient: "from-[#6b4fa0] to-[#9b7bc9]", lineActual: "#2e1f47", linePpa: "#6b4fa0" },
-};
-
-const BAR_UNDER_PPA = "#4caf7d"; // dưới/đúng PPA — xanh lá
-const BAR_OVER_PPA = "#f2a29b"; // vượt PPA — đỏ nhạt
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const percentFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -586,51 +574,11 @@ export function PpaHeatRateDashboard() {
       </ul>}
     </div>}
 
-    <div className="module-chart-grid grid gap-3 lg:grid-cols-3">
+    <div className="ppa-unit-grid">
       {(["s1", "s2", "plant"] as UnitKey[]).map(unit => {
-        const meta = UNIT_META[unit], summary = summaryFor(unit);
+        const summary = summaryFor(unit);
         const unitChartData = chartData(unit);
-        // Trục phải (chênh lệch) tự co theo đúng biên độ dữ liệu của nó (luôn bao gồm 0) thay vì
-        // dùng domain mặc định — nếu không, vài ngày chênh lệch lớn bất thường sẽ kéo domain giãn ra
-        // làm cột/đường chênh lệch các ngày còn lại bị dẹt, khó nhìn.
-        const diffValues = unitChartData.map(point => point.chenhLech).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-        const diffMin = Math.min(0, ...diffValues), diffMax = Math.max(0, ...diffValues);
-        const diffPad = Math.max(2, (diffMax - diffMin) * 0.25);
-        const diffDomain: [number, number] = [Math.floor(diffMin - diffPad), Math.ceil(diffMax + diffPad)];
-        // Trục trái (2 đường SHN thực tế / PPA) cũng co sát theo đúng khoảng giá trị thật của chúng
-        // (không ép về 0 như trục phải, vì SHN luôn ở mức hàng nghìn) — nếu không, khoảng cách nhỏ
-        // giữa 2 đường (vài chục kJ/kWh trên nền vài nghìn) sẽ bị domain mặc định nuốt mất, nhìn như
-        // 1 đường phẳng.
-        const leftValues = unitChartData.flatMap(point => [point.thucTe, point.ppa]).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-        const leftMin = leftValues.length ? Math.min(...leftValues) : 0, leftMax = leftValues.length ? Math.max(...leftValues) : 0;
-        const leftPad = Math.max(5, (leftMax - leftMin) * 0.2);
-        const leftDomain: [number, number] = [Math.floor(leftMin - leftPad), Math.ceil(leftMax + leftPad)];
-        return <div key={unit} className={`overflow-hidden rounded-2xl border ${meta.border} bg-white shadow-sm`}>
-          <div className={`bg-gradient-to-r ${meta.gradient} px-4 py-3 text-white`}><p className="text-xs font-bold uppercase tracking-wide opacity-90">{meta.label}</p></div>
-          <div className={`grid grid-cols-2 gap-2 p-3 text-xs ${meta.bg}`}>
-            <div className="rounded-lg bg-white/70 p-2"><p className="text-slate-500">SHN Thực tế TB</p><p className={`text-base font-extrabold ${meta.text}`}>{format(summary.avgActual)}</p></div>
-            <div className="rounded-lg bg-white/70 p-2"><p className="text-slate-500">SHN theo PPA TB</p><p className={`text-base font-extrabold ${meta.text}`}>{format(summary.avgPpa)}</p></div>
-            <div className="rounded-lg bg-white/70 p-2"><p className="text-slate-500">Chênh lệch TB</p><p className={`text-base font-extrabold ${(summary.avgDiff ?? 0) > 0 ? "text-red-700" : "text-emerald-700"}`}>{format(summary.avgDiff)}</p></div>
-            <div className="rounded-lg bg-white/70 p-2"><p className="text-slate-500">Số ngày vượt/đạt</p><p className="text-base font-extrabold text-slate-800">{summary.exceeded} / {summary.met}</p></div>
-          </div>
-          <div className="h-56 p-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={unitChartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e9f2"/>
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd"/>
-                <YAxis yAxisId="left" tick={{ fontSize: 10 }} width={44} domain={leftDomain} allowDataOverflow/>
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} width={40} domain={diffDomain} allowDataOverflow/>
-                <Tooltip formatter={(value: unknown) => format(typeof value === "number" ? value : Number(value))} labelFormatter={label => `Ngày ${label}`}/>
-                <Legend wrapperStyle={{ fontSize: 11 }}/>
-                <Bar yAxisId="right" dataKey="chenhLech" name="Chênh lệch" radius={[3, 3, 0, 0]}>
-                  {unitChartData.map((point, index) => <Cell key={index} fill={(point.chenhLech ?? 0) > 0 ? BAR_OVER_PPA : BAR_UNDER_PPA}/>)}
-                </Bar>
-                <Line yAxisId="left" type="monotone" dataKey="thucTe" name="SHN thực tế" stroke={meta.lineActual} strokeWidth={2} dot={false}/>
-                <Line yAxisId="left" type="monotone" dataKey="ppa" name="SHN theo PPA" stroke={meta.linePpa} strokeWidth={2} strokeDasharray="4 3" dot={false}/>
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>;
+        return <PpaUnitCard key={unit} unit={unit} summary={summary} points={unitChartData} />;
       })}
     </div>
 

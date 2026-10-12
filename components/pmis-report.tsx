@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { AxisDomainItem } from "recharts/types/util/types";
+import { PmisTrendPanels } from "@/components/pmis-trend-panels";
 import { DateField } from "@/components/ui/date-field";
 import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSyncPayload, type QlktSyncPayload } from "@/lib/qlkt-sync";
 import { useSessionUser } from "@/components/session-context";
@@ -27,14 +26,7 @@ const METRICS: { key: string; label: string; unit: string; codes?: Record<Unit, 
   { key: "TNM", label: "Trung bình nhiệt độ nước làm mát tuần hoàn", unit: "°C", codes: { s1: "DG", s2: "DH" } },
   { key: "NH3", label: "Suất tiêu hao NH3 đầu cực MF", unit: "g/kWh" },
 ];
-// Màu cố định theo thứ tự cho từng chỉ tiêu (không đổi theo bộ lọc) — dùng khi gộp cả 5 chỉ tiêu
-// vào chung 1 biểu đồ nên cần phân biệt bằng màu thay vì bằng tổ máy.
-const METRIC_COLOR: Record<string, string> = { PG: "#dc2626", L1: "#c2410c", PBN: "#15803d", TNM: "#0d9488", NH3: "#7e22ce" };
-
 const UNIT_LABEL: Record<Unit, string> = { s1: "S1-DH1", s2: "S2-DH1" };
-// Cùng 1 cặp màu tổ máy đã dùng ở trang So sánh SHN PPA (xanh dương = S1, hổ phách = S2) để người
-// dùng nhận ra "tổ máy nào là màu nào" nhất quán giữa các trang, không phải học lại bảng màu mới.
-const UNIT_COLOR: Record<Unit, string> = { s1: "#2f6fb0", s2: "#b9860f" };
 // Cột nhãn chỉ tiêu đứng yên bên trái (sticky) khi cuộn ngang; độ rộng cố định để tính minWidth của
 // bảng (LABEL_COL_PX) khớp với LABEL_COL.
 const LABEL_COL = "w-[150px] min-w-[150px]";
@@ -322,12 +314,12 @@ export function PmisReport() {
 
     <PmisTable dates={dates} valueFor={valueFor}/>
 
-    <div className="flex flex-wrap items-end gap-x-3 gap-y-1 rounded-2xl border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
-      <p className="text-[11px] font-extrabold text-[#18233d]">Biểu đồ</p>
-      <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">TỪ NGÀY<DateField value={chartFromDate} max={chartToDate} onChange={setChartFromDate} className="h-7 w-[120px]"/></label>
-      <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">ĐẾN NGÀY<DateField value={chartToDate} min={chartFromDate} max={today} onChange={setChartToDate} className="h-7 w-[120px]"/></label>
-      <button type="button" onClick={applyChartRange} className="h-7 rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-3 text-xs font-bold text-[#354a9f]">Áp dụng</button>
-      <p className="ml-auto text-[11px] font-semibold text-slate-500">{chartDates.length} ngày</p>
+    <div className="pmis-chart-toolbar">
+      <div><h2>Xu hướng chỉ tiêu PMIS</h2><p>Đối chiếu từng chỉ tiêu giữa hai tổ máy</p></div>
+      <label>TỪ NGÀY<DateField value={chartFromDate} max={chartToDate} onChange={setChartFromDate} className="h-10 w-[150px]"/></label>
+      <label>ĐẾN NGÀY<DateField value={chartToDate} min={chartFromDate} max={today} onChange={setChartToDate} className="h-10 w-[150px]"/></label>
+      <button type="button" onClick={applyChartRange}>Áp dụng</button>
+      <span className="pmis-range-count">{chartDates.length} ngày</span>
     </div>
 
     <PmisCharts dates={chartDates} valueFor={valueFor}/>
@@ -372,61 +364,11 @@ function PmisUnitRows({ unit, dates, valueFor, withLabel }: { unit: Unit; dates:
   </>;
 }
 
-function chartDataForUnit(unit: Unit, dates: string[], valueFor: ValueFor) {
-  return dates.map(date => {
-    const row: Record<string, string | number | null> = { date: ddMM(date) };
-    METRICS.forEach(metric => { row[metric.key] = valueFor(unit, metric, date); });
-    return row;
-  });
-}
-
-// 5 chỉ tiêu có 5 đơn vị đo khác nhau (MW/%/kPa/°C/g·kWh⁻¹) và biên độ dao động rất khác nhau
-// (PG vài trăm MW, PBN chỉ lệch 1-2 kPa quanh -93) — nếu dùng chung 1 trục Y theo giá trị gốc thì
-// chỉ tiêu biên độ nhỏ sẽ nhìn như đường thẳng. Vì vậy mỗi chỉ tiêu có 1 trục Y RIÊNG (ẩn, không vẽ
-// đường/nhãn trục) chỉ để tính tỷ lệ hiển thị cho đúng đường của nó — vẫn hiện chung 1 biểu đồ, 1
-// hệ trục X (ngày) như yêu cầu, nhưng mỗi đường được "phóng to" theo đúng biên độ riêng nên luôn
-// thấy rõ thay đổi dù đơn vị/biên độ khác nhau xa. PG dùng khoảng cố định 400–625 MW theo yêu cầu;
-// các chỉ tiêu còn lại tự tính khoảng theo min/max thực tế + đệm 12% (tối thiểu 1 đơn vị) mỗi bên.
-const METRIC_DOMAIN: Partial<Record<string, [number, number]>> = { PG: [400, 625] };
-function domainFor(key: string): [AxisDomainItem, AxisDomainItem] {
-  const fixed = METRIC_DOMAIN[key];
-  if (fixed) return fixed;
-  return [
-    (min: number) => Number.isFinite(min) ? min - Math.max(Math.abs(min) * 0.12, 1) : 0,
-    (max: number) => Number.isFinite(max) ? max + Math.max(Math.abs(max) * 0.12, 1) : 1,
-  ];
-}
-
-function metricTooltipFormatter(value: unknown, name?: string | number) {
-  const metric = METRICS.find(m => m.key === name);
-  const label = metric ? metric.label + (metric.unit ? ` (${metric.unit})` : "") : String(name ?? "");
-  return [format(typeof value === "number" ? value : Number(value)), label];
-}
-
-// Biểu đồ theo ngày: đúng 2 biểu đồ đặt cạnh nhau — S1 bên trái, S2 bên phải — mỗi biểu đồ gộp
-// chung cả 5 chỉ tiêu theo đúng giá trị gốc (xem domainFor ở trên về cách mỗi đường có khoảng hiển
-// thị riêng). Nét vẽ tô đậm (strokeWidth 3, màu bão hòa cao) để dễ phân biệt.
 function PmisCharts({ dates, valueFor }: { dates: string[]; valueFor: ValueFor }) {
   if (!dates.length) return null;
-  return <div className="module-chart-grid grid min-h-[360px] flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
-    {(["s1", "s2"] as Unit[]).map(unit => {
-      const data = chartDataForUnit(unit, dates, valueFor);
-      return <div key={unit} className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-        <p className="text-xs font-extrabold" style={{ color: UNIT_COLOR[unit] }}>{UNIT_LABEL[unit]}</p>
-        <div className="mt-1 min-h-0 flex-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
-              <CartesianGrid horizontal vertical={false} strokeDasharray="4 4" stroke="#c9d2e0" yAxisId="PG"/>
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd"/>
-              <YAxis yAxisId="PG" hide domain={domainFor("PG")}/>
-              {METRICS.filter(m => m.key !== "PG").map(metric => <YAxis key={metric.key} yAxisId={metric.key} hide domain={domainFor(metric.key)}/>)}
-              <Tooltip formatter={metricTooltipFormatter} labelFormatter={label => `Ngày ${label}`}/>
-              <Legend wrapperStyle={{ fontSize: 10 }} formatter={value => { const metric = METRICS.find(m => m.key === value); return metric ? metric.label : value; }}/>
-              {METRICS.map(metric => <Line key={metric.key} yAxisId={metric.key} type="monotone" dataKey={metric.key} name={metric.key} stroke={METRIC_COLOR[metric.key]} strokeWidth={3} dot={false} connectNulls/>)}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>;
-    })}
-  </div>;
+  const series = (["s1", "s2"] as Unit[]).map(unit => ({
+    unit,
+    points: dates.map(date => ({date, values: Object.fromEntries(METRICS.map(metric => [metric.key, valueFor(unit, metric, date)]))})),
+  }));
+  return <PmisTrendPanels metrics={METRICS} series={series}/>;
 }

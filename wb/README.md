@@ -10,6 +10,12 @@ Ngày khảo sát: 12/10/2026. Phạm vi: dashboard quản lý kỹ thuật PXVH
 - Đã kiểm tra trực quan desktop 1440px và mobile 390px; ảnh lưu tại `wb/local-preview.png`.
 - Người dùng đã duyệt bản local và yêu cầu đưa lên GitHub. Kết quả kiểm tra: build production, TypeScript, lint các file sửa và toàn bộ 344 test đạt.
 
+## Preview nhẹ sau khi báo giật/chậm
+
+Chạy `npm run dev`, sau khi server sẵn sàng chạy `npm run preview:design`. Middleware development phục vụ HTML/CSS tĩnh tại cùng URL `/wb-preview`; không hydrate React, không kết nối HMR. Sau mỗi lần đổi thiết kế, chạy lại `npm run preview:design` để cập nhật cache. Dùng `/wb-preview?live=1` khi cần so sánh bản React trực tiếp.
+
+Cache nằm trong `.sites-runtime/design-preview/` (gitignored). Không dùng cơ chế này cho trang nghiệp vụ hoặc API. Nếu chưa tạo cache, preview tự quay về render development bình thường. Khi chạy production, plugin này không hoạt động.
+
 ## Các nguồn đã tìm trên GitHub
 
 | Mẫu | Repository | Đặc điểm được công bố | Cách tham khảo cho PXVH1 |

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { SpreadsheetInputBehavior } from "@/components/spreadsheet-input-behavior";
 import "./interface.css";
 import "./engineering-workspace.css";
 import "./wb-design.css";
@@ -24,7 +23,6 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body className="antialiased">
-        <SpreadsheetInputBehavior />
         {children}
       </body>
     </html>

@@ -1,8 +1,9 @@
 import vinext from "vinext";
-import { defineConfig } from "vite";
+import { defineConfig, type ViteDevServer } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { readExecutionProfile } from "./scripts/execution-profile.mjs";
 import { sites } from "./build/sites-vite-plugin";
+import { readFile } from "node:fs/promises";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
@@ -56,6 +57,27 @@ export default defineConfig(async () => {
       ...(isCodexSeatbeltSandbox ? { watch: { useFsEvents: false, usePolling: true } } : {}),
     },
     plugins: [
+      {
+        name: "read-only-design-preview",
+        apply: "serve",
+        configureServer(server: ViteDevServer) {
+          server.middlewares.use(async (request, response, next) => {
+            const url = new URL(request.url || "/", "http://localhost");
+            if (request.method !== "GET" || url.pathname !== "/wb-preview" || url.searchParams.has("live")) return next();
+            try {
+              const compressed = request.headers["accept-encoding"]?.includes("gzip");
+              const html = await readFile(new URL(`./.sites-runtime/design-preview/index.html${compressed ? ".gz" : ""}`, import.meta.url));
+              response.setHeader("Content-Type", "text/html; charset=utf-8");
+              response.setHeader("Cache-Control", "no-store");
+              response.setHeader("Vary", "Accept-Encoding");
+              if (compressed) response.setHeader("Content-Encoding", "gzip");
+              response.end(html);
+            } catch {
+              next();
+            }
+          });
+        },
+      },
       vinext(),
       sites({ mockAuth: !managedLinux }),
       cloudflare({

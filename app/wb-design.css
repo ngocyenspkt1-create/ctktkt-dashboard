@@ -35,6 +35,9 @@ body { font-family: "Bahnschrift", "Segoe UI", sans-serif; }
 .app-user-card a:hover { color: #245cdb; background: #e6edfb; }
 .app-mobile-nav > button { color: #58657b; }
 .app-header,.app-workspace:has(.engineering-workspace) .app-header { height: 74px; background: #fff; border-color: #e2e7ef; box-shadow: none; }
+.app-header { backdrop-filter: none; }
+.app-workspace,.auth-workspace { scroll-behavior: auto; }
+.auth-hero > div[aria-hidden] { display: none; }
 .app-header h1 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
 .app-header input[role="combobox"] { background: #f7f9fc; border-color: #e2e7ef; border-radius: 7px; }
 .app-content { padding-top: 24px; }
