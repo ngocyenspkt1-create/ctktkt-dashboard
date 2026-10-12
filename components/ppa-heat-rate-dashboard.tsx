@@ -593,9 +593,9 @@ export function PpaHeatRateDashboard() {
             </tr>
           </thead>
           <tbody>
-            {rowsByMonth.map(([period, monthRows]) => <Fragment key={period}>
+            {[...rowsByMonth].reverse().map(([period, monthRows]) => <Fragment key={period}>
               <tr className="bg-slate-100"><td colSpan={17} className="ppa-month-label px-2 py-1.5 text-left font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
-              {monthRows.map(row => {
+              {[...monthRows].sort((a, b) => b.date.localeCompare(a.date)).map(row => {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
                 const differenceCells = (comparison: ReturnType<typeof compareHeatRate>) => {
                   const tone = comparison.status === "Vượt PPA" ? "ppa-cl-over" : comparison.status === "Đạt" ? "ppa-cl-met" : "ppa-cl-empty";

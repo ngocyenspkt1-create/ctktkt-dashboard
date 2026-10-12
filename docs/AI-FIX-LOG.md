@@ -156,3 +156,8 @@ Sau khi sửa: tsc sạch, lint 0 lỗi/12 cảnh báo, test 351/351 đạt.
 - Thay đổi `components/ppa-unit-card.{tsx,css}` là phần “Gom biểu đồ PPA” có từ trước, không thuộc lần rà soát này — commit riêng nếu người dùng muốn.
 - Không commit `pnpm-lock.yaml` (dự án dùng `package-lock.json`).
 - Kiểm tra lại trước khi push: `npx tsc --noEmit`, `npm run lint`, `node --test tests/*.test.mjs`.
+# 2026-10-12 — Bảng PPA ngày mới nhất trước (local)
+
+- Bảng chi tiết hiển thị tháng mới nhất trước, các ngày trong tháng giảm dần. Ngày mới nhất là dòng dữ liệu đầu tiên.
+- Chỉ đổi thứ tự hiển thị bảng; giữ nguyên thứ tự biểu đồ và file Excel, không thay đổi dữ liệu gốc.
+- Kiểm tra TypeScript thành công. Người dùng đã yêu cầu xuất bản thay đổi này lên GitHub.
