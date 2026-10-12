@@ -50,4 +50,22 @@
 .ppa-card-data-scroll { overflow:auto; max-height:240px; margin-top:12px; }.ppa-card-data table { width:100%; min-width:320px; border-collapse:collapse; font-variant-numeric:tabular-nums; }.ppa-card-data :is(th,td) { text-align:right; padding:7px 4px; border-bottom:1px solid #edf0f5; }
 .ppa-card-footnote { margin:0; padding:0 20px 16px; font-size:9px; line-height:1.5; color:#8a95a6; }
 @media(max-width:1199px) { .ppa-unit-grid { grid-template-columns:1fr; }.ppa-rate-metrics strong { font-size:26px; }.ppa-rate-chart { max-height:240px; }.ppa-diff-chart { max-height:160px; } }
+.ppa-card-header { padding:12px 14px; gap:8px; }
+.ppa-unit-marker { width:32px; height:32px; }
+.ppa-rate-metrics { padding:12px 14px; gap:12px; }
+.ppa-rate-metrics > div + div { padding-left:12px; }
+.ppa-rate-metrics p { margin-bottom:4px; }
+.ppa-rate-metrics p span { display:inline; margin-left:4px; }
+.ppa-difference-summary { margin:0 14px; padding:9px 12px; }
+.ppa-difference-summary strong { font-size:21px; }
+.ppa-day-counts { padding:10px 14px 6px; }
+.ppa-day-bar { margin:0 14px 12px; }
+.ppa-chart-section { padding:12px 8px 8px; }
+.ppa-chart-legend { flex-wrap:wrap; gap:8px 12px; padding:4px 0; }
+.ppa-chart-legend i.over,.ppa-chart-legend i.met { width:8px; height:8px; border:0; border-radius:2px; background:#e58080; }
+.ppa-chart-legend i.met { background:#48a984; }
+.ppa-axis-note { text-align:center; font-size:9px; color:#768399; margin:4px 0 0; }
+.ppa-zero-line { stroke-dasharray:4 3; }
+.ppa-card-data { padding:10px 14px; }
+.ppa-card-footnote { padding:0 14px 12px; }
 @media print { .ppa-unit-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }.ppa-card-data { display:none; }.ppa-unit-card { break-inside:avoid; } }
