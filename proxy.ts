@@ -5,6 +5,7 @@ const PUBLIC_PATHS = new Set(["/login", "/api/auth/login"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (process.env.NODE_ENV === "development" && pathname === "/wb-preview") return NextResponse.next();
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;

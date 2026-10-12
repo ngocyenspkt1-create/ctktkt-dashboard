@@ -55,3 +55,13 @@ Chưa sửa logic ứng dụng vì chưa có lỗi runtime/test nào tái hiện
 - `npm run build`: exit 0, đủ 5 giai đoạn client/server/RSC/SSR.
 - Test đồng bộ NKVH, khoảng ngày và phân quyền: 12/12 đạt. Kiểm tra cuối bằng `npm test`: 344/344 đạt, 0 fail (28.7 giây), bao gồm test export từng bị thiếu jszip.
 - Visual QA trên trình duyệt và luồng dữ liệu production vẫn cần phiên đăng nhập và dữ liệu thật; chưa tuyên bố đã xác minh các luồng này.
+
+### /wb — Thiết kế local chờ người dùng duyệt
+
+- Thay stylesheet đang nạp sang `app/wb-design.css`: sidebar sáng, điểm nhấn xanh lam, KPI phẳng, tiêu đề gọn; tham khảo Shadcn Admin/Tabler trong `wb/README.md`.
+- Sửa màu tên/cương vị người dùng để đọc được trên sidebar sáng.
+- Thêm `/wb-preview` chỉ trong development, dữ liệu tĩnh minh họa, không truy cập database/API. Production trả notFound từ trang; proxy không mở route này ngoài development.
+- Dev server cổng 5173; đã kiểm tra trang đăng nhập và preview ở 1440px/390px. Mobile không tràn toàn trang; bảng có vùng cuộn riêng.
+- Lint các file sửa và TypeScript đạt. Không commit/push theo yêu cầu duyệt local trước.
+- Build production và toàn suite 344 test đạt sau thay đổi /wb.
+- Người dùng đã yêu cầu đẩy GitHub sau khi xem local; xuất bản theme /wb, trang preview development và tài liệu/ảnh tham khảo. Không đưa pnpm-lock.yaml phát sinh trong điều tra vào commit.

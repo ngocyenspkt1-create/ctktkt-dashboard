@@ -1,0 +1,100 @@
+/* /wb direction: Shadcn Admin navigation + Tabler data hierarchy.
+   Original implementation; no third-party template source copied. */
+:root {
+  --font-sans: "Bahnschrift", "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Code", Consolas, monospace;
+  --app-bg: #f5f7fb; --background: #f5f7fb; --foreground: #18243b;
+  --primary: #245cdb; --accent: #edf3ff; --border: #e2e7ef; --ring: #245cdb;
+  --nav-bg: #fff; --nav-hover: #f3f6fb; --nav-text: #58657b; --nav-active: #245cdb;
+}
+body { font-family: "Bahnschrift", "Segoe UI", sans-serif; }
+@theme inline {
+  --font-sans: "Bahnschrift", "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Code", Consolas, monospace;
+}
+.app-sidebar,.app-mobile-nav { background: #fff; color: #58657b; border-color: #e2e7ef; }
+.app-sidebar { border-right: 1px solid #e2e7ef; box-shadow: none; }
+.app-sidebar-brand { border-bottom: 1px solid #edf0f5; }
+.control-brand-mark { background: #245cdb; color: #fff; border-radius: 11px; box-shadow: 0 4px 10px #245cdb26; }
+.app-brand-title { color: #18243b; font-size: 14px; letter-spacing: .025em; }
+.app-brand-subtitle { color: #7a8598; margin-top: 4px; font-size: 11px; }
+.control-workspace-label { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 0; color: #7c879a; font-size: 9px; letter-spacing: .08em; }
+.control-workspace-label span { padding: 3px 6px; border: 1px solid #e2e7ef; border-radius: 4px; color: #58657b; font-size: 9px; }
+.app-nav-group { color: #8590a2; font-size: 10px; letter-spacing: .09em; }
+.app-nav .app-nav-link { border-radius: 7px; color: #58657b; padding: 10px 12px; font-size: 13px; }
+.app-nav .app-nav-link svg { color: #8994a7; }
+.app-nav .app-nav-link:hover { color: #18243b; background: #f3f6fb; }
+.app-nav .app-nav-link:hover svg { color: #245cdb; }
+.app-nav .app-nav-link[aria-current="page"] { background: #edf3ff; color: #245cdb; border-color: #dce7fc; box-shadow: none; }
+.app-nav .app-nav-link[aria-current="page"] svg { color: #245cdb; }
+.app-nav .app-nav-link[aria-current="page"] > span:last-child:not(:first-of-type) { background: #245cdb; }
+.app-sidebar-footer { border-top: 1px solid #edf0f5; }
+.app-user-card { background: #f7f9fc; border: 1px solid #e9edf3; }
+.app-user-name { color: #24334c; }
+.app-user-role { color: #6d7b91; }
+.app-user-card a:hover { color: #245cdb; background: #e6edfb; }
+.app-mobile-nav > button { color: #58657b; }
+.app-header,.app-workspace:has(.engineering-workspace) .app-header { height: 74px; background: #fff; border-color: #e2e7ef; box-shadow: none; }
+.app-header h1 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+.app-header input[role="combobox"] { background: #f7f9fc; border-color: #e2e7ef; border-radius: 7px; }
+.app-content { padding-top: 24px; }
+.app-content :is(button,a,input,textarea,select):focus-visible,
+.app-content :is(input,textarea,select):not(:disabled):not([readonly]):focus-visible { outline: 2px solid #245cdb; outline-offset: 2px; }
+.app-content .ui-3d-card:hover { transform: none; }
+.app-content :is(.monthly-heading,.monthly-toolbar,.monthly-overview,.monthly-range,.monthly-stat,.module-hero,.module-chart-grid > div) { background: #fff; border: 1px solid #e2e7ef; border-radius: 10px; box-shadow: 0 2px 4px #18243b03; }
+.app-content .monthly-heading { padding: 24px; gap: 16px; border-left: 4px solid #245cdb; }
+.app-content .monthly-heading::before,.app-content .monthly-heading::after { display: none; }
+.app-content .monthly-heading h2 { color: #18243b; font-size: clamp(24px,2.3vw,32px); font-weight: 600; letter-spacing: -.04em; }
+.app-content .monthly-heading h2 + p { color: #6d7b91; font-size: 13px; }
+.app-content .monthly-eyebrow { color: #245cdb; font-size: 10px; letter-spacing: .12em; }
+.app-content .monthly-heading-icon { width: 50px; height: 50px; background: #edf3ff; border: 1px solid #dce7fc; color: #245cdb; border-radius: 10px; box-shadow: none; }
+.app-content .monthly-heading-icon svg { width: 24px; height: 24px; }
+.app-content .monthly-period-badge { background: #f7f9fc; color: #45566f; border: 1px solid #e2e7ef; border-radius: 7px; padding: 10px 14px; font-size: 13px; }
+.app-content .monthly-toolbar { padding: 18px 20px; }
+.app-content .monthly-stat { --stat-color: #245cdb; padding: 20px; gap: 14px; }
+.app-content .monthly-stat:nth-child(2) { --stat-color: #168563; }
+.app-content .monthly-stat:nth-child(3) { --stat-color: #bd7a1d; }
+.app-content .monthly-stat:nth-child(4) { --stat-color: #64748b; }
+.app-content .monthly-stat:has(.text-red-700) { --stat-color: #dc2626; border-color: #fecaca; }
+.app-content .monthly-stat::before,.app-content .monthly-stat::after { display: none; }
+.app-content .monthly-stat p:first-child { color: #18243b; font-size: 30px; font-weight: 600; letter-spacing: -.03em; }
+.app-content .monthly-stat p:last-child { font-size: 12px; color: #6d7b91; }
+.app-content .monthly-stat-icon { width: 42px; height: 42px; border-radius: 9px; }
+.app-content .monthly-overview-header { padding: 20px 24px 12px; }
+.app-content .monthly-overview-canvas { background: #fff; }
+.app-content .monthly-table-heading { background: #fff; padding: 20px 24px; border-bottom: 1px solid #e2e7ef; }
+.app-content .monthly-table-heading h3 { color: #18243b; font-size: 18px; }
+.app-content .monthly-table-heading h3 svg { color: #245cdb; }
+.app-content .monthly-table-heading p { color: #6d7b91; }
+.app-content .monthly-chart-hint { color: #58657b; background: #f7f9fc; border-color: #e2e7ef; }
+.app-content .monthly-group-tabs [role="tab"][data-state="active"] { background: #245cdb; border-color: #245cdb; box-shadow: none; }
+.app-content .monthly-group-tabs [role="tab"][data-state="active"]:hover { background: #1e4fbd; }
+.app-content .monthly-grid thead th { background: #eef2f8; color: #45566f; }
+.app-content .monthly-grid tfoot td { background: #e8f0ff; color: #274e95; }
+.app-content .monthly-grid tbody td:first-child { background: #f6f8fc; color: #58657b; }
+.engineering-workspace { --module-accent: #245cdb; }
+.engineering-workspace .module-heading-copy { background: #f7f9fc; border: 1px solid #e2e7ef; border-radius: 7px; padding: 18px 20px; color: #18243b; }
+.engineering-workspace .module-heading-copy :is(h1,h2) { color: #18243b; font-size: 23px; letter-spacing: -.03em; }
+.engineering-workspace .module-heading-copy :is(p,span):not([class*="bg-"]) { color: #6d7b91; }
+.engineering-workspace .module-heading-copy :is(p,span)[class*="uppercase"] { color: #245cdb; }
+.engineering-workspace .module-section-heading { background: #f7f9fc; border-color: #e2e7ef; border-left-color: #245cdb; }
+.engineering-workspace .module-page-tabs button[aria-pressed="true"] { background: #245cdb; box-shadow: none; }
+.engineering-workspace .report-data-table thead th { background: #eef2f8; color: #45566f; }
+.auth-hero { background: #15294b; }
+.auth-hero h2 { font-size: clamp(34px,3.5vw,48px); letter-spacing: -.04em; }
+.auth-form-panel { background: #f5f7fb; }
+.auth-form-panel > form { border-radius: 12px; border-color: #e2e7ef; box-shadow: 0 8px 32px #15294b08; }
+.wb-preview-chart { padding: 12px 24px 20px; }
+.wb-preview-chart svg { width: 100%; height: 200px; }
+@media (max-width: 767px) {
+  .app-header,.app-workspace:has(.engineering-workspace) .app-header { height: 66px; }
+  .app-content { padding-top: 16px; }
+  .app-content .monthly-heading { padding: 18px; }
+  .app-content .monthly-stat { padding: 14px 12px; gap: 10px; }
+  .app-content .monthly-stat p:first-child { font-size: 25px; }
+  .app-content .monthly-stat-icon { width: 32px; height: 32px; }
+}
+@media print {
+  .app-content .monthly-heading,.engineering-workspace .module-heading-copy { background: white; border: 0; }
+  .app-content .monthly-heading :is(h2,p),.engineering-workspace .module-heading-copy :is(h1,h2,p,span) { color: black !important; }
+}
