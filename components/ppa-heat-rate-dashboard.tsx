@@ -2,7 +2,9 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { PpaUnitCard } from "@/components/ppa-unit-card";
+import { PpaNotePreview } from "@/components/ppa-note-preview";
 import "./ppa-detail-table.css";
+import "./ppa-controls.css";
 import { DateField } from "@/components/ui/date-field";
 import { GoogleSheetSyncButton } from "@/components/google-sheet-sync-button";
 import { CAPACITY_KW, calculateActualHeatRate, calculatePpaHeatRateDetailed, compareHeatRate, ppaCurveForYear, type PpaSourceData, type UnitDetail } from "@/lib/ppa-heat-rate";
@@ -53,20 +55,6 @@ const formatPercent = (value: number | null | undefined) => value === null || va
 const shortDate = (iso: string) => iso.split("-").reverse().slice(0, 2).join("/");
 const fullDate = (iso: string) => iso.split("-").reverse().join("/");
 const monthLabel = (period: string) => `Tháng ${period.slice(5, 7)}/${period.slice(0, 4)}`;
-
-function ExpandableNote({ note }: { note: string }) {
-  if (!note.trim()) return <span className="text-slate-400">—</span>;
-
-  return <details className="group min-w-0">
-    <summary
-      className="block min-w-0 cursor-pointer list-none rounded-md px-1 py-0.5 outline-none transition hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#4c78a8] [&::-webkit-details-marker]:hidden"
-      title="Bấm để xem đầy đủ nội dung"
-    >
-      <span className="block truncate leading-5 group-open:hidden">{note}</span>
-      <span className="hidden whitespace-pre-wrap break-words leading-5 [overflow-wrap:anywhere] group-open:block">{note}</span>
-    </summary>
-  </details>;
-}
 
 function periodsBetween(from: string, to: string) {
   const periods: string[] = [];
@@ -539,26 +527,24 @@ export function PpaHeatRateDashboard() {
       onFillMissing={() => { setExportMissingOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
       onExportAnyway={continuePpaExport}
     />
-    <div className="module-hero flex flex-wrap items-end justify-between gap-3">
-      <div className="module-heading-copy">
+    <div className="ppa-controls">
+      <div className="ppa-control-heading">
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Theo dõi hiệu suất vận hành</p>
-        <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-[#18233d]">So sánh trực quan SHN Thực tế và PPA</h1>
-        <p className="mt-1 text-sm text-slate-500">Tổng hợp từ kết quả đã lưu theo ngày. Chọn khoảng thời gian để xem biểu đồ và bảng chi tiết.</p>
+        <h1>So sánh suất hao nhiệt thực tế & PPA</h1>
+        <p className="ppa-control-description">Kết quả theo ngày · S1, S2 và toàn nhà máy</p>
       </div>
-      <div className="flex flex-wrap items-end justify-end gap-2">
-        <label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐẨY GOOGLE SHEET<DateField value={sheetDate} onChange={setSheetDate} className="w-[180px]"/></label>
-        <GoogleSheetSyncButton operatingDate={sheetDate} disabled={!hasSavedPpaForSheet || !hasAvailableCapacityForSheet} disabledReason={sheetDisabledReason} onImported={() => loadRange(fromDate, toDate, false)}/>
-        <button type="button" disabled={exporting || loading || !rows.length} onClick={requestExportXlsx} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50">{exporting ? "Đang xuất…" : "Xuất kết quả (.xlsx)"}</button>
+      <div className="ppa-sheet-row">
+        <label>Ngày Google Sheet<DateField value={sheetDate} onChange={setSheetDate} className="w-[150px]"/></label>
+        <GoogleSheetSyncButton compact operatingDate={sheetDate} disabled={!hasSavedPpaForSheet || !hasAvailableCapacityForSheet} disabledReason={sheetDisabledReason} onImported={() => loadRange(fromDate, toDate, false)}/>
+        <button type="button" disabled={exporting || loading || !rows.length} onClick={requestExportXlsx} className="ppa-export-button">{exporting ? "Đang xuất…" : "Xuất Excel (.xlsx)"}</button>
       </div>
     </div>
 
-    <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="ppa-range-controls">
       <label className="grid gap-1 text-xs font-bold text-slate-600">TỪ NGÀY<DateField value={fromDate} max={toDate} onChange={setFromDate} className="w-[150px]"/></label>
       <label className="grid gap-1 text-xs font-bold text-slate-600">ĐẾN NGÀY<DateField value={toDate} min={fromDate} max={today} onChange={setToDate} className="w-[150px]"/></label>
       <button type="button" onClick={applyManualRange} className="h-10 rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-4 text-sm font-bold text-[#354a9f]">Áp dụng</button>
-      <div className="mx-1 h-8 w-px bg-slate-200"/>
-      <button type="button" onClick={() => applyQuick("last15")} className={`h-10 rounded-xl px-4 text-sm font-bold ${rangeLabel === "15 ngày gần nhất" ? "bg-[#4057b5] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>15 ngày gần nhất</button>
-      <button type="button" onClick={() => applyQuick("all")} className={`h-10 rounded-xl px-4 text-sm font-bold ${rangeLabel === "Xem tất cả" ? "bg-[#4057b5] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>Xem tất cả</button>
+      <div className="ppa-range-presets"><button type="button" onClick={() => applyQuick("last15")} aria-pressed={rangeLabel === "15 ngày gần nhất"}>15 ngày gần nhất</button><button type="button" onClick={() => applyQuick("all")} aria-pressed={rangeLabel === "Xem tất cả"}>Tất cả</button></div>
       <p className="ml-auto text-xs font-semibold text-slate-500">{loading ? "Đang tải…" : `${rows.length} ngày có kết quả đã lưu`}</p>
     </div>
 
@@ -639,7 +625,7 @@ export function PpaHeatRateDashboard() {
                     <div className="flex items-center justify-between gap-1">
                       <div className="min-w-0 flex-1">
                         {row.noteS1 ? (
-                          <ExpandableNote note={row.noteS1} />
+                          <PpaNotePreview date={row.date} noteS1={row.noteS1} noteS2={row.noteS2} unit="s1" />
                         ) : canEdit ? (
                           <button
                             type="button"
@@ -669,7 +655,7 @@ export function PpaHeatRateDashboard() {
                     <div className="flex items-center justify-between gap-1">
                       <div className="min-w-0 flex-1">
                         {row.noteS2 ? (
-                          <ExpandableNote note={row.noteS2} />
+                          <PpaNotePreview date={row.date} noteS1={row.noteS1} noteS2={row.noteS2} unit="s2" />
                         ) : canEdit ? (
                           <button
                             type="button"

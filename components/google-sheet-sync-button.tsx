@@ -10,7 +10,7 @@ const URL_KEY = "ctktkt-google-script-url";
 const TOKEN_KEY = "ctktkt-google-script-token";
 type PreviewResponse = { configured?: boolean; preview?: GoogleSheetDayPayload; error?: string; results?: unknown };
 
-export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = false, disabledReason: disabledReasonProp = "", onImported }: { operatingDate: string; disabled?: boolean; disabledReason?: string; onImported?: () => void | Promise<void> }) {
+export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = false, disabledReason: disabledReasonProp = "", onImported, compact = false }: { operatingDate: string; disabled?: boolean; disabledReason?: string; onImported?: () => void | Promise<void>; compact?: boolean }) {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "sync_google_sheet");
   const disabled = disabledProp || isViewer;
@@ -148,9 +148,9 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
   const displayDate = operatingDate.split("-").reverse().join("/");
 
   return <>
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex gap-1">
-        <button type="button" disabled={loading || disabled} onClick={() => void pushGoogleSheet()} title={disabled ? disabledReason : `Đẩy ngay dữ liệu ngày ${displayDate} lên Google Sheet`} className="h-10 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80">{loading ? "Đang đẩy…" : `Đẩy Google Sheet · ${displayDate}`}</button>
+    <div className="google-sheet-actions flex flex-col items-end gap-1">
+      <div className="google-sheet-buttons flex flex-wrap gap-1">
+        <button type="button" disabled={loading || disabled} onClick={() => void pushGoogleSheet()} title={disabled ? disabledReason : `Đẩy ngay dữ liệu ngày ${displayDate} lên Google Sheet`} className="h-10 whitespace-nowrap rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80">{loading ? "Đang đẩy…" : compact ? "Đẩy Google Sheet" : `Đẩy Google Sheet · ${displayDate}`}</button>
         <a href={GOOGLE_SHEET_VIEW_URL} target="_blank" rel="noopener noreferrer" title="Mở bảng Google Sheet trong tab mới" className="inline-flex h-10 items-center whitespace-nowrap rounded-xl border border-blue-300 bg-blue-50 px-3 text-sm font-bold text-blue-800 shadow-sm hover:bg-blue-100">Mở Google Sheet</a>
         <button type="button" disabled={loading || disabled} onClick={startHistoricalImport} title={disabled ? disabledReason : "Nhập một lần các đánh giá S1/S2 cũ từ Google Sheet về web"} className="h-10 whitespace-nowrap rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-bold text-amber-800 shadow-sm disabled:opacity-60">Nhập đánh giá cũ</button>
         {!serverConfigured && <button type="button" onClick={() => { setError(""); setSettingsOpen(true); }} aria-label="Cài đặt đồng bộ Google Sheet" title="Cài đặt Google Sheet dự phòng" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">⚙</button>}

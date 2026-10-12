@@ -101,4 +101,22 @@ Chưa sửa logic ứng dụng vì chưa có lỗi runtime/test nào tái hiện
 - Bỏ min-width 2600px, dùng bảng 100% với min-width 1000px, tỷ lệ cột và chữ 11px; ngày dd/MM, năm ở nhóm tháng và tooltip ngày đầy đủ. Nhận xét vẫn mở rộng/được sửa theo quyền hiện có.
 - Preview desktop 1440px: table 1124.7px nằm trong container 1125px, đủ 17 cột. Màn hình nhỏ vẫn cuộn riêng bảng; chưa đổi format xuất Excel hoặc API.
 - Lint component, TypeScript, build production và 350 test đạt; ảnh `wb/ppa-table-compact.png`. Người dùng đã duyệt và yêu cầu đẩy GitHub.
+
+### Khung nhận xét khi rê chuột
+
+- Thay nội dung details ở ô nhận xét PPA bằng PpaNotePreview: hover/focus/chạm mở bảng nổi với đầy đủ nhận xét S1/S2 và ngày. Giữ các nút chỉnh sửa theo quyền hiện có.
+- Popover portal tránh bị cắt bởi overflow bảng; desktop ưu tiên bên trái, màn hình dưới 768px ưu tiên phía trên; có nút đóng, Escape, giới hạn chiều cao và cuộn nội dung dài.
+- Khi test live preview, phát hiện hydration mismatch do SVG title gồm nhiều text node. Đã đổi title trong PPA/PMIS sang một chuỗi duy nhất; preview sau reload mở popup bình thường.
+- Đã kiểm tra bằng trình duyệt: mở bằng click, đủ hai nhận xét nhiều dòng, popup không tràn viewport 566px, đóng được. Hover có handler open/close và đệm 180ms để chuyển chuột vào popup.
+- Lint/TypeScript đạt; ảnh `wb/ppa-note-hover.png`. Preview tương tác cần `?live=1#ppa-notes-design` vì preview tĩnh không nạp JavaScript.
+- Bản sửa đang local, chưa commit/push.
+
+### Thu gọn tiêu đề và toolbar PPA
+
+- Bỏ khối tiêu đề gradient lớn ở khu thao tác PPA, dùng tiêu đề 21px, mô tả ngắn và hàng Google Sheet riêng.
+- Ngày Google Sheet, các nút đẩy/mở/nhập/cài đặt cùng hàng, nút xuất Excel ở cuối. Compact GoogleSheetSyncButton bỏ ngày lặp trong nhãn nút, giữ ngày trong title và giữ chức năng/phân quyền.
+- Bộ lọc từ/đến, Áp dụng, preset 15 ngày/Tất cả và số ngày bố trí cùng hàng; preset có aria-pressed. Mobile xuống hàng theo nhóm, chiều cao nút 36px.
+- Lint/TypeScript đạt, build đạt; 12 test Google Sheet đạt. Preview minh họa `/wb-preview#ppa-toolbar-design`, ảnh `wb/ppa-toolbar-compact.png`.
+- Chưa commit/push; không thực hiện đẩy Google Sheet thật trong quá trình thử giao diện.
+- Người dùng đã duyệt và yêu cầu đẩy GitHub: xuất bản nhận xét nổi, toolbar PPA gọn và sửa SVG hydration cùng ảnh minh họa. Các ghi chú local phía trên phản ánh thời điểm trước lần xuất bản này.
 - Người dùng yêu cầu đẩy GitHub: xuất bản tối ưu preview và các thiết kế PPA/PMIS cùng test, tài liệu và ảnh. Các ghi chú “chưa push” phía trên là trạng thái tại thời điểm triển khai; lần xuất bản này bao gồm cả ba phần. Cache `.sites-runtime` và pnpm-lock.yaml điều tra không được đưa vào commit.

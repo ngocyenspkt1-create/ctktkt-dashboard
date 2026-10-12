@@ -23,7 +23,7 @@ export function PmisTrendPanels({metrics,series}:{metrics:Metric[];series:Series
         {valid>0?<svg viewBox="0 0 470 113" role="img" aria-label={`${metric.label} ${unit.toUpperCase()}, đơn vị ${metric.unit}`}>
           {[min,(min+max)/2,max].map((v,i)=><g key={i}><line x1="56" x2="450" y1={y(v)} y2={y(v)} className="pmis-trend-gridline"/><text x="48" y={y(v)+3} textAnchor="end">{axisFormat.format(v)}</text></g>)}
           {buildRatePaths(values,x,y).map((d,i)=><path key={i} d={d} className="pmis-trend-path"/>)}
-          {values.map((v,i)=><g key={i}>{v!==null && Number.isFinite(v) && <circle cx={x(i)} cy={y(v)} r="2.6" className="pmis-trend-point"><title>{shortDate(points[i].date)}: {format.format(v)} {metric.unit}</title></circle>}{(i===0||i===points.length-1||i%Math.max(1,Math.ceil(points.length/5))===0)&&<text x={x(i)} y="107" textAnchor="middle">{shortDate(points[i].date)}</text>}</g>)}
+          {values.map((v,i)=><g key={i}>{v!==null && Number.isFinite(v) && <circle cx={x(i)} cy={y(v)} r="2.6" className="pmis-trend-point"><title>{`${shortDate(points[i].date)}: ${format.format(v)} ${metric.unit}`}</title></circle>}{(i===0||i===points.length-1||i%Math.max(1,Math.ceil(points.length/5))===0)&&<text x={x(i)} y="107" textAnchor="middle">{shortDate(points[i].date)}</text>}</g>)}
         </svg>:<div className="pmis-trend-empty">Không có dữ liệu trong khoảng ngày đã chọn</div>}
       </section>;
     })}
