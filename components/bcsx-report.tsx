@@ -731,7 +731,7 @@ export function BcsxReport() {
     </div>
 
     {/* 1. Bảng thông số nửa giờ — 3 Ca song song không cần cuộn */}
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="bcsx-half-hour-font rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="module-section-heading flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#173b64]">
