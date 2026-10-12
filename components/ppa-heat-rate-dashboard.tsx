@@ -73,8 +73,8 @@ function ExpandableNote({ note }: { note: string }) {
       className="block min-w-0 cursor-pointer list-none rounded-md px-1 py-0.5 outline-none transition hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#4c78a8] [&::-webkit-details-marker]:hidden"
       title="Bấm để xem đầy đủ nội dung"
     >
-      <span className="block truncate leading-4 group-open:hidden">{note}</span>
-      <span className="hidden whitespace-pre-wrap break-words leading-4 [overflow-wrap:anywhere] group-open:block">{note}</span>
+      <span className="block truncate leading-5 group-open:hidden">{note}</span>
+      <span className="hidden whitespace-pre-wrap break-words leading-5 [overflow-wrap:anywhere] group-open:block">{note}</span>
     </summary>
   </details>;
 }
@@ -635,14 +635,14 @@ export function PpaHeatRateDashboard() {
     </div>
 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2></div>
-      {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="module-table-scroll w-full overflow-auto">
-        <table className="report-data-table w-full table-fixed border-collapse text-[10px] [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-slate-200 xl:text-[11px]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2><span className="text-xs text-slate-500">Cuộn ngang để xem đầy đủ các cột</span></div>
+      {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="module-table-scroll w-full min-w-0 max-w-full overflow-x-scroll overflow-y-auto" tabIndex={0} role="region" aria-label="Bảng PPA theo ngày, cuộn ngang để xem các cột">
+        <table className="report-data-table w-full min-w-[2600px] table-fixed border-collapse text-sm leading-5 [&_td]:border-r [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-2 [&_td]:tabular-nums [&_td:nth-child(-n+18)]:whitespace-nowrap [&_th]:border-r [&_th]:border-slate-200 [&_th]:px-2 [&_th]:py-2">
           <colgroup>
-            <col style={{ width: "5%" }}/>
-            {Array.from({ length: 17 }, (_, index) => <col key={index} style={{ width: "3.94%" }}/>) }
-            <col style={{ width: "14%" }}/>
-            <col style={{ width: "14%" }}/>
+            <col style={{ width: 136 }}/>
+            {Array.from({ length: 17 }, (_, index) => <col key={index} style={{ width: 112 }}/>) }
+            <col style={{ width: 280 }}/>
+            <col style={{ width: 280 }}/>
           </colgroup>
           <thead>
             <tr className="bg-[#dcebf5] text-[#173b64]">
@@ -659,10 +659,10 @@ export function PpaHeatRateDashboard() {
           </thead>
           <tbody>
             {rowsByMonth.map(([period, monthRows]) => <Fragment key={period}>
-              <tr className="bg-slate-100"><td colSpan={20} className="px-2 py-1.5 text-left text-[11px] font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
+              <tr className="bg-slate-100"><td colSpan={20} className="px-2 py-1.5 text-left text-[13px] font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
               {monthRows.map(row => {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
-                const statusBadge = (status: string) => <span className={`rounded-full px-1 py-0.5 text-[9px] font-extrabold ${status === "Đạt" ? "bg-emerald-100 text-emerald-800" : status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-500"}`}>{status === "Chưa đủ dữ liệu" ? "—" : status === "Vượt PPA" ? "Vượt" : "Đạt"}</span>;
+                const statusBadge = (status: string) => <span className={`rounded-full px-2 py-0.5 text-[13px] font-extrabold ${status === "Đạt" ? "bg-emerald-100 text-emerald-800" : status === "Vượt PPA" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-500"}`}>{status === "Chưa đủ dữ liệu" ? "—" : status === "Vượt PPA" ? "Vượt" : "Đạt"}</span>;
                 return <tr id={`ppa-row-${row.date}`} key={row.date} className="border-t border-slate-200 hover:bg-slate-50/60">
                   <td className="whitespace-nowrap px-0.5 py-1 text-center font-bold text-black">
                     {canEdit ? (
@@ -694,7 +694,7 @@ export function PpaHeatRateDashboard() {
                           <button
                             type="button"
                             onClick={() => openEditNote(row)}
-                            className="text-[10px] italic text-blue-600/70 hover:text-blue-900 hover:underline"
+                            className="text-[13px] italic text-blue-600/70 hover:text-blue-900 hover:underline"
                             title="Bổ sung nhận xét S1"
                           >
                             + Nhận xét
@@ -707,7 +707,7 @@ export function PpaHeatRateDashboard() {
                         <button
                           type="button"
                           onClick={() => openEditNote(row)}
-                          className="shrink-0 rounded p-0.5 text-[10px] text-blue-600 opacity-40 transition hover:bg-blue-200 hover:opacity-100"
+                          className="shrink-0 rounded p-0.5 text-[13px] text-blue-600 opacity-40 transition hover:bg-blue-200 hover:opacity-100"
                           title={`Chỉnh sửa nhận xét ngày ${fullDate(row.date)}`}
                         >
                           ✏️
@@ -724,7 +724,7 @@ export function PpaHeatRateDashboard() {
                           <button
                             type="button"
                             onClick={() => openEditNote(row)}
-                            className="text-[10px] italic text-amber-700/70 hover:text-amber-900 hover:underline"
+                            className="text-[13px] italic text-amber-700/70 hover:text-amber-900 hover:underline"
                             title="Bổ sung nhận xét S2"
                           >
                             + Nhận xét
@@ -737,7 +737,7 @@ export function PpaHeatRateDashboard() {
                         <button
                           type="button"
                           onClick={() => openEditNote(row)}
-                          className="shrink-0 rounded p-0.5 text-[10px] text-amber-700 opacity-40 transition hover:bg-amber-200 hover:opacity-100"
+                          className="shrink-0 rounded p-0.5 text-[13px] text-amber-700 opacity-40 transition hover:bg-amber-200 hover:opacity-100"
                           title={`Chỉnh sửa nhận xét ngày ${fullDate(row.date)}`}
                         >
                           ✏️
