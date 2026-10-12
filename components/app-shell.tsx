@@ -11,10 +11,10 @@ import { MobileNav, QuickSearch, SidebarNav } from "@/components/app-navigation"
 function Brand() {
   return (
     <Link href="/" className="app-brand flex items-center gap-3">
-      <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-blue-900/20"><Zap className="size-5" aria-hidden /></span>
+      <span className="control-brand-mark grid size-10 place-items-center"><Zap className="size-5" aria-hidden /></span>
       <span className="leading-tight">
-        <span className="app-brand-title block text-base font-bold">Vận hành 1</span>
-        <span className="app-brand-subtitle block text-xs">NMNĐ Duyên Hải 1</span>
+        <span className="app-brand-title block text-base font-bold">DUYÊN HẢI 1</span>
+        <span className="app-brand-subtitle block text-xs">Phân xưởng Vận hành 1</span>
       </span>
     </Link>
   );
@@ -35,6 +35,7 @@ export async function AppShell({ children, active }: { children: ReactNode; acti
       <div className="app-workspace min-h-screen bg-[var(--app-bg)] text-slate-900">
         <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-64 flex-col lg:flex">
           <div className="app-sidebar-brand flex h-20 items-center px-5"><Brand /></div>
+          <div className="control-workspace-label"><span aria-hidden>01</span> QUẢN LÝ KỸ THUẬT</div>
           <div className="flex-1 overflow-y-auto px-3 py-5">
             <SidebarNav active={active} isAdmin={isAdmin} />
           </div>
