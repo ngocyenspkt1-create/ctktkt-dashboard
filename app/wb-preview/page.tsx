@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, CheckCircle2, Database, PencilLine, Save, TriangleAlert, Zap } from "lucide-react";
-import { visibleGroups } from "@/lib/navigation";
+import { SidebarNav } from "@/components/app-navigation";
 import "@/components/daily-production-table.css";
 import { PpaDesignPreview } from "@/components/ppa-design-preview";
 import { PmisTrendPanels } from "@/components/pmis-trend-panels";
@@ -23,7 +23,7 @@ export default function WbPreview() {
     <aside className="app-sidebar fixed inset-y-0 left-0 hidden w-64 flex-col lg:flex">
       <div className="app-sidebar-brand flex h-20 items-center gap-3 px-5"><span className="control-brand-mark grid size-10 place-items-center"><Zap className="size-5" /></span><div><span className="app-brand-title block font-bold">DUYÊN HẢI 1</span><span className="app-brand-subtitle block">Phân xưởng Vận hành 1</span></div></div>
       <div className="control-workspace-label">KHÔNG GIAN LÀM VIỆC <span>PXVH1</span></div>
-      <nav className="app-nav flex flex-1 flex-col gap-6 overflow-auto px-3 py-5" aria-label="Chức năng minh họa">{visibleGroups(false).map(group => <div key={group.title}><p className="app-nav-group px-3 pb-2 font-semibold uppercase">{group.title}</p><ul className="space-y-1">{group.items.map(item => <li key={item.key}><Link className="app-nav-link flex items-center gap-3" href={item.href} aria-current={item.key === "data" ? "page" : undefined}><item.icon className="size-[18px]" /><span>{item.label}</span></Link></li>)}</ul></div>)}</nav>
+      <div className="flex-1 overflow-y-auto px-3 py-5"><SidebarNav active="data" isAdmin={false} /></div>
       <div className="app-sidebar-footer p-4 text-xs text-slate-500">Bản duyệt giao diện · /wb</div>
     </aside>
     <div className="lg:pl-64">

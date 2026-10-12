@@ -161,6 +161,62 @@ input[readonly] {
 .app-user-card { background: rgb(0 21 40 / 22%); }
 .app-user-card a:hover { background: var(--nav-hover); color: #fff; }
 .app-mobile-nav > button { color: #e2e8f0; }
+
+/* Hiệu ứng menu bên (12/10/2026, theo web theo dõi độ rung — nav-fx.js): thanh sáng trượt + nhóm mở/thu mượt, mục hiện lần lượt. */
+.app-nav-glow,
+.app-nav-glow-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  border-radius: 12px;
+  opacity: 0;
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), width 0.38s cubic-bezier(0.22, 1, 0.36, 1), height 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
+}
+.app-nav-glow {
+  z-index: 0;
+  background: linear-gradient(90deg, rgb(64 158 255 / 24%), rgb(64 158 255 / 8%) 70%, transparent);
+}
+.app-nav-glow.is-active { background: transparent; }
+/* Vạch phát sáng bên trái nằm trên mục, kể cả mục đang chọn (nền xanh đậm). */
+.app-nav-glow-bar { z-index: 2; }
+.app-nav-glow-bar::before {
+  content: "";
+  position: absolute;
+  top: 24%;
+  bottom: 24%;
+  left: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: #7cc0ff;
+  box-shadow: 0 0 10px 1px rgb(124 192 255 / 80%), 0 0 24px 5px rgb(64 158 255 / 35%);
+  opacity: 0.6;
+  transition: opacity 0.25s, top 0.3s, bottom 0.3s;
+}
+.app-nav-glow-bar.is-active::before { opacity: 1; top: 18%; bottom: 18%; background: #e0f2fe; }
+.app-nav .app-nav-link { position: relative; z-index: 1; transition: color 0.2s, transform 0.2s; }
+.app-nav .app-nav-link:not([aria-current="page"]):hover { background: transparent; transform: translateX(3px); }
+.app-nav-group-toggle { cursor: pointer; text-align: left; }
+.app-nav-group-toggle:hover .app-nav-group { color: #fff; }
+.app-nav-rule { flex: 1; height: 1px; background: linear-gradient(90deg, rgb(178 195 216 / 30%), transparent); }
+.app-nav-chevron { color: #b2c3d8; transform: rotate(90deg); transition: transform 0.25s, color 0.2s; }
+.app-nav-group-toggle[aria-expanded="false"] .app-nav-chevron { transform: none; }
+.app-nav-group-toggle:hover .app-nav-chevron { color: #7cc0ff; }
+.app-nav-items {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
+}
+.app-nav-items[data-collapsed="true"] { grid-template-rows: 0fr; opacity: 0; }
+/* Đệm để bóng của mục đang chọn và dịch chuyển khi rê chuột không bị cắt. */
+.app-nav-items > ul { min-height: 0; overflow: hidden; margin: -2px -6px -8px; padding: 2px 6px 8px; }
+.app-nav-fx-in { animation: app-nav-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--fx-i, 0) * 45ms); }
+@keyframes app-nav-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .app-nav-glow, .app-nav-glow-bar, .app-nav-items, .app-nav .app-nav-link, .app-nav-fx-in { transition: none !important; animation: none !important; }
+  .app-nav .app-nav-link:not([aria-current="page"]):hover { background: var(--nav-hover); transform: none; }
+}
 .app-header { box-shadow: 0 2px 10px rgb(15 23 42 / 3%); }
 .app-content { min-width: 0; }
 .app-content :is(h1, h2, h3) { text-wrap: balance; }

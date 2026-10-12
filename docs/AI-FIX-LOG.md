@@ -161,3 +161,17 @@ Sau khi sửa: tsc sạch, lint 0 lỗi/12 cảnh báo, test 351/351 đạt.
 - Bảng chi tiết hiển thị tháng mới nhất trước, các ngày trong tháng giảm dần. Ngày mới nhất là dòng dữ liệu đầu tiên.
 - Chỉ đổi thứ tự hiển thị bảng; giữ nguyên thứ tự biểu đồ và file Excel, không thay đổi dữ liệu gốc.
 - Kiểm tra TypeScript thành công. Người dùng đã yêu cầu xuất bản thay đổi này lên GitHub.
+
+# 2026-10-12 — Hiệu ứng menu bên theo web theo dõi độ rung (local, chưa đẩy GitHub)
+
+Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi đã làm bên web theo dõi độ rung» (nguồn: `nav-fx.js` + khối CSS «Sidebar UI v2» trong `ui.css` của dự án VibraControl).
+
+- `components/app-navigation.tsx` (`NavList`, dùng chung cho thanh bên máy tính và menu điện thoại):
+  - Thanh sáng (`.app-nav-glow` nền mờ + `.app-nav-glow-bar` vạch phát sáng bên trái) trượt mượt tới mục đang rê chuột/focus; rời menu thì trượt về mục đang mở; đổi trang thì trượt tới mục mới. Lần đặt đầu tiên không có chuyển động.
+  - Tiêu đề nhóm thành nút thu/mở (`aria-expanded`, `aria-controls`, mũi tên xoay). Chiều cao trượt mượt bằng `grid-template-rows 1fr↔0fr`; nhóm thu được đặt `inert` để không Tab vào. Khi mở, các mục hiện lần lượt (trễ 45 ms/mục).
+  - Nhóm đã thu được nhớ trong `localStorage` (`qlkt-nav-collapsed`, có try/catch); nhóm chứa trang đang mở luôn mở khi vào trang. Máy chủ luôn render mọi nhóm mở để không lệch hydrate.
+- `app/interface.css`: khối «Hiệu ứng menu bên» theo màu thanh bên hiện có (#409eff). Tắt chuyển động khi hệ điều hành bật «giảm chuyển động».
+- `app/wb-preview/page.tsx`: thanh bên bản xem trước dùng `SidebarNav` thật để duyệt hiệu ứng tại `/wb-preview?live=1` (chỉ môi trường dev).
+- Đã kiểm tra trên `/wb-preview`: thanh sáng di chuyển theo mục, thu/mở nhóm đúng chiều cao, lưu trạng thái, không lỗi console. tsc sạch, lint 0 lỗi, test 351/351.
+- Khi đẩy GitHub: commit 3 file trên + `docs/AI-FIX-LOG.md`. `.claude/launch.json` chỉ là cấu hình chạy thử local, không cần commit.
+- 13/10/2026: Người dùng yêu cầu xuất bản phần Claude đã sửa và thêm lên GitHub. Kiểm tra lại TypeScript và ESLint các file thay đổi thành công; không đưa `.claude/` và `pnpm-lock.yaml` vào commit.
