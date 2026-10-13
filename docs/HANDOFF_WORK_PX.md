@@ -66,3 +66,5 @@
 - Menu không làm thay đổi độ rộng cột. Bảng cuộn ngang trên màn hình hẹp để giữ ngày tháng dễ đọc. Không thay đổi nghiệp vụ, phân quyền hay công thức KPI.
 - Kiểm tra local bằng dữ liệu giả: danh sách và menu; 375/375 tests, ESLint tệp giao diện và build Next.js đạt.
 - storage:check OK: 13,91 MiB; 0,2717% mốc tham chiếu 5 GiB. Chưa có usage tài khoản Turso/Vercel để xác nhận giới hạn gói, lượt đọc/ghi hoặc usage Vercel.
+
+- Bổ sung hiển thị toàn bộ description của từng công việc ngay dưới tiêu đề trong bảng danh sách; giữ xuống dòng, không giới hạn số dòng/ký tự hiển thị. Chỉ đổi giao diện, không đổi dữ liệu và nghiệp vụ.

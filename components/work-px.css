@@ -6,3 +6,5 @@
 .app-workspace:has(.wp){font-family:Arial,Helvetica,sans-serif}.wp-filters .wp-month{margin-right:auto;color:#657085}.wp-filters .wp-month input{background:white}.wp-filters>select:first-of-type{margin-left:0}
 
 .wp table{table-layout:fixed}.wp table.wp-task-table{min-width:1320px}.wp table.wp-source-table{min-width:1100px}.wp th:first-child,.wp th.wp-content-column,.wp th:last-child{width:auto}.wp td{overflow-wrap:normal;word-break:normal}.wp-task-table td:nth-child(4),.wp-task-table td:nth-child(5),.wp-task-table td:nth-child(6),.wp-status{white-space:nowrap}.wp-action-menu{position:absolute;right:0;top:40px;width:200px}.wp-table-scroll{padding-bottom:110px}
+
+.wp-task-description{margin:10px 0 0 27px;font-size:16px;line-height:1.65;color:#4b5563;white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:768px){.wp-task-description{font-size:15px}}
