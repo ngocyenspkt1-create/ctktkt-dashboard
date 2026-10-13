@@ -36,3 +36,4 @@
 .wp .wp-reload{height:44px;width:44px;padding:0;justify-content:center}
 .wp-list-search{margin-top:20px}
 @media(max-width:768px){.wp-filter-left,.wp-filter-right{width:100%}.wp-date-control{width:calc(50% - 4px)}.wp-toolbar .wp-month{margin-left:0}.wp .wp-filter-left>select{flex:1}.wp .wp-scope-control select{width:160px}}
+.wp-filter-right{margin-left:auto}@media(max-width:768px){.wp-filter-right{margin-left:0}}
