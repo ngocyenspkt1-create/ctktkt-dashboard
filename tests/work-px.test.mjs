@@ -119,3 +119,21 @@ test("Deadline adjustments preserve progress; changing primary requires new acce
   const reassigned = changeWork(item, leader, "assign", { ...item, assigneeId: 3, collaboratorIds: [2], text: "reassign" }, "2026-10-06").item;
   assert.equal(reassigned.status, "assigned"); assert.equal(reassigned.progress, 0); assert.equal(reassigned.lastReportDate, null);
 });
+test("Meeting chair persists through editing and audit, while legacy and non-meeting records remain valid", async () => {
+  const { sqlite, db } = database(); try {
+    const source = { ...task(), kind: "source", status: "submitted", assigneeId: null, collaboratorIds: [] };
+    assert.equal(validateWorkInput(source, "source").meetingChair, "");
+    const input = validateWorkInput({ ...source, meetingChair: "  Synthetic chair A  " }, "source");
+    assert.equal(input.meetingChair, "Synthetic chair A");
+    assert.equal(validateWorkInput({ ...source, sourceType: "request", meetingChair: "Ignored" }, "source").meetingChair, "");
+    assert.throws(() => validateWorkInput({ ...source, meetingChair: "x".repeat(201) }, "source"));
+    await ensureWorkSchema(db);
+    const saved = await saveWork(db, { ...source, ...input }, leader, "create_source", "minutes", null);
+    const changed = changeWork(saved, leader, "edit_source", { ...saved, meetingChair: "Synthetic chair B", text: "correct chair" }, "2026-10-13").item;
+    await saveWork(db, changed, leader, "edit_source", "correct chair", saved.version);
+    assert.equal((await getWork(db, source.id, leader)).meetingChair, "Synthetic chair B");
+    const history = await workHistory(db, source.id);
+    assert.equal(history[0].snapshot.meetingChair, "Synthetic chair B");
+    assert.equal(history[1].snapshot.meetingChair, "Synthetic chair A");
+  } finally { sqlite.close(); }
+});

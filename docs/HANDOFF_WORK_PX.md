@@ -1,6 +1,7 @@
 # Công việc Phân xưởng PXVH1 — 13/10/2026
 
 ## Phạm vi đã thống nhất
+- Bổ sung 13/10/2026: người chủ trì cuộc họp nhập họ tên (tối đa 200 ký tự), hiện khi nguồn là Cuộc họp; lưu cùng nội dung và bản chụp nhật ký. Dữ liệu cũ không có trường này vẫn hợp lệ, hiển thị Chưa cập nhật. Thông tin được mang sang biểu mẫu phân công từ nội dung họp, độc lập với cá nhân chủ trì công việc.
 - Bổ sung vào CTKTKT, dùng riêng PXVH1; không sửa công thức hoặc dữ liệu báo cáo hiện hữu.
 - Cá nhân ghi nhận nội dung họp/yêu cầu phát sinh. Lãnh đạo xem xét, tách thành một hoặc nhiều việc.
 - Quản đốc/Phó quản đốc phân công chủ trì, phối hợp, ngày giao, hạn, ưu tiên và chu kỳ báo cáo.

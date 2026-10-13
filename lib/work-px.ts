@@ -5,7 +5,7 @@ export type WorkStatus = keyof typeof WORK_STATUSES;
 export type WorkMember = { id: number; displayName: string; position: string };
 export type WorkItem = {
   id: string; version: number; kind: "source" | "task"; sourceType: "meeting" | "request";
-  title: string; description: string; sourceDate: string; sourceId: string | null;
+  title: string; description: string; sourceDate: string; sourceId: string | null; meetingChair?: string;
   creatorId: number; creatorName: string; assigneeId: number | null; collaboratorIds: number[];
   startDate: string; dueDate: string; reportEveryDays: number; lastReportDate: string | null;
   status: WorkStatus; progress: number; priority: "normal" | "high"; createdAt: string; updatedAt: string;
@@ -24,13 +24,14 @@ export function validateWorkInput(body: Record<string, unknown>, kind: WorkItem[
   const title = text(body.title, "Tiêu đề", 250), description = text(body.description, "Nội dung", 10000);
   if (!validWorkDate(body.sourceDate)) throw new WorkError("Ngày nội dung không hợp lệ.");
   if (!["meeting", "request"].includes(String(body.sourceType))) throw new WorkError("Nguồn công việc không hợp lệ.");
-  if (kind === "source") return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"] };
+  const meetingChair = body.sourceType === "meeting" ? text(body.meetingChair ?? "", "Người chủ trì cuộc họp", 200, false) : "";
+  if (kind === "source") return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"], meetingChair };
   if (!validWorkDate(body.startDate) || !validWorkDate(body.dueDate) || body.dueDate < body.startDate) throw new WorkError("Hạn thực hiện phải từ ngày giao việc trở đi.");
   if (!Number.isSafeInteger(body.assigneeId) || Number(body.assigneeId) < 1) throw new WorkError("Chọn cá nhân chủ trì.");
   if (!Array.isArray(body.collaboratorIds) || body.collaboratorIds.length > 30 || body.collaboratorIds.some(id => !Number.isSafeInteger(id) || id < 1 || id === body.assigneeId)) throw new WorkError("Danh sách phối hợp không hợp lệ hoặc trùng người chủ trì.");
   if (!Number.isInteger(body.reportEveryDays) || Number(body.reportEveryDays) < 0 || Number(body.reportEveryDays) > 365) throw new WorkError("Chu kỳ báo cáo: 0 (không định kỳ) hoặc 1–365 ngày.");
   if (!["normal", "high"].includes(String(body.priority))) throw new WorkError("Mức ưu tiên không hợp lệ.");
-  return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"], startDate: body.startDate, dueDate: body.dueDate, assigneeId: Number(body.assigneeId), collaboratorIds: [...new Set(body.collaboratorIds)] as number[], reportEveryDays: Number(body.reportEveryDays), priority: body.priority as WorkItem["priority"] };
+  return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"], meetingChair, startDate: body.startDate, dueDate: body.dueDate, assigneeId: Number(body.assigneeId), collaboratorIds: [...new Set(body.collaboratorIds)] as number[], reportEveryDays: Number(body.reportEveryDays), priority: body.priority as WorkItem["priority"] };
 }
 function addDays(date: string, count: number) { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + count); return d.toISOString().slice(0, 10); }
 export function nextWorkReport(item: WorkItem) {
