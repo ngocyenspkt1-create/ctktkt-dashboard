@@ -1,7 +1,7 @@
 import { getRawDb } from "@/db";
 import { getSessionUser } from "@/lib/auth/server";
 import { loadCurrentUser } from "@/lib/auth/current-user";
-import { canAccessWork, canManageWork, changeWork, isWorkAdmin, pxDepartment, sourceContentLink, validateWorkInput, workToday, WorkError, type WorkItem } from "@/lib/work-px";
+import { canAccessWork, canManageWork, changeWork, sourceContentLink, validateWorkInput, workToday, WorkError, type WorkItem } from "@/lib/work-px";
 import { ensureWorkSchema, getWork, listWork, saveWork, workHistory } from "@/lib/work-px-store";
 
 export const dynamic = "force-dynamic";
@@ -10,10 +10,6 @@ async function context() {
   if (!user) throw new WorkError("Chưa đăng nhập.", 401);
   if (!canAccessWork(user)) throw new WorkError("Chưa được cấp quyền Công việc PXVH1. Liên hệ quản trị để cấp quyền theo cương vị.", 403);
   const db = getRawDb();
-  if (!isWorkAdmin(user)) {
-    const row = await db.prepare("SELECT department FROM users WHERE id = ?").bind(user.id).first();
-    if (!pxDepartment(row?.department)) throw new WorkError("Mục này dành cho PXVH1.", 403);
-  }
   await ensureWorkSchema(db);
   return { db, user };
 }
@@ -22,11 +18,11 @@ export async function GET(request: Request) {
   try {
     const { db, user } = await context(); const id = new URL(request.url).searchParams.get("id");
     if (id) { const item = await getWork(db, id, user); return Response.json({ item, events: await workHistory(db, id) }, { headers: { "Cache-Control": "private, no-store" } }); }
-    // Only expose the minimum directory needed to assign work, within PXVH1.
+    // Managers can assign any active account; participants see only relevant names.
     const { results } = await db.prepare("SELECT id, display_name AS displayName, position, department FROM users WHERE COALESCE(status, 'active') = 'active' ORDER BY display_name").all();
     const items = await listWork(db, user);
     const relevantIds = new Set(items.flatMap(item => [item.creatorId, item.assigneeId, ...item.collaboratorIds]));
-    const members = results.filter(row => pxDepartment(row.department) && (canManageWork(user) || relevantIds.has(Number(row.id)))).map(row => ({ id: Number(row.id), displayName: String(row.displayName), position: String(row.position || "") }));
+    const members = results.filter(row => canManageWork(user) || relevantIds.has(Number(row.id))).map(row => ({ id: Number(row.id), displayName: String(row.displayName), position: String(row.position || "") }));
     return Response.json({ items, members, today: workToday() }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return failure(error); }
 }
@@ -44,9 +40,8 @@ export async function POST(request: Request) {
     const checkAssignees = async (input: ReturnType<typeof validateWorkInput>) => {
       if (!("assigneeId" in input) || input.assigneeId === undefined) return;
       for (const id of [input.assigneeId, ...(input.collaboratorIds || [])]) {
-        const row = await db.prepare("SELECT department FROM users WHERE id = ?").bind(id).first();
         const member = await loadCurrentUser(db, id);
-        if (!row || !pxDepartment(row.department) || !member || !canAccessWork(member)) throw new WorkError("Người được phân công phải thuộc PXVH1, có tài khoản hoạt động và được cấp quyền Công việc PX.");
+        if (!member) throw new WorkError("Người được phân công phải có tài khoản đang hoạt động trên web.");
       }
     };
     if (body.action === "create_source" || body.action === "create_task") {

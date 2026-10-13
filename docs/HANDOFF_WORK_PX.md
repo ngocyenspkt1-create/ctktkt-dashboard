@@ -10,11 +10,11 @@
 
 ## Cách sử dụng
 1. Quản trị vào **Quản lý tài khoản → Phân quyền theo cương vị**.
-2. Cấp **Công việc PX** cho cương vị cá nhân được tham gia; cấp thêm **Giao việc PX** cho cương vị Quản đốc/Phó quản đốc. Đây là hai quyền độc lập; không tự cấp từ tên cương vị. Quản trị hệ thống giữ hợp đồng toàn quyền hiện hữu.
-3. Tài khoản cá nhân phải hoạt động, thuộc đơn vị `Vận hành 1` / `PXVH1` / `Phân xưởng vận hành 1`. Không đổi đơn vị hoặc cấp quyền thật trong lượt triển khai mã này.
+2. Mọi tài khoản hoạt động đều có thể nhận và thực hiện việc được giao, không cần quyền Công việc PX. Chỉ cấp **Giao việc PX** cho lãnh đạo được giao nhiệm vụ phân công/phê duyệt. Quản trị hệ thống giữ toàn quyền hiện hữu.
+3. Nhân sự được phân công lấy từ tất cả tài khoản đang hoạt động trên web, không lọc đơn vị. Tài khoản bị khóa không thể nhận việc mới hoặc truy cập; người cần đổi mật khẩu phải đổi trước khi sử dụng.
 4. Cá nhân mở **Công việc Phân xưởng → Ghi nhận nội dung**, nhập ngày họp/phát sinh, tiêu đề và kết luận/yêu cầu. Được sửa nội dung của mình trước khi lãnh đạo xem xét.
 5. Lãnh đạo mở **Họp & phát sinh**, chọn nội dung → **Phân công từ nội dung này**. Một nội dung có thể tạo nhiều việc độc lập. Ghi ý kiến **Đã xem xét** khi xử lý xong nội dung nguồn.
-6. Chọn một người chủ trì và các cá nhân phối hợp. Người được giao phải có quyền tham gia; nếu chưa có quyền, API từ chối lưu và yêu cầu quản trị cấp trước.
+6. Tìm tên hoặc cương vị có dấu/không dấu trong ô người chủ trì và người phối hợp. Chọn một chủ trì, tối đa 30 phối hợp. Đổi từ khóa tìm không làm mất người đã chọn. API kiểm tra tài khoản còn hoạt động trước khi lưu.
 7. Chu kỳ `0` là không định kỳ; `1–365` là số ngày giữa các báo cáo. Kỳ đầu = ngày giao + chu kỳ; các kỳ sau = ngày báo cáo chủ trì gần nhất + chu kỳ. Kỳ cuối không vượt hạn thực hiện.
 8. Người chủ trì nhập nội dung để **Tiếp nhận**, sau đó **Gửi báo cáo tiến độ**. Báo cáo phối hợp được lưu nhưng không thay đổi % tiến độ hoặc kỳ báo cáo của chủ trì.
 9. **Đề nghị hoàn thành** chuyển sang chờ xác nhận, dừng nhắc báo cáo. % 100 tự nó không đóng việc. Lãnh đạo ghi ý kiến rồi **Xác nhận hoàn thành** hoặc **Yêu cầu bổ sung**.

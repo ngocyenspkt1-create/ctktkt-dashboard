@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { canAccessWork, canManageWork, canReadWork, changeWork, nextWorkReport, pxDepartment, sourceContentLink, validateWorkInput, workContents, workInMonth, workToday } from "../lib/work-px.ts";
+import { canAccessWork, canManageWork, canReadWork, changeWork, matchesWorkMember, nextWorkReport, pxDepartment, sourceContentLink, validateWorkInput, workContents, workInMonth, workToday } from "../lib/work-px.ts";
 import { ensureWorkSchema, getWork, listWork, saveWork, workHistory } from "../lib/work-px-store.ts";
 const member = id => ({ id, username: `synthetic${id}`, displayName: `Synthetic ${id}`, role: "viewer", permissions: ["work_px"] });
 const leader = { ...member(1), permissions: ["work_px", "manage_work_px"] };
@@ -11,16 +11,31 @@ function database() {
   const stmt = (sql, args = []) => ({ sql, args, bind: (...values) => stmt(sql, values), first: async () => sqlite.prepare(sql).get(...args) || null, all: async () => ({ results: sqlite.prepare(sql).all(...args) }), run: async () => { const r = sqlite.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } });
   return { sqlite, db: { prepare: sql => stmt(sql), batch: async statements => { sqlite.exec("BEGIN"); try { const results = []; for (const s of statements) results.push(await s.run()); sqlite.exec("COMMIT"); return results; } catch (e) { sqlite.exec("ROLLBACK"); throw e; } } } };
 }
-test("Own records are isolated, leadership requires explicit grant, and revoked grants fail closed", () => {
+test("All accounts can participate, own records are isolated and leadership requires explicit grant", () => {
   assert.equal(canReadWork(member(2), task()), true);
   assert.equal(canReadWork(member(3), task()), true);
   assert.equal(canReadWork(member(4), task()), false);
   assert.equal(canReadWork(leader, { ...task(), creatorId: 8 }), true);
   assert.equal(canManageWork({ ...member(2), position: "Lãnh đạo phân xưởng", role: "supervisor" }), false);
-  assert.equal(canAccessWork({ ...member(2), permissions: [] }), false);
-  assert.equal(canReadWork({ ...member(2), permissions: [] }, task()), false);
+  assert.equal(canAccessWork({ ...member(2), permissions: [] }), true);
+  assert.equal(canReadWork({ ...member(2), permissions: [] }, task()), true);
+  assert.equal(canReadWork({ ...member(4), permissions: [] }, task()), false);
+  assert.equal(canAccessWork({ ...member(2), mustChangePassword: true }), false);
+  assert.equal(canManageWork({ ...leader, permissions: [] }), false);
   assert.equal(pxDepartment("Vận hành 1"), true);
   assert.equal(pxDepartment("Vận hành 2"), false);
+});
+test("Member search ignores Vietnamese accents and case and includes position", () => {
+  const person = { id: 2, displayName: "Đặng Nguyễn Văn Hùng", position: "Kỹ thuật viên" };
+  for (const query of ["dang", "NGUYEN", "Văn Hùng", "ky thuat", ""]) assert.equal(matchesWorkMember(person, query), true);
+  assert.equal(matchesWorkMember(person, "khong co"), false);
+});
+test("Account with no module grant can report assigned work but cannot assign or approve", () => {
+  const user = { ...member(2), permissions: [], position: "Đơn vị khác" };
+  const accepted = changeWork(task(), user, "accept", { text: "received" }, "2026-10-13").item;
+  assert.equal(changeWork(accepted, user, "report", { text: "progress", progress: 30 }, "2026-10-13").item.progress, 30);
+  assert.throws(() => changeWork(accepted, user, "assign", { ...task(), text: "assign" }, "2026-10-13"), /lãnh đạo/);
+  assert.throws(() => changeWork({ ...accepted, status: "pending_review" }, user, "approve", { text: "approve" }, "2026-10-13"), /lãnh đạo/);
 });
 test("Lifecycle requires acceptance, completion request and leader approval", () => {
   assert.throws(() => changeWork(task(), member(2), "report", { text: "report", progress: 50 }, "2026-10-01"), /tiếp nhận/);

@@ -16,7 +16,12 @@ export type WorkEvent = { id: string; itemId: string; actorId: number; actorName
 export class WorkError extends Error { status: number; constructor(message: string, status = 400) { super(message); this.status = status; } }
 export function pxDepartment(value: unknown) { return ["vận hành 1", "pxvh1", "phân xưởng vận hành 1"].includes(String(value || "").trim().toLocaleLowerCase("vi-VN")); }
 export function canManageWork(user: SessionUser) { return hasPermission(user, "manage_work_px"); }
-export function canAccessWork(user: SessionUser) { return hasPermission(user, "work_px") || canManageWork(user); }
+// Every authenticated active account can participate; management stays explicitly granted.
+export function canAccessWork(user: SessionUser) { return Number.isSafeInteger(user.id) && user.id > 0 && !user.mustChangePassword; }
+export function matchesWorkMember(member: WorkMember, query: string) {
+  const normalize = (value: string) => value.toLocaleLowerCase("vi-VN").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+  return normalize(`${member.displayName} ${member.position}`).includes(normalize(query.trim()));
+}
 export function canReadWork(user: SessionUser, item: WorkItem) { return canAccessWork(user) && (canManageWork(user) || item.creatorId === user.id || item.assigneeId === user.id || item.collaboratorIds.includes(user.id)); }
 export function isWorkAdmin(user: SessionUser) { return isAdminUser(user); }
 export function workToday(now = new Date()) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now); }
