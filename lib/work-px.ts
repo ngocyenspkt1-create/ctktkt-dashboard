@@ -1,0 +1,84 @@
+import { hasPermission, isAdminUser, type SessionUser } from "./auth/session.ts";
+
+export const WORK_STATUSES = { submitted: "Chờ xem xét", reviewed: "Đã xem xét", assigned: "Chưa tiếp nhận", in_progress: "Đang thực hiện", pending_review: "Chờ xác nhận", completed: "Hoàn thành", cancelled: "Đã hủy" } as const;
+export type WorkStatus = keyof typeof WORK_STATUSES;
+export type WorkMember = { id: number; displayName: string; position: string };
+export type WorkItem = {
+  id: string; version: number; kind: "source" | "task"; sourceType: "meeting" | "request";
+  title: string; description: string; sourceDate: string; sourceId: string | null;
+  creatorId: number; creatorName: string; assigneeId: number | null; collaboratorIds: number[];
+  startDate: string; dueDate: string; reportEveryDays: number; lastReportDate: string | null;
+  status: WorkStatus; progress: number; priority: "normal" | "high"; createdAt: string; updatedAt: string;
+};
+export type WorkEvent = { id: string; itemId: string; actorId: number; actorName: string; action: string; text: string; createdAt: string; snapshot: WorkItem };
+export class WorkError extends Error { status: number; constructor(message: string, status = 400) { super(message); this.status = status; } }
+export function pxDepartment(value: unknown) { return ["vận hành 1", "pxvh1", "phân xưởng vận hành 1"].includes(String(value || "").trim().toLocaleLowerCase("vi-VN")); }
+export function canManageWork(user: SessionUser) { return hasPermission(user, "manage_work_px"); }
+export function canAccessWork(user: SessionUser) { return hasPermission(user, "work_px") || canManageWork(user); }
+export function canReadWork(user: SessionUser, item: WorkItem) { return canAccessWork(user) && (canManageWork(user) || item.creatorId === user.id || item.assigneeId === user.id || item.collaboratorIds.includes(user.id)); }
+export function isWorkAdmin(user: SessionUser) { return isAdminUser(user); }
+export function workToday(now = new Date()) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now); }
+export function validWorkDate(value: unknown): value is string { return typeof value === "string" && /^20\d{2}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value; }
+function text(value: unknown, label: string, max: number, required = true) { if (typeof value !== "string" || value.trim().length > max || (required && !value.trim())) throw new WorkError(`${label} phải có nội dung và tối đa ${max.toLocaleString("vi-VN")} ký tự.`); return value.trim(); }
+export function validateWorkInput(body: Record<string, unknown>, kind: WorkItem["kind"]) {
+  const title = text(body.title, "Tiêu đề", 250), description = text(body.description, "Nội dung", 10000);
+  if (!validWorkDate(body.sourceDate)) throw new WorkError("Ngày nội dung không hợp lệ.");
+  if (!["meeting", "request"].includes(String(body.sourceType))) throw new WorkError("Nguồn công việc không hợp lệ.");
+  if (kind === "source") return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"] };
+  if (!validWorkDate(body.startDate) || !validWorkDate(body.dueDate) || body.dueDate < body.startDate) throw new WorkError("Hạn thực hiện phải từ ngày giao việc trở đi.");
+  if (!Number.isSafeInteger(body.assigneeId) || Number(body.assigneeId) < 1) throw new WorkError("Chọn cá nhân chủ trì.");
+  if (!Array.isArray(body.collaboratorIds) || body.collaboratorIds.length > 30 || body.collaboratorIds.some(id => !Number.isSafeInteger(id) || id < 1 || id === body.assigneeId)) throw new WorkError("Danh sách phối hợp không hợp lệ hoặc trùng người chủ trì.");
+  if (!Number.isInteger(body.reportEveryDays) || Number(body.reportEveryDays) < 0 || Number(body.reportEveryDays) > 365) throw new WorkError("Chu kỳ báo cáo: 0 (không định kỳ) hoặc 1–365 ngày.");
+  if (!["normal", "high"].includes(String(body.priority))) throw new WorkError("Mức ưu tiên không hợp lệ.");
+  return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"], startDate: body.startDate, dueDate: body.dueDate, assigneeId: Number(body.assigneeId), collaboratorIds: [...new Set(body.collaboratorIds)] as number[], reportEveryDays: Number(body.reportEveryDays), priority: body.priority as WorkItem["priority"] };
+}
+function addDays(date: string, count: number) { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + count); return d.toISOString().slice(0, 10); }
+export function nextWorkReport(item: WorkItem) {
+  if (item.kind !== "task" || !item.reportEveryDays || ["completed", "cancelled", "pending_review"].includes(item.status)) return null;
+  // Final report is due on the task deadline even when the cycle extends beyond it.
+  if (item.lastReportDate && item.lastReportDate >= item.dueDate) return null;
+  return [addDays(item.lastReportDate || item.startDate, item.reportEveryDays), item.dueDate].sort()[0];
+}
+export function workInMonth(item: WorkItem, month: string) {
+  if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(month)) return false;
+  if (item.kind === "source") return item.sourceDate.startsWith(month);
+  const start = `${month}-01`, end = addDays(`${month}-01`, new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate() - 1);
+  const closed = ["completed", "cancelled"].includes(item.status);
+  return item.startDate <= end && (item.dueDate >= start || (!closed) || workToday(new Date(item.updatedAt)) >= start);
+}
+export function changeWork(item: WorkItem, user: SessionUser, action: string, body: Record<string, unknown>, today: string): { item: WorkItem; text: string } {
+  if (!canReadWork(user, item)) throw new WorkError("Không có quyền truy cập công việc này.", 403);
+  const manager = canManageWork(user), primary = item.assigneeId === user.id, participant = primary || item.collaboratorIds.includes(user.id);
+  let next = { ...item }; const note = text(body.text, "Nội dung cập nhật", 10000);
+  if (item.kind === "source") {
+    if (action === "edit_source") {
+      if (!manager && (item.creatorId !== user.id || item.status !== "submitted")) throw new WorkError("Chỉ sửa nội dung của mình trước khi lãnh đạo xem xét.", 403);
+      next = { ...next, ...validateWorkInput(body, "source") };
+    } else if (action === "review_source" && manager) next.status = "reviewed";
+    else throw new WorkError("Chỉ lãnh đạo được xem xét nội dung.", 403);
+  } else if (action === "assign") {
+    if (!manager) throw new WorkError("Chỉ lãnh đạo được phân công.", 403);
+    if (["completed", "cancelled"].includes(item.status)) throw new WorkError("Mở lại công việc trước khi sửa phân công.", 409);
+    const input = validateWorkInput(body, "task");
+    const reassigned = input.assigneeId !== item.assigneeId;
+    next = { ...next, ...input, ...(reassigned ? { status: "assigned" as const, progress: 0, lastReportDate: null } : {}) };
+  } else if (action === "accept") {
+    if (!primary) throw new WorkError("Chỉ người chủ trì được tiếp nhận.", 403);
+    if (item.status !== "assigned") throw new WorkError("Công việc không ở trạng thái chờ tiếp nhận.", 409);
+    next.status = "in_progress";
+  } else if (action === "report" || action === "request_completion") {
+    if (!participant || (action === "request_completion" && !primary)) throw new WorkError("Không có quyền báo cáo thao tác này.", 403);
+    if (item.status !== "in_progress") throw new WorkError("Cần tiếp nhận công việc hoặc chờ lãnh đạo trả lại trước khi báo cáo.", 409);
+    if (!Number.isInteger(body.progress) || Number(body.progress) < 0 || Number(body.progress) > 100) throw new WorkError("Tiến độ phải từ 0 đến 100%.");
+    if (primary) { next.progress = action === "request_completion" ? 100 : Number(body.progress); next.lastReportDate = today; }
+    if (action === "request_completion") next.status = "pending_review";
+  } else if (["approve", "return", "reopen", "cancel"].includes(action)) {
+    if (!manager) throw new WorkError("Chỉ lãnh đạo được phê duyệt hoặc thay đổi trạng thái.", 403);
+    if (["approve", "return"].includes(action) && item.status !== "pending_review") throw new WorkError("Công việc chưa chờ xác nhận.", 409);
+    if (action === "reopen" && !["completed", "cancelled"].includes(item.status)) throw new WorkError("Chỉ mở lại việc đã đóng.", 409);
+    if (action === "cancel" && ["completed", "cancelled"].includes(item.status)) throw new WorkError("Công việc đã đóng.", 409);
+    next.status = ({ approve: "completed", return: "in_progress", reopen: "in_progress", cancel: "cancelled" } as const)[action as "approve"];
+    if (action === "reopen") { next.progress = 0; next.lastReportDate = null; }
+  } else throw new WorkError("Thao tác không hợp lệ.");
+  return { item: next, text: note };
+}

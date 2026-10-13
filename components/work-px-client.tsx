@@ -1,0 +1,145 @@
+"use client";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CalendarClock, CheckCircle2, ClipboardList, Plus, RefreshCw, Search, X, AlertTriangle, Users, MessageSquareText, ArrowUpRight } from "lucide-react";
+import { useSessionUser } from "@/components/session-context";
+import type { SessionUser } from "@/lib/auth/session";
+import { canAccessWork, canManageWork, nextWorkReport, workInMonth, workToday, WORK_STATUSES, type WorkItem, type WorkEvent, type WorkMember, type WorkStatus } from "@/lib/work-px";
+import "./work-px.css";
+
+export type WorkData = { items: WorkItem[]; members: WorkMember[]; today: string };
+type Draft = { kind: "source" | "task"; sourceType: "meeting" | "request"; title: string; description: string; sourceDate: string; sourceId: string; assigneeId: string; collaboratorIds: number[]; startDate: string; dueDate: string; reportEveryDays: number; priority: "normal" | "high"; editingId?: string };
+const actionLabels: Record<string, string> = { create_source: "Ghi nhận nội dung", edit_source: "Cập nhật nội dung", create_task: "Giao việc", review_source: "Xem xét nội dung", assign: "Điều chỉnh phân công", accept: "Tiếp nhận", report: "Báo cáo tiến độ", request_completion: "Đề nghị hoàn thành", approve: "Xác nhận hoàn thành", return: "Yêu cầu bổ sung", reopen: "Mở lại", cancel: "Hủy công việc" };
+const dateLabel = (date: string) => date ? date.split("-").reverse().join("/") : "—";
+const timeLabel = (date: string) => new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short", timeStyle: "short" }).format(new Date(date));
+
+export function WorkPxClient({ preview }: { preview?: WorkData }) {
+  const user = useSessionUser();
+  return <WorkPxWorkspace user={user} preview={preview} />;
+}
+export function WorkPxWorkspace({ user, preview }: { user: SessionUser; preview?: WorkData }) {
+  const manager = canManageWork(user);
+  const [data, setData] = useState<WorkData>(preview || { items: [], members: [], today: workToday() });
+  const [month, setMonth] = useState((preview?.today || workToday()).slice(0, 7));
+  const [tab, setTab] = useState<"tasks" | "sources">("tasks"), [scope, setScope] = useState<"all" | "mine">(manager ? "all" : "mine");
+  const [query, setQuery] = useState(""), [filter, setFilter] = useState("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null), [events, setEvents] = useState<WorkEvent[]>([]);
+  const [draft, setDraft] = useState<Draft | null>(null), [note, setNote] = useState(""), [progress, setProgress] = useState(0);
+  const [busy, setBusy] = useState(false), [loading, setLoading] = useState(!preview), [error, setError] = useState(""), [success, setSuccess] = useState("");
+  const selected = data.items.find(item => item.id === selectedId);
+  const name = (id: number | null) => data.members.find(member => member.id === id)?.displayName || (id === user.id ? user.displayName : id ? `Tài khoản #${id}` : "—");
+  const reload = useCallback(async () => {
+    if (preview) return;
+    try { const response = await fetch("/api/work-px", { cache: "no-store" }); const result = await response.json() as WorkData & { error?: string }; if (!response.ok) throw new Error(result.error); setData(result); }
+    catch (e) { setError(e instanceof Error ? e.message : "Không tải được công việc."); }
+    finally { setLoading(false); }
+  }, [preview]);
+  useEffect(() => {
+    if (preview) return;
+    const controller = new AbortController();
+    void fetch("/api/work-px", { cache: "no-store", signal: controller.signal }).then(async response => {
+      const result = await response.json() as WorkData & { error?: string };
+      if (!response.ok) throw new Error(result.error);
+      setData(result);
+    }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Không tải được công việc."); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [preview]);
+  const draftOpen = draft !== null;
+  useEffect(() => {
+    let active = true;
+    if (selectedId) document.querySelector(".wp-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (selectedId && !preview) {
+      void (async () => {
+        try { const response = await fetch(`/api/work-px?id=${encodeURIComponent(selectedId)}`, { cache: "no-store" }); const result = await response.json() as { item: WorkItem; events: WorkEvent[]; error?: string }; if (!response.ok) throw new Error(result.error); if (active) { setEvents(result.events); setProgress(result.item.progress); setData(current => ({ ...current, items: current.items.map(item => item.id === result.item.id ? result.item : item) })); } }
+        catch (e) { if (active) setError(e instanceof Error ? e.message : "Không tải được lịch sử."); }
+      })();
+    }
+    return () => { active = false; };
+  }, [selectedId, preview]);
+  useEffect(() => {
+    if (preview) return;
+    const onFocus = () => { void reload(); };
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(() => { if (!document.hidden) void reload(); }, 60_000);
+    return () => { window.removeEventListener("focus", onFocus); window.clearInterval(timer); };
+  }, [preview, reload]);
+  useEffect(() => {
+    if (!draftOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const modal = document.querySelector<HTMLElement>(".wp-modal");
+    modal?.querySelector<HTMLElement>("input,button,select,textarea")?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) setDraft(null);
+      if (event.key !== "Tab" || !modal) return;
+      const controls = Array.from(modal.querySelectorAll<HTMLElement>("button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)"));
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); previous?.focus(); };
+  }, [draftOpen, busy]);
+  const overdue = (item: WorkItem) => item.kind === "task" && !["completed", "cancelled"].includes(item.status) && item.dueDate < data.today;
+  const reportDue = (item: WorkItem) => { const date = nextWorkReport(item); return Boolean(date && date <= data.today); };
+  const inMonth = useMemo(() => data.items.filter(item => workInMonth(item, month) && (scope === "all" || item.assigneeId === user.id || item.collaboratorIds.includes(user.id) || (item.kind === "source" && item.creatorId === user.id))), [data.items, month, scope, user.id]);
+  const tasks = inMonth.filter(item => item.kind === "task"), sources = inMonth.filter(item => item.kind === "source");
+  const rows = (tab === "tasks" ? tasks : sources).filter(item => `${item.title} ${item.description} ${name(item.assigneeId)}`.toLocaleLowerCase("vi-VN").includes(query.toLocaleLowerCase("vi-VN")) && (filter === "all" || (filter === "overdue" ? overdue(item) : filter === "report_due" ? reportDue(item) : item.status === filter)));
+  function openDraft(kind: Draft["kind"], source?: WorkItem, editing?: WorkItem) {
+    setError(""); setSuccess("");
+    const item = editing || source;
+    setDraft({ kind, sourceType: item?.sourceType || "meeting", title: item?.title || "", description: item?.description || "", sourceDate: item?.sourceDate || data.today, sourceId: editing?.sourceId || source?.id || "", assigneeId: editing?.assigneeId ? String(editing.assigneeId) : "", collaboratorIds: editing?.collaboratorIds || [], startDate: editing?.startDate || data.today, dueDate: editing?.dueDate || `${month}-${String(new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate())}`, reportEveryDays: editing?.reportEveryDays || 0, priority: editing?.priority || "normal", editingId: editing?.id });
+  }
+  async function mutate(payload: Record<string, unknown>) {
+    setError(""); setSuccess(""); setBusy(true);
+    try {
+      if (preview) throw new Error("Đây là bản xem trước dùng dữ liệu giả. Thao tác lưu thực hiện tại mục Công việc Phân xưởng sau khi đăng nhập.");
+      const response = await fetch("/api/work-px", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const result = await response.json() as { item: WorkItem; error?: string };
+      if (!response.ok) { if (response.status === 409) await reload(); throw new Error(result.error || "Không lưu được."); }
+      setData(current => ({ ...current, items: [result.item, ...current.items.filter(item => item.id !== result.item.id)] }));
+      setDraft(null); setSelectedId(result.item.id); setNote(""); setProgress(result.item.progress); setSuccess("Đã lưu công việc và nhật ký xử lý.");
+      const history = await fetch(`/api/work-px?id=${encodeURIComponent(result.item.id)}`, { cache: "no-store" });
+      if (history.ok) setEvents((await history.json() as { events: WorkEvent[] }).events);
+    } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được."); }
+    finally { setBusy(false); }
+  }
+  const act = (action: string) => selected && void mutate({ id: selected.id, version: selected.version, action, text: note, progress });
+  function openSelection(id: string | null) { setEvents([]); setNote(""); setProgress(data.items.find(item => item.id === id)?.progress || 0); setSelectedId(id); }
+  function submitDraft(event: React.FormEvent) {
+    event.preventDefault(); if (!draft) return;
+    const current = data.items.find(item => item.id === draft.editingId);
+    void mutate({ ...draft, action: current ? draft.kind === "source" ? "edit_source" : "assign" : draft.kind === "task" ? "create_task" : "create_source", id: current?.id, version: current?.version, assigneeId: Number(draft.assigneeId), text: draft.kind === "source" ? "Cập nhật nội dung họp / phát sinh." : "Điều chỉnh phân công, thời hạn hoặc chu kỳ báo cáo." });
+  }
+  if (!canAccessWork(user)) return <div className="wp-denied"><ClipboardList size={32} /><h1>Công việc Phân xưởng</h1><p>Tài khoản chưa được cấp quyền. Quản trị mở Quản lý tài khoản → Phân quyền theo cương vị → Công việc PX.</p></div>;
+  return <div className="wp">
+    {preview && <div className="wp-preview">BẢN XEM TRƯỚC LOCAL · Dữ liệu minh họa · Không lưu vào hệ thống</div>}
+    <header className="wp-hero"><div><span className="wp-eyebrow">ĐIỀU HÀNH PXVH1</span><h1>Công việc Phân xưởng</h1><p>Từ nội dung cuộc họp đến kết quả thực hiện. Mỗi việc có người chịu trách nhiệm và thời hạn rõ ràng.</p></div><div className="wp-hero-actions"><button onClick={() => openDraft("source")}><MessageSquareText size={17} /> Ghi nhận nội dung</button>{manager && <button className="wp-primary" onClick={() => openDraft("task")}><Plus size={17} /> Giao việc</button>}</div></header>
+    {error && <div role="alert" className="wp-error">{error}<button onClick={() => setError("")} aria-label="Đóng thông báo"><X size={16} /></button></div>}
+    {success && <div role="status" className="wp-success">{success}</div>}
+    <div className="wp-metrics">{[
+      { label: "Công việc trong tháng", value: tasks.length, hint: "Bao gồm việc chuyển tiếp", icon: ClipboardList, color: "blue", filter: "all" },
+      { label: "Quá hạn thực hiện", value: tasks.filter(overdue).length, hint: "Cần xử lý hoặc điều chỉnh hạn", icon: AlertTriangle, color: "red", filter: "overdue" },
+      { label: "Đến kỳ báo cáo", value: tasks.filter(reportDue).length, hint: "Đến hạn hoặc đã trễ báo cáo", icon: CalendarClock, color: "amber", filter: "report_due" },
+      { label: "Chờ xác nhận", value: tasks.filter(item => item.status === "pending_review").length, hint: "Lãnh đạo kiểm tra kết quả", icon: CheckCircle2, color: "green", filter: "pending_review" },
+    ].map(stat => <button key={stat.label} className={`wp-metric ${stat.color}`} onClick={() => { setTab("tasks"); setFilter(stat.filter); }}><div><span>{stat.label}</span><strong>{stat.value}</strong><small>{stat.hint}</small></div><stat.icon size={26} /></button>)}</div>
+    <section className="wp-panel"><div className="wp-toolbar"><div className="wp-tabs"><button aria-pressed={tab === "tasks"} className={tab === "tasks" ? "active" : ""} onClick={() => { setTab("tasks"); setFilter("all"); }}>Công việc <b>{tasks.length}</b></button><button aria-pressed={tab === "sources"} className={tab === "sources" ? "active" : ""} onClick={() => { setTab("sources"); setFilter("all"); }}>Họp & phát sinh <b>{sources.filter(item => item.status === "submitted").length}</b></button></div><label className="wp-month">Tháng <input aria-label="Tháng quản lý" type="month" min="2000-01" max="2099-12" value={month} onChange={e => { if (e.target.value) setMonth(e.target.value); }} /></label></div>
+      <div className="wp-filters"><label className="wp-search"><Search size={17} /><input aria-label="Tìm công việc" placeholder="Tìm nội dung, người chủ trì…" value={query} onChange={e => setQuery(e.target.value)} /></label>{manager && <select aria-label="Phạm vi công việc" value={scope} onChange={e => setScope(e.target.value as "all")}><option value="all">Toàn Phân xưởng</option><option value="mine">Tôi chủ trì / phối hợp</option></select>}<select aria-label="Trạng thái công việc" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">Tất cả trạng thái</option>{Object.entries(WORK_STATUSES).filter(([key]) => tab === "sources" ? ["submitted", "reviewed"].includes(key) : !["submitted", "reviewed"].includes(key)).map(([key, label]) => <option key={key} value={key}>{label}</option>)}{tab === "tasks" && <><option value="overdue">Quá hạn thực hiện</option><option value="report_due">Đến kỳ báo cáo</option></>}</select><button onClick={() => void reload()} disabled={loading || busy} aria-label="Tải lại công việc"><RefreshCw size={17} /></button></div>
+      <div className="wp-table-scroll"><table><thead><tr><th>Nội dung {tab === "sources" ? "ghi nhận" : "công việc"}</th><th>{tab === "sources" ? "Người ghi nhận" : "Chủ trì"}</th><th>{tab === "sources" ? "Ngày nội dung" : "Hạn thực hiện"}</th><th>{tab === "sources" ? "Nguồn" : "Báo cáo kế tiếp"}</th><th>Trạng thái</th><th /></tr></thead><tbody>{rows.map(item => <tr key={item.id} className={selectedId === item.id ? "selected" : ""}><td><button className="wp-title" onClick={() => openSelection(item.id)}>{item.title}</button><div className="wp-row-meta">{item.kind === "task" ? <><span className={`wp-priority ${item.priority}`}>{item.priority === "high" ? "Ưu tiên cao" : "Bình thường"}</span><span>{item.progress}% · {item.collaboratorIds.length} phối hợp</span>{item.startDate.slice(0, 7) < month && <span>Chuyển tiếp</span>}</> : <span>{item.description.slice(0, 95)}{item.description.length > 95 ? "…" : ""}</span>}</div></td><td>{item.kind === "source" ? item.creatorName : name(item.assigneeId)}</td><td><span className={overdue(item) ? "wp-red" : ""}>{dateLabel(item.kind === "source" ? item.sourceDate : item.dueDate)}</span>{overdue(item) && <small className="wp-red">Quá hạn</small>}</td><td>{item.kind === "source" ? item.sourceType === "meeting" ? "Cuộc họp" : "Phát sinh" : <><span className={reportDue(item) ? "wp-amber" : ""}>{dateLabel(nextWorkReport(item) || "")}</span><small>{item.reportEveryDays ? `Mỗi ${item.reportEveryDays} ngày` : "Không định kỳ"}</small></>}</td><td><Status status={item.status} /></td><td><button onClick={() => openSelection(item.id)} aria-label={`Mở ${item.title}`}><ArrowUpRight size={17} /></button></td></tr>)}</tbody></table></div>
+      {!rows.length && <div className="wp-empty"><ClipboardList size={32} /><strong>{loading ? "Đang tải công việc…" : "Chưa có nội dung phù hợp"}</strong><p>{tab === "sources" ? "Ghi nhận kết luận cuộc họp hoặc yêu cầu phát sinh để lãnh đạo xem xét phân công." : "Chọn tháng, đổi bộ lọc hoặc ghi nhận nội dung mới."}</p></div>}
+      <footer className="wp-table-footer">{rows.length} nội dung · Thời gian theo giờ Việt Nam · {manager ? "Bạn có quyền phân công và xác nhận kết quả" : "Bạn xem các nội dung do mình tạo hoặc được phân công"}</footer>
+    </section>
+    {selected && <section className="wp-panel wp-detail"><div className="wp-detail-heading"><div><span className="wp-eyebrow">{selected.kind === "source" ? "NỘI DUNG HỌP / PHÁT SINH" : "CHI TIẾT CÔNG VIỆC"}</span><h2>{selected.title}</h2></div><button onClick={() => openSelection(null)} aria-label="Đóng chi tiết"><X size={20} /></button></div><div className="wp-detail-grid"><div><h3>Nội dung & kết quả yêu cầu</h3><p className="wp-description">{selected.description}</p>{selected.sourceId && data.items.some(item => item.id === selected.sourceId) && <button className="wp-link" onClick={() => openSelection(selected.sourceId)}>Xem nội dung gốc →</button>}<h3>Nhật ký xử lý</h3><p className="wp-muted">Lưu người cập nhật, thời điểm, nội dung và trạng thái. Hiển thị 200 cập nhật gần nhất.</p><div className="wp-history">{events.length ? events.map(event => <article key={event.id}><div><strong>{event.actorName}</strong><time>{timeLabel(event.createdAt)}</time></div><span>{actionLabels[event.action] || event.action} · {WORK_STATUSES[event.snapshot.status]} · {event.snapshot.progress}%</span><p>{event.text}</p>{event.action === "assign" && <small>Chủ trì: {name(event.snapshot.assigneeId)} · Hạn: {dateLabel(event.snapshot.dueDate)} · Báo cáo: {event.snapshot.reportEveryDays || "không định kỳ"}</small>}</article>) : <p className="wp-muted">{preview ? "Nhật ký thực tế xuất hiện sau khi lưu trên hệ thống." : "Chưa tải được nhật ký hoặc chưa có cập nhật."}</p>}</div></div><aside className="wp-info"><Status status={selected.status} /><dl><dt>Người ghi nhận</dt><dd>{selected.creatorName}</dd><dt>Ngày nội dung</dt><dd>{dateLabel(selected.sourceDate)}</dd>{selected.kind === "task" && <><dt>Chủ trì</dt><dd>{name(selected.assigneeId)}</dd><dt>Phối hợp</dt><dd>{selected.collaboratorIds.map(name).join(", ") || "—"}</dd><dt>Ngày giao việc</dt><dd>{dateLabel(selected.startDate)}</dd><dt>Hạn thực hiện</dt><dd>{dateLabel(selected.dueDate)}</dd><dt>Báo cáo kế tiếp</dt><dd>{dateLabel(nextWorkReport(selected) || "")}</dd><dt>Tiến độ</dt><dd>{selected.progress}%</dd></>}</dl>{selected.kind === "source" && (manager || (selected.creatorId === user.id && selected.status === "submitted")) && <button onClick={() => openDraft("source", undefined, selected)}>Sửa nội dung ghi nhận</button>}{manager && selected.kind === "source" && <><button className="wp-primary" onClick={() => openDraft("task", selected)}><Plus size={16} /> Phân công từ nội dung này</button><small>Một nội dung có thể phân thành nhiều công việc.</small></>}{manager && selected.kind === "task" && !["completed", "cancelled"].includes(selected.status) && <button onClick={() => openDraft("task", undefined, selected)}>Sửa phân công / thời hạn</button>}</aside></div>
+      <div className="wp-update"><h3>{selected.kind === "source" ? "Ý kiến xem xét của lãnh đạo" : "Cập nhật xử lý"}</h3><label>Nội dung báo cáo / ý kiến <textarea value={note} onChange={e => setNote(e.target.value)} maxLength={10000} placeholder="Kết quả đã thực hiện, vướng mắc, bước tiếp theo hoặc ý kiến xác nhận…" /></label>{selected.kind === "task" && selected.status === "in_progress" && (selected.assigneeId === user.id || selected.collaboratorIds.includes(user.id)) && <label className="wp-progress-label">Tiến độ (%) <input type="number" min={0} max={100} value={progress} onChange={e => setProgress(Number(e.target.value))} />{selected.assigneeId !== user.id && <small>Báo cáo phối hợp không thay đổi tiến độ hoặc kỳ báo cáo của người chủ trì.</small>}</label>}<div className="wp-update-actions">
+        {selected.kind === "source" ? manager && <button disabled={busy || !note.trim()} onClick={() => act("review_source")}>Ghi nhận đã xem xét</button> : <>
+          {selected.status === "assigned" && selected.assigneeId === user.id && <button className="wp-primary" disabled={busy || !note.trim()} onClick={() => act("accept")}>Tiếp nhận công việc</button>}
+          {selected.status === "in_progress" && (selected.assigneeId === user.id || selected.collaboratorIds.includes(user.id)) && <button className="wp-primary" disabled={busy || !note.trim()} onClick={() => act("report")}>Gửi báo cáo tiến độ</button>}
+          {selected.status === "in_progress" && selected.assigneeId === user.id && <button disabled={busy || !note.trim()} onClick={() => act("request_completion")}>Đề nghị hoàn thành</button>}
+          {manager && selected.status === "pending_review" && <><button className="wp-primary" disabled={busy || !note.trim()} onClick={() => act("approve")}>Xác nhận hoàn thành</button><button disabled={busy || !note.trim()} onClick={() => act("return")}>Yêu cầu bổ sung</button></>}
+          {manager && ["completed", "cancelled"].includes(selected.status) && <button disabled={busy || !note.trim()} onClick={() => act("reopen")}>Mở lại công việc</button>}
+          {manager && !["completed", "cancelled"].includes(selected.status) && <button className="wp-danger" disabled={busy || !note.trim()} onClick={() => act("cancel")}>Hủy công việc có lý do</button>}
+        </>}
+      </div><p className="wp-muted">{selected.status === "pending_review" ? "Đã gửi kết quả. Chờ lãnh đạo xác nhận hoặc yêu cầu bổ sung." : "Nhập nội dung trước khi thực hiện thao tác. Đề nghị hoàn thành sẽ chờ lãnh đạo xác nhận."}</p></div>
+    </section>}
+    {draft && <div className="wp-overlay"><form className="wp-modal" role="dialog" aria-modal="true" aria-labelledby="wp-draft-title" onSubmit={submitDraft}><div className="wp-modal-heading"><div><span className="wp-eyebrow">PXVH1</span><h2 id="wp-draft-title">{draft.editingId ? draft.kind === "source" ? "Cập nhật nội dung ghi nhận" : "Điều chỉnh phân công" : draft.kind === "source" ? "Ghi nhận họp / phát sinh" : "Phân công công việc"}</h2></div><button type="button" onClick={() => setDraft(null)} disabled={busy} aria-label="Đóng biểu mẫu"><X size={20} /></button></div><div className="wp-form"><div className="wp-form-row"><label>Nguồn nội dung<select value={draft.sourceType} onChange={e => setDraft({ ...draft, sourceType: e.target.value as Draft["sourceType"] })}><option value="meeting">Cuộc họp</option><option value="request">Yêu cầu / công việc phát sinh</option></select></label><label>Ngày họp / ngày nội dung<input type="date" required value={draft.sourceDate} onChange={e => setDraft({ ...draft, sourceDate: e.target.value })} /></label></div><label>Tiêu đề<input required maxLength={250} value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="Ví dụ: Rà soát tồn tại sau họp giao ban tháng" /></label><label>{draft.kind === "source" ? "Nội dung cuộc họp, kết luận và yêu cầu cần xử lý" : "Nội dung công việc & kết quả cần đạt"}<textarea required rows={5} maxLength={10000} value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label>{draft.kind === "task" && <><div className="wp-form-row"><label>Cá nhân chủ trì<select required value={draft.assigneeId} onChange={e => setDraft({ ...draft, assigneeId: e.target.value, collaboratorIds: draft.collaboratorIds.filter(id => id !== Number(e.target.value)) })}><option value="">Chọn người chịu trách nhiệm</option>{data.members.map(member => <option key={member.id} value={member.id}>{member.displayName} · {member.position}</option>)}</select></label><label>Ưu tiên<select value={draft.priority} onChange={e => setDraft({ ...draft, priority: e.target.value as Draft["priority"] })}><option value="normal">Bình thường</option><option value="high">Cao</option></select></label></div><fieldset><legend><Users size={15} /> Cá nhân phối hợp</legend><div className="wp-members">{data.members.filter(member => member.id !== Number(draft.assigneeId)).map(member => <label key={member.id}><input type="checkbox" checked={draft.collaboratorIds.includes(member.id)} onChange={e => setDraft({ ...draft, collaboratorIds: e.target.checked ? [...draft.collaboratorIds, member.id] : draft.collaboratorIds.filter(id => id !== member.id) })} />{member.displayName}</label>)}</div></fieldset><div className="wp-form-row"><label>Ngày giao việc<input type="date" required value={draft.startDate} onChange={e => setDraft({ ...draft, startDate: e.target.value })} /></label><label>Hạn thực hiện<input type="date" required min={draft.startDate} value={draft.dueDate} onChange={e => setDraft({ ...draft, dueDate: e.target.value })} /></label><label>Báo cáo mỗi (ngày)<input type="number" required min={0} max={365} value={draft.reportEveryDays} onChange={e => setDraft({ ...draft, reportEveryDays: Number(e.target.value) })} /><small>0 = không định kỳ; kỳ cuối tại hạn thực hiện.</small></label></div>{draft.editingId && <p className="wp-muted">Sửa thời hạn hoặc chu kỳ giữ nguyên tiến độ. Đổi người chủ trì sẽ yêu cầu tiếp nhận lại và bắt đầu kỳ báo cáo mới; lịch sử cũ được giữ.</p>}</>}{error && <p role="alert" className="wp-red">{error}</p>}</div><div className="wp-modal-footer"><button type="button" disabled={busy} onClick={() => setDraft(null)}>Đóng</button><button className="wp-primary" disabled={busy}>{busy ? "Đang lưu…" : draft.kind === "source" ? "Gửi nội dung" : "Lưu phân công"}</button></div></form></div>}
+  </div>;
+}
+function Status({ status }: { status: WorkStatus }) { return <span className={`wp-status ${status}`}>{WORK_STATUSES[status]}</span>; }

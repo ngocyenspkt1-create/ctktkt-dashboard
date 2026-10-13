@@ -1,0 +1,121 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { canAccessWork, canManageWork, canReadWork, changeWork, nextWorkReport, pxDepartment, validateWorkInput, workInMonth, workToday } from "../lib/work-px.ts";
+import { ensureWorkSchema, getWork, listWork, saveWork, workHistory } from "../lib/work-px-store.ts";
+const member = id => ({ id, username: `synthetic${id}`, displayName: `Synthetic ${id}`, role: "viewer", permissions: ["work_px"] });
+const leader = { ...member(1), permissions: ["work_px", "manage_work_px"] };
+const task = () => ({ id: "synthetic-task", version: 1, kind: "task", sourceType: "meeting", title: "Synthetic task", description: "Synthetic acceptance criteria", sourceDate: "2026-09-25", sourceId: null, creatorId: 1, creatorName: "Synthetic 1", assigneeId: 2, collaboratorIds: [3], startDate: "2026-09-25", dueDate: "2026-10-10", reportEveryDays: 7, lastReportDate: null, status: "assigned", progress: 0, priority: "normal", createdAt: "2026-09-25T01:00:00Z", updatedAt: "2026-09-25T01:00:00Z" });
+function database() {
+  const sqlite = new DatabaseSync(":memory:");
+  const stmt = (sql, args = []) => ({ sql, args, bind: (...values) => stmt(sql, values), first: async () => sqlite.prepare(sql).get(...args) || null, all: async () => ({ results: sqlite.prepare(sql).all(...args) }), run: async () => { const r = sqlite.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } });
+  return { sqlite, db: { prepare: sql => stmt(sql), batch: async statements => { sqlite.exec("BEGIN"); try { const results = []; for (const s of statements) results.push(await s.run()); sqlite.exec("COMMIT"); return results; } catch (e) { sqlite.exec("ROLLBACK"); throw e; } } } };
+}
+test("Own records are isolated, leadership requires explicit grant, and revoked grants fail closed", () => {
+  assert.equal(canReadWork(member(2), task()), true);
+  assert.equal(canReadWork(member(3), task()), true);
+  assert.equal(canReadWork(member(4), task()), false);
+  assert.equal(canReadWork(leader, { ...task(), creatorId: 8 }), true);
+  assert.equal(canManageWork({ ...member(2), position: "Lãnh đạo phân xưởng", role: "supervisor" }), false);
+  assert.equal(canAccessWork({ ...member(2), permissions: [] }), false);
+  assert.equal(canReadWork({ ...member(2), permissions: [] }, task()), false);
+  assert.equal(pxDepartment("Vận hành 1"), true);
+  assert.equal(pxDepartment("Vận hành 2"), false);
+});
+test("Lifecycle requires acceptance, completion request and leader approval", () => {
+  assert.throws(() => changeWork(task(), member(2), "report", { text: "report", progress: 50 }, "2026-10-01"), /tiếp nhận/);
+  let item = changeWork(task(), member(2), "accept", { text: "accept" }, "2026-10-01").item;
+  item = changeWork(item, member(2), "report", { text: "progress", progress: 100 }, "2026-10-01").item;
+  assert.equal(item.status, "in_progress");
+  assert.throws(() => changeWork(item, leader, "approve", { text: "approved" }, "2026-10-01"), /chưa chờ/);
+  item = changeWork(item, member(2), "request_completion", { text: "result", progress: 100 }, "2026-10-01").item;
+  assert.equal(item.status, "pending_review");
+  assert.throws(() => changeWork(item, member(2), "approve", { text: "self approval" }, "2026-10-01"), /lãnh đạo/);
+  assert.throws(() => changeWork(item, member(3), "request_completion", { text: "result", progress: 100 }, "2026-10-01"), /quyền/);
+  item = changeWork(item, leader, "return", { text: "add evidence" }, "2026-10-01").item;
+  assert.equal(item.status, "in_progress");
+  item = changeWork(item, member(2), "request_completion", { text: "evidence", progress: 100 }, "2026-10-02").item;
+  item = changeWork(item, leader, "approve", { text: "verified" }, "2026-10-02").item;
+  assert.equal(item.status, "completed");
+  assert.throws(() => changeWork(item, member(2), "report", { text: "late report", progress: 50 }, "2026-10-03"), /tiếp nhận/);
+  assert.equal(changeWork(item, leader, "reopen", { text: "new evidence" }, "2026-10-03").item.status, "in_progress");
+});
+test("Periodic reporting ends at deadline, cooperation does not discharge primary reporting", () => {
+  let item = { ...task(), status: "in_progress" };
+  assert.equal(nextWorkReport(item), "2026-10-02");
+  item = changeWork(item, member(3), "report", { text: "cooperation", progress: 80 }, "2026-10-02").item;
+  assert.equal(item.lastReportDate, null); assert.equal(item.progress, 0);
+  item = changeWork(item, member(2), "report", { text: "primary", progress: 80 }, "2026-10-09").item;
+  assert.equal(nextWorkReport(item), "2026-10-10");
+  assert.equal(nextWorkReport({ ...item, lastReportDate: "2026-10-10" }), null);
+  assert.equal(nextWorkReport({ ...item, status: "pending_review" }), null);
+  assert.equal(nextWorkReport({ ...item, reportEveryDays: 0 }), null);
+  assert.equal(workToday(new Date("2026-10-12T18:00:00Z")), "2026-10-13");
+});
+test("Unfinished tasks carry into later months; closed tasks stop after closure month", () => {
+  assert.equal(workInMonth(task(), "2026-09"), true);
+  assert.equal(workInMonth(task(), "2026-10"), true);
+  assert.equal(workInMonth(task(), "2026-11"), true);
+  assert.equal(workInMonth({ ...task(), status: "completed", updatedAt: "2026-10-12T18:00:00Z" }, "2026-11"), false);
+  assert.equal(workInMonth({ ...task(), kind: "source" }, "2026-10"), false);
+  assert.equal(workInMonth(task(), "2026-08"), false);
+});
+test("Input validation rejects impossible dates, invalid participants and invalid cycles", () => {
+  const payload = task(); assert.equal(validateWorkInput(payload, "task").assigneeId, 2);
+  for (const bad of [{ dueDate: "2026-09-01" }, { sourceDate: "2026-02-30" }, { reportEveryDays: -1 }, { reportEveryDays: 366 }, { collaboratorIds: [2] }, { collaboratorIds: [1.2] }, { title: " " }, { description: "x".repeat(10001) }]) assert.throws(() => validateWorkInput({ ...payload, ...bad }, "task"));
+  assert.throws(() => changeWork(task(), member(2), "accept", { text: "" }, "2026-10-01"));
+  assert.throws(() => changeWork(task(), member(3), "accept", { text: "wrong actor" }, "2026-10-01"), /chủ trì/);
+});
+test("Meeting intake can be updated by its creator before review; one source can feed independent tasks", () => {
+  const source = { ...task(), id: "synthetic-source", kind: "source", creatorId: 2, assigneeId: null, collaboratorIds: [], status: "submitted" };
+  const edited = changeWork(source, member(2), "edit_source", { ...source, title: "Corrected minutes", text: "corrected" }, "2026-10-01").item;
+  assert.equal(edited.title, "Corrected minutes");
+  assert.throws(() => changeWork(edited, member(2), "review_source", { text: "self review" }, "2026-10-01"));
+  const reviewed = changeWork(edited, leader, "review_source", { text: "reviewed" }, "2026-10-01").item;
+  assert.throws(() => changeWork(reviewed, member(2), "edit_source", { ...edited, text: "changed" }, "2026-10-01"));
+  const managerEdit = changeWork(reviewed, leader, "edit_source", { ...edited, title: "Clarified minutes", text: "clarified" }, "2026-10-01").item;
+  assert.equal(managerEdit.title, "Clarified minutes");
+  const child = { ...task(), sourceId: source.id };
+  assert.equal(changeWork({ ...child, status: "in_progress" }, member(2), "report", { text: "result", progress: 50 }, "2026-10-01").item.sourceId, source.id);
+  assert.equal(source.status, "submitted");
+});
+test("Persisted records survive reload and outsiders cannot retrieve history via item id", async () => {
+  const { sqlite, db } = database(); try {
+    await ensureWorkSchema(db); await ensureWorkSchema(db);
+    await saveWork(db, task(), leader, "create_task", "assign", null);
+    assert.equal((await listWork(db, member(2))).length, 1);
+    assert.equal((await listWork(db, member(4))).length, 0);
+    await assert.rejects(getWork(db, task().id, member(4)), e => e.status === 404);
+    const row = await getWork(db, task().id, member(2));
+    const changed = changeWork(row, member(2), "accept", { text: "accept" }, "2026-10-01").item;
+    await saveWork(db, changed, member(2), "accept", "accept", row.version);
+    assert.equal((await getWork(db, task().id, leader)).status, "in_progress");
+    const history = await workHistory(db, task().id);
+    assert.equal(history.length, 2); assert.equal(history[0].actorId, 2); assert.equal(history[1].snapshot.status, "assigned");
+  } finally { sqlite.close(); }
+});
+test("Competing writers cannot overwrite or create false audit entries", async () => {
+  const { sqlite, db } = database(); try {
+    await ensureWorkSchema(db); const first = await saveWork(db, task(), leader, "create_task", "assign", null);
+    await saveWork(db, { ...first, status: "in_progress" }, member(2), "accept", "accept", 1);
+    await assert.rejects(saveWork(db, { ...first, dueDate: "2026-12-01" }, leader, "assign", "stale", 1), e => e.status === 409);
+    assert.equal((await getWork(db, first.id, leader)).dueDate, "2026-10-10");
+    assert.equal((await workHistory(db, first.id)).length, 2);
+  } finally { sqlite.close(); }
+});
+test("Audit failure rolls back task mutation", async () => {
+  const { sqlite, db } = database(); try {
+    await ensureWorkSchema(db); await saveWork(db, task(), leader, "create_task", "assign", null);
+    sqlite.exec("CREATE TRIGGER synthetic_audit_failure BEFORE INSERT ON px_work_events BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END");
+    await assert.rejects(saveWork(db, { ...task(), status: "completed" }, leader, "approve", "verified", 1));
+    assert.equal((await getWork(db, task().id, leader)).status, "assigned");
+    assert.equal((await workHistory(db, task().id)).length, 1);
+  } finally { sqlite.close(); }
+});
+test("Deadline adjustments preserve progress; changing primary requires new acceptance", () => {
+  const item = { ...task(), status: "in_progress", progress: 80, lastReportDate: "2026-10-05" };
+  const adjusted = changeWork(item, leader, "assign", { ...item, dueDate: "2026-10-31", text: "extend with reason" }, "2026-10-06").item;
+  assert.equal(adjusted.status, "in_progress"); assert.equal(adjusted.progress, 80); assert.equal(adjusted.lastReportDate, "2026-10-05");
+  const reassigned = changeWork(item, leader, "assign", { ...item, assigneeId: 3, collaboratorIds: [2], text: "reassign" }, "2026-10-06").item;
+  assert.equal(reassigned.status, "assigned"); assert.equal(reassigned.progress, 0); assert.equal(reassigned.lastReportDate, null);
+});
