@@ -73,3 +73,8 @@
 
 - Thanh lọc theo QLCV: hai ô ngày có icon lịch nền xanh, trạng thái và phễu xanh lá bên trái; phạm vi cá nhân, nút danh sách/bảng và tải lại bên phải. Hàng dưới xóa bộ lọc bên trái, tìm kiếm bên phải.
 - Khoảng ngày giới hạn trong tháng đang chọn; áp dụng bằng nút phễu. Công việc lọc theo giao nhau của startDate/dueDate với khoảng chọn; nguồn lọc theo sourceDate. Toàn tháng giữ nguyên logic workInMonth, bao gồm chuyển tiếp. Xóa bộ lọc xóa cả khoảng ngày.
+
+## Cấp quyền tham gia toàn bộ tài khoản — 13/10/2026
+- Theo lựa chọn người dùng: thêm work_px (ghi nhận/nhận việc/báo cáo) vào cả 25 cấu hình cương vị hiện có. Đã xác minh 165/165 tài khoản có quyền hiệu lực (bao gồm admin theo vai trò). Không mở khóa tài khoản.
+- Cập nhật trong giao dịch, đối chiếu từng cấu hình để bảo toàn role, permissions_version và mọi quyền khác, gồm manage_work_px. Snapshot trước cập nhật tại .tmp/work-px-grants-before.json (không đưa lên Git).
+- Ma trận dùng tên đầy đủ Công việc Phân xưởng và Quản lý công việc Phân xưởng; giải thích riêng quyền tham gia và quyền phân công/xác nhận hoàn thành.

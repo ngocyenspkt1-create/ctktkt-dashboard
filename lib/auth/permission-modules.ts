@@ -1,8 +1,8 @@
 import type { Permission } from "./session.ts";
 
 export const PERMISSION_MODULES: { permission: Permission; label: string; scopes: Permission[] }[] = [
-  { permission: "work_px", label: "Công việc PX", scopes: [] },
-  { permission: "manage_work_px", label: "Giao việc PX", scopes: [] },
+  { permission: "work_px", label: "Công việc Phân xưởng", scopes: [] },
+  { permission: "manage_work_px", label: "Quản lý công việc Phân xưởng", scopes: [] },
   { permission: "manage_users", label: "Quản trị", scopes: [] },
   { permission: "edit_monthly_kpi", label: "Chỉ tiêu tháng", scopes: [] },
   { permission: "edit_daily_inputs", label: "Số liệu ngày", scopes: [] },
