@@ -1,6 +1,7 @@
 import { hasPermission, isAdminUser, type SessionUser } from "./auth/session.ts";
 
-export const WORK_STATUSES = { submitted: "Chờ xem xét", reviewed: "Đã xem xét", assigned: "Chưa tiếp nhận", in_progress: "Đang thực hiện", pending_review: "Chờ xác nhận", completed: "Hoàn thành", cancelled: "Đã hủy" } as const;
+export const WORK_STATUSES = { submitted: "Chờ xem xét", reviewed: "Đã xem xét", assigned: "Chưa tiếp nhận", in_progress: "Đang thực hiện", pending_review: "Đang kiểm tra", waiting_response: "Chờ phản hồi", completed: "Hoàn thành", returned: "Trả lại", cancelled: "Đã hủy" } as const;
+export const WORK_FLOW = ["assigned", "in_progress", "pending_review", "waiting_response", "completed"] as const;
 export type WorkStatus = keyof typeof WORK_STATUSES;
 export type WorkMember = { id: number; displayName: string; position: string };
 export type WorkContent = { id: string; text: string };
@@ -9,7 +10,9 @@ export type WorkItem = {
   title: string; description: string; sourceDate: string; sourceId: string | null; meetingChair?: string;
   contentSections?: WorkContent[]; sourceContentId?: string | null;
   deletedAt?: string | null;
+  closedAt?: string | null;
   creatorId: number; creatorName: string; assigneeId: number | null; collaboratorIds: number[];
+  observerIds?: number[];
   startDate: string; dueDate: string; reportEveryDays: number; lastReportDate: string | null;
   status: WorkStatus; progress: number; priority: "normal" | "high"; createdAt: string; updatedAt: string;
 };
@@ -27,7 +30,7 @@ export function matchesWorkMember(member: WorkMember, query: string) {
   const normalize = (value: string) => value.toLocaleLowerCase("vi-VN").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
   return normalize(`${member.displayName} ${member.position}`).includes(normalize(query.trim()));
 }
-export function canReadWork(user: SessionUser, item: WorkItem) { return canAccessWork(user) && (canManageWork(user) || (item.kind === "source" && canEditWorkSource(user)) || item.creatorId === user.id || item.assigneeId === user.id || item.collaboratorIds.includes(user.id)); }
+export function canReadWork(user: SessionUser, item: WorkItem) { return canAccessWork(user) && (canManageWork(user) || (item.kind === "source" && canEditWorkSource(user)) || item.creatorId === user.id || item.assigneeId === user.id || item.collaboratorIds.includes(user.id) || Boolean(item.observerIds?.includes(user.id))); }
 export function isWorkAdmin(user: SessionUser) { return isAdminUser(user); }
 export function workToday(now = new Date()) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now); }
 export function validWorkDate(value: unknown): value is string { return typeof value === "string" && /^20\d{2}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value; }
@@ -64,13 +67,15 @@ export function validateWorkInput(body: Record<string, unknown>, kind: WorkItem[
   if (!validWorkDate(body.startDate) || !validWorkDate(body.dueDate) || body.dueDate < body.startDate) throw new WorkError("Hạn thực hiện phải từ ngày giao việc trở đi.");
   if (!Number.isSafeInteger(body.assigneeId) || Number(body.assigneeId) < 1) throw new WorkError("Chọn cá nhân chủ trì.");
   if (!Array.isArray(body.collaboratorIds) || body.collaboratorIds.length > 30 || body.collaboratorIds.some(id => !Number.isSafeInteger(id) || id < 1 || id === body.assigneeId)) throw new WorkError("Danh sách phối hợp không hợp lệ hoặc trùng người chủ trì.");
+  const observers = body.observerIds ?? [];
+  if (!Array.isArray(observers) || observers.length > 30 || observers.some(id => !Number.isSafeInteger(id) || id < 1 || id === body.assigneeId || (body.collaboratorIds as number[]).includes(id))) throw new WorkError("Người theo dõi không được trùng chủ trì hoặc phối hợp; tối đa 30 người.");
   if (!Number.isInteger(body.reportEveryDays) || Number(body.reportEveryDays) < 0 || Number(body.reportEveryDays) > 365) throw new WorkError("Chu kỳ báo cáo: 0 (không định kỳ) hoặc 1–365 ngày.");
   if (!["normal", "high"].includes(String(body.priority))) throw new WorkError("Mức ưu tiên không hợp lệ.");
-  return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"], meetingChair, startDate: body.startDate, dueDate: body.dueDate, assigneeId: Number(body.assigneeId), collaboratorIds: [...new Set(body.collaboratorIds)] as number[], reportEveryDays: Number(body.reportEveryDays), priority: body.priority as WorkItem["priority"] };
+  return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"], meetingChair, startDate: body.startDate, dueDate: body.dueDate, assigneeId: Number(body.assigneeId), collaboratorIds: [...new Set(body.collaboratorIds)] as number[], observerIds: [...new Set(observers)] as number[], reportEveryDays: Number(body.reportEveryDays), priority: body.priority as WorkItem["priority"] };
 }
 function addDays(date: string, count: number) { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + count); return d.toISOString().slice(0, 10); }
 export function nextWorkReport(item: WorkItem) {
-  if (item.kind !== "task" || !item.reportEveryDays || ["completed", "cancelled", "pending_review"].includes(item.status)) return null;
+  if (item.kind !== "task" || !item.reportEveryDays || ["completed", "cancelled", "pending_review", "waiting_response", "returned"].includes(item.status)) return null;
   // Final report is due on the task deadline even when the cycle extends beyond it.
   if (item.lastReportDate && item.lastReportDate >= item.dueDate) return null;
   return [addDays(item.lastReportDate || item.startDate, item.reportEveryDays), item.dueDate].sort()[0];
@@ -80,7 +85,7 @@ export function workInMonth(item: WorkItem, month: string) {
   if (item.kind === "source") return item.sourceDate.startsWith(month);
   const start = `${month}-01`, end = addDays(`${month}-01`, new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate() - 1);
   const closed = ["completed", "cancelled"].includes(item.status);
-  return item.startDate <= end && (item.dueDate >= start || (!closed) || workToday(new Date(item.updatedAt)) >= start);
+  return item.startDate <= end && (item.dueDate >= start || (!closed) || workToday(new Date(item.closedAt || item.updatedAt)) >= start);
 }
 export function changeWork(item: WorkItem, user: SessionUser, action: string, body: Record<string, unknown>, today: string): { item: WorkItem; text: string } {
   if (!canReadWork(user, item)) throw new WorkError("Không có quyền truy cập công việc này.", 403);
@@ -99,12 +104,32 @@ export function changeWork(item: WorkItem, user: SessionUser, action: string, bo
       next = { ...next, ...validateWorkInput({ ...body, contentSections: body.contentSections ?? item.contentSections }, "source") };
     } else if (action === "review_source" && manager) next.status = "reviewed";
     else throw new WorkError("Chỉ lãnh đạo được xem xét nội dung.", 403);
+  } else if (action === "comment") {
+    if (["completed", "cancelled"].includes(item.status) && !item.closedAt) next.closedAt = item.updatedAt;
+    return { item: next, text: note };
+  } else if (action === "extend") {
+    if (!manager) throw new WorkError("Chỉ lãnh đạo được gia hạn.", 403);
+    if (["completed", "cancelled"].includes(item.status)) throw new WorkError("Mở lại công việc trước khi gia hạn.", 409);
+    if (!validWorkDate(body.dueDate) || body.dueDate <= item.dueDate) throw new WorkError("Hạn mới phải sau hạn hiện tại.");
+    next.dueDate = body.dueDate;
+  } else if (action === "decline") {
+    if (!primary) throw new WorkError("Chỉ người chủ trì được trả lại phân công.", 403);
+    if (item.status !== "assigned") throw new WorkError("Chỉ trả lại việc chưa tiếp nhận.", 409);
+    next.status = "returned";
+  } else if (action === "request_feedback") {
+    if (!manager) throw new WorkError("Chỉ lãnh đạo được yêu cầu phản hồi.", 403);
+    if (item.status !== "pending_review") throw new WorkError("Cần kiểm tra kết quả trước khi yêu cầu phản hồi.", 409);
+    next.status = "waiting_response";
+  } else if (action === "respond") {
+    if (!primary) throw new WorkError("Chỉ người chủ trì được gửi phản hồi kết quả.", 403);
+    if (item.status !== "waiting_response") throw new WorkError("Công việc không chờ phản hồi.", 409);
+    next.status = "pending_review";
   } else if (action === "assign") {
     if (!manager) throw new WorkError("Chỉ lãnh đạo được phân công.", 403);
     if (["completed", "cancelled"].includes(item.status)) throw new WorkError("Mở lại công việc trước khi sửa phân công.", 409);
     const input = validateWorkInput(body, "task");
     const reassigned = input.assigneeId !== item.assigneeId;
-    next = { ...next, ...input, ...(reassigned ? { status: "assigned" as const, progress: 0, lastReportDate: null } : {}) };
+    next = { ...next, ...input, ...(reassigned || item.status === "returned" ? { status: "assigned" as const, progress: 0, lastReportDate: null } : {}) };
   } else if (action === "accept") {
     if (!primary) throw new WorkError("Chỉ người chủ trì được tiếp nhận.", 403);
     if (item.status !== "assigned") throw new WorkError("Công việc không ở trạng thái chờ tiếp nhận.", 409);
@@ -121,6 +146,8 @@ export function changeWork(item: WorkItem, user: SessionUser, action: string, bo
     if (action === "reopen" && !["completed", "cancelled"].includes(item.status)) throw new WorkError("Chỉ mở lại việc đã đóng.", 409);
     if (action === "cancel" && ["completed", "cancelled"].includes(item.status)) throw new WorkError("Công việc đã đóng.", 409);
     next.status = ({ approve: "completed", return: "in_progress", reopen: "in_progress", cancel: "cancelled" } as const)[action as "approve"];
+    if (["approve", "cancel"].includes(action)) next.closedAt = new Date().toISOString();
+    if (action === "reopen") next.closedAt = null;
     if (action === "reopen") { next.progress = 0; next.lastReportDate = null; }
   } else throw new WorkError("Thao tác không hợp lệ.");
   return { item: next, text: note };

@@ -235,3 +235,55 @@ test("Legacy assignments protect their original text when adding separate conten
     assert.equal((await getWork(db, source.id, leader)).contentSections[0].id, "legacy");
   } finally { sqlite.close(); }
 });
+test("Company-style review, response and closure require the right actor and state", () => {
+  let item = changeWork(task(), member(2), "accept", { text: "accepted" }, "2026-10-13").item;
+  item = changeWork(item, member(2), "request_completion", { text: "result", progress: 100 }, "2026-10-13").item;
+  item = changeWork(item, leader, "request_feedback", { text: "clarify result" }, "2026-10-13").item;
+  assert.equal(item.status, "waiting_response"); assert.equal(nextWorkReport(item), null);
+  assert.throws(() => changeWork(item, member(3), "respond", { text: "response" }, "2026-10-13"), /chủ trì/);
+  assert.throws(() => changeWork(item, leader, "approve", { text: "approve" }, "2026-10-13"), e => e.status === 409);
+  item = changeWork(item, member(2), "respond", { text: "evidence clarified" }, "2026-10-13").item;
+  assert.equal(item.status, "pending_review");
+  item = changeWork(item, leader, "approve", { text: "verified" }, "2026-10-13").item;
+  assert.equal(item.status, "completed"); assert.ok(item.closedAt);
+});
+test("Returned assignment must be reassigned and accepted; extension preserves all progress", () => {
+  const returned = changeWork(task(), member(2), "decline", { text: "wrong scope" }, "2026-10-13").item;
+  assert.equal(returned.status, "returned"); assert.equal(nextWorkReport(returned), null);
+  assert.throws(() => changeWork(returned, member(2), "accept", { text: "accept" }, "2026-10-13"), e => e.status === 409);
+  const reassigned = changeWork(returned, leader, "assign", { ...returned, text: "clarified assignment" }, "2026-10-13").item;
+  assert.equal(reassigned.status, "assigned");
+  const active = { ...task(), status: "in_progress", progress: 60, lastReportDate: "2026-10-05" };
+  const extended = changeWork(active, leader, "extend", { text: "reason", dueDate: "2026-10-31" }, "2026-10-13").item;
+  assert.equal(extended.status, "in_progress"); assert.equal(extended.progress, 60); assert.equal(extended.lastReportDate, active.lastReportDate);
+  assert.throws(() => changeWork(active, member(2), "extend", { text: "reason", dueDate: "2026-10-31" }, "2026-10-13"), /lãnh đạo/);
+  assert.throws(() => changeWork(active, leader, "extend", { text: "reason", dueDate: active.dueDate }, "2026-10-13"));
+  assert.throws(() => changeWork({ ...active, status: "completed" }, leader, "extend", { text: "reason", dueDate: "2026-10-31" }, "2026-10-13"));
+});
+test("Observers may view and exchange but cannot report, decline, change progress or close", () => {
+  const item = { ...task(), observerIds: [4], status: "in_progress", progress: 20, lastReportDate: "2026-10-02" };
+  assert.equal(canReadWork(member(4), item), true);
+  assert.equal(canReadWork(member(5), item), false);
+  assert.deepEqual(changeWork(item, member(4), "comment", { text: "observation" }, "2026-10-13").item, item);
+  for (const action of ["report", "request_completion", "decline", "approve", "request_feedback", "extend"]) assert.throws(() => changeWork(item, member(4), action, { text: "attempt", progress: 100, dueDate: "2026-10-31" }, "2026-10-13"));
+  assert.deepEqual(validateWorkInput({ ...task(), observerIds: [4, 4] }, "task").observerIds, [4]);
+  for (const ids of [[2], [3], [0], [1.5], Array.from({ length: 31 }, (_, i) => i + 10)]) assert.throws(() => validateWorkInput({ ...task(), observerIds: ids }, "task"));
+  assert.deepEqual(validateWorkInput(task(), "task").observerIds, []);
+});
+test("Exchange and extension journal atomically, without discharging a report cycle", async () => {
+  const { sqlite, db } = database(); try {
+    await ensureWorkSchema(db);
+    let current = await saveWork(db, { ...task(), observerIds: [4], status: "in_progress", lastReportDate: "2026-10-01", progress: 50 }, leader, "create_task", "assign", null);
+    current = await saveWork(db, changeWork(current, member(4), "comment", { text: "question" }, "2026-10-13").item, member(4), "comment", "question", current.version);
+    current = await saveWork(db, changeWork(current, leader, "extend", { text: "new deadline reason", dueDate: "2026-10-31" }, "2026-10-13").item, leader, "extend", "new deadline reason", current.version);
+    assert.equal(current.lastReportDate, "2026-10-01"); assert.equal(current.progress, 50);
+    assert.equal((await listWork(db, member(4))).length, 1);
+    const history = await workHistory(db, current.id);
+    assert.equal(history[0].action, "extend"); assert.equal(history[1].actorId, 4);
+  } finally { sqlite.close(); }
+});
+test("Exchange after closure cannot make a completed task reappear in subsequent months", () => {
+  const closed = { ...task(), status: "completed", updatedAt: "2026-10-13T02:00:00Z" };
+  const discussed = changeWork(closed, leader, "comment", { text: "follow-up" }, "2026-11-13").item;
+  assert.equal(workInMonth({ ...discussed, updatedAt: "2026-11-13T02:00:00Z" }, "2026-11"), false);
+});

@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     // Managers can assign any active account; participants see only relevant names.
     const { results } = await db.prepare("SELECT id, display_name AS displayName, position, department FROM users WHERE COALESCE(status, 'active') = 'active' ORDER BY display_name").all();
     const items = await listWork(db, user);
-    const relevantIds = new Set(items.flatMap(item => [item.creatorId, item.assigneeId, ...item.collaboratorIds]));
+    const relevantIds = new Set(items.flatMap(item => [item.creatorId, item.assigneeId, ...item.collaboratorIds, ...(item.observerIds || [])]));
     const members = results.filter(row => canManageWork(user) || relevantIds.has(Number(row.id))).map(row => ({ id: Number(row.id), displayName: String(row.displayName), position: String(row.position || "") }));
     return Response.json({ items, members, today: workToday() }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return failure(error); }
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const { db, user } = await context();
     const checkAssignees = async (input: ReturnType<typeof validateWorkInput>) => {
       if (!("assigneeId" in input) || input.assigneeId === undefined) return;
-      for (const id of [input.assigneeId, ...(input.collaboratorIds || [])]) {
+      for (const id of [input.assigneeId, ...(input.collaboratorIds || []), ...("observerIds" in input ? input.observerIds || [] : [])]) {
         const member = await loadCurrentUser(db, id);
         if (!member) throw new WorkError("Người được phân công phải có tài khoản đang hoạt động trên web.");
       }
@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       const now = new Date().toISOString();
       const item: WorkItem = { id: crypto.randomUUID(), version: 1, kind, title: input.title, description: input.description, sourceDate: input.sourceDate, sourceType: input.sourceType, meetingChair: input.meetingChair, sourceId, creatorId: user.id, creatorName: user.displayName, assigneeId: "assigneeId" in input ? input.assigneeId! : null, collaboratorIds: "collaboratorIds" in input ? input.collaboratorIds! : [], startDate: "startDate" in input ? input.startDate! : input.sourceDate, dueDate: "dueDate" in input ? input.dueDate! : input.sourceDate, reportEveryDays: "reportEveryDays" in input ? input.reportEveryDays! : 0, priority: "priority" in input ? input.priority! : "normal", progress: 0, status: kind === "source" ? "submitted" : "assigned", lastReportDate: null, createdAt: now, updatedAt: now };
       item.sourceContentId = sourceContentId;
+      if ("observerIds" in input) item.observerIds = input.observerIds;
       if (kind === "source" && "contentSections" in input && input.contentSections) item.contentSections = input.contentSections;
       return Response.json({ item: await saveWork(db, item, user, String(body.action), item.description, null, sourceGuard) });
     }
