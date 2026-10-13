@@ -78,3 +78,5 @@
 - Theo lựa chọn người dùng: thêm work_px (ghi nhận/nhận việc/báo cáo) vào cả 25 cấu hình cương vị hiện có. Đã xác minh 165/165 tài khoản có quyền hiệu lực (bao gồm admin theo vai trò). Không mở khóa tài khoản.
 - Cập nhật trong giao dịch, đối chiếu từng cấu hình để bảo toàn role, permissions_version và mọi quyền khác, gồm manage_work_px. Snapshot trước cập nhật tại .tmp/work-px-grants-before.json (không đưa lên Git).
 - Ma trận dùng tên đầy đủ Công việc Phân xưởng và Quản lý công việc Phân xưởng; giải thích riêng quyền tham gia và quyền phân công/xác nhận hoàn thành.
+
+- Tên chủ trì xanh biển, tên phối hợp đen dưới chủ trì; cờ vàng bên trái tiêu đề khi còn 0–3 ngày tới hạn, không áp dụng công việc hoàn thành/hủy. Quá hạn đổi tiêu đề và nội dung sang đỏ trong danh sách, bảng trạng thái và chi tiết. Demo có mẫu sắp đến hạn và quá hạn; không sửa dữ liệu công việc thật.

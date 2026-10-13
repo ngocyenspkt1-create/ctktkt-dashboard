@@ -37,3 +37,10 @@
 .wp-list-search{margin-top:20px}
 @media(max-width:768px){.wp-filter-left,.wp-filter-right{width:100%}.wp-date-control{width:calc(50% - 4px)}.wp-toolbar .wp-month{margin-left:0}.wp .wp-filter-left>select{flex:1}.wp .wp-scope-control select{width:160px}}
 .wp-filter-right{margin-left:auto}@media(max-width:768px){.wp-filter-right{margin-left:0}}
+
+/* Assignment names and task deadline signals. */
+.wp .wp-primary-name{color:#1464bc;font-weight:600}
+.wp .wp-collaborator-names{color:#111;font-size:14px;line-height:1.6;font-weight:400;margin-top:6px;white-space:normal;overflow-wrap:anywhere}
+.wp .wp-deadline-flag{color:#e6b220;flex-shrink:0;margin-top:3px}
+.wp-board-card .wp-deadline-flag{display:inline-block;vertical-align:middle;margin:0 6px 0 0}
+.wp .wp-task-overdue .wp-title,.wp .wp-task-overdue .wp-task-description,.wp .wp-task-overdue .wp-detail-heading h2,.wp .wp-task-overdue .wp-description,.wp .wp-task-overdue.wp-board-card>strong{color:#c62828}
