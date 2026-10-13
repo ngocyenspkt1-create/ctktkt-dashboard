@@ -1,7 +1,7 @@
 import { getRawDb } from "@/db";
 import { getSessionUser } from "@/lib/auth/server";
 import { loadCurrentUser } from "@/lib/auth/current-user";
-import { canAccessWork, canManageWork, changeWork, isWorkAdmin, pxDepartment, validateWorkInput, workToday, WorkError, type WorkItem } from "@/lib/work-px";
+import { canAccessWork, canManageWork, changeWork, isWorkAdmin, pxDepartment, sourceContentLink, validateWorkInput, workToday, WorkError, type WorkItem } from "@/lib/work-px";
 import { ensureWorkSchema, getWork, listWork, saveWork, workHistory } from "@/lib/work-px-store";
 
 export const dynamic = "force-dynamic";
@@ -53,15 +53,18 @@ export async function POST(request: Request) {
       const kind = body.action === "create_source" ? "source" : "task";
       if (kind === "task" && !canManageWork(user)) throw new WorkError("Chỉ lãnh đạo được giao việc.", 403);
       const input = validateWorkInput(body, kind); await checkAssignees(input);
-      let sourceId: string | null = null;
+      let sourceId: string | null = null, sourceContentId: string | null = null;
+      let sourceGuard: { sourceId: string; version: number } | undefined;
       if (kind === "task" && body.sourceId) {
         const source = await getWork(db, String(body.sourceId), user);
-        if (source.kind !== "source") throw new WorkError("Nguồn phải là nội dung họp/phát sinh.");
-        sourceId = source.id;
+        const link = sourceContentLink(source, body.sourceContentId, body.sourceVersion);
+        sourceId = link.sourceId; sourceContentId = link.sourceContentId; sourceGuard = link;
       }
       const now = new Date().toISOString();
       const item: WorkItem = { id: crypto.randomUUID(), version: 1, kind, title: input.title, description: input.description, sourceDate: input.sourceDate, sourceType: input.sourceType, meetingChair: input.meetingChair, sourceId, creatorId: user.id, creatorName: user.displayName, assigneeId: "assigneeId" in input ? input.assigneeId! : null, collaboratorIds: "collaboratorIds" in input ? input.collaboratorIds! : [], startDate: "startDate" in input ? input.startDate! : input.sourceDate, dueDate: "dueDate" in input ? input.dueDate! : input.sourceDate, reportEveryDays: "reportEveryDays" in input ? input.reportEveryDays! : 0, priority: "priority" in input ? input.priority! : "normal", progress: 0, status: kind === "source" ? "submitted" : "assigned", lastReportDate: null, createdAt: now, updatedAt: now };
-      return Response.json({ item: await saveWork(db, item, user, String(body.action), item.description, null) });
+      item.sourceContentId = sourceContentId;
+      if (kind === "source" && "contentSections" in input && input.contentSections) item.contentSections = input.contentSections;
+      return Response.json({ item: await saveWork(db, item, user, String(body.action), item.description, null, sourceGuard) });
     }
     const item = await getWork(db, String(body.id || ""), user);
     if (body.version !== item.version) throw new WorkError("Công việc vừa thay đổi. Tải lại trước khi lưu.", 409);

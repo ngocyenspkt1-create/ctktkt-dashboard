@@ -9,5 +9,5 @@ export const workPreviewData = { today: "2026-10-13", members, items: [
   { ...base, id: "demo-3", title: "Cập nhật danh mục theo dõi khắc phục khiếm khuyết", dueDate: "2026-10-10", lastReportDate: "2026-10-05", priority: "high", progress: 80 },
   { ...base, id: "demo-4", title: "Rà soát tài liệu huấn luyện và quy trình vận hành", status: "pending_review", progress: 100 },
   { ...base, id: "demo-5", title: "Hoàn thiện báo cáo tổng kết công việc chuyển tiếp", startDate: "2026-09-24", status: "completed", progress: 100 },
-  { ...base, id: "demo-6", kind: "source", title: "Kết luận họp giao ban PXVH1 ngày 12/10", sourceDate: "2026-10-12", status: "submitted", assigneeId: null, collaboratorIds: [], progress: 0 },
+  { ...base, id: "demo-6", kind: "source", title: "Kết luận họp giao ban PXVH1 ngày 12/10", sourceDate: "2026-10-12", status: "submitted", assigneeId: null, collaboratorIds: [], progress: 0, contentSections: [{ id: "demo-topic-1", text: "Rà soát tồn tại kỹ thuật, tổng hợp danh mục và đề xuất thời hạn khắc phục. Đây là dữ liệu minh họa." }, { id: "demo-topic-2", text: "Cập nhật tài liệu huấn luyện vận hành và lập kế hoạch thực hiện trong tháng. Đây là dữ liệu minh họa." }] },
 ] as WorkItem[] };

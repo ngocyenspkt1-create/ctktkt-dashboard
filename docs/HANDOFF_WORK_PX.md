@@ -1,6 +1,7 @@
 # Công việc Phân xưởng PXVH1 — 13/10/2026
 
 ## Phạm vi đã thống nhất
+- Bổ sung nhiều nội dung/cuộc họp: biểu mẫu có Thêm nội dung và Xóa từng mục chưa phân công. Mỗi mục giữ mã riêng; chi tiết có Giao nội dung này để tạo việc với người chủ trì, hạn và chu kỳ riêng. Task lưu sourceId + sourceContentId; sửa cuộc họp không tự sửa task. Cuộc họp cũ hiển thị một mục legacy; không xóa mục có phân công kể cả task đã đóng. Việc gắn nội dung kiểm tra phiên bản nguồn ngay trong giao dịch để tránh phân công nhầm khi có chỉnh sửa đồng thời. Tối đa 50 mục, tổng văn bản 10.000 ký tự.
 - Bổ sung 13/10/2026: người chủ trì cuộc họp nhập họ tên (tối đa 200 ký tự), hiện khi nguồn là Cuộc họp; lưu cùng nội dung và bản chụp nhật ký. Dữ liệu cũ không có trường này vẫn hợp lệ, hiển thị Chưa cập nhật. Thông tin được mang sang biểu mẫu phân công từ nội dung họp, độc lập với cá nhân chủ trì công việc.
 - Bổ sung vào CTKTKT, dùng riêng PXVH1; không sửa công thức hoặc dữ liệu báo cáo hiện hữu.
 - Cá nhân ghi nhận nội dung họp/yêu cầu phát sinh. Lãnh đạo xem xét, tách thành một hoặc nhiều việc.

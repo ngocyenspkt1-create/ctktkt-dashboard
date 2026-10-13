@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { canAccessWork, canManageWork, canReadWork, changeWork, nextWorkReport, pxDepartment, validateWorkInput, workInMonth, workToday } from "../lib/work-px.ts";
+import { canAccessWork, canManageWork, canReadWork, changeWork, nextWorkReport, pxDepartment, sourceContentLink, validateWorkInput, workContents, workInMonth, workToday } from "../lib/work-px.ts";
 import { ensureWorkSchema, getWork, listWork, saveWork, workHistory } from "../lib/work-px-store.ts";
 const member = id => ({ id, username: `synthetic${id}`, displayName: `Synthetic ${id}`, role: "viewer", permissions: ["work_px"] });
 const leader = { ...member(1), permissions: ["work_px", "manage_work_px"] };
@@ -135,5 +135,63 @@ test("Meeting chair persists through editing and audit, while legacy and non-mee
     const history = await workHistory(db, source.id);
     assert.equal(history[0].snapshot.meetingChair, "Synthetic chair B");
     assert.equal(history[1].snapshot.meetingChair, "Synthetic chair A");
+  } finally { sqlite.close(); }
+});
+const meeting = () => ({ ...task(), id: "synthetic-meeting", kind: "source", status: "submitted", assigneeId: null, collaboratorIds: [], contentSections: [{ id: "topic-a", text: "Synthetic first conclusion" }, { id: "topic-b", text: "Synthetic second conclusion" }] });
+test("Separate meeting contents validate and legacy text remains one assignable content", () => {
+  const input = validateWorkInput(meeting(), "source");
+  assert.deepEqual(input.contentSections, meeting().contentSections);
+  assert.match(input.description, /Nội dung 2/);
+  const legacy = { ...task(), kind: "source" };
+  assert.deepEqual(workContents(legacy), [{ id: "legacy", text: legacy.description }]);
+  assert.equal(sourceContentLink(legacy, undefined, undefined).sourceContentId, "legacy");
+  assert.throws(() => sourceContentLink(meeting(), undefined, undefined), /cụ thể/);
+  assert.throws(() => sourceContentLink(meeting(), "topic-c", 1));
+  assert.throws(() => sourceContentLink(meeting(), "topic-a", 2), e => e.status === 409);
+  for (const sections of [[], [{ id: "x", text: " " }], [{ id: "x", text: "a" }, { id: "x", text: "b" }], Array.from({ length: 51 }, (_, i) => ({ id: `topic-${i}`, text: "a" })), [{ id: "a", text: "x".repeat(6000) }, { id: "b", text: "x".repeat(6000) }]]) assert.throws(() => validateWorkInput({ ...meeting(), contentSections: sections }, "source"));
+});
+test("Two contents create independent assignments and reordering keeps each association", async () => {
+  const { sqlite, db } = database(); try {
+    await ensureWorkSchema(db); const source = await saveWork(db, meeting(), leader, "create_source", "meeting", null);
+    for (const [i, content] of source.contentSections.entries()) {
+      const link = sourceContentLink(source, content.id, source.version);
+      await saveWork(db, { ...task(), id: `assignment-${i}`, assigneeId: i + 2, sourceId: link.sourceId, sourceContentId: link.sourceContentId, description: content.text }, leader, "create_task", "assign", null, link);
+    }
+    const reordered = changeWork(source, leader, "edit_source", { ...source, contentSections: [...source.contentSections].reverse(), text: "reorder" }, "2026-10-13").item;
+    await saveWork(db, reordered, leader, "edit_source", "reorder", source.version);
+    assert.equal((await getWork(db, "assignment-0", leader)).sourceContentId, "topic-a");
+    assert.equal((await getWork(db, "assignment-1", leader)).assigneeId, 3);
+    assert.equal((await getWork(db, source.id, leader)).contentSections[0].id, "topic-b");
+  } finally { sqlite.close(); }
+});
+test("Assigning a stale meeting snapshot fails atomically with no task or false audit", async () => {
+  const { sqlite, db } = database(); try {
+    await ensureWorkSchema(db); const source = await saveWork(db, meeting(), leader, "create_source", "meeting", null);
+    const link = sourceContentLink(source, "topic-a", source.version);
+    await saveWork(db, { ...source, title: "Updated meeting" }, leader, "edit_source", "update", source.version);
+    await assert.rejects(saveWork(db, { ...task(), sourceId: source.id, sourceContentId: "topic-a" }, leader, "create_task", "stale assignment", null, link), e => e.status === 409);
+    assert.equal((await listWork(db, leader)).length, 1);
+    assert.equal((await workHistory(db, task().id)).length, 0);
+  } finally { sqlite.close(); }
+});
+test("Deleting a content with a concurrent assignment is rejected without changing meeting or history", async () => {
+  const { sqlite, db } = database(); try {
+    await ensureWorkSchema(db); const source = await saveWork(db, meeting(), leader, "create_source", "meeting", null);
+    const removing = { ...source, contentSections: [source.contentSections[1]] };
+    const link = sourceContentLink(source, "topic-a", source.version);
+    await saveWork(db, { ...task(), sourceId: source.id, sourceContentId: "topic-a" }, leader, "create_task", "assign", null, link);
+    await assert.rejects(saveWork(db, removing, leader, "edit_source", "remove", source.version), e => e.status === 409);
+    assert.equal((await getWork(db, source.id, leader)).contentSections.length, 2);
+    assert.equal((await workHistory(db, source.id)).length, 1);
+  } finally { sqlite.close(); }
+});
+test("Legacy assignments protect their original text when adding separate contents", async () => {
+  const { sqlite, db } = database(); try {
+    await ensureWorkSchema(db); const source = await saveWork(db, { ...meeting(), contentSections: undefined }, leader, "create_source", "legacy", null);
+    await saveWork(db, { ...task(), sourceId: source.id }, leader, "create_task", "old assignment", null);
+    const migrated = { ...source, contentSections: [...workContents(source), { id: "new-topic", text: "New topic" }] };
+    const updated = await saveWork(db, migrated, leader, "edit_source", "add", source.version);
+    await assert.rejects(saveWork(db, { ...updated, contentSections: [updated.contentSections[1]] }, leader, "edit_source", "remove original", updated.version), e => e.status === 409);
+    assert.equal((await getWork(db, source.id, leader)).contentSections[0].id, "legacy");
   } finally { sqlite.close(); }
 });

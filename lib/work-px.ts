@@ -3,9 +3,11 @@ import { hasPermission, isAdminUser, type SessionUser } from "./auth/session.ts"
 export const WORK_STATUSES = { submitted: "Chờ xem xét", reviewed: "Đã xem xét", assigned: "Chưa tiếp nhận", in_progress: "Đang thực hiện", pending_review: "Chờ xác nhận", completed: "Hoàn thành", cancelled: "Đã hủy" } as const;
 export type WorkStatus = keyof typeof WORK_STATUSES;
 export type WorkMember = { id: number; displayName: string; position: string };
+export type WorkContent = { id: string; text: string };
 export type WorkItem = {
   id: string; version: number; kind: "source" | "task"; sourceType: "meeting" | "request";
   title: string; description: string; sourceDate: string; sourceId: string | null; meetingChair?: string;
+  contentSections?: WorkContent[]; sourceContentId?: string | null;
   creatorId: number; creatorName: string; assigneeId: number | null; collaboratorIds: number[];
   startDate: string; dueDate: string; reportEveryDays: number; lastReportDate: string | null;
   status: WorkStatus; progress: number; priority: "normal" | "high"; createdAt: string; updatedAt: string;
@@ -20,12 +22,34 @@ export function isWorkAdmin(user: SessionUser) { return isAdminUser(user); }
 export function workToday(now = new Date()) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now); }
 export function validWorkDate(value: unknown): value is string { return typeof value === "string" && /^20\d{2}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value; }
 function text(value: unknown, label: string, max: number, required = true) { if (typeof value !== "string" || value.trim().length > max || (required && !value.trim())) throw new WorkError(`${label} phải có nội dung và tối đa ${max.toLocaleString("vi-VN")} ký tự.`); return value.trim(); }
+export function workContents(item: WorkItem): WorkContent[] {
+  return item.contentSections?.length ? item.contentSections : [{ id: "legacy", text: item.description }];
+}
+function validateContents(value: unknown): WorkContent[] {
+  if (!Array.isArray(value) || !value.length || value.length > 50) throw new WorkError("Cuộc họp phải có từ 1 đến 50 nội dung.");
+  const seen = new Set<string>();
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || typeof entry.id !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(entry.id) || seen.has(entry.id)) throw new WorkError("Mã nội dung không hợp lệ hoặc bị trùng.");
+    seen.add(entry.id);
+    return { id: entry.id, text: text(entry.text, `Nội dung ${index + 1}`, 10000) };
+  });
+}
+export function sourceContentLink(source: WorkItem, contentId: unknown, version: unknown) {
+  if (source.kind !== "source") throw new WorkError("Nguồn phải là nội dung họp/phát sinh.");
+  if (version !== undefined && version !== source.version) throw new WorkError("Nội dung họp vừa thay đổi. Tải lại trước khi phân công.", 409);
+  const sections = workContents(source);
+  const section = sections.find(entry => entry.id === (contentId || (sections.length === 1 ? sections[0].id : null)));
+  if (!section) throw new WorkError("Chọn một nội dung cụ thể của cuộc họp để phân công.");
+  return { sourceId: source.id, sourceContentId: section.id, version: source.version };
+}
 export function validateWorkInput(body: Record<string, unknown>, kind: WorkItem["kind"]) {
-  const title = text(body.title, "Tiêu đề", 250), description = text(body.description, "Nội dung", 10000);
+  const title = text(body.title, "Tiêu đề", 250);
+  const contentSections = kind === "source" && body.contentSections !== undefined ? validateContents(body.contentSections) : undefined;
+  const description = text(contentSections ? contentSections.map((entry, index) => `Nội dung ${index + 1}:\n${entry.text}`).join("\n\n") : body.description, "Tổng nội dung", 10000);
   if (!validWorkDate(body.sourceDate)) throw new WorkError("Ngày nội dung không hợp lệ.");
   if (!["meeting", "request"].includes(String(body.sourceType))) throw new WorkError("Nguồn công việc không hợp lệ.");
   const meetingChair = body.sourceType === "meeting" ? text(body.meetingChair ?? "", "Người chủ trì cuộc họp", 200, false) : "";
-  if (kind === "source") return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"], meetingChair };
+  if (kind === "source") return { title, description, sourceDate: body.sourceDate, sourceType: body.sourceType as WorkItem["sourceType"], meetingChair, ...(contentSections ? { contentSections } : {}) };
   if (!validWorkDate(body.startDate) || !validWorkDate(body.dueDate) || body.dueDate < body.startDate) throw new WorkError("Hạn thực hiện phải từ ngày giao việc trở đi.");
   if (!Number.isSafeInteger(body.assigneeId) || Number(body.assigneeId) < 1) throw new WorkError("Chọn cá nhân chủ trì.");
   if (!Array.isArray(body.collaboratorIds) || body.collaboratorIds.length > 30 || body.collaboratorIds.some(id => !Number.isSafeInteger(id) || id < 1 || id === body.assigneeId)) throw new WorkError("Danh sách phối hợp không hợp lệ hoặc trùng người chủ trì.");
@@ -54,7 +78,7 @@ export function changeWork(item: WorkItem, user: SessionUser, action: string, bo
   if (item.kind === "source") {
     if (action === "edit_source") {
       if (!manager && (item.creatorId !== user.id || item.status !== "submitted")) throw new WorkError("Chỉ sửa nội dung của mình trước khi lãnh đạo xem xét.", 403);
-      next = { ...next, ...validateWorkInput(body, "source") };
+      next = { ...next, ...validateWorkInput({ ...body, contentSections: body.contentSections ?? item.contentSections }, "source") };
     } else if (action === "review_source" && manager) next.status = "reviewed";
     else throw new WorkError("Chỉ lãnh đạo được xem xét nội dung.", 403);
   } else if (action === "assign") {
