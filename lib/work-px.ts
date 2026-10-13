@@ -8,6 +8,7 @@ export type WorkItem = {
   id: string; version: number; kind: "source" | "task"; sourceType: "meeting" | "request";
   title: string; description: string; sourceDate: string; sourceId: string | null; meetingChair?: string;
   contentSections?: WorkContent[]; sourceContentId?: string | null;
+  deletedAt?: string | null;
   creatorId: number; creatorName: string; assigneeId: number | null; collaboratorIds: number[];
   startDate: string; dueDate: string; reportEveryDays: number; lastReportDate: string | null;
   status: WorkStatus; progress: number; priority: "normal" | "high"; createdAt: string; updatedAt: string;
@@ -16,13 +17,17 @@ export type WorkEvent = { id: string; itemId: string; actorId: number; actorName
 export class WorkError extends Error { status: number; constructor(message: string, status = 400) { super(message); this.status = status; } }
 export function pxDepartment(value: unknown) { return ["vận hành 1", "pxvh1", "phân xưởng vận hành 1"].includes(String(value || "").trim().toLocaleLowerCase("vi-VN")); }
 export function canManageWork(user: SessionUser) { return hasPermission(user, "manage_work_px"); }
+export function canEditWorkSource(user: SessionUser) {
+  const position = (user.position || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi-VN");
+  return canAccessWork(user) && (canManageWork(user) || ["quản đốc", "phó quản đốc"].includes(position));
+}
 // Every authenticated active account can participate; management stays explicitly granted.
 export function canAccessWork(user: SessionUser) { return Number.isSafeInteger(user.id) && user.id > 0 && !user.mustChangePassword; }
 export function matchesWorkMember(member: WorkMember, query: string) {
   const normalize = (value: string) => value.toLocaleLowerCase("vi-VN").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
   return normalize(`${member.displayName} ${member.position}`).includes(normalize(query.trim()));
 }
-export function canReadWork(user: SessionUser, item: WorkItem) { return canAccessWork(user) && (canManageWork(user) || item.creatorId === user.id || item.assigneeId === user.id || item.collaboratorIds.includes(user.id)); }
+export function canReadWork(user: SessionUser, item: WorkItem) { return canAccessWork(user) && (canManageWork(user) || (item.kind === "source" && canEditWorkSource(user)) || item.creatorId === user.id || item.assigneeId === user.id || item.collaboratorIds.includes(user.id)); }
 export function isWorkAdmin(user: SessionUser) { return isAdminUser(user); }
 export function workToday(now = new Date()) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now); }
 export function validWorkDate(value: unknown): value is string { return typeof value === "string" && /^20\d{2}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value; }
@@ -41,6 +46,7 @@ function validateContents(value: unknown): WorkContent[] {
 }
 export function sourceContentLink(source: WorkItem, contentId: unknown, version: unknown) {
   if (source.kind !== "source") throw new WorkError("Nguồn phải là nội dung họp/phát sinh.");
+  if (source.deletedAt) throw new WorkError("Khôi phục nội dung đã xóa trước khi phân công.", 409);
   if (version !== undefined && version !== source.version) throw new WorkError("Nội dung họp vừa thay đổi. Tải lại trước khi phân công.", 409);
   const sections = workContents(source);
   const section = sections.find(entry => entry.id === (contentId || (sections.length === 1 ? sections[0].id : null)));
@@ -81,8 +87,15 @@ export function changeWork(item: WorkItem, user: SessionUser, action: string, bo
   const manager = canManageWork(user), primary = item.assigneeId === user.id, participant = primary || item.collaboratorIds.includes(user.id);
   let next = { ...item }; const note = text(body.text, "Nội dung cập nhật", 10000);
   if (item.kind === "source") {
+    if (action === "delete_source" || action === "restore_source") {
+      if (!canEditWorkSource(user)) throw new WorkError("Chỉ Quản đốc, Phó quản đốc hoặc lãnh đạo được cấp quyền mới được xóa/khôi phục nội dung.", 403);
+      if ((action === "delete_source") === Boolean(item.deletedAt)) throw new WorkError("Trạng thái nội dung vừa thay đổi. Tải lại để kiểm tra.", 409);
+      next.deletedAt = action === "delete_source" ? new Date().toISOString() : null;
+      return { item: next, text: note };
+    }
+    if (item.deletedAt) throw new WorkError("Khôi phục nội dung trước khi chỉnh sửa.", 409);
     if (action === "edit_source") {
-      if (!manager && (item.creatorId !== user.id || item.status !== "submitted")) throw new WorkError("Chỉ sửa nội dung của mình trước khi lãnh đạo xem xét.", 403);
+      if (!canEditWorkSource(user) && (item.creatorId !== user.id || item.status !== "submitted")) throw new WorkError("Chỉ sửa nội dung của mình trước khi lãnh đạo xem xét.", 403);
       next = { ...next, ...validateWorkInput({ ...body, contentSections: body.contentSections ?? item.contentSections }, "source") };
     } else if (action === "review_source" && manager) next.status = "reviewed";
     else throw new WorkError("Chỉ lãnh đạo được xem xét nội dung.", 403);

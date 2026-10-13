@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { canAccessWork, canManageWork, canReadWork, changeWork, matchesWorkMember, nextWorkReport, pxDepartment, sourceContentLink, validateWorkInput, workContents, workInMonth, workToday } from "../lib/work-px.ts";
+import { canAccessWork, canEditWorkSource, canManageWork, canReadWork, changeWork, matchesWorkMember, nextWorkReport, pxDepartment, sourceContentLink, validateWorkInput, workContents, workInMonth, workToday } from "../lib/work-px.ts";
 import { ensureWorkSchema, getWork, listWork, saveWork, workHistory } from "../lib/work-px-store.ts";
 const member = id => ({ id, username: `synthetic${id}`, displayName: `Synthetic ${id}`, role: "viewer", permissions: ["work_px"] });
 const leader = { ...member(1), permissions: ["work_px", "manage_work_px"] };
@@ -153,6 +153,31 @@ test("Meeting chair persists through editing and audit, while legacy and non-mee
   } finally { sqlite.close(); }
 });
 const meeting = () => ({ ...task(), id: "synthetic-meeting", kind: "source", status: "submitted", assigneeId: null, collaboratorIds: [], contentSections: [{ id: "topic-a", text: "Synthetic first conclusion" }, { id: "topic-b", text: "Synthetic second conclusion" }] });
+test("Workshop heads can edit, archive and restore meetings without acquiring task management", async () => {
+  const { sqlite, db } = database(); try {
+    await ensureWorkSchema(db);
+    const source = await saveWork(db, meeting(), leader, "create_source", "meeting", null);
+    await saveWork(db, { ...task(), sourceId: source.id, sourceContentId: "topic-a" }, leader, "create_task", "assigned", null);
+    for (const position of ["Quản đốc", "Phó Quản đốc"]) {
+      const head = { ...member(9), permissions: [], position };
+      assert.equal(canEditWorkSource(head), true); assert.equal(canManageWork(head), false);
+      let current = await getWork(db, source.id, head);
+      current = await saveWork(db, changeWork(current, head, "edit_source", { ...current, title: "Corrected minutes", text: "edit" }, "2026-10-13").item, head, "edit_source", "edit", current.version);
+      current = await saveWork(db, changeWork(current, head, "delete_source", { text: "duplicate" }, "2026-10-13").item, head, "delete_source", "duplicate", current.version);
+      assert.ok(current.deletedAt);
+      assert.throws(() => sourceContentLink(current, "topic-a", current.version), e => e.status === 409);
+      assert.throws(() => changeWork(current, head, "edit_source", { ...current, text: "edit" }, "2026-10-13"), e => e.status === 409);
+      assert.equal((await getWork(db, task().id, leader)).status, "assigned");
+      current = await saveWork(db, changeWork(current, head, "restore_source", { text: "restore" }, "2026-10-13").item, head, "restore_source", "restore", current.version);
+      assert.equal(current.deletedAt, null); assert.equal(current.contentSections.length, 2);
+    }
+    assert.equal(canEditWorkSource({ ...member(9), position: "Trưởng ca" }), false);
+    assert.throws(() => changeWork(source, member(1), "delete_source", { text: "delete own" }, "2026-10-13"), e => e.status === 403);
+    const events = await workHistory(db, source.id);
+    assert.equal(events.filter(event => event.action === "delete_source").length, 2);
+    assert.equal(events.filter(event => event.action === "restore_source").length, 2);
+  } finally { sqlite.close(); }
+});
 test("Separate meeting contents validate and legacy text remains one assignable content", () => {
   const input = validateWorkInput(meeting(), "source");
   assert.deepEqual(input.contentSections, meeting().contentSections);
