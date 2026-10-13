@@ -8,3 +8,13 @@
 .wp table{table-layout:fixed}.wp table.wp-task-table{min-width:1320px}.wp table.wp-source-table{min-width:1100px}.wp th:first-child,.wp th.wp-content-column,.wp th:last-child{width:auto}.wp td{overflow-wrap:normal;word-break:normal}.wp-task-table td:nth-child(4),.wp-task-table td:nth-child(5),.wp-task-table td:nth-child(6),.wp-status{white-space:nowrap}.wp-action-menu{position:absolute;right:0;top:40px;width:200px}.wp-table-scroll{padding-bottom:110px}
 
 .wp-task-description{margin:10px 0 0 27px;font-size:16px;line-height:1.65;color:#4b5563;white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:768px){.wp-task-description{font-size:15px}}
+
+/* Meeting emphasis and blue workflow connectors. */
+.wp .wp-title,.wp .wp-detail-heading h2{font-weight:700}
+.wp .wp-task-description,.wp .wp-description{font-weight:400}
+.wp .wp-workflow{gap:0}
+.wp .wp-workflow>div{position:relative}
+.wp .wp-workflow>div:nth-child(-n+4)::before{content:"";position:absolute;top:17px;left:calc(50% + 18px);width:calc(100% - 36px);height:2px;background:#2389dc}
+.wp .wp-workflow>div:nth-child(-n+4)::after{content:"";position:absolute;top:13px;left:calc(150% - 26px);width:8px;height:8px;border-top:2px solid #2389dc;border-right:2px solid #2389dc;transform:rotate(45deg)}
+.wp .wp-workflow b{position:relative;z-index:1;border-color:#2389dc;color:#2389dc;background:white}
+.wp .wp-workflow .current b{background:#e4f0fb;border-color:#2389dc;color:#1464bc}

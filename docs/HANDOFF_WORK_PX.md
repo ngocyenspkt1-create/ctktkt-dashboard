@@ -68,3 +68,5 @@
 - storage:check OK: 13,91 MiB; 0,2717% mốc tham chiếu 5 GiB. Chưa có usage tài khoản Turso/Vercel để xác nhận giới hạn gói, lượt đọc/ghi hoặc usage Vercel.
 
 - Bổ sung hiển thị toàn bộ description của từng công việc ngay dưới tiêu đề trong bảng danh sách; giữ xuống dòng, không giới hạn số dòng/ký tự hiển thị. Chỉ đổi giao diện, không đổi dữ liệu và nghiệp vụ.
+
+- Đường nối và mũi tên giữa năm bước xử lý dùng màu xanh biển; tên cuộc họp/công việc in đậm, nội dung chi tiết in thường. CSS giới hạn trong module Công việc PX.
