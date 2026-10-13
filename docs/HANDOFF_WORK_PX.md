@@ -59,3 +59,10 @@
 - Nội dung và báo cáo dạng văn bản; chưa tải tệp đính kèm, xuất báo cáo tháng hoặc tích hợp tự động phần mềm công ty.
 - Chưa có phân quyền theo nhiều PX, chưa có công việc con hoặc cơ chế báo cáo theo mốc cố định trong tuần/tháng.
 - Khôi phục mã: gỡ module/nav/quyền mới theo bản Git; giữ hai bảng mới để không mất lịch sử. Sao lưu bảng trước thay đổi dữ liệu hoặc xóa module.
+
+## Giao diện theo QLCV công ty — 13/10/2026
+- Sáu thẻ trạng thái dùng icon, màu và số lượng theo mẫu QLCV; font Arial và cỡ chữ dễ đọc, chỉ áp dụng trong module Công việc PX.
+- Bảng có ưu tiên, nội dung, chủ trì, ngày giao, ngày hết hạn, báo cáo kế tiếp, trạng thái và menu thao tác; nhấp đúp hoặc nút xem mở chi tiết. Giữ bộ lọc tháng, phạm vi cá nhân và bảng trạng thái.
+- Menu không làm thay đổi độ rộng cột. Bảng cuộn ngang trên màn hình hẹp để giữ ngày tháng dễ đọc. Không thay đổi nghiệp vụ, phân quyền hay công thức KPI.
+- Kiểm tra local bằng dữ liệu giả: danh sách và menu; 375/375 tests, ESLint tệp giao diện và build Next.js đạt.
+- storage:check OK: 13,91 MiB; 0,2717% mốc tham chiếu 5 GiB. Chưa có usage tài khoản Turso/Vercel để xác nhận giới hạn gói, lượt đọc/ghi hoặc usage Vercel.
