@@ -18,3 +18,21 @@
 .wp .wp-workflow>div:nth-child(-n+4)::after{content:"";position:absolute;top:13px;left:calc(150% - 26px);width:8px;height:8px;border-top:2px solid #2389dc;border-right:2px solid #2389dc;transform:rotate(45deg)}
 .wp .wp-workflow b{position:relative;z-index:1;border-color:#2389dc;color:#2389dc;background:white}
 .wp .wp-workflow .current b{background:#e4f0fb;border-color:#2389dc;color:#1464bc}
+
+/* QLCV filter toolbar and separate search row. */
+.wp-toolbar .wp-month{margin-left:auto;margin-right:0}
+.wp .wp-filters{display:flex;justify-content:space-between;gap:20px;padding:16px;flex-wrap:wrap}
+.wp-filter-left,.wp-filter-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wp .wp-filter-left>select{margin:0;width:210px}
+.wp-date-control{position:relative;display:flex;align-items:center;width:170px;background:white;border:1px solid #cdd4dc;border-radius:5px;overflow:hidden}
+.wp .wp-date-control input{width:100%;border:0;background:transparent;padding:9px 42px 9px 10px;height:44px;position:relative;z-index:1}
+.wp-date-control input::-webkit-calendar-picker-indicator{position:absolute;right:0;top:0;width:38px;height:44px;margin:0;padding:0;opacity:0;cursor:pointer}
+.wp-date-control>span{position:absolute;right:0;top:0;height:44px;width:38px;display:grid;place-items:center;background:#5c8fe9;color:white;pointer-events:none}
+.wp .wp-apply-filter{height:44px;width:44px;padding:0;justify-content:center;background:#789d43;border-color:#789d43;color:white}
+.wp-scope-control{display:flex;align-items:center;gap:8px;background:white;border:1px solid #cdd4dc;border-radius:5px;padding-left:12px;color:#748090}
+.wp .wp-scope-control select{border:0;margin:0!important;width:180px;background:transparent}
+.wp-filters .wp-view-toggle{padding:0;background:transparent;display:flex;flex-wrap:nowrap;gap:0}
+.wp-filters .wp-view-toggle button{height:44px;width:44px;padding:0;justify-content:center}
+.wp .wp-reload{height:44px;width:44px;padding:0;justify-content:center}
+.wp-list-search{margin-top:20px}
+@media(max-width:768px){.wp-filter-left,.wp-filter-right{width:100%}.wp-date-control{width:calc(50% - 4px)}.wp-toolbar .wp-month{margin-left:0}.wp .wp-filter-left>select{flex:1}.wp .wp-scope-control select{width:160px}}

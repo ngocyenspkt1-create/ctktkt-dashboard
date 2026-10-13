@@ -70,3 +70,6 @@
 - Bổ sung hiển thị toàn bộ description của từng công việc ngay dưới tiêu đề trong bảng danh sách; giữ xuống dòng, không giới hạn số dòng/ký tự hiển thị. Chỉ đổi giao diện, không đổi dữ liệu và nghiệp vụ.
 
 - Đường nối và mũi tên giữa năm bước xử lý dùng màu xanh biển; tên cuộc họp/công việc in đậm, nội dung chi tiết in thường. CSS giới hạn trong module Công việc PX.
+
+- Thanh lọc theo QLCV: hai ô ngày có icon lịch nền xanh, trạng thái và phễu xanh lá bên trái; phạm vi cá nhân, nút danh sách/bảng và tải lại bên phải. Hàng dưới xóa bộ lọc bên trái, tìm kiếm bên phải.
+- Khoảng ngày giới hạn trong tháng đang chọn; áp dụng bằng nút phễu. Công việc lọc theo giao nhau của startDate/dueDate với khoảng chọn; nguồn lọc theo sourceDate. Toàn tháng giữ nguyên logic workInMonth, bao gồm chuyển tiếp. Xóa bộ lọc xóa cả khoảng ngày.
