@@ -10,11 +10,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type NavKey = "data" | "ctktkt" | "bcsx" | "water" | "chemical-usage" | "ppa" | "pmis" | "admin-users";
+export type NavKey = "data" | "ctktkt" | "bcsx" | "water" | "chemical-usage" | "ppa" | "pmis" | "admin-users" | "work-px";
 
 export type NavItem = { key: NavKey; href: string; label: string; description: string; icon: LucideIcon; keywords: string };
 
 const NAV_GROUPS: Array<{ title: string; adminOnly?: boolean; items: NavItem[] }> = [
+  {
+    title: "Điều hành Phân xưởng",
+    items: [{ key: "work-px", href: "/work-px", label: "Công việc Phân xưởng", description: "Nội dung họp, phân công, báo cáo tiến độ và phê duyệt", icon: ClipboardList, keywords: "cong viec phan xuong pxvh1 hop giao viec tien do bao cao" }],
+  },
   {
     title: "Số liệu vận hành",
     items: [
