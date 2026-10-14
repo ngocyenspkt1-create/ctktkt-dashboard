@@ -80,3 +80,13 @@
 - Ma trận dùng tên đầy đủ Công việc Phân xưởng và Quản lý công việc Phân xưởng; giải thích riêng quyền tham gia và quyền phân công/xác nhận hoàn thành.
 
 - Tên chủ trì xanh biển, tên phối hợp đen dưới chủ trì; cờ vàng bên trái tiêu đề khi còn 0–3 ngày tới hạn, không áp dụng công việc hoàn thành/hủy. Quá hạn đổi tiêu đề và nội dung sang đỏ trong danh sách, bảng trạng thái và chi tiết. Demo có mẫu sắp đến hạn và quá hạn; không sửa dữ liệu công việc thật.
+
+## Tiếp nhận bằng bước 2 và báo cáo có định dạng/đính kèm — 14/10/2026
+- Chỉ chủ trì của việc Chưa tiếp nhận được bấm số 2 để mở Chuyển trạng thái công việc. Đồng ý gửi accept với lời xác nhận tự động; Hủy/ESC không gửi. Giữ CAS phiên bản và phân quyền server.
+- Báo cáo tiến độ đặt ngay dưới mô tả, trước nhật ký; Quill 2 (không CDN), chữ đậm/nghiêng/gạch chân, màu, tiêu đề, danh sách, căn lề, liên kết. HTML được lọc allowlist server khi lưu và khi đọc; không cho nhúng ảnh/video từ editor. Nội dung thường vẫn giữ cho tìm kiếm/lịch sử cũ.
+- File được gửi cùng report/request_completion/respond, không upload rời; tối đa 3 file, 1 MiB/file, tổng 2 MiB/report. PDF, DOCX, XLSX, PPTX, TXT, CSV, PNG, JPG; kiểm tra extension/base64/signature/size. Chỉ cho tải xuống, nosniff + CSP sandbox; chưa có antivirus/quét nội dung tệp, nên chỉ nhận hồ sơ công việc tin cậy.
+- Thêm bảng px_work_attachments, giữ file BLOB riêng khỏi WorkItem và snapshot. Giới hạn cứng 100 MiB toàn kho đính kèm, bảo vệ trong cùng transaction/CAS. File + event + thay đổi trạng thái hoặc cùng thành công hoặc không ghi. Không có file tạm/orphan khi báo cáo bị xung đột.
+- Tải file /api/work-px/attachments?id=... yêu cầu phiên đăng nhập hợp lệ và canReadWork cho công việc gốc; tài khoản bị khóa/không liên quan không tải được. Không có URL tệp công khai, không gửi hồ sơ qua nhà cung cấp khác.
+- Rollback code giữ bảng/file để tránh mất hồ sơ; cần sao lưu bảng items/events/attachments khi vận hành. Mọi thay đổi cấu hình dung lượng hoặc retention phải đánh giá riêng.
+- Preview vẫn không lưu; có mẫu chủ trì là người dùng minh họa để thử mở hộp xác nhận và editor. Công cụ trình duyệt lỗi khởi tạo trong lần triển khai này nên chưa xác nhận trực quan sau đăng nhập.
+- Kiểm chứng: 383/383 tests đạt, gồm tương tác React mô phỏng nút bước 2/Hủy/Đồng ý và gửi báo cáo, kiểm tra XSS/giới hạn tệp/ACL tải xuống/CAS/rollback. TypeScript, ESLint các tệp chức năng và build Next.js đạt. Chưa nghiệm thu trực quan bằng trình duyệt thật do lỗi khởi tạo công cụ.

@@ -16,7 +16,8 @@ export type WorkItem = {
   startDate: string; dueDate: string; reportEveryDays: number; lastReportDate: string | null;
   status: WorkStatus; progress: number; priority: "normal" | "high"; createdAt: string; updatedAt: string;
 };
-export type WorkEvent = { id: string; itemId: string; actorId: number; actorName: string; action: string; text: string; createdAt: string; snapshot: WorkItem };
+export type WorkAttachment = { id: string; name: string; type: string; size: number };
+export type WorkEvent = { reportHtml?: string; attachments?: WorkAttachment[]; id: string; itemId: string; actorId: number; actorName: string; action: string; text: string; createdAt: string; snapshot: WorkItem };
 export class WorkError extends Error { status: number; constructor(message: string, status = 400) { super(message); this.status = status; } }
 export function pxDepartment(value: unknown) { return ["vận hành 1", "pxvh1", "phân xưởng vận hành 1"].includes(String(value || "").trim().toLocaleLowerCase("vi-VN")); }
 export function canManageWork(user: SessionUser) { return hasPermission(user, "manage_work_px"); }

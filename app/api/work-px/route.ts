@@ -1,3 +1,4 @@
+import { cleanReportHtml, decodeReportFiles } from "@/lib/work-px-reports";
 import { getRawDb } from "@/db";
 import { getSessionUser } from "@/lib/auth/server";
 import { loadCurrentUser } from "@/lib/auth/current-user";
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     if (!request.headers.get("content-type")?.includes("application/json")) throw new WorkError("Yêu cầu phải là JSON.", 415);
     const origin = request.headers.get("origin");
     if (origin && origin !== new URL(request.url).origin) throw new WorkError("Nguồn yêu cầu không hợp lệ.", 403);
-    const raw = await request.text(); if (raw.length > 30000) throw new WorkError("Nội dung quá lớn.", 413);
+    const raw = await request.text(); if (raw.length > 3000000) throw new WorkError("Nội dung quá lớn.", 413);
     let body: Record<string, unknown>;
     try { body = JSON.parse(raw); } catch { throw new WorkError("JSON không hợp lệ."); }
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new WorkError("Nội dung không hợp lệ.");
@@ -68,7 +69,10 @@ export async function POST(request: Request) {
       if (!canManageWork(user)) throw new WorkError("Chỉ lãnh đạo được phân công.", 403);
       await checkAssignees(validateWorkInput(body, "task"));
     }
+    const richAction=["report","request_completion","respond"].includes(String(body.action));
+    if (!richAction && (body.reportHtml !== undefined || body.attachments !== undefined)) throw new WorkError("Chỉ đính kèm và định dạng trong báo cáo hoặc phản hồi.");
+    const report=richAction ? {html:cleanReportHtml(body.reportHtml),files:decodeReportFiles(body.attachments)} : undefined;
     const changed = changeWork(item, user, String(body.action), body, workToday());
-    return Response.json({ item: await saveWork(db, changed.item, user, String(body.action), changed.text, item.version) });
+    return Response.json({ item: await saveWork(db, changed.item, user, String(body.action), changed.text, item.version, undefined, report) });
   } catch (error) { return failure(error); }
 }
