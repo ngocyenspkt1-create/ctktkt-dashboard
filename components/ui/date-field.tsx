@@ -52,7 +52,7 @@ export function DateField({ value, onChange, min, max, className, placeholder = 
         type="button"
         variant="outline"
         disabled={disabled}
-        className={cn("h-10 w-full justify-start gap-2 rounded-xl border-slate-200 bg-white px-3 text-sm font-normal text-black shadow-sm hover:bg-white", !selected && "text-slate-400", className)}
+        className={cn("qlkt-date-field h-10 w-full justify-start gap-2 rounded-xl border-slate-200 bg-white px-3 text-sm font-normal text-black shadow-sm hover:bg-white", !selected && "text-slate-400", className)}
       >
         <CalendarIcon className="size-4 shrink-0 text-slate-400"/>
         {selected ? formatDisplay(selected) : placeholder}

@@ -27,6 +27,16 @@ test("PMIS toolbar and legacy black date text have dark overrides", () => {
   assert.match(css,/html\[data-theme="dark"\] \[class~="text-black"\] \{ color:#e6edf5 !important;/);
 });
 
+test("KTKT banner and date trigger have explicit dark hooks", () => {
+  const css=readFileSync(new URL("../app/dark-theme.css",import.meta.url),"utf8");
+  const date=readFileSync(new URL("../components/ui/date-field.tsx",import.meta.url),"utf8");
+  const report=readFileSync(new URL("../components/ctktkt-report.tsx",import.meta.url),"utf8");
+  assert.ok(date.includes("qlkt-date-field"));
+  assert.ok(report.includes("ktkt-role-banner"));
+  assert.match(css,/html\[data-theme="dark"\] \.qlkt-date-field \{[^}]*-webkit-text-fill-color:#e6edf5 !important/);
+  assert.ok(css.includes('.ktkt-workspace .ktkt-role-banner'));
+});
+
 test("report surfaces, captions, table sections and tooltip have dark guards", () => {
   const css=readFileSync(new URL("../app/dark-theme.css",import.meta.url),"utf8");
   for (const selector of [".module-section-heading", ".pmis-table-scroll tbody tr>td[colspan]", ".monthly-stat:nth-child(n)", ".ppa-day-counts b", ".ppa-range-presets button", ".recharts-default-tooltip", '[class~="text-black"]']) {

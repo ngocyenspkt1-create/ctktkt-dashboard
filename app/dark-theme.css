@@ -100,6 +100,15 @@ html[data-theme="dark"] {
 }
 /* Legacy report palettes: screen-only and dark-only. Do not invert images. */
 @media screen {
+  html[data-theme="dark"] .qlkt-date-field { background:#10232d !important; color:#e6edf5 !important; -webkit-text-fill-color:#e6edf5 !important; border-color:#496275 !important; }
+  html[data-theme="dark"] .ktkt-workspace .ktkt-role-banner,
+  html[data-theme="dark"] .ktkt-workspace .module-section-heading { background:#203b49 !important; background-image:none !important; color:#e6edf5 !important; border-color:#496275 !important; }
+  html[data-theme="dark"] .ktkt-workspace .ktkt-role-banner :is(span,svg),
+  html[data-theme="dark"] .ktkt-workspace .module-section-heading :is(h2,h3,span) { color:#d8e8f5 !important; }
+  html[data-theme="dark"] .ktkt-workspace .ktkt-role-banner [class~="bg-indigo-100"] { background:#304564 !important; color:#dce8ff !important; }
+  html[data-theme="dark"] .ktkt-workspace .module-heading-copy [class~="bg-indigo-100"] { background:#304564 !important; color:#dce8ff !important; }
+  html[data-theme="dark"] .ktkt-workspace .report-data-table :is(th,td) { color:#e6edf5; }
+  html[data-theme="dark"] .ktkt-workspace .report-data-table thead th { background:#203b49 !important; color:#e6edf5 !important; }
   html[data-theme="dark"] :is([class~="bg-slate-50"],[class~="bg-slate-100"],[class~="bg-slate-200"]) { background:#203b49 !important; }
   html[data-theme="dark"] :is([class~="bg-gray-50"],[class~="bg-gray-100"],[class~="bg-gray-200"]) { background:#203b49 !important; }
   html[data-theme="dark"] :is([class~="bg-blue-50"],[class~="bg-blue-100"],[class~="bg-blue-200"]) { background:#183e63 !important; }

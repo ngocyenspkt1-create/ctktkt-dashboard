@@ -1116,7 +1116,7 @@ export function CtktktReport() {
         </div>
 
         {/* Banner thông tin cương vị & phân quyền */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-[#f5f8ff] px-3.5 py-2 text-xs text-[#1e3a8a]">
+        <div className="ktkt-role-banner mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-[#f5f8ff] px-3.5 py-2 text-xs text-[#1e3a8a]">
           <div className="flex flex-wrap items-center gap-2">
             <UserCheck className="size-4 text-indigo-700 shrink-0" />
             <span className="font-bold text-slate-800">

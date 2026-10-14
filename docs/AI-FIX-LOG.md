@@ -219,3 +219,9 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Thêm test guard các nhóm component và kiểm tra tương phản các cặp màu. Người dùng yêu cầu sửa và đẩy GitHub.
 - Lần này không kiểm tra trực tiếp được trong trình duyệt do công cụ từ chối truy cập local; không tuyên bố đã kiểm tra mọi trang/trạng thái runtime. Cần người dùng tải lại web và đối chiếu các màn hình dữ liệu thật sau triển khai.
 
+# 2026-10-14 — Hook tối riêng cho KTKT và ngày báo cáo (local)
+
+- Theo ảnh phản hồi, thêm class ktkt-role-banner và qlkt-date-field để override chính xác, không phụ thuộc vào tên utility màu. Chỉ có quy tắc dark, CSS sáng không thay đổi.
+- Banner quyền, tiêu đề cụm, nhãn cương vị/báo cáo gốc, header bảng KTKT có nền/chữ tối rõ; ngày báo cáo đặt cả color và WebKit text fill để không còn chữ đen.
+- Thêm test hồi quy hooks, không đổi dữ liệu/công thức/định dạng ngày. Người dùng yêu cầu xuất bản lên GitHub. 5 test đạt; ESLint không lỗi, 2 cảnh báo điều hướng cũ. Chưa xác nhận trên web production.
+
