@@ -23,7 +23,10 @@ export function ThemeToggle() {
     setDark(next);
     try { localStorage.setItem(key, next ? "dark" : "light"); } catch { /* storage unavailable */ }
   }
-  return <button type="button" className="theme-toggle" onClick={toggle} aria-pressed={dark} aria-label="Chế độ tối" title={dark ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}>
-    {dark ? <Sun size={17} aria-hidden /> : <Moon size={17} aria-hidden />}<span className="hidden sm:inline">{dark ? "Sáng" : "Tối"}</span>
+  return <button type="button" className="theme-toggle theme-slide" onClick={toggle} role="switch" aria-checked={dark} aria-label="Chế độ tối" title={dark ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}>
+    <span className="theme-slide-stars" aria-hidden />
+    <Moon className="theme-slide-moon" size={15} aria-hidden />
+    <Sun className="theme-slide-sun" size={16} aria-hidden />
+    <span className="theme-slide-thumb" aria-hidden>{dark ? <Moon size={16} /> : <Sun size={16} />}</span>
   </button>;
 }

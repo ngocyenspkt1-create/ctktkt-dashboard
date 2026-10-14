@@ -1,5 +1,15 @@
 .theme-toggle { display:inline-flex; align-items:center; justify-content:center; gap:7px; height:36px; padding:0 11px; flex-shrink:0; border:1px solid var(--border); border-radius:9px; color:var(--foreground); background:var(--card); font-size:13px; cursor:pointer; }
 .theme-toggle:hover { border-color:var(--primary); }
+.theme-slide { position:relative; isolation:isolate; width:78px; height:36px; padding:0; gap:0; border-radius:999px; overflow:hidden; background:linear-gradient(#6fa8e6,#b9d7f5); box-shadow:inset 0 2px 6px #0a1e4659; }
+.theme-slide-thumb { position:absolute; z-index:1; display:grid; place-items:center; color:#a36c00; left:4px; top:4px; width:28px; height:28px; border-radius:50%; background:#fff2b2; box-shadow:0 1px 4px #0004; transition:transform .3s ease; }
+.theme-slide[aria-checked="true"] { background:linear-gradient(#070d26,#1b285c); }
+.theme-slide[aria-checked="true"] .theme-slide-thumb { transform:translateX(40px); background:#e5edf6; color:#33476b; }
+.theme-slide-sun { position:absolute; right:12px; color:#fff1a6; }
+.theme-slide-moon { position:absolute; left:12px; color:#ffe295; opacity:0; }
+.theme-slide-stars { position:absolute; inset:0; opacity:0; background:radial-gradient(1px 1px at 45% 22%,white 60%,transparent 61%),radial-gradient(1px 1px at 30% 70%,white 60%,transparent 61%); }
+.theme-slide[aria-checked="true"] :is(.theme-slide-moon,.theme-slide-stars) { opacity:1; }
+.theme-slide[aria-checked="true"] .theme-slide-sun { opacity:0; }
+@media(prefers-reduced-motion:reduce) { .theme-slide-thumb { transition:none; } }
 /* VibraControl palette; light rules remain untouched. */
 html[data-theme="dark"] {
   color-scheme:dark;
@@ -40,5 +50,39 @@ html[data-theme="dark"] {
   [data-theme="dark"] .monthly-grid tbody td:first-child,[data-theme="dark"] .monthly-grid tfoot td { background:#203b49; color:var(--foreground); }
   [data-theme="dark"] .monthly-grid tbody td[class*="bg-"] { background:#203b49 !important; color:var(--foreground); }
   [data-theme="dark"] .monthly-range-summary:hover,[data-theme="dark"] .monthly-group-tabs [role="tab"]:hover { background:var(--accent); }
+  /* Workshop styles are loaded with the route; higher specificity prevents
+     their hard-coded light palette from overriding the dark theme. */
+  html[data-theme="dark"] .wp { background:#15212b; color:#e6edf5; }
+  html[data-theme="dark"] .wp :is(.wp-hero,.wp-panel,.wp-modal,.wp-update,.wp-toolbar,.wp-filters,.wp-view-toggle,.wp-list-search,.wp-search,.wp-date-control,.wp-scope-control,.wp-modal-footer) { background:#15212b; color:#e6edf5; border-color:#38505e; }
+  html[data-theme="dark"] .wp :is(.wp-title,.wp-task-description,.wp-description,.wp-collaborator-names,.wp-detail-heading h2,.wp-report-content,.wp-confirm-body) { color:#e6edf5; }
+  html[data-theme="dark"] .wp :is(.wp-primary-name,.wp-link,.wp-report-files a,.wp-file-choose) { color:#91c5ff; }
+  html[data-theme="dark"] .wp :is(.wp-muted,.wp-row-meta,.wp-month,.wp-eyebrow,.wp-table-footer,.wp-empty,.wp-info dt,.wp-info small,.wp-form label,.wp-update label,.wp-form legend,.wp-history time,.wp-history span,.wp-history small,.wp-metric span,.wp-metric small,.wp-state-counts small,.wp-board-card span,.wp-board-card small,.wp-confirm-body small,.wp-extend small,td small) { color:#b8c9d9; }
+  html[data-theme="dark"] .wp :is(.wp-info,.wp-history article,.wp-source-contents>article,.wp-board>section,.wp-extend,.wp-rich-editor .ql-toolbar,.wp-rich-editor .ql-container,.wp-selected-file) { background:#1b2d3a; color:#e6edf5; border-color:#38505e; }
+  html[data-theme="dark"] .wp :is(button,.wp-state-counts button,.wp-board-card) { background:#203646; color:#e6edf5; border-color:#496275; }
+  html[data-theme="dark"] .wp button:hover { background:#2a4659; }
+  html[data-theme="dark"] .wp .wp-title,html[data-theme="dark"] .wp .wp-link { background:transparent; }
+  html[data-theme="dark"] .wp :is(.wp-primary,.wp-send-report) { background:#286ab0; color:#fff; border-color:#5d9edc; }
+  html[data-theme="dark"] .wp :is(.wp-tabs .active,button[aria-pressed="true"]) { background:#244b63; color:#d8eeff; border-color:#80bfee; }
+  html[data-theme="dark"] .wp :is(th,td) { color:#e6edf5; border-color:#38505e; }
+  html[data-theme="dark"] .wp :is(thead th,.wp-table-footer) { background:#203b49; color:#d1e0ec; }
+  html[data-theme="dark"] .wp tbody tr:hover>td,html[data-theme="dark"] .wp tr.selected>td { background:#254353; }
+  html[data-theme="dark"] .wp :is(.wp-status,.wp-priority) { background:#304455; color:#e0eaf3; }
+  html[data-theme="dark"] .wp .wp-status.in_progress { background:#183e63; color:#b2d8ff; }
+  html[data-theme="dark"] .wp .wp-status.pending_review { background:#392d57; color:#ddc7ff; }
+  html[data-theme="dark"] .wp :is(.wp-status.completed,.wp-status.reviewed,.wp-success) { background:#183e32; color:#a4edc6; }
+  html[data-theme="dark"] .wp :is(.wp-status.waiting_response,.wp-priority.high,.wp-preview) { background:#453a21; color:#ffdc91; }
+  html[data-theme="dark"] .wp :is(.wp-status.cancelled,.wp-status.returned,.wp-error) { background:#492d35; color:#ffb5be; }
+  html[data-theme="dark"] .wp :is(.wp-red,.wp-danger,.wp-task-overdue .wp-title,.wp-task-overdue .wp-task-description,.wp-task-overdue .wp-description,.wp-task-overdue .wp-detail-heading h2,.wp-task-overdue.wp-board-card>strong) { color:#ffb0b7; }
+  html[data-theme="dark"] .wp :is(.wp-amber,.wp-deadline-flag) { color:#ffda85; }
+  html[data-theme="dark"] .wp .wp-metric strong { color:#eef5fc; }
+  html[data-theme="dark"] .wp .wp-state-counts :is(strong,span) { color:#e6edf5; }
+  html[data-theme="dark"] .wp .wp-action-menu { background:#203646; border-color:#496275; }
+  html[data-theme="dark"] .wp .wp-workflow { border-color:#38505e; color:#b8c9d9; }
+  html[data-theme="dark"] .wp .wp-workflow .current { color:#a9d7ff; }
+  html[data-theme="dark"] .wp .wp-workflow .wp-step-button { background:#203b49; color:#d1eaff; }
+  html[data-theme="dark"] .wp .wp-rich-editor :is(.ql-editor,.ql-picker,.ql-picker-options) { color:#e6edf5; background:#1b2d3a; }
+  html[data-theme="dark"] .wp .wp-rich-editor .ql-stroke { stroke:#d1e0ec; }
+  html[data-theme="dark"] .wp .wp-rich-editor .ql-fill { fill:#d1e0ec; }
+  html[data-theme="dark"] .wp .wp-report-content [style*="color"] { color:#e6edf5 !important; }
 }
 @media print { html[data-theme="dark"] { color-scheme:light; --background:#fff; --foreground:#0f172a; --card:#fff; --border:#dbe4ef; } .theme-toggle { display:none; } }

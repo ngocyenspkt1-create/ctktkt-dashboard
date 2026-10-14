@@ -188,3 +188,20 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Metadata icon và shortcut đổi sang đường dẫn mới để tránh cache favicon biểu đồ cũ. Chỉ đổi biểu tượng tab, không thay logo trong giao diện.
 - Người dùng đã yêu cầu xuất bản favicon EVN lên GitHub.
 
+# 2026-10-14 — Sửa tương phản tối và thanh trượt ngày/đêm (local)
+
+- Nguyên nhân: CSS route Công việc Phân xưởng đặt chữ đen/nền trắng riêng; theme tổng quát không bao phủ và thua specificity ở các thành phần con.
+- Bổ sung override chỉ trong `html[data-theme="dark"] .wp`: nội dung, người phụ trách/phối hợp, bảng, form, thẻ, board, popup, rich editor, trạng thái và hạn công việc. Không chỉnh CSS chế độ sáng.
+- Đổi nút theme thành switch mặt trời/mặt trăng có nút trượt, aria-checked, bàn phím và reduced-motion. Giữ lưu lựa chọn và đồng bộ tab.
+- Test tương phản 9 cặp màu chữ đạt tối thiểu 4.5:1, test guard CSS/switch đạt; ESLint component đạt. Preview dev Công việc có switch để QA, không đổi route production.
+- Cài phụ thuộc đúng package-lock hoàn tất, TypeScript và ESLint đạt. Đã thử bật/tắt và tải lại tại `/work-px-preview` trên Next dev cổng 5174, xác nhận bảng và thẻ thống kê rõ chữ, chế độ sáng trở lại như cũ. Ảnh QA: `wb/dark-work-table.png`, `wb/dark-work-overview.png`.
+- Chưa đẩy GitHub. Next dev tự sinh AGENTS.md/CLAUDE.md không thuộc thay đổi này, không stage chúng. Phát hiện riêng: proxy đang chuyển favicon PNG sang login khi chưa đăng nhập; chưa sửa trong yêu cầu tương phản.
+
+# 2026-10-14 — Favicon EVN không méo (local)
+
+> Xuất bản: người dùng yêu cầu đẩy cả bản sửa tối/thanh trượt và favicon SVG lên GitHub ngày 14/10/2026. Test tương phản và switch chạy lại đạt; ghi chú “chưa đẩy” dưới đây là trạng thái tại thời điểm sửa. Không đưa cấu hình local, AGENTS.md/CLAUDE.md tự sinh và pnpm-lock.yaml vào commit.
+
+- Ảnh PNG gốc có khung chữ nhật và khoảng trắng lệch, bị ép khi hiển thị biểu tượng tab vuông. Thay bằng SVG viewBox vuông, tâm vòng tròn/ngôi sao trùng nhau, giữ ba màu EVN.
+- Metadata dùng `/evn-favicon.svg`; proxy cho phép đúng asset favicon này khi chưa đăng nhập. Không mở quyền truy cập dữ liệu/API.
+- Giữ ảnh PNG gốc, không thay đổi giao diện sáng/tối. Chưa đẩy GitHub.
+
