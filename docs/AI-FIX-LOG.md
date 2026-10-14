@@ -175,3 +175,10 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Đã kiểm tra trên `/wb-preview`: thanh sáng di chuyển theo mục, thu/mở nhóm đúng chiều cao, lưu trạng thái, không lỗi console. tsc sạch, lint 0 lỗi, test 351/351.
 - Khi đẩy GitHub: commit 3 file trên + `docs/AI-FIX-LOG.md`. `.claude/launch.json` chỉ là cấu hình chạy thử local, không cần commit.
 - 13/10/2026: Người dùng yêu cầu xuất bản phần Claude đã sửa và thêm lên GitHub. Kiểm tra lại TypeScript và ESLint các file thay đổi thành công; không đưa `.claude/` và `pnpm-lock.yaml` vào commit.
+# 2026-10-14 — Chế độ sáng/tối (local, chưa đẩy GitHub)
+
+- Nút chuyển chế độ cạnh QuickSearch trong AppShell; có aria-pressed, hỗ trợ bàn phím, lưu `qlkt-theme` và đồng bộ tab qua storage event. Mặc định sáng, không tự chuyển theo hệ điều hành.
+- Layout đọc lựa chọn trước khi vẽ để tránh nháy nền sáng; chế độ sáng giữ nguyên CSS hiện có. CSS tối được giới hạn theo data-theme, không dùng bộ lọc đảo màu ảnh/logo.
+- Tham khảo bảng màu từ dự án VibraControl local `web theo dõi độ rung thiết bị quay/up web/ui.css` và `theme.css`. Web mẫu online chỉ hiển thị màn hình truy cập báo lỗi máy chủ lúc kiểm tra.
+- Bản thử tương tác: `/wb-preview?live=1`; cache preview không có JavaScript nên không dùng để kiểm tra nút.
+- Người dùng đã yêu cầu đẩy GitHub. TypeScript và ESLint các file thay đổi thành công. Kiểm tra runtime bị chặn bởi lỗi HTTP 500 `fetch failed` trong Miniflare/Cloudflare Vite khi tải preview; chưa xác nhận chuyển chế độ trực tiếp.

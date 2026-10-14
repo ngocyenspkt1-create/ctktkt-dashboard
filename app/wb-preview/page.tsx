@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { notFound } from "next/navigation";
 import { CalendarDays, CheckCircle2, Database, PencilLine, Save, TriangleAlert, Zap } from "lucide-react";
 import { SidebarNav } from "@/components/app-navigation";
@@ -27,7 +28,7 @@ export default function WbPreview() {
       <div className="app-sidebar-footer p-4 text-xs text-slate-500">Bản duyệt giao diện · /wb</div>
     </aside>
     <div className="lg:pl-64">
-      <header className="app-header flex items-center justify-between gap-3 border-b px-5"><div><p className="text-[11px] text-slate-500">Duyên Hải 1 / Vận hành 1</p><h1>Dữ liệu các tháng</h1></div><Link href="/login" className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">Đăng nhập hệ thống</Link></header>
+      <header className="app-header flex items-center justify-between gap-3 border-b px-5"><div><p className="text-[11px] text-slate-500">Duyên Hải 1 / Vận hành 1</p><h1>Dữ liệu các tháng</h1></div><div className="flex items-center gap-2"><ThemeToggle /><Link href="/login" className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">Đăng nhập hệ thống</Link></div></header>
       <main className="app-content space-y-5 px-4 sm:px-6">
         <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">BẢN XEM TRƯỚC LOCAL — Số liệu bên dưới chỉ minh họa bố cục. Không lưu hoặc đồng bộ dữ liệu thật.</p>
         <div className="monthly-heading"><div className="monthly-heading-icon"><Database /></div><div className="flex-1"><p className="monthly-eyebrow mb-2">TỔNG QUAN VẬN HÀNH</p><h2>Dữ liệu sản xuất hằng ngày</h2><p className="mt-2">Theo dõi sản lượng, hiệu suất và các chỉ tiêu kinh tế kỹ thuật.</p></div><div className="monthly-period-badge"><CalendarDays className="size-4" />Tháng 10 / 2026</div></div>

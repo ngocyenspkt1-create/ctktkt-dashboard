@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./interface.css";
 import "./engineering-workspace.css";
+import "./dark-theme.css";
 
 export const metadata: Metadata = {
   title: "Quản lý chỉ tiêu KTKT PXVH1",
@@ -20,7 +21,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi">
+    <html lang="vi" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: 'try{document.documentElement.dataset.theme=localStorage.getItem("qlkt-theme")==="dark"?"dark":"light"}catch{}' }} /></head>
       <body className="antialiased">
         {children}
       </body>
