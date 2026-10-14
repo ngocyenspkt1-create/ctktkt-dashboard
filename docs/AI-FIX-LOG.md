@@ -205,3 +205,17 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Metadata dùng `/evn-favicon.svg`; proxy cho phép đúng asset favicon này khi chưa đăng nhập. Không mở quyền truy cập dữ liệu/API.
 - Giữ ảnh PNG gốc, không thay đổi giao diện sáng/tối. Chưa đẩy GitHub.
 
+# 2026-10-14 — Bổ sung theme tối PMIS và DateField (local)
+
+- PMIS toolbar/panel có nền trắng riêng chưa được bao phủ; DateField dùng button text-black nên quy tắc input tối không có tác dụng.
+- Override chỉ dark cho nền toolbar, tiêu đề, chú thích, biểu đồ PMIS, chữ đen legacy và nút chọn ngày. Giữ nguyên chế độ sáng.
+- Thêm test hồi quy cho toolbar PMIS và chữ DateField. Chưa đẩy GitHub.
+
+# 2026-10-14 — Rà soát theme tối các báo cáo, xuất bản
+
+- Rà soát toàn bộ CSS component và lớp màu cố định trong component TSX. Bổ sung nền/chữ tối cho PMIS, nhóm báo cáo kỹ thuật BCSX/nước/hóa chất/KTKT, thống kê tháng, nút lọc PPA, tooltip Recharts, input khóa và popover chọn ngày.
+- Nguồn lỗi: nền sáng và chữ đậm màu được hard-code trong CSS route hoặc utility riêng, không tự đổi theo token theme. Thêm override chỉ dark + screen, không sửa CSS sáng hoặc tính toán dữ liệu.
+- Các utility màu nền nhạt chuyển sang nền tối theo nhóm ngữ nghĩa (đỏ/cảnh báo, xanh/đạt, vàng/lưu ý); giữ các nút nền đậm và ảnh/logo. Không đảo màu toàn trang.
+- Thêm test guard các nhóm component và kiểm tra tương phản các cặp màu. Người dùng yêu cầu sửa và đẩy GitHub.
+- Lần này không kiểm tra trực tiếp được trong trình duyệt do công cụ từ chối truy cập local; không tuyên bố đã kiểm tra mọi trang/trạng thái runtime. Cần người dùng tải lại web và đối chiếu các màn hình dữ liệu thật sau triển khai.
+

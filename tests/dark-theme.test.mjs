@@ -20,3 +20,19 @@ test("dark workshop overrides are scoped and slider exposes switch state", () =>
   assert.match(toggle,/role="switch" aria-checked=\{dark\}/);
   assert.match(toggle,/theme-slide-thumb/);
 });
+
+test("PMIS toolbar and legacy black date text have dark overrides", () => {
+  const css=readFileSync(new URL("../app/dark-theme.css",import.meta.url),"utf8");
+  assert.match(css,/html\[data-theme="dark"\] :is\(\.pmis-chart-toolbar,\.pmis-trend-panel\)/);
+  assert.match(css,/html\[data-theme="dark"\] \[class~="text-black"\] \{ color:#e6edf5 !important;/);
+});
+
+test("report surfaces, captions, table sections and tooltip have dark guards", () => {
+  const css=readFileSync(new URL("../app/dark-theme.css",import.meta.url),"utf8");
+  for (const selector of [".module-section-heading", ".pmis-table-scroll tbody tr>td[colspan]", ".monthly-stat:nth-child(n)", ".ppa-day-counts b", ".ppa-range-presets button", ".recharts-default-tooltip", '[class~="text-black"]']) {
+    assert.ok(css.includes(selector), selector);
+  }
+  for (const [fg,bg] of [["c4deef","203b49"],["d8eeff","244b63"],["b8c9d9","24333c"],["a2e4e7","173e43"],["c6d6ff","283751"],["ffd0a0","453321"]]) {
+    assert.ok((luminance(fg)+.05)/(luminance(bg)+.05)>=4.5, `${fg} on ${bg}`);
+  }
+});
