@@ -182,3 +182,9 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Tham khảo bảng màu từ dự án VibraControl local `web theo dõi độ rung thiết bị quay/up web/ui.css` và `theme.css`. Web mẫu online chỉ hiển thị màn hình truy cập báo lỗi máy chủ lúc kiểm tra.
 - Bản thử tương tác: `/wb-preview?live=1`; cache preview không có JavaScript nên không dùng để kiểm tra nút.
 - Người dùng đã yêu cầu đẩy GitHub. TypeScript và ESLint các file thay đổi thành công. Kiểm tra runtime bị chặn bởi lỗi HTTP 500 `fetch failed` trong Miniflare/Cloudflare Vite khi tải preview; chưa xác nhận chuyển chế độ trực tiếp.
+# 2026-10-14 — Favicon EVN (local)
+
+- Dùng nguyên ảnh logo EVN do người dùng gửi tại `public/evn-logo.png`, không vẽ lại hoặc thay đổi màu logo.
+- Metadata icon và shortcut đổi sang đường dẫn mới để tránh cache favicon biểu đồ cũ. Chỉ đổi biểu tượng tab, không thay logo trong giao diện.
+- Người dùng đã yêu cầu xuất bản favicon EVN lên GitHub.
+
