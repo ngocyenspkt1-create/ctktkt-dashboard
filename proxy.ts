@@ -8,6 +8,8 @@ export async function proxy(request: NextRequest) {
   if (process.env.NODE_ENV === "development" && pathname === "/wb-preview") return NextResponse.next();
   if (process.env.NODE_ENV === "development" && pathname === "/work-px-preview") return NextResponse.next();
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
+  // This one read-only route authenticates its own Bearer key; all other APIs retain session checks.
+  if (pathname === "/api/integration/v1/operating-data") return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const user = token ? await verifySessionToken(token) : null;

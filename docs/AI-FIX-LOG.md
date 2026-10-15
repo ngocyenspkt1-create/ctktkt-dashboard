@@ -225,3 +225,10 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Banner quyền, tiêu đề cụm, nhãn cương vị/báo cáo gốc, header bảng KTKT có nền/chữ tối rõ; ngày báo cáo đặt cả color và WebKit text fill để không còn chữ đen.
 - Thêm test hồi quy hooks, không đổi dữ liệu/công thức/định dạng ngày. Người dùng yêu cầu xuất bản lên GitHub. 5 test đạt; ESLint không lỗi, 2 cảnh báo điều hướng cũ. Chưa xác nhận trên web production.
 
+# 2026-10-15 — API tích hợp PMIS/PPA (local, chưa kích hoạt production)
+
+- Người dùng xác nhận backend pxvh1.infinityfree.me được đọc PMIS và SHN/PPA. Tạo khóa ngẫu nhiên 256-bit trong .sites-runtime/private (gitignored), không in khóa ra log hoặc commit. Vercel chỉ lưu SHA256; xóa/đổi hash và redeploy để thu hồi.
+- Route riêng /api/integration/v1/operating-data, Bearer auth constant-time, fail closed khi chưa cấu hình, GET theo tháng và whitelist dataset; không nới quyền API phiên đăng nhập khác. Không trả file nguồn, ghi chú hay tài khoản.
+- Test auth/header/query và tháng đạt. Hướng dẫn kích hoạt ở docs/INTEGRATION-API.md. Người dùng yêu cầu đẩy mã lên GitHub; không đẩy khóa. Chưa thêm env Vercel, chưa chuyển khóa sang InfinityFree.
+- Lưu ý chưa xác minh đối chiếu dữ liệu SHN/NH3 từ KTKT lưu với tổng hợp động của báo cáo; cần hoàn tất đối chiếu trước sử dụng vận hành. Không có rate limit phân tán, giới hạn một tháng mỗi query.
+

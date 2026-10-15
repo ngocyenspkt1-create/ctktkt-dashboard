@@ -1,0 +1,10 @@
+import { randomBytes, createHash } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+const key=randomBytes(32).toString("base64url");
+const hash=createHash("sha256").update(key).digest("hex");
+const directory=resolve(".sites-runtime/private");
+mkdirSync(directory,{recursive:true});
+const path=resolve(directory,"pxvh1-read-api-key.json");
+writeFileSync(path,JSON.stringify({recipient:"https://pxvh1.infinityfree.me/",key,vercel:{PXVH1_READ_API_KEY_SHA256:hash},scope:["pmis:read","ppa:read"]},null,2),{flag:"wx",mode:0o600});
+console.log(`Created private key file: ${path}. Key not printed. Keep this file private; never upload it to GitHub.`);
