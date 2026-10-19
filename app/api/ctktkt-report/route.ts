@@ -15,6 +15,7 @@ import { COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 import { CTKTKT_OPERATING_HOURS_CELLS } from "@/lib/ctktkt-extra-fields";
 import { loadCtktktOperatingHours } from "@/lib/ctktkt-operating-hours-db";
 import { CTKTKT_OPERATION_EVENTS_CELL, normalizeCtktktOperationEvents } from "@/lib/ctktkt-operation-events";
+import { reportReadRange } from "@/lib/report-read-range";
 
 const fieldCells = new Set<string>([
   ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
@@ -22,23 +23,15 @@ const fieldCells = new Set<string>([
 ].filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell)
   && !CTKTKT_WATER_LINKED_CELLS.has(cell)
   && !NH3_DCS_START_METER_CELLS.has(cell)));
-const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
-
-function monthBounds(period: string) {
-  const [year, month] = period.split("-").map(Number);
-  const next = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const previous = new Date(`${period}-01T12:00:00+07:00`);
-  previous.setDate(previous.getDate() - 1);
-  const from = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(previous);
-  return { from, next };
-}
 
 export async function GET(request: Request) {
   const session = await requireSession(); if (!session.ok) return session.response;
-  const period = new URL(request.url).searchParams.get("period") || "";
-  if (!periodPattern.test(period)) return Response.json({ error: "Tháng không hợp lệ." }, { status: 400 });
-  const { from, next } = monthBounds(period);
+  const params = new URL(request.url).searchParams;
+  const range = reportReadRange(params.get("period") || "", params.get("date"), true);
+  const scope = params.get("scope");
+  if (!range || (scope !== null && scope !== "daily-links")) return Response.json({ error: "Khoảng đọc dữ liệu không hợp lệ." }, { status: 400 });
+  const { from, next } = range;
   const today = vietnamDateIso();
   try {
     const db = getRawDb();
@@ -83,7 +76,10 @@ export async function GET(request: Request) {
       && !CTKTKT_BCSX_LINKED_CELLS.has(entry.cell)
       && !CTKTKT_WATER_LINKED_CELLS.has(entry.cell)
       && !hourCells.has(entry.cell));
-    const operatingHours = await loadCtktktOperatingHours(db, from, next);
+    // Daily links do not consume W68:Z69. Full CTKTKT reads/exports retain annual totals.
+    const operatingHours = scope === "daily-links"
+      ? { entries: [], missingDates: [] }
+      : await loadCtktktOperatingHours(db, from, next);
     linkedEntries.push(...operatingHours.entries.filter(entry => !isFutureOperatingDate(entry.operatingDate, today)));
     const nonEmptyManualKeys = new Set(manualEntries.filter(e => e.value !== "" && e.value !== null && e.value !== undefined).map(e => `${e.operatingDate}|${e.cell}`));
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);

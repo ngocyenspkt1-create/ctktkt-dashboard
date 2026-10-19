@@ -202,9 +202,9 @@ export function PpaHeatRateDashboard() {
   const canEdit = hasPermission(user, "edit_ppa");
   const today = useMemo(() => vietnamDateIso(), []);
   const defaultDate = useMemo(() => defaultOperatingDate(), []);
-  const [fromDate, setFromDate] = useState(() => addDaysIso(defaultOperatingDate(), -14));
+  const [fromDate, setFromDate] = useState(() => `${defaultOperatingDate().slice(0, 7)}-01`);
   const [toDate, setToDate] = useState(defaultDate);
-  const [rangeLabel, setRangeLabel] = useState("15 ngày gần nhất");
+  const [rangeLabel, setRangeLabel] = useState("Tháng vận hành");
   const [entries, setEntries] = useState<StoredPpa[]>([]);
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]);
   const [loading, setLoading] = useState(true);
@@ -301,8 +301,11 @@ export function PpaHeatRateDashboard() {
       const responses = await Promise.all(periods.map(period => Promise.all([
         fetch(`/api/ppa-heat-rate?period=${period}`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: StoredPpa[]; error?: string }>),
         fetch(`/api/daily-inputs?period=${period}`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: DailyInput[]; error?: string }>),
-        fetch(`/api/ctktkt-report?period=${period}`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string }>),
+        fetch(`/api/ctktkt-report?period=${period}&scope=daily-links`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string }>),
       ])));
+      for (const bodies of responses) {
+        for (const body of bodies) if (body.error) throw new Error(body.error);
+      }
       const allPpa = responses.flatMap(([ppaBody]) => ppaBody.entries || []);
       const allDaily = responses.flatMap(([, dailyBody, ctktktBody], index) => mergeDailyInputsWithCtktkt(
         dailyBody.entries || [],
@@ -344,8 +347,12 @@ export function PpaHeatRateDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadRange(fromDate, toDate, false); }, []);
 
-  function applyQuick(kind: "last15" | "all") {
-    if (kind === "last15") {
+  function applyQuick(kind: "month" | "last15" | "all") {
+    if (kind === "month") {
+      const from = `${defaultDate.slice(0, 7)}-01`;
+      setFromDate(from); setToDate(defaultDate); setRangeLabel("Tháng vận hành");
+      void loadRange(from, defaultDate, false);
+    } else if (kind === "last15") {
       const from = addDaysIso(defaultDate, -14);
       setFromDate(from); setToDate(defaultDate); setRangeLabel("15 ngày gần nhất");
       void loadRange(from, defaultDate, false);
@@ -544,7 +551,7 @@ export function PpaHeatRateDashboard() {
       <label className="grid gap-1 text-xs font-bold text-slate-600">TỪ NGÀY<DateField value={fromDate} max={toDate} onChange={setFromDate} className="w-[150px]"/></label>
       <label className="grid gap-1 text-xs font-bold text-slate-600">ĐẾN NGÀY<DateField value={toDate} min={fromDate} max={today} onChange={setToDate} className="w-[150px]"/></label>
       <button type="button" onClick={applyManualRange} className="h-10 rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-4 text-sm font-bold text-[#354a9f]">Áp dụng</button>
-      <div className="ppa-range-presets"><button type="button" onClick={() => applyQuick("last15")} aria-pressed={rangeLabel === "15 ngày gần nhất"}>15 ngày gần nhất</button><button type="button" onClick={() => applyQuick("all")} aria-pressed={rangeLabel === "Xem tất cả"}>Tất cả</button></div>
+      <div className="ppa-range-presets"><button type="button" onClick={() => applyQuick("month")} aria-pressed={rangeLabel === "Tháng vận hành"}>Tháng vận hành</button><button type="button" onClick={() => applyQuick("last15")} aria-pressed={rangeLabel === "15 ngày gần nhất"}>15 ngày gần nhất</button><button type="button" onClick={() => applyQuick("all")} aria-pressed={rangeLabel === "Xem tất cả"}>Tất cả</button></div>
       <p className="ml-auto text-xs font-semibold text-slate-500">{loading ? "Đang tải…" : `${rows.length} ngày có kết quả đã lưu`}</p>
     </div>
 

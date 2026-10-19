@@ -14,7 +14,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "test": "node --test tests/*.test.mjs",
     "db:generate": "drizzle-kit generate",
-    "storage:check": "node scripts/check-storage-health.mjs"
+    "storage:check": "node scripts/check-storage-health.mjs",
+    "storage:optimize": "node scripts/optimize-read-index.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

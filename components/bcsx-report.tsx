@@ -99,15 +99,15 @@ export function BcsxReport() {
         const [readingsRes, eventsRes, totalsRes, ctktktRes] = [
           await fetch(`/api/shift-readings?date=${operatingDate}`),
           await fetch(`/api/operating-events?date=${operatingDate}`),
-          await fetch(`/api/daily-inputs?period=${operatingDate.slice(0, 7)}`),
-          await fetch(`/api/ctktkt-report?period=${operatingDate.slice(0, 7)}`),
+          await fetch(`/api/daily-inputs?period=${operatingDate.slice(0, 7)}&date=${operatingDate}`),
+          await fetch(`/api/ctktkt-report?period=${operatingDate.slice(0, 7)}&date=${operatingDate}&scope=daily-links`),
         ];
         const readingsJson = await readingsRes.json() as { entries?: { unit: Unit; timeSlot: string; metric: ShiftMetric; value: string }[]; error?: string };
         const eventsJson = await eventsRes.json() as { events?: (OperatingEvent & { unit: Unit })[]; error?: string };
         const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[]; error?: string };
         const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[]; linkedEntries?: { operatingDate: string; cell: string; value: string }[]; error?: string };
         if (cancelled) return;
-        if (readingsJson.error || eventsJson.error) throw new Error(readingsJson.error || eventsJson.error);
+        if (readingsJson.error || eventsJson.error || totalsJson.error || ctktktJson.error) throw new Error(readingsJson.error || eventsJson.error || totalsJson.error || ctktktJson.error);
 
         const nextGrids: Record<Unit, ReadingsGrid> = { S1: emptyGrid(), S2: emptyGrid() };
         const slotIndex = new Map(SHIFT_TIME_SLOTS.map((s, i) => [s, i]));
@@ -398,11 +398,12 @@ export function BcsxReport() {
     try {
       const period = operatingDate.slice(0, 7);
       const [totalsRes, ctktktRes] = await Promise.all([
-        fetch(`/api/daily-inputs?period=${period}`),
-        fetch(`/api/ctktkt-report?period=${period}`),
+        fetch(`/api/daily-inputs?period=${period}&date=${operatingDate}`),
+        fetch(`/api/ctktkt-report?period=${period}&date=${operatingDate}&scope=daily-links`),
       ]);
-      const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[] };
-      const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[]; linkedEntries?: { operatingDate: string; cell: string; value: string }[] };
+      const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[]; error?: string };
+      const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[]; linkedEntries?: { operatingDate: string; cell: string; value: string }[]; error?: string };
+      if (!totalsRes.ok || !ctktktRes.ok || totalsJson.error || ctktktJson.error) throw new Error(totalsJson.error || ctktktJson.error || "Không tải được số liệu liên kết.");
       const byCode = new Map((totalsJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
       const ktktByDate = ctktktEntriesByDate([...(ctktktJson.entries || []), ...(ctktktJson.linkedEntries || [])]);
       const ktktValues = deriveDailyValuesFromCtktkt(

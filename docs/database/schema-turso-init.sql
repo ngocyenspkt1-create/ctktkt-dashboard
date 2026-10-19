@@ -52,6 +52,7 @@ CREATE TABLE `daily_inputs` (
 );
 CREATE UNIQUE INDEX `uidx_daily_inputs_date_field` ON `daily_inputs` (`operating_date`,`field_code`);
 CREATE INDEX `idx_daily_inputs_date` ON `daily_inputs` (`operating_date`);
+CREATE INDEX `idx_daily_inputs_field_date` ON `daily_inputs` (`field_code`,`operating_date`);
 
 CREATE TABLE `ppa_heat_rate_daily` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,

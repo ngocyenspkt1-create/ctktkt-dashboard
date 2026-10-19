@@ -44,7 +44,7 @@ export const dailyInputs = sqliteTable("daily_inputs", {
   value: text("value").notNull(),
   note: text("note").notNull().default(""),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, table => [uniqueIndex("uidx_daily_inputs_date_field").on(table.operatingDate, table.fieldCode), index("idx_daily_inputs_date").on(table.operatingDate)]);
+}, table => [uniqueIndex("uidx_daily_inputs_date_field").on(table.operatingDate, table.fieldCode), index("idx_daily_inputs_date").on(table.operatingDate), index("idx_daily_inputs_field_date").on(table.fieldCode, table.operatingDate)]);
 
 export const shiftReadings = sqliteTable("shift_readings", {
   id: integer("id").primaryKey({ autoIncrement: true }),

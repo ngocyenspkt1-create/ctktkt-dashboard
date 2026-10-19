@@ -19,7 +19,9 @@ const editor=tree=>find(tree,n=>typeof n.type==='function'&&n.props.onChange&&'v
 const progress=tree=>find(tree,n=>n.type==='input'&&n.props.type==='number');
 function harness(){
  const slots=[],effects=[],pending=[],posts=[],gets=[],remote=new Map(['A','B'].map(id=>[id,task(id)])),histories=new Map(['A','B'].map(id=>[id,[event(task(id),'initial-'+id)]]));
- let cursor=0,tree,dirty=true,postRelease=null,holdPost=false,holdGet=null,confirm=false;
+ let cursor=0,tree,dirty=true,postRelease=null,holdPost=false,holdGet=null,confirm=false,now=Date.now();
+ const timers=[],listeners=new Map();
+ class ClockDate extends Date { static now(){return now;} }
  const dependenciesEqual=(a,b)=>a&&b&&a.length===b.length&&a.every((value,index)=>Object.is(value,b[index]));
  const hooks={...React,
   useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],value=>{const next=typeof value==='function'?value(slots[i]):value;if(!Object.is(next,slots[i])){slots[i]=next;dirty=true;}}];},
@@ -45,17 +47,28 @@ function harness(){
  };
  const compiled={exports:{}};
  const dependencies=name=>name==='react'?hooks:name==='@/lib/work-px'?domain:name==='./work-report-editor'?{__esModule:true,default:function Editor(){}}:name==='@/components/session-context'?{useSessionUser:()=>actor}:name.endsWith('.css')?{}:require(name);
- vm.runInNewContext(code,{module:compiled,exports:compiled.exports,require:dependencies,fetch,queueMicrotask,Date,console,crypto:globalThis.crypto,document:{hidden:false,querySelector:()=>null,addEventListener(){},removeEventListener(){}},window:{confirm:()=>confirm,setInterval:()=>0,clearInterval(){},addEventListener(){},removeEventListener(){}}});
+ const document={hidden:false,querySelector:()=>null,addEventListener(){},removeEventListener(){}};
+ vm.runInNewContext(code,{module:compiled,exports:compiled.exports,require:dependencies,fetch,queueMicrotask,Date:ClockDate,console,crypto:globalThis.crypto,document,window:{confirm:()=>confirm,setInterval:(callback,delay)=>{timers.push({callback,delay});return timers.length;},clearInterval(){},addEventListener:(event,callback)=>listeners.set(event,callback),removeEventListener:event=>listeners.delete(event)}});
  function render(){cursor=0;dirty=false;tree=compiled.exports.WorkPxWorkspace({user:actor});for(const effect of effects.splice(0))effect();return tree;}
  return{
   render,get tree(){return tree;},posts,gets,remote,histories,
   async settle(){for(let i=0;i<12;i++){if(dirty)render();await new Promise(resolve=>setImmediate(resolve));}if(dirty)render();return tree;},
   select(id){find(tree,n=>n.type==='button'&&n.props.className==='wp-title'&&text(n).endsWith(id)).props.onClick();return render();},
   reload(){button(tree,'Tải lại công việc').props.onClick();},
+  timers,advance(ms){now+=ms;},focus(){listeners.get('focus')?.();},poll(){for(const timer of timers)timer.callback();},hide(value){document.hidden=value;},
   holdPosts(){holdPost=true;},releasePost(){postRelease();},holdGets(match){holdGet=match;},releaseGet(index){pending[index]();},allowDiscard(){confirm=true;},
  };
 }
 async function opened(){const h=harness();await h.settle();h.select('A');await h.settle();return h;}
+
+test('quota mode refreshes at five minutes, suppresses fresh focus/hidden polling, and keeps manual reload immediate',async()=>{
+ const h=await opened();assert.equal(h.timers[0].delay,300_000);const count=h.gets.length;
+ h.advance(60_000);h.focus();h.poll();await h.settle();assert.equal(h.gets.length,count);
+ h.advance(240_000);h.hide(true);h.poll();await h.settle();assert.equal(h.gets.length,count);
+ h.hide(false);h.focus();await h.settle();assert.equal(h.gets.length,count+2);
+ h.focus();await h.settle();assert.equal(h.gets.length,count+2);
+ h.reload();await h.settle();assert.equal(h.gets.length,count+4);
+});
 
 test('WP-01: clean refresh synchronizes progress; dirty reports retain their original version and cannot overwrite remote progress',async()=>{
  const h=await opened();h.remote.set('A',{...h.remote.get('A'),version:2,progress:80});h.reload();await h.settle();assert.equal(progress(h.tree).props.value,80);
