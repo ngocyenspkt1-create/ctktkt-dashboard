@@ -11,7 +11,7 @@ test("CTKTKT water link targets source cells and preserves Excel formula cells",
     assert.doesNotMatch(linkSource, new RegExp(`cell: \\"${formulaCell}\\"`));
   }
 
-  const exportSource = fs.readFileSync(new URL("../app/api/ctktkt-report/export/route.ts", import.meta.url), "utf8");
+  const exportSource = fs.readFileSync(new URL("../lib/report-exports/ctktkt.ts", import.meta.url), "utf8");
   assert.match(exportSource, /applyWaterLinks\(sheet, date\)/);
 });
 

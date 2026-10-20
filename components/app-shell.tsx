@@ -9,6 +9,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { MobileNav, QuickSearch, SidebarNav } from "@/components/app-navigation";
 import { SpreadsheetInputBehavior } from "@/components/spreadsheet-input-behavior";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { GoogleMirrorLinks } from "@/components/google-mirror-links";
 
 function Brand() {
   return (
@@ -74,7 +75,7 @@ export async function AppShell({ children, active }: { children: ReactNode; acti
               <LogoutButton />
             </div>
           </header>
-          <main className={`app-content ${active !== "data" ? "engineering-workspace" : ""} px-3 py-4 sm:px-5 lg:px-6 lg:py-6`} data-module={active}>{children}</main>
+          <main className={`app-content ${active !== "data" ? "engineering-workspace" : ""} px-3 py-4 sm:px-5 lg:px-6 lg:py-6`} data-module={active}><GoogleMirrorLinks module={active}/>{children}</main>
         </div>
       </div>
     </SessionProvider>

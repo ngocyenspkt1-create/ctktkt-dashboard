@@ -10,6 +10,8 @@ export async function proxy(request: NextRequest) {
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
   // This one read-only route authenticates its own Bearer key; all other APIs retain session checks.
   if (pathname === "/api/integration/v1/operating-data") return NextResponse.next();
+  // Dedicated integration routes authenticate their own scoped Bearer token.
+  if (pathname === "/api/google-mirror/snapshot" || (pathname === "/api/google-mirror/status" && request.method === "POST")) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const user = token ? await verifySessionToken(token) : null;

@@ -1,0 +1,10 @@
+import {requireAdmin} from '@/lib/auth/server';
+import {GOOGLE_MIRROR_SCRIPT} from '@/lib/google-mirror-script';
+import {GOOGLE_MIRROR_FILES} from '@/lib/google-mirror';
+import {mirrorSetupToken} from '@/lib/google-mirror-credentials';
+export async function GET(){
+ const guard=await requireAdmin();if(!guard.ok)return guard.response;
+ let token:string;try{token=await mirrorSetupToken();}catch{return Response.json({error:'Chưa tạo được kết nối an toàn; thử lại sau.'},{status:503});}
+ const config={base:'https://ctktkt-dashboard.vercel.app',token,initialPeriod:'2026-10',files:GOOGLE_MIRROR_FILES.map(({key,id})=>({key,id}))};
+ return new Response('const CONFIG = '+JSON.stringify(config)+';\n'+GOOGLE_MIRROR_SCRIPT,{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store','Content-Disposition':'attachment; filename="CTKTKT_Google_Sheets.gs"','X-Content-Type-Options':'nosniff'}});
+}
