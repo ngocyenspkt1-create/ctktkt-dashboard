@@ -46,17 +46,22 @@ test('existing export routes keep session guard after extraction',()=>{
  }
  new vm.Script(GOOGLE_MIRROR_SCRIPT);
 });
-test('Sheets formula serialization keeps numeric arguments separate and quoted commas intact',()=>{
+test('Vietnamese Sheets serialization preserves quoted text and numeric precision',()=>{
  const ctx=vm.createContext({});vm.runInContext(GOOGLE_MIRROR_SCRIPT,ctx);
  for(const [formula,expected] of [
-  ['IFERROR(D6/B6/10,0)','=IFERROR(D6/B6/10, 0)'],
-  ['IF(G4>0, K4/G4, 0)','=IF(G4>0, K4/G4, 0)'],
-  ['IFERROR(G6/622.5*100,0)','=IFERROR(G6/622.5*100, 0)'],
-  ['IF(A1="1,0",0,1)','=IF(A1="1,0", 0, 1)'],
-  ["SUM('Sheet,1'!A1,2)","=SUM('Sheet,1'!A1, 2)"],
-  ['IF(A1="a""b,c",0,1)','=IF(A1="a""b,c", 0, 1)'],
-  ["SUM('Sheet''s,1'!A1,2)","=SUM('Sheet''s,1'!A1, 2)"],
+  ['IFERROR(D6/B6/10,0)','=IFERROR(D6/B6/10;0)'],
+  ['IF(G4>0, K4/G4, 0)','=IF(G4>0; K4/G4; 0)'],
+  ['IFERROR(G6/622.5*100,0)','=IFERROR(G6/622,5*100;0)'],
+  ['IF(A1="1,0",0,1)','=IF(A1="1,0";0;1)'],
+  ["SUM('Sheet,1'!A1,2)","=SUM('Sheet,1'!A1;2)"],
+  ['IF(A1="a""b,c",0,1)','=IF(A1="a""b,c";0;1)'],
+  ["SUM('Sheet''s,1'!A1,2)","=SUM('Sheet''s,1'!A1;2)"],
+  ['M24-0.0011','=M24-0,0011'],
+  ['SUM(E7:E18)+99559.297','=SUM(E7:E18)+99559,297'],
+  ['IF(A1>1.25E-3,.5,0)','=IF(A1>1,25E-3;,5;0)'],
+  ['SUM({1.5,2;3,4})','=SUM({1,5\\2;3\\4})'],
  ])assert.equal(ctx.mirrorFormula(formula),expected);
+ assert.equal(ctx.mirrorFormula('IFERROR(A1/622.5,0)','en_US'),'=IFERROR(A1/622.5,0)');
 });
 test('unchanged mirror snapshots use conditional GET; ETag is stored only after successful writes and callbacks',()=>{
  const props=new Map([['token','x'.repeat(48)]]),calls=[];

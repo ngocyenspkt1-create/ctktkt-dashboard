@@ -35,6 +35,7 @@ function syncNow() {
         const target = CONFIG.files.find(f => f.key === file.key && f.id === file.id);
         if (!target) throw new Error('File ngoài phạm vi được phép.');
         const book = SpreadsheetApp.openById(target.id); // Also declares the Sheets authorization scope.
+        const formulaLocale = typeof book.getSpreadsheetLocale === 'function' ? book.getSpreadsheetLocale() : 'vi_VN';
         const lastPeriod = props.getProperty('period_' + target.key) || CONFIG.initialPeriod;
         if (lastPeriod !== snapshot.period) {
           // Keep a private full copy before changing the active reporting month.
@@ -66,7 +67,7 @@ function syncNow() {
                 const v=r[i];
                 if(v===null || v===undefined) return {};
                 // User text remains literal even when it begins with =, +, - or @.
-                return {userEnteredValue:typeof v==='object'?{formulaValue:mirrorFormula(v.formula)}:typeof v==='number'?{numberValue:v}:typeof v==='boolean'?{boolValue:v}:{stringValue:String(v)}};
+                return {userEnteredValue:typeof v==='object'?{formulaValue:mirrorFormula(v.formula, formulaLocale)}:typeof v==='number'?{numberValue:v}:typeof v==='boolean'?{boolValue:v}:{stringValue:String(v)}};
               })})), fields:'userEnteredValue'
             }});
             if(file.key==='ppa' && (tab.name==='S1'||tab.name==='S2')) {
@@ -106,21 +107,26 @@ function syncNow() {
 function stopSync() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncNow').forEach(t => ScriptApp.deleteTrigger(t));
 }
-// A Vietnamese Sheet may parse 10,0 as a decimal rather than two arguments.
-// Preserve formula meaning by spacing argument commas outside quoted content.
-function mirrorFormula(formula) {
+// XLSX formulas use English separators. Sheets formulaValue is locale-sensitive.
+// Only translate syntax; quoted strings/sheet names and KPI logic stay intact.
+function mirrorFormula(formula, locale) {
   const source = formula.replace(/^=/, '');
-  let result = '=', quote = '';
+  if (locale && locale !== 'vi_VN') return '=' + source;
+  let result = '=', quote = '', arrayDepth = 0;
   for (let i = 0; i < source.length; i++) {
     const ch = source[i];
-    result += ch;
     if (quote) {
+      result += ch;
       if (ch === quote) {
         if (source[i + 1] === quote) result += source[++i];
         else quote = '';
       }
-    } else if (ch === '"' || ch === "'") quote = ch;
-    else if (ch === ',' && source[i + 1] && !/\s/.test(source[i + 1])) result += ' ';
+    } else if (ch === '"' || ch === "'") { quote = ch; result += ch; }
+    else if (ch === '{') { arrayDepth++; result += ch; }
+    else if (ch === '}') { arrayDepth--; result += ch; }
+    else if (ch === ',') result += arrayDepth ? '\\' : ';';
+    else if (ch === '.' && /\d/.test(source[i + 1] || '') && !/[A-Za-z_$]/.test(source[i - 1] || '')) result += ',';
+    else result += ch;
   }
   return result;
 }
