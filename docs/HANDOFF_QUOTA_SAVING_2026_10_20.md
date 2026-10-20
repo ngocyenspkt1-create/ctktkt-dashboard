@@ -20,7 +20,7 @@
 - Đã kiểm tra rollback, yêu cầu cũ đang chạy không ghi đè cache của phiên bản mới, cache lỗi/quá lớn không lặp SQL thành công, SQL lỗi không được cache, tài khoản đổi quyền vẫn thấy hiệu lực ngay.
 - Snapshot: 10 conditional GET không đổi không gọi lại exporter; đổi nguồn/ngày trả 200; chưa có quyền trả 401 trước khi đọc metadata.
 - Bộ kiểm thử đầy đủ cuối trước phát hành: **422/422 đạt**; kiểm thử cache tập trung **9/9 đạt**. Lint các file thay đổi sạch. TypeScript nguồn đạt với cấu hình kiểm tra không lấy file `.next/types` bị lỗi sinh từ build Next cục bộ; không coi đây là xác nhận toàn bộ build Next đã đạt. Chưa gán tỷ lệ tiết kiệm quota production từ số đo synthetic.
-- Vinext build đạt. Next webpack trên Windows lỗi công cụ WasmHash; dùng build Next trên Vercel làm gate triển khai thật, không coi lỗi công cụ cục bộ là đã build Next đạt.
+- Vinext build đạt. Next production build (Turbopack) cục bộ đạt sau khi sửa biểu thức RegExp dùng chuỗi ghép, tránh lỗi minifier biến ký tự backtick trong template literal thành JavaScript sai cú pháp. Bản đầu cc1c64b thất bại khi collect page data; không đưa bản lỗi lên production. Kiểm thử cache sau sửa: 9/9 đạt.
 
 ## Vận hành và rollback
 

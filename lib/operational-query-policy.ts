@@ -73,7 +73,7 @@ export function operationalWriteKeys(sql: string, args: unknown[]): string[] {
   // DDL, unbounded/range mutations and SQL literals invalidate every month.
   // Date-bounded point writes are the only localized case.
   const column = dateColumn(table);
-  const insertDateFirst = new RegExp(`^\\s*(?:INSERT(?:\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO)\\s+[\x60\"]?${table}[\x60\"]?\\s*\\(\\s*[\x60\"]?${column}[\x60\"]?\\s*,[^)]*\\)\\s*VALUES\\s*\\(\\s*\\?`, 'i').test(sql);
+  const insertDateFirst = new RegExp("^\\s*(?:INSERT(?:\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO)\\s+[\x60\"]?" + table + "[\x60\"]?\\s*\\(\\s*[\x60\"]?" + column + "[\x60\"]?\\s*,[^)]*\\)\\s*VALUES\\s*\\(\\s*\\?", 'i').test(sql);
   const whereDate = new RegExp(`\\bWHERE\\s+${column}\\s*=\\s*\\?(?:\\s|$)`, 'i').exec(sql);
   const whereDateFirst = Boolean(whereDate && isIsoDate(args[parameterIndex(sql, sql.indexOf('?', whereDate.index))]));
   const changesDate = new RegExp(`\\b${column}\\s*=`, 'i').test(sql.split(/\bWHERE\b/i)[0]);
