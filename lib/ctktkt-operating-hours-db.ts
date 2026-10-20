@@ -9,15 +9,30 @@ import {
 
 type RawDb = ReturnType<typeof getRawDb>;
 
+function monthlyRanges(next: string) {
+  const ranges: Array<[string, string]> = [];
+  let from = CTKTKT_OPERATING_HOURS_START_DATE;
+  while (from < next && ranges.length < 24) {
+    const year = Number(from.slice(0, 4)), month = Number(from.slice(5, 7));
+    const following = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const end = following < next ? following : next;
+    ranges.push([from, end]); from = end;
+  }
+  // Preserve old behavior for exceptionally broad requests, without thousands
+  // of queries. Normal reports reuse closed-month cache entries independently.
+  return from < next ? [[CTKTKT_OPERATING_HOURS_START_DATE, next]] : ranges;
+}
+
 /**
  * Lũy kế giờ theo QLKT cho các ngày trong [from, next).
  * Trả về các ô W68:Z69 dạng liên kết và danh sách ngày QLKT còn thiếu giờ phát tới hết khoảng.
  */
 export async function loadCtktktOperatingHours(db: RawDb, from: string, next: string) {
   const codes = [...CTKTKT_OPERATING_HOURS_SOURCE_CODES];
-  const { results } = await db.prepare(
+  const chunks = await Promise.all(monthlyRanges(next).map(([start, end]) => db.prepare(
     `SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code IN (${codes.map(() => "?").join(", ")})`,
-  ).bind(CTKTKT_OPERATING_HOURS_START_DATE, next, ...codes).all();
+  ).bind(start, end, ...codes).all()));
+  const results = chunks.flatMap(chunk => chunk.results);
   const daily = new Map<string, Record<string, string>>();
   for (const row of results as Array<{ operatingDate: string; fieldCode: string; value: string }>) {
     const day = daily.get(row.operatingDate) || {};

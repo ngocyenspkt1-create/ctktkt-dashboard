@@ -75,8 +75,10 @@ test("PPA scoped reads omit the annual query but preserve every derived daily va
   const f = fixture(); t.after(() => f.db.close());
   const full = await f.ctktkt("period=2026-09");
   assert.equal(full.status, 200);
-  assert.equal(f.queries.length, 5);
-  assert.deepEqual(f.queries.at(-1).args.slice(0, 2), ["2026-01-01", "2026-10-01"]);
+  const hoursQueries = f.queries.filter(q => q.sql.includes('field_code AS fieldCode'));
+  assert.equal(hoursQueries.length, 9);
+  assert.deepEqual(hoursQueries[0].args.slice(0, 2), ["2026-01-01", "2026-02-01"]);
+  assert.deepEqual(hoursQueries.at(-1).args.slice(0, 2), ["2026-09-01", "2026-10-01"]);
   assert.ok(full.body.linkedEntries.some(e => e.cell === "W68" && e.operatingDate === "2026-09-17" && Number(e.value) === 72));
   f.queries.length = 0;
   const scoped = await f.ctktkt("period=2026-09&scope=daily-links");

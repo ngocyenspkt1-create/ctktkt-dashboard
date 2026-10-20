@@ -46,3 +46,38 @@ test('existing export routes keep session guard after extraction',()=>{
  }
  new vm.Script(GOOGLE_MIRROR_SCRIPT);
 });
+test('Sheets formula serialization keeps numeric arguments separate and quoted commas intact',()=>{
+ const ctx=vm.createContext({});vm.runInContext(GOOGLE_MIRROR_SCRIPT,ctx);
+ for(const [formula,expected] of [
+  ['IFERROR(D6/B6/10,0)','=IFERROR(D6/B6/10, 0)'],
+  ['IF(G4>0, K4/G4, 0)','=IF(G4>0, K4/G4, 0)'],
+  ['IFERROR(G6/622.5*100,0)','=IFERROR(G6/622.5*100, 0)'],
+  ['IF(A1="1,0",0,1)','=IF(A1="1,0", 0, 1)'],
+  ["SUM('Sheet,1'!A1,2)","=SUM('Sheet,1'!A1, 2)"],
+  ['IF(A1="a""b,c",0,1)','=IF(A1="a""b,c", 0, 1)'],
+  ["SUM('Sheet''s,1'!A1,2)","=SUM('Sheet''s,1'!A1, 2)"],
+ ])assert.equal(ctx.mirrorFormula(formula),expected);
+});
+test('unchanged mirror snapshots use conditional GET; ETag is stored only after successful writes and callbacks',()=>{
+ const props=new Map([['token','x'.repeat(48)]]),calls=[];
+ let status=200,failed=false,opened=0;
+ const sheet={getSheetId:()=>1,getMaxRows:()=>10,getMaxColumns:()=>10,getName:()=> 't',showSheet:()=>{}};
+ const ctx={CONFIG:{base:'https://test',initialPeriod:'2026-10',files:[{key:'test',id:'allowed'}]},console:{log:()=>{}},
+ LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock:()=>{}})},
+ PropertiesService:{getScriptProperties:()=>({getProperty:k=>props.get(k),setProperty:(k,v)=>props.set(k,v)})},
+ SpreadsheetApp:{openById:()=>{opened++;return {getSheetByName:()=>sheet,getSheets:()=>[sheet],setActiveSheet:()=>{},rename:()=>{}};},flush:()=>{}},
+ ScriptApp:{getOAuthToken:()=> 'opaque'},
+ UrlFetchApp:{fetch:(url,opts)=>{calls.push({url,opts});if(url.endsWith('/snapshot'))return {getResponseCode:()=>status,getAllHeaders:()=>({ETag:'"revision1"'}),getContentText:()=>JSON.stringify({period:'2026-10',generatedAt:'2026-10-20T00:00:00Z',files:[{key:'test',id:'allowed',hash:'abc',tabs:[{name:'t',rows:[[1]]}]}]})};return {getResponseCode:()=>failed?500:200};}},
+ };
+ vm.createContext(ctx);vm.runInContext(GOOGLE_MIRROR_SCRIPT,ctx);
+ failed=true;assert.throws(()=>ctx.syncNow());assert.equal(props.has('snapshot_etag'),false);
+ failed=false;ctx.syncNow();assert.equal(props.get('snapshot_etag'),'"revision1"');
+ calls.length=0;opened=0;status=304;ctx.syncNow();
+ assert.equal(calls.length,1);assert.equal(calls[0].opts.headers['If-None-Match'],'"revision1"');assert.equal(opened,0);
+});
+test('install cannot claim success or create a schedule while another sync holds its lock',()=>{
+ let scheduled=false;
+ const ctx={CONFIG:{token:'x'.repeat(48)},PropertiesService:{getScriptProperties:()=>({setProperty:()=>{},deleteProperty:()=>{}})},
+ LockService:{getScriptLock:()=>({tryLock:()=>false})},ScriptApp:{getProjectTriggers:()=>{scheduled=true;return [];}}};
+ vm.createContext(ctx);vm.runInContext(GOOGLE_MIRROR_SCRIPT,ctx);assert.throws(()=>ctx.install(),/Đang có lần đồng bộ khác/);assert.equal(scheduled,false);
+});

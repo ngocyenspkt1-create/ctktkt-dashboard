@@ -1,6 +1,12 @@
 import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
+// Small revision counters only; no duplicate operating values or credentials.
+export const operationalReadVersions = sqliteTable("operational_read_versions", {
+  cacheKey: text("cache_key").primaryKey(),
+  version: integer("version").notNull().default(0),
+});
+
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull(),

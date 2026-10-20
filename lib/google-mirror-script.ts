@@ -3,6 +3,7 @@ export const GOOGLE_MIRROR_SCRIPT = String.raw`
 function install() {
   if (CONFIG.token.length < 32) throw new Error('Chưa cấu hình mã kết nối.');
   PropertiesService.getScriptProperties().setProperty('token', CONFIG.token);
+  PropertiesService.getScriptProperties().deleteProperty('snapshot_etag');
   syncNow(); // Authorize and complete a real first sync before installing the schedule.
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncNow').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('syncNow').timeBased().everyHours(1).create();
@@ -10,14 +11,21 @@ function install() {
 }
 function syncNow() {
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(1000)) return;
+  if (!lock.tryLock(1000)) throw new Error('Đang có lần đồng bộ khác; chờ hoàn tất rồi chạy lại.');
   try {
     const props = PropertiesService.getScriptProperties();
     const token = props.getProperty('token');
     if (!token) throw new Error('Chạy install trước.');
+    const requestHeaders = {Authorization: 'Bearer ' + token};
+    const previousEtag = props.getProperty('snapshot_etag');
+    if (previousEtag) requestHeaders['If-None-Match'] = previousEtag;
     const response = UrlFetchApp.fetch(CONFIG.base + '/api/google-mirror/snapshot', {
-      headers: {Authorization: 'Bearer ' + token}, muteHttpExceptions: true
+      headers: requestHeaders, muteHttpExceptions: true
     });
+    if (response.getResponseCode() === 304) {
+      console.log('Dữ liệu web không đổi; không đọc lại báo cáo và không ghi lại Google Sheets.');
+      return;
+    }
     if (response.getResponseCode() !== 200) throw new Error('Chưa lấy được dữ liệu web. Giữ nguyên Google Sheets. HTTP ' + response.getResponseCode());
     const snapshot = JSON.parse(response.getContentText());
     if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(snapshot.period) || snapshot.files.length !== CONFIG.files.length) throw new Error('Bản đồng bộ không hợp lệ.');
@@ -58,7 +66,7 @@ function syncNow() {
                 const v=r[i];
                 if(v===null || v===undefined) return {};
                 // User text remains literal even when it begins with =, +, - or @.
-                return {userEnteredValue:typeof v==='object'?{formulaValue:'='+v.formula.replace(/^=/,'')}:typeof v==='number'?{numberValue:v}:typeof v==='boolean'?{boolValue:v}:{stringValue:String(v)}};
+                return {userEnteredValue:typeof v==='object'?{formulaValue:mirrorFormula(v.formula)}:typeof v==='number'?{numberValue:v}:typeof v==='boolean'?{boolValue:v}:{stringValue:String(v)}};
               })})), fields:'userEnteredValue'
             }});
             if(file.key==='ppa' && (tab.name==='S1'||tab.name==='S2')) {
@@ -88,9 +96,32 @@ function syncNow() {
       } catch (e) { failures.push(file.key+': '+e.message); }
     });
     if(failures.length) throw new Error(failures.join('\n'));
+    if (typeof response.getAllHeaders === 'function') {
+      const headers = response.getAllHeaders();
+      const key = Object.keys(headers).find(k => k.toLowerCase() === 'etag');
+      if (key) props.setProperty('snapshot_etag', String(headers[key]));
+    }
   } finally { lock.releaseLock(); }
 }
 function stopSync() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncNow').forEach(t => ScriptApp.deleteTrigger(t));
+}
+// A Vietnamese Sheet may parse 10,0 as a decimal rather than two arguments.
+// Preserve formula meaning by spacing argument commas outside quoted content.
+function mirrorFormula(formula) {
+  const source = formula.replace(/^=/, '');
+  let result = '=', quote = '';
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    result += ch;
+    if (quote) {
+      if (ch === quote) {
+        if (source[i + 1] === quote) result += source[++i];
+        else quote = '';
+      }
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === ',' && source[i + 1] && !/\s/.test(source[i + 1])) result += ' ';
+  }
+  return result;
 }
 `;
