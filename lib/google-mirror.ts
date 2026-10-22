@@ -11,7 +11,7 @@ export const GOOGLE_MIRROR_FILES = [
 ] as const;
 export type MirrorKey = typeof GOOGLE_MIRROR_FILES[number]['key'];
 export function mirrorFile(key:string){return GOOGLE_MIRROR_FILES.find(f=>f.key===key);}
-export function mirrorUrl(id:string){return `https://docs.google.com/spreadsheets/d/${id}/edit`;}
+export function mirrorUrl(id:string){return `https://docs.google.com/spreadsheets/d/${id}/view`;}
 export function validMirrorPeriod(value:string){return /^20\d{2}-(0[1-9]|1[0-2])$/.test(value);}
 export type MirrorCell = string|number|boolean|null|{formula:string};
 export type MirrorTab = {name:string;template?:string;rows:MirrorCell[][];startRow?:number;startColumn?:number;clearRows?:number;clearColumns?:number};
