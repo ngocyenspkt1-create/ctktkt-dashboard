@@ -8,9 +8,8 @@ function configureViewerAccess() {
     CONFIG.files.forEach(target => {
       try {
         const path = '/files/' + encodeURIComponent(target.id);
-        const metadata = mirrorDriveRequest(path + '?fields=id,mimeType,parents,owners(emailAddress),writersCanShare,copyRequiresWriterPermission');
-        const actor = Session.getEffectiveUser().getEmail();
-        if (metadata.mimeType !== 'application/vnd.google-apps.spreadsheet' || !actor || !(metadata.owners || []).some(o => o.emailAddress === actor)) throw new Error('Chỉ chủ sở hữu được cấu hình file này.');
+        const metadata = mirrorDriveRequest(path + '?fields=id,mimeType,parents,ownedByMe,writersCanShare,copyRequiresWriterPermission');
+        if (metadata.mimeType !== 'application/vnd.google-apps.spreadsheet' || metadata.ownedByMe !== true) throw new Error('Chỉ chủ sở hữu được cấu hình file này.');
         // Do not change a folder or silently leave inherited edit access in place.
         (metadata.parents || []).forEach(parent => {
           if (mirrorPermissions(parent).some(p => ['writer','commenter','organizer','fileOrganizer'].includes(p.role))) throw new Error('Thư mục cha đang cấp quyền sửa/bình luận; cần xử lý riêng tại thư mục.');

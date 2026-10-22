@@ -5,9 +5,9 @@ import {GOOGLE_MIRROR_ACCESS_SCRIPT} from '../lib/google-mirror-access-script.ts
 import {GOOGLE_MIRROR_FILES,mirrorUrl} from '../lib/google-mirror.ts';
 
 function harness({parentEditor=false,failWrite=false,readerRestricted=false}={}) {
- const calls=[],files=new Map(GOOGLE_MIRROR_FILES.map(f=>[f.id,{metadata:{id:f.id,mimeType:'application/vnd.google-apps.spreadsheet',parents:['parent'],owners:[{emailAddress:'owner@example.test'}],writersCanShare:true,copyRequiresWriterPermission:true},permissions:[{id:'owner',type:'user',role:'owner'},{id:'editor',type:'user',role:'writer'}]}]));
+ const calls=[],files=new Map(GOOGLE_MIRROR_FILES.map(f=>[f.id,{metadata:{id:f.id,mimeType:'application/vnd.google-apps.spreadsheet',parents:['parent'],ownedByMe:true,writersCanShare:true,copyRequiresWriterPermission:true},permissions:[{id:'owner',type:'user',role:'owner'},{id:'editor',type:'user',role:'writer'}]}]));
  let unlocked=false;
- const ctx={CONFIG:{files:GOOGLE_MIRROR_FILES},Session:{getEffectiveUser:()=>({getEmail:()=> 'owner@example.test'})},LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock:()=>{unlocked=true;}})},ScriptApp:{getOAuthToken:()=> 'synthetic'},console:{log:()=>{}},
+ const ctx={CONFIG:{files:GOOGLE_MIRROR_FILES},LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock:()=>{unlocked=true;}})},ScriptApp:{getOAuthToken:()=> 'synthetic'},console:{log:()=>{}},
  UrlFetchApp:{fetch:(raw,options)=>{
  const url=new URL(raw),segments=url.pathname.split('/'),id=segments[4],permissionId=segments[6],method=options.method;
  calls.push({url:raw,method,payload:options.payload?JSON.parse(options.payload):null});
