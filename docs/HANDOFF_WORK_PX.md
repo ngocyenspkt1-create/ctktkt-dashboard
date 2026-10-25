@@ -90,3 +90,12 @@
 - Rollback code giữ bảng/file để tránh mất hồ sơ; cần sao lưu bảng items/events/attachments khi vận hành. Mọi thay đổi cấu hình dung lượng hoặc retention phải đánh giá riêng.
 - Preview vẫn không lưu; có mẫu chủ trì là người dùng minh họa để thử mở hộp xác nhận và editor. Công cụ trình duyệt lỗi khởi tạo trong lần triển khai này nên chưa xác nhận trực quan sau đăng nhập.
 - Kiểm chứng: 383/383 tests đạt, gồm tương tác React mô phỏng nút bước 2/Hủy/Đồng ý và gửi báo cáo, kiểm tra XSS/giới hạn tệp/ACL tải xuống/CAS/rollback. TypeScript, ESLint các tệp chức năng và build Next.js đạt. Chưa nghiệm thu trực quan bằng trình duyệt thật do lỗi khởi tạo công cụ.
+
+## Sửa sáu lỗi và chuẩn bị triển khai — 19/10/2026
+- Biểu mẫu giữ phiên bản gốc khi đang soạn; tải lại không ghép tiến độ cũ với phiên bản mới. Có cảnh báo xung đột và nạp lại sau xác nhận bỏ bản nháp.
+- Chặn chuyển việc, mở biểu mẫu khác và gửi trùng khi đang lưu; editor khởi tạo muộn vẫn giữ trạng thái khóa. Chọn lại cùng việc giữ nguyên bản nháp và nhật ký.
+- Tải lại cập nhật cả danh sách và nhật ký chi tiết; loại phản hồi cũ và phản hồi thuộc việc đã rời.
+- Kiểm tra gói Office bằng cấu trúc ZIP/CRC, Content Types và phần chính tương ứng; giới hạn 2.000 mục và 20 MiB sau giải nén. Giữ giới hạn 3 tệp, 1 MiB/tệp, 2 MiB/báo cáo và lưu/tải riêng tư qua API hiện có.
+- Thêm 10 kiểm thử hồi quy. Sau đồng bộ `github/main` tại `8f20af1`: 400/400 tests, TypeScript và build Next.js `--webpack` đạt; ESLint phạm vi sửa đạt. Không sửa công thức KPI, phân quyền hoặc schema DB.
+- `storage:check` OK: 14,61 MiB, 15 bảng, 133.435 dòng; chưa xác minh hạn mức gói và usage tài khoản Turso/Vercel.
+- Preview local bị timeout từ công cụ trình duyệt; chưa nghiệm thu đầy đủ thao tác ghi bằng tài khoản thật. Trạng thái deployment phải kiểm tra theo SHA sau khi push.

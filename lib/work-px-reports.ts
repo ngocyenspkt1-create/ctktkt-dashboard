@@ -1,5 +1,6 @@
 import sanitizeHtml from "sanitize-html";
 import { WorkError } from "./work-px.ts";
+import { validateOfficeArchive } from "./work-px-office.ts";
 export const FILE_LIMIT = 1024 * 1024;
 export const REPORT_FILES_LIMIT = 2 * FILE_LIMIT;
 export const STORAGE_LIMIT = 100 * FILE_LIMIT;
@@ -32,6 +33,7 @@ export function decodeReportFiles(input: unknown): StoredReportFile[] {
     const signature=bytes.subarray(0,8).toString("hex");
     const ok=ext==="pdf" ? bytes.subarray(0,5).toString()==="%PDF-" : ["docx","xlsx","pptx"].includes(ext) ? signature.startsWith("504b0304") : ext==="png" ? signature==="89504e470d0a1a0a" : ["jpg","jpeg"].includes(ext) ? signature.startsWith("ffd8ff") : !bytes.includes(0);
     if(!ok) throw new WorkError("Định dạng thực của tệp không khớp phần mở rộng.");
+    if (["docx", "xlsx", "pptx"].includes(ext)) validateOfficeArchive(bytes, ext);
     return {id:crypto.randomUUID(),name,type:types[ext],size:bytes.length,data:bytes};
   });
 }

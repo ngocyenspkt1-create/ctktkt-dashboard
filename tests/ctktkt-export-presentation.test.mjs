@@ -66,7 +66,7 @@ test('rich text keeps its text and emphasis while adopting Times New Roman',()=>
 });
 
 test('export applies presentation after writing data and before serializing workbook',()=>{
- const source=readFileSync(new URL('../app/api/ctktkt-report/export/route.ts',import.meta.url),'utf8');
+ const source=readFileSync(new URL('../lib/report-exports/ctktkt.ts',import.meta.url),'utf8');
  assert.match(source,/applyCtktktExportPresentation\(workbook\);\s*hideCtktktExportScratchArea\(workbook\);\s*const output = new Uint8Array\(await workbook\.xlsx\.writeBuffer\(\)\)/);
 });
 

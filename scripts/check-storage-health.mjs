@@ -4,6 +4,7 @@ import { createClient } from "@libsql/client/http";
 if (existsSync(".env.local")) process.loadEnvFile(".env.local");
 
 const url = process.env.TURSO_DATABASE_URL;
+const light = process.argv.includes('--light');
 if (!url) {
   console.error("STORAGE_HEALTH_ERROR: thiếu TURSO_DATABASE_URL trong môi trường hiện tại.");
   process.exitCode = 1;
@@ -25,7 +26,7 @@ if (!url) {
     let totalRows = 0;
     const rowCounts = [];
 
-    for (const row of tablesResult.rows) {
+    for (const row of light ? [] : tablesResult.rows) {
       const table = String(row[0]);
       const quoted = table.replaceAll('"', '""');
       const countResult = await client.execute(`SELECT COUNT(*) FROM "${quoted}"`);
@@ -40,18 +41,19 @@ if (!url) {
     const mib = value => Number((value / 1024 / 1024).toFixed(2));
 
     console.log(JSON.stringify({
-      status: level,
+      status: light ? 'CONNECTED' : level,
       turso: {
         allocatedMiB: mib(allocatedBytes),
         estimatedUsedMiB: mib(usedBytes),
         freePagesMiB: mib(freePages * pageSize),
-        freePlanLimitMiB: 5120,
-        allocatedPercentOfFreePlan: Number(percentage.toFixed(4)),
-        tableCount: rowCounts.length,
-        totalRows,
+        freePlanLimitMiB: light ? null : 5120,
+        allocatedPercentOfFreePlan: light ? null : Number(percentage.toFixed(4)),
+        tableCount: tablesResult.rows.length,
+        totalRows: light ? null : totalRows,
         largestTables: rowCounts.sort((a, b) => b.count - a.count).slice(0, 8),
       },
-      note: "Dung lượng Vercel và số lượt đọc/ghi Turso phải kiểm tra riêng trong dashboard nhà cung cấp.",
+      mode: light ? 'light-no-row-counts' : 'full',
+      note: light ? 'Kết nối và dung lượng DB đã đọc; không COUNT toàn bảng. Chưa xác minh gói/hạn mức/kỳ hóa đơn: kiểm tra Turso Analytics/Billing và Vercel Usage.' : "Dung lượng Vercel và số lượt đọc/ghi Turso phải kiểm tra riêng trong dashboard nhà cung cấp.",
     }, null, 2));
   } catch (error) {
     console.error(`STORAGE_HEALTH_ERROR: ${error instanceof Error ? error.message : String(error)}`);

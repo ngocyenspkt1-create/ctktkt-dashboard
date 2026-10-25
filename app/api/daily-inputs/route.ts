@@ -5,6 +5,7 @@ import { CTKTKT_LINKED_DAILY_CODES } from "@/lib/daily-source-links";
 import { requireAnyPermission, requireSession } from "@/lib/auth/server";
 import { canEditOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 import { isAdminUser } from "@/lib/auth/session";
+import { reportReadRange } from "@/lib/report-read-range";
 
 const allowedCodes = new Set(["B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","AA","AE","AF","AG","AH","AJ","AK","AR","AT","CJ","CX","BN","BO","BP","BQ","BR","BS","BT","BU","BV","BW","BX","BY","CN","BZ","CA","CC","CD","CE","CF","CM","CQ","CR","CS","CT","CU","CV","CW","DA","DB","DC","DD","DE","DF","DG","DH","GRID_RECEIVE_S1","GRID_RECEIVE_S2","BCSX_COAL_STOCK_24H"]);
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
@@ -13,10 +14,10 @@ const unavailable = () => Response.json({ error: "Chưa truy cập được kho 
 
 export async function GET(request: Request) {
   const session = await requireSession(); if (!session.ok) return session.response;
-  const period = new URL(request.url).searchParams.get("period") || "";
-  if (!periodPattern.test(period)) return Response.json({ error: "Tháng theo dõi không hợp lệ." }, { status: 400 });
-  const [year, month] = period.split("-").map(Number); const next = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;
-  try { const { results } = await getRawDb().prepare("SELECT operating_date AS operatingDate, field_code AS fieldCode, value, note FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND operating_date <= ? ORDER BY operating_date, field_code").bind(`${period}-01`, `${next}-01`, vietnamDateIso()).all(); return Response.json({ entries: results }, { headers: { "Cache-Control": "no-store" } }); }
+  const params = new URL(request.url).searchParams;
+  const range = reportReadRange(params.get("period") || "", params.get("date"));
+  if (!range) return Response.json({ error: "Khoảng đọc dữ liệu không hợp lệ." }, { status: 400 });
+  try { const { results } = await getRawDb().prepare("SELECT operating_date AS operatingDate, field_code AS fieldCode, value, note FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND operating_date <= ? ORDER BY operating_date, field_code").bind(range.from, range.next, vietnamDateIso()).all(); return Response.json({ entries: results }, { headers: { "Cache-Control": "no-store" } }); }
   catch { return unavailable(); }
 }
 

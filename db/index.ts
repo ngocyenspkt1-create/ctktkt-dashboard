@@ -1,8 +1,62 @@
 import { createClient, type Client, type InValue, type Row } from "@libsql/client/http";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
+import {createHash} from "node:crypto";
+import {cachedOperationalRows} from "../lib/operational-query-cache";
+import {operationalWriteKeys} from "../lib/operational-query-policy";
 
 let client: Client | null = null;
+let versionSchema: Promise<unknown> | null = null;
+let versionRead: Promise<Record<string, number>> | null = null;
+
+function ensureVersionSchema() {
+  if (!versionSchema) {
+    versionSchema = getClient().execute("CREATE TABLE IF NOT EXISTS operational_read_versions (cache_key TEXT PRIMARY KEY, version INTEGER NOT NULL DEFAULT 0)")
+      .catch(error => { versionSchema = null; throw error; });
+  }
+  return versionSchema;
+}
+
+async function loadReadVersions() {
+  if (versionRead) return versionRead;
+  const current = (async () => {
+    await ensureVersionSchema();
+    const result = await getClient().execute("SELECT cache_key, version FROM operational_read_versions");
+    return Object.fromEntries(result.rows.map(row => [String(row.cache_key), Number(row.version)]));
+  })();
+  versionRead = current;
+  try { return await current; }
+  finally { if (versionRead === current) versionRead = null; }
+}
+
+function versionStatements(keys: string[]) {
+  return [...new Set(keys)].map(key => ({
+    sql: "INSERT INTO operational_read_versions (cache_key, version) VALUES (?, 1) ON CONFLICT(cache_key) DO UPDATE SET version = version + 1",
+    args: [key] as InValue[],
+  }));
+}
+
+async function execute(sql: string, args: InValue[]) {
+  const keys = operationalWriteKeys(sql, args);
+  if (!keys.length) return getClient().execute({sql, args});
+  await ensureVersionSchema();
+  // Data and revisions commit together. A failed write cannot publish a new
+  // revision; a successful write cannot leave another instance on old data.
+  const results = await getClient().batch([{sql, args}, ...versionStatements(keys)], 'write');
+  versionRead = null;
+  return results[0];
+}
+
+async function readRows(sql: string, args: InValue[]): Promise<ReturnType<typeof rowsToObjects>> {
+  const namespace = createHash('sha256').update(process.env.TURSO_DATABASE_URL || '').digest('hex');
+  return await cachedOperationalRows(sql, args, namespace, loadReadVersions, async () => {
+    const result = await execute(sql, args);
+    return rowsToObjects(result.columns, result.rows);
+  }) as ReturnType<typeof rowsToObjects>;
+}
+
+/** A tiny fresh metadata read, never cached. Used for conditional mirror GET. */
+export function getOperationalReadVersions() { return loadReadVersions(); }
 
 // Vercel không có Cloudflare D1 — dùng Turso (libSQL) làm database thay thế.
 // Turso cũng là SQLite (giống hệt D1 về cú pháp SQL) nên toàn bộ schema và
@@ -42,15 +96,14 @@ function statement(sql: string, args: unknown[] = []) {
   return {
     sql, args: inArgs,
     all: async () => {
-      const result = await getClient().execute({ sql, args: inArgs });
-      return { results: rowsToObjects(result.columns, result.rows) };
+      return { results: await readRows(sql, inArgs) };
     },
     first: async () => {
-      const result = await getClient().execute({ sql, args: inArgs });
-      return result.rows.length ? rowsToObjects(result.columns, result.rows)[0] : null;
+      const rows = await readRows(sql, inArgs);
+      return rows[0] || null;
     },
     run: async () => {
-      const result = await getClient().execute({ sql, args: inArgs });
+      const result = await execute(sql, inArgs);
       return { success: true, meta: toMeta(result) };
     },
   };
@@ -60,8 +113,14 @@ export function getRawDb() {
   return {
     prepare: (sql: string) => ({ ...statement(sql), bind: (...args: unknown[]) => statement(sql, args) }),
     batch: async (statements: Array<{ sql: string; args: InValue[] }>) => {
-      const results = await getClient().batch(statements.map(item => ({ sql: item.sql, args: item.args })));
-      return results.map(result => ({ success: true, meta: toMeta(result) }));
+      const keys = statements.flatMap(item => operationalWriteKeys(item.sql, item.args));
+      if (keys.length) await ensureVersionSchema();
+      const originals = statements.map(item => ({ sql: item.sql, args: item.args }));
+      const results = keys.length
+        ? await getClient().batch([...originals, ...versionStatements(keys)], 'write')
+        : await getClient().batch(originals);
+      if (keys.length) versionRead = null;
+      return results.slice(0, statements.length).map(result => ({ success: true, meta: toMeta(result) }));
     },
   };
 }

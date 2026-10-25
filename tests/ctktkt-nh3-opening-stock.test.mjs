@@ -45,7 +45,7 @@ test('P73 is read-only for all roles and is excluded from manual missing warning
 });
 
 test('Excel export explicitly sets P73 from prior closing stock and import cannot overwrite it', () => {
-  const exportSource = readFileSync(new URL('../app/api/ctktkt-report/export/route.ts', import.meta.url), 'utf8');
+  const exportSource = readFileSync(new URL('../lib/report-exports/ctktkt.ts', import.meta.url), 'utf8');
   const importSource = readFileSync(new URL('../lib/ctktkt-history-import.ts', import.meta.url), 'utf8');
   assert.match(exportSource, /sheet\.getCell\(NH3_OPENING_STOCK_CELL\)\.value = numeric\(deriveNh3OpeningStock\(ktktCells\(previousRow\)\)\)/);
   assert.match(importSource, /cell !== NH3_OPENING_STOCK_CELL/);

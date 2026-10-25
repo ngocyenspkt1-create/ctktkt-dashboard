@@ -1,6 +1,12 @@
 import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
+// Small revision counters only; no duplicate operating values or credentials.
+export const operationalReadVersions = sqliteTable("operational_read_versions", {
+  cacheKey: text("cache_key").primaryKey(),
+  version: integer("version").notNull().default(0),
+});
+
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull(),
@@ -44,7 +50,7 @@ export const dailyInputs = sqliteTable("daily_inputs", {
   value: text("value").notNull(),
   note: text("note").notNull().default(""),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, table => [uniqueIndex("uidx_daily_inputs_date_field").on(table.operatingDate, table.fieldCode), index("idx_daily_inputs_date").on(table.operatingDate)]);
+}, table => [uniqueIndex("uidx_daily_inputs_date_field").on(table.operatingDate, table.fieldCode), index("idx_daily_inputs_date").on(table.operatingDate), index("idx_daily_inputs_field_date").on(table.fieldCode, table.operatingDate)]);
 
 export const shiftReadings = sqliteTable("shift_readings", {
   id: integer("id").primaryKey({ autoIncrement: true }),

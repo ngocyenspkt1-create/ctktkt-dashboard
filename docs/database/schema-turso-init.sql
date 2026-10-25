@@ -52,6 +52,7 @@ CREATE TABLE `daily_inputs` (
 );
 CREATE UNIQUE INDEX `uidx_daily_inputs_date_field` ON `daily_inputs` (`operating_date`,`field_code`);
 CREATE INDEX `idx_daily_inputs_date` ON `daily_inputs` (`operating_date`);
+CREATE INDEX `idx_daily_inputs_field_date` ON `daily_inputs` (`field_code`,`operating_date`);
 
 CREATE TABLE `ppa_heat_rate_daily` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -95,3 +96,8 @@ CREATE TABLE `shift_readings` (
 );
 CREATE UNIQUE INDEX `uidx_shift_readings` ON `shift_readings` (`operating_date`,`unit`,`time_slot`,`metric`);
 CREATE INDEX `idx_shift_readings_date` ON `shift_readings` (`operating_date`);
+
+CREATE TABLE IF NOT EXISTS operational_read_versions (
+  cache_key TEXT PRIMARY KEY,
+  version INTEGER NOT NULL DEFAULT 0
+);
