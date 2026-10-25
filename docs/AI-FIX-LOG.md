@@ -241,3 +241,10 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Đã kiểm tra TypeScript, ESLint các file mới, 12 test chuyên biệt (gồm guard archive) và toàn bộ test hiện có đều đạt. Chưa thử Gemini thật, DB/cron production hoặc kiểm tra UI bằng ảnh công tơ thật. Hướng dẫn ở docs/COAL-METER-GEMINI.md.
 - Người dùng yêu cầu đẩy GitHub và kích hoạt ngày 25/10. Đã kiểm tra Vercel nhưng đang ở trang login; chưa cấu hình GEMINI_API_KEY/GEMINI_VISION_MODEL/CRON_SECRET. Mã được xuất bản riêng, không đưa bí mật vào Git và không tuyên bố đã kích hoạt.
 
+# 2026-10-25 — Khóa Gemini tạm cho thử nghiệm không cần quyền Vercel
+
+- Người dùng muốn thử nghiệm khi chưa có quyền cấu hình Vercel. Thêm ô khóa password và model trong cửa sổ đọc ảnh; không hard-code khóa đã gửi trong chat.
+- Backend chấp nhận khóa cho từng request sau kiểm tra đăng nhập/quyền, định dạng và giới hạn lượt đọc như cũ. Không lưu key trong DB/log; client không localStorage, đóng cửa sổ xóa giá trị state.
+- Khóa tạm không sửa biến môi trường. Header model chỉ có tác dụng với khóa tạm; dùng khóa server thì không cho client chọn model khác để tránh phát sinh chi phí ngoài cấu hình.
+- TypeScript và 15 test chuyên biệt đạt. Chưa gọi Gemini thật hoặc thử bằng ảnh công tơ thực tế. Đẩy GitHub theo yêu cầu kích hoạt đang tiếp tục; sau deploy có thể thử bằng khóa tạm, còn cron nền vẫn chưa kích hoạt nếu thiếu CRON_SECRET.
+

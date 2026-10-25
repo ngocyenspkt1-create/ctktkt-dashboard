@@ -2,7 +2,15 @@
 
 ## Kích hoạt
 
-Thu hồi khóa đã gửi trong chat, tạo khóa mới rồi cấu hình **GEMINI_API_KEY**, **GEMINI_VISION_MODEL** (model hỗ trợ ảnh trong tài khoản Google), **CRON_SECRET** trên Vercel Production và redeploy. Không dùng NEXT_PUBLIC, không commit khóa. Chưa cấu hình thì đọc ảnh trả 503, cron trả 401. Tham khảo https://ai.google.dev/gemini-api/docs/image-understanding . Chưa gọi Gemini thật khi phát triển.
+### Dùng thử không cần quyền Vercel
+
+Mở Đọc công tơ từ ảnh, nhập khóa vào ô Khóa Gemini tạm, chọn model tài khoản có quyền dùng rồi chọn ảnh. Khóa chỉ giữ trong React state của cửa sổ và gửi bằng header riêng qua HTTPS đến backend/Google; không lưu CSDL, localStorage hoặc Git. Đóng cửa sổ hoặc bấm Xóa khóa tạm để xóa giá trị khỏi state. Không dán khóa vào mã nguồn. Không tự lấy khóa từ chat.
+
+Mặc định `gemini-3.8-flash`, theo tài liệu https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash hỗ trợ ảnh và structured output. Không cam kết model miễn phí: hạn mức/phí phụ thuộc khóa/tài khoản Google. Có thể nhập tên model khác được cấp quyền. Khi dùng khóa máy chủ, model vẫn do máy chủ quyết định, client không được đổi model bằng header.
+
+Chế độ này không cần GEMINI_API_KEY/GEMINI_VISION_MODEL trong Vercel. Xóa ảnh theo truy cập vẫn hoạt động; lịch cron nền vẫn cần CRON_SECRET như bên dưới. Chưa thử API thật bằng khóa/ảnh người dùng.
+
+Để cấu hình cố định: thu hồi khóa đã gửi trong chat, tạo khóa mới rồi đặt **GEMINI_API_KEY**, **GEMINI_VISION_MODEL** (model hỗ trợ ảnh trong tài khoản Google), **CRON_SECRET** trên Vercel Production và redeploy. Không dùng NEXT_PUBLIC, không commit khóa. Không có cả khóa server lẫn khóa tạm thì đọc ảnh trả 503; thiếu CRON_SECRET thì cron trả 401. Tham khảo https://ai.google.dev/gemini-api/docs/image-understanding . Chưa gọi Gemini thật khi phát triển.
 
 ## Sử dụng
 

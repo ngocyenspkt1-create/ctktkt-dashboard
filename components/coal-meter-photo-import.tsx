@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, CheckCircle2, ImagePlus, Loader2, TriangleAlert, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CtktktDayEntries } from "@/lib/ctktkt-report";
+import {DEFAULT_COAL_GEMINI_MODEL} from "@/lib/coal-gemini-config";
 import {
   ALL_COAL_METER_KEYS,
   COAL_SLOTS,
@@ -68,12 +69,12 @@ type VisionReading = {
   note: string;
 };
 
-async function readPhoto(file: File, reportDate:string, slot:CoalSlot) {
+async function readPhoto(file: File, reportDate:string, slot:CoalSlot, temporaryKey:string, model:string) {
   const exifTime = readExifTime(await file.arrayBuffer());
   const exifSlot=exifTime?slotForPhotoTime(exifTime):null;
   const response = await fetch("/api/coal-meter-ocr", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json",...(temporaryKey.trim()?{"x-coal-gemini-key":temporaryKey.trim(),"x-coal-gemini-model":model.trim()}:{}) },
     body: JSON.stringify({ data: await photoAsJpegBase64(file), mediaType: "image/jpeg",reportDate,slot:exifSlot?.operatingDate===reportDate?exifSlot.slot:slot,exifDate:exifSlot?.operatingDate,exifSlot:exifSlot?.slot }),
   });
   const body = await response.json().catch(() => ({})) as { reading?: VisionReading; error?: string;photo?:unknown };
@@ -120,6 +121,9 @@ export function CoalMeterPhotoImport({
   const [comparison,setComparison]=useState<string|null>(null);
   const [archive,setArchive]=useState<{id:string;slot:string;reading:VisionReading;expiresAt:number}[]>([]);
   const [archiveError,setArchiveError]=useState("");
+  const [temporaryKey,setTemporaryKey]=useState("");
+  const [geminiModel,setGeminiModel]=useState(DEFAULT_COAL_GEMINI_MODEL);
+  const changeOpen=(next:boolean)=>{if(!next)setTemporaryKey("");onOpenChange(next);};
   const fileInput = useRef<HTMLInputElement>(null);
   const urlsRef = useRef<string[]>([]);
 
@@ -173,7 +177,7 @@ export function CoalMeterPhotoImport({
         if (!row) return;
         setRows(old => old.map(item => (item.id === row.id ? { ...item, state: "reading" } : item)));
         try {
-          const result = await readPhoto(fileById.get(row.id)!,reportDate,defaultSlot);
+          const result = await readPhoto(fileById.get(row.id)!,reportDate,defaultSlot,temporaryKey,geminiModel);
           const timing = result.time ? slotForPhotoTime(result.time) : null;
           const slot = timing?.slot ?? defaultSlot;
           // A nearby number is not evidence of a feeder name. Never guess another meter.
@@ -219,11 +223,11 @@ export function CoalMeterPhotoImport({
     setRows([]);
     setComparison(null);
     setPreview(null);
-    onOpenChange(false);
+    changeOpen(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!busy) onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={next => { if (!busy) changeOpen(next); }}>
       <DialogContent className="max-h-[92vh] max-w-[calc(100%-1rem)] grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-3 p-4 sm:max-w-6xl sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Camera className="size-5 text-indigo-600" aria-hidden /> Đọc công tơ than từ ảnh</DialogTitle>
@@ -233,6 +237,20 @@ export function CoalMeterPhotoImport({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="grid gap-2">
+        <details className="rounded-xl border border-border bg-card p-3 text-card-foreground" open>
+          <summary className="cursor-pointer text-sm font-semibold">Dùng thử bằng khóa Gemini của bạn · không cần vào Vercel</summary>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <label className="grid gap-1 text-xs">Khóa Gemini tạm
+              <input type="password" value={temporaryKey} disabled={busy} autoComplete="off" spellCheck={false} maxLength={256} onChange={event=>setTemporaryKey(event.target.value)} placeholder="Dán khóa API tại đây" className="h-10 rounded-lg border border-input bg-background px-3 text-foreground" />
+            </label>
+            <label className="grid gap-1 text-xs">Model Gemini
+              <input value={geminiModel} disabled={busy} spellCheck={false} maxLength={110} onChange={event=>setGeminiModel(event.target.value)} className="h-10 rounded-lg border border-input bg-background px-3 text-foreground" />
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Khóa chỉ giữ trong bộ nhớ cửa sổ này, gửi qua HTTPS đến backend để gọi Google; không lưu vào tài khoản, kho ảnh hoặc GitHub. Đóng cửa sổ sẽ xóa ô khóa. Để trống nếu máy chủ đã cấu hình. Hạn mức/phí theo tài khoản Google của khóa bạn nhập.</p>
+          {temporaryKey && <button type="button" disabled={busy} onClick={()=>setTemporaryKey("")} className="mt-2 text-xs underline">Xóa khóa tạm</button>}
+        </details>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={event => void addFiles(event.target.files)} />
           <button type="button" disabled={busy} onClick={() => fileInput.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60">
@@ -246,6 +264,7 @@ export function CoalMeterPhotoImport({
             </select>
           </label>
           {rows.length > 0 && <span className="ml-auto text-xs text-slate-500">Mỗi ảnh mất khoảng 5–15 giây, đọc song song 3 ảnh.</span>}
+        </div>
         </div>
 
         <div className="grid min-h-0 gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -349,7 +368,7 @@ export function CoalMeterPhotoImport({
             Sau khi điền, kiểm tra bảng rồi bấm “Lưu số liệu”.
           </p>
           <div className="flex gap-2">
-            <button type="button" disabled={busy} onClick={() => onOpenChange(false)} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">Đóng</button>
+            <button type="button" disabled={busy} onClick={() => changeOpen(false)} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">Đóng</button>
             <button type="button" disabled={busy || writable.length === 0} onClick={apply} className="h-10 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50">Điền {writable.length} chỉ số vào bảng</button>
           </div>
         </DialogFooter>

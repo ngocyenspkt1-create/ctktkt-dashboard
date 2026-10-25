@@ -5,6 +5,7 @@ import { readCoalMeterGemini } from "@/lib/coal-meter-gemini";
 import { saveCoalPhoto,reserveCoalPhotoRead } from "@/lib/coal-photo-store";
 import { coalPhotoExpiry } from "@/lib/coal-photo-retention";
 import {parseVisionTimestamp,slotForPhotoTime} from "@/lib/coal-meter-ocr";
+import {coalGeminiConfig} from "@/lib/coal-gemini-config";
 
 // Reading one photo with the vision model usually takes a few seconds, occasionally longer.
 export const maxDuration = 60;
@@ -21,9 +22,8 @@ export async function POST(request: Request) {
   }
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
-  if (!process.env.GEMINI_API_KEY || !process.env.GEMINI_VISION_MODEL) {
-    return Response.json({ error: "Chưa cấu hình GEMINI_API_KEY và GEMINI_VISION_MODEL trên máy chủ." }, { status: 503 });
-  }
+  const config=coalGeminiConfig(request.headers,process.env.GEMINI_API_KEY,process.env.GEMINI_VISION_MODEL);
+  if(!config.ok) return Response.json({error:config.error},{status:config.status});
 
   if(Number(request.headers.get("content-length")||0)>4_000_000) return Response.json({error:"Ảnh quá lớn."},{status:413});
   const reader=request.body?.getReader();
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   if(!signature) return Response.json({error:"Nội dung ảnh không đúng định dạng."},{status:400});
   try {
     if(!await reserveCoalPhotoRead(user.id)) return Response.json({error:"Đã đủ 72 lượt đọc ảnh/giờ cho tài khoản này. Hãy thử lại giờ tiếp theo."},{status:429});
-    const reading = await readCoalMeterGemini({data,mediaType},process.env.GEMINI_API_KEY,process.env.GEMINI_VISION_MODEL);
+    const reading = await readCoalMeterGemini({data,mediaType},config.key,config.model);
     const timestamp=parseVisionTimestamp(reading.photo_timestamp),timing=timestamp?slotForPhotoTime(timestamp):null;
     const photoDate=typeof body?.exifDate==="string"?body.exifDate:timing?.operatingDate;
     const photoSlot=typeof body?.exifSlot==="string"?body.exifSlot:timing?.slot;
