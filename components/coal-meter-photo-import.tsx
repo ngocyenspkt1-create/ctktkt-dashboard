@@ -121,10 +121,12 @@ export function CoalMeterPhotoImport({
   const [archiveError,setArchiveError]=useState("");
   const [archiveVersion,setArchiveVersion]=useState(0);
   const [temporaryKey,setTemporaryKey]=useState("");
+  const [temporaryMode,setTemporaryMode]=useState(false);
   const [geminiModel,setGeminiModel]=useState(DEFAULT_COAL_GEMINI_MODEL);
   const [keyCheck,setKeyCheck]=useState<{state:"idle"|"checking"|"ok"|"error";message:string}>({state:"idle",message:""});
   const keyCheckController=useRef<AbortController|null>(null);
   const locked=busy||keyCheck.state==="checking";
+  const activeTemporaryKey=temporaryMode?temporaryKey:"";
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadButton = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -145,7 +147,7 @@ export function CoalMeterPhotoImport({
   }
 
   function changeOpen(next:boolean) {
-    if (!next) { stopReading(); resetKeyCheck(); setTemporaryKey(""); setPreview(null); }
+    if (!next) { stopReading(); resetKeyCheck(); setTemporaryKey(""); setTemporaryMode(false); setPreview(null); }
     onOpenChange(next);
   }
 
@@ -163,17 +165,21 @@ export function CoalMeterPhotoImport({
   }
 
   function switchToSharedKey() {
-    resetKeyCheck();setTemporaryKey("");
+    resetKeyCheck();setTemporaryKey("");setTemporaryMode(false);
   }
 
   async function checkActiveKey() {
     if(locked)return;
+    if(temporaryMode&&!temporaryKey.trim()){
+      setKeyCheck({state:"error",message:"Bạn đã chọn khóa tạm. Nhập khóa tạm hoặc bấm Dùng khóa chung trước khi kiểm tra."});
+      return;
+    }
     const controller=new AbortController();
     keyCheckController.current=controller;
     setKeyCheck({state:"checking",message:"Đang gửi yêu cầu thử tới Gemini…"});
     try {
       const response=await request("/api/coal-gemini-settings/check",{
-        method:"POST",headers:coalGeminiRequestHeaders(temporaryKey,geminiModel),body:"{}",cache:"no-store",
+        method:"POST",headers:coalGeminiRequestHeaders(activeTemporaryKey,geminiModel),body:"{}",cache:"no-store",
         signal:AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]),
       });
       const body=await response.json() as {message?:string;error?:string};
@@ -224,6 +230,10 @@ export function CoalMeterPhotoImport({
 
   async function processRows(items: PhotoRow[]) {
     if (!items.length || locked) return;
+    if(temporaryMode&&!temporaryKey.trim()){
+      setError("Bạn đã chọn khóa tạm. Nhập khóa tạm hoặc bấm Dùng khóa chung trước khi đọc ảnh.");
+      return;
+    }
     const generation = ++batch.current;
     const queue = [...items];
     setBusy(true);
@@ -237,7 +247,7 @@ export function CoalMeterPhotoImport({
         controllers.current.set(row.id,controller);
         setRows(old=>old.map(item=>item.id===row.id?{...item,state:"reading",error:""}:item));
         try {
-          const result = await readPhoto(file,reportDate,row.slot||defaultSlot,temporaryKey,geminiModel,controller.signal,request);
+          const result = await readPhoto(file,reportDate,row.slot||defaultSlot,activeTemporaryKey,geminiModel,controller.signal,request);
           if (generation !== batch.current || !filesRef.current.has(row.id) || controller.signal.aborted) continue;
           const timing = result.time ? slotForPhotoTime(result.time) : null;
           const numeric = result.value === null ? null : truncateTwoDecimals(result.value);
@@ -332,18 +342,18 @@ export function CoalMeterPhotoImport({
           <CoalGeminiSharedSettings disabled={locked} request={request} onSaved={switchToSharedKey}/>
           <details className={styles.temporary}>
             <summary>Khóa tạm cho lượt nhập này</summary>
-            <div className={styles.fields}>
-              <label>Khóa Gemini tạm<input type="password" value={temporaryKey} disabled={locked} autoComplete="off" spellCheck={false} maxLength={256} onChange={e=>{resetKeyCheck();setTemporaryKey(e.target.value);}} placeholder="Để trống để dùng khóa chung"/></label>
+            {!temporaryMode?<><p>Mặc định dùng khóa chung trên máy chủ. Chỉ bật khi muốn thử bằng khóa riêng.</p><button type="button" disabled={locked} onClick={()=>{resetKeyCheck();setTemporaryKey("");setTemporaryMode(true);}}>Chọn dùng khóa tạm</button></>:<><div className={styles.fields}>
+              <label>Khóa Gemini tạm<input type="password" value={temporaryKey} disabled={locked} autoComplete="new-password" spellCheck={false} maxLength={256} onChange={e=>{resetKeyCheck();setTemporaryKey(e.target.value);}} placeholder="Nhập khóa Gemini tạm"/></label>
               <label>Model Gemini tạm<input value={geminiModel} disabled={locked} spellCheck={false} maxLength={110} onChange={e=>{resetKeyCheck();setGeminiModel(e.target.value);}}/></label>
             </div>
             <p>Không thay khóa chung. Đóng cửa sổ sẽ xóa ô khóa tạm.</p>
-            {temporaryKey&&<button type="button" disabled={locked} onClick={switchToSharedKey}>Xóa khóa tạm / dùng khóa chung</button>}
+            <button type="button" disabled={locked} onClick={switchToSharedKey}>Xóa khóa tạm / dùng khóa chung</button></>}
           </details>
         </div>
 
         <section className={styles.keySource} aria-label="Nguồn khóa đang dùng">
-          <div><strong>{temporaryKey.trim()?`Đang dùng khóa tạm của bạn · ${geminiModel}`:"Đang dùng khóa chung / cấu hình máy chủ"}</strong><p>Kiểm tra Gemini gửi một yêu cầu văn bản ngắn, có dùng hạn mức Google.</p></div>
-          <div className={styles.actions}>{temporaryKey.trim()&&<button type="button" disabled={locked} onClick={switchToSharedKey}>Dùng khóa chung</button>}<button type="button" disabled={locked} onClick={()=>void checkActiveKey()}><RefreshCw size={14} aria-hidden/>{keyCheck.state==="checking"?"Đang kiểm tra…":"Kiểm tra Gemini"}</button></div>
+          <div><strong>{temporaryMode?`Đang dùng khóa tạm của bạn · ${geminiModel}`:"Đang dùng khóa chung / cấu hình máy chủ"}</strong><p>Kiểm tra Gemini gửi một yêu cầu văn bản ngắn, có dùng hạn mức Google.</p></div>
+          <div className={styles.actions}>{temporaryMode&&<button type="button" disabled={locked} onClick={switchToSharedKey}>Dùng khóa chung</button>}<button type="button" disabled={locked} onClick={()=>void checkActiveKey()}><RefreshCw size={14} aria-hidden/>{keyCheck.state==="checking"?"Đang kiểm tra…":"Kiểm tra Gemini"}</button></div>
         </section>
         <div role="status" aria-live="polite">{keyCheck.state!=="idle"&&<p className={keyCheck.state==="error"?styles.error:keyCheck.state==="ok"?styles.success:styles.notice}>{keyCheck.message}</p>}</div>
 
