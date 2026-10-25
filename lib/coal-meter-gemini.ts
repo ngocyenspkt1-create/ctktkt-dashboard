@@ -4,8 +4,12 @@ export async function coalGeminiHttpError(response: Response) {
   // Only enumerated reasons are used. Provider messages may echo credentials.
   const failure = await response.json().catch(() => null) as {error?:{details?:{reason?:string}[]}} | null;
   const reasons = Array.isArray(failure?.error?.details) ? failure.error.details.map(item=>item?.reason) : [];
-  const message = reasons.some(reason=>reason==="API_KEY_INVALID"||reason==="API_KEY_EXPIRED") || response.status===401
+  const knownReasons = new Set(["API_KEY_INVALID","API_KEY_EXPIRED","ACCESS_TOKEN_TYPE_UNSUPPORTED","API_KEY_SERVICE_BLOCKED","API_KEY_HTTP_REFERRER_BLOCKED","API_KEY_IP_ADDRESS_BLOCKED","CREDENTIALS_MISSING","SERVICE_DISABLED","ACCESS_TOKEN_SCOPE_INSUFFICIENT"]);
+  const safeReason = reasons.find(reason=>typeof reason==="string"&&knownReasons.has(reason));
+  const message = reasons.some(reason=>reason==="API_KEY_INVALID"||reason==="API_KEY_EXPIRED")
     ? "Khóa Gemini không hợp lệ hoặc đã hết hiệu lực. Mở Cấu hình Gemini để nhập lại khóa, rồi kiểm tra kết nối."
+    : response.status===401
+    ? "Google không xác thực được khóa cho yêu cầu này. Kiểm tra hoặc thay khóa trong Google AI Studio. Đây là lỗi xác thực, chưa phải lỗi chất lượng ảnh."
     : response.status===403
     ? "Google từ chối quyền truy cập. Kiểm tra quyền của khóa, giới hạn API và dự án Google AI Studio."
     : response.status===404
@@ -15,7 +19,7 @@ export async function coalGeminiHttpError(response: Response) {
     : response.status===400
     ? "Google không chấp nhận yêu cầu hoặc cấu hình Gemini. Kiểm tra khóa và model; phản hồi này chưa kết luận ảnh khó đọc."
     : "Google Gemini đang gặp lỗi dịch vụ. Giữ ảnh và thử lại sau.";
-  return new CoalMeterVisionError(`${message} (Google HTTP ${response.status})`,response.status===429?429:502);
+  return new CoalMeterVisionError(`${message} (Google HTTP ${response.status}${safeReason?` · ${safeReason}`:""})`,response.status===429?429:502);
 }
 
 /** Checks credentials/model metadata independently of image quality, without generation. */
@@ -23,17 +27,21 @@ export async function checkCoalGeminiConnection(key:string,model:string,call:typ
   if(!/^gemini-[A-Za-z0-9.-]{1,100}$/.test(model)) throw new CoalMeterVisionError("Tên model Gemini không hợp lệ.",400);
   let response:Response;
   try {
-    response=await call(`https://generativelanguage.googleapis.com/v1beta/models/${model}`,{
+    // A model's public metadata alone does not prove this key can authenticate.
+    // Check the catalog with the key, still without billing an OCR generation.
+    response=await call("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",{
       method:"GET",headers:{"x-goog-api-key":key},signal:AbortSignal.timeout(12000),cache:"no-store",
     });
   } catch {
     throw new CoalMeterVisionError("Chưa kết nối được Google để kiểm tra khóa/model trong 12 giây. Chưa gửi ảnh hoặc chạy đọc số.",504);
   }
   if(!response.ok)throw await coalGeminiHttpError(response);
-  const result=await response.json().catch(()=>null) as {name?:unknown;supportedGenerationMethods?:unknown}|null;
-  if(typeof result?.name!=="string"||!Array.isArray(result.supportedGenerationMethods))throw new CoalMeterVisionError("Google trả trạng thái model không hợp lệ. Chưa thể xác nhận kết nối.",502);
-  if(!result.supportedGenerationMethods.includes("generateContent"))throw new CoalMeterVisionError("Model đã cấu hình không hỗ trợ generateContent để đọc ảnh. Chọn model Gemini phù hợp.",422);
-  return {model,message:"Google đã chấp nhận khóa và trả thông tin model. Chưa kiểm tra hạn mức đọc ảnh; vẫn cần thử Đọc lại với ảnh công tơ."};
+  const result=await response.json().catch(()=>null) as {models?:{name?:unknown;supportedGenerationMethods?:unknown}[];nextPageToken?:unknown}|null;
+  if(!Array.isArray(result?.models))throw new CoalMeterVisionError("Google trả danh sách model không hợp lệ. Chưa thể xác nhận kết nối.",502);
+  const selected=result.models.find(item=>item?.name===`models/${model}`);
+  if(!selected)throw new CoalMeterVisionError(result.nextPageToken?"Danh sách model chưa đầy đủ, chưa thể xác nhận model đã chọn.":"Model đã cấu hình không có trong danh sách Google trả cho khóa này. Kiểm tra lại model trong Google AI Studio.",422);
+  if(!Array.isArray(selected.supportedGenerationMethods)||!selected.supportedGenerationMethods.includes("generateContent"))throw new CoalMeterVisionError("Model đã cấu hình không hỗ trợ generateContent để đọc ảnh. Chọn model Gemini phù hợp.",422);
+  return {model,message:"Đã truy cập danh sách model Google và tìm thấy model đã cấu hình. Chưa kiểm tra quyền gọi generateContent hoặc hạn mức đọc ảnh; vẫn cần thử Đọc lại với ảnh công tơ."};
 }
 
 export async function readCoalMeterGemini(image: {data:string;mediaType:string}, key:string, model:string, call:typeof fetch=fetch) {

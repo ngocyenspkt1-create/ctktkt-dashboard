@@ -35,17 +35,22 @@ test("network errors and timeouts become actionable errors without leaking provi
 });
 test("connection check uses only model metadata, keeps the key out of URL/body and does not claim image quota",async()=>{
   const result=await checkCoalGeminiConnection("private-key","gemini-test",async(url,options)=>{
-    assert.equal(url,"https://generativelanguage.googleapis.com/v1beta/models/gemini-test");
+    assert.equal(url,"https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000");
     assert.equal(options.method,"GET");assert.equal(options.headers["x-goog-api-key"],"private-key");assert.equal(options.body,undefined);
-    return mock({name:"models/gemini-test",supportedGenerationMethods:["generateContent"]})();
+    return mock({models:[{name:"models/gemini-test",supportedGenerationMethods:["generateContent"]}]})();
   });
-  assert.match(result.message,/Chưa kiểm tra hạn mức/);assert.ok(!JSON.stringify(result).includes("private-key"));
+  assert.match(result.message,/Chưa kiểm tra quyền gọi generateContent/);assert.ok(!JSON.stringify(result).includes("private-key"));
 });
 test("connection probe rejects bad credentials, unsuitable models and unavailable network without exposing secrets",async()=>{
   await assert.rejects(()=>checkCoalGeminiConnection("private-key","gemini-test",mock({error:{message:"private-key",details:[{reason:"API_KEY_INVALID"}]}},400)),error=>error.message.includes("Khóa Gemini")&&error.message.includes("HTTP 400")&&!error.message.includes("private-key"));
-  await assert.rejects(()=>checkCoalGeminiConnection("private-key","gemini-test",mock({name:"models/gemini-test",supportedGenerationMethods:["embedContent"]})),error=>error.status===422);
+  await assert.rejects(()=>checkCoalGeminiConnection("private-key","gemini-test",mock({models:[{name:"models/gemini-test",supportedGenerationMethods:["embedContent"]}]})),error=>error.status===422);
+  await assert.rejects(()=>checkCoalGeminiConnection("private-key","gemini-test",mock({name:"models/gemini-test",supportedGenerationMethods:["generateContent"]})),error=>error.status===502);
   await assert.rejects(()=>checkCoalGeminiConnection("private-key","gemini-test",mock({})),error=>error.status===502);
   await assert.rejects(()=>checkCoalGeminiConnection("private-key","gemini-test",async()=>{throw new Error("secret private-key");}),error=>error.status===504&&!error.message.includes("private-key"));
+});
+test("401 identifies authentication instead of image legibility, with only a safe reason",async()=>{
+  const failure={error:{message:"secret private-key",details:[{reason:"ACCESS_TOKEN_TYPE_UNSUPPORTED"},{reason:"secret private-key"}]}};
+  await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"private-key","test",mock(failure,401)),error=>error.message.includes("lỗi xác thực")&&error.message.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED")&&!error.message.includes("private-key"));
 });
 test("provider key, permission, model, quota and service errors stay distinct and redact raw messages",async()=>{
   for (const [status,reason,word] of [[400,"API_KEY_INVALID","Khóa Gemini"],[403,"","quyền"],[404,"","model"],[429,"","hạn mức"],[503,"","dịch vụ"]]) {

@@ -282,3 +282,11 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Trong Cấu hình Gemini có nút Kiểm tra khóa đã lưu. Phân biệt lưu được khóa và kiểm tra được khóa/model; kết quả metadata thành công vẫn ghi rõ chưa kiểm tra hạn mức OCR. Nút kiểm tra chỉ dùng khóa trên server, không lấy ô khóa mới chưa lưu. Tài liệu đối chiếu: https://ai.google.dev/api/models#method:-models.get.
 - Lỗi HTTP Google trả về mã 400/401/403/404/429/5xx riêng; 400 không còn gợi ý đổi ảnh rõ hơn khi chưa có bằng chứng. Test thêm probe GET-only, không key trong URL/body/phản hồi, model thiếu generateContent, key lỗi, mạng lỗi. 14 test nhóm Gemini/key/retention đạt; TypeScript và lint đạt. Đang chờ triển khai để ghi kết quả thực tế, chưa kết luận khóa của người dùng sai.
 
+## Kết quả trên production sau commit a5c5a34
+
+- Đã đẩy main, Vercel báo success. Endpoint kiểm tra trả 401 khi không có phiên đăng nhập; khi đăng nhập đã mở được giao diện mới và đọc trạng thái cấu hình.
+- Dùng đúng ảnh gốc người dùng từng tải, tên bắt đầu 1792861228348 trong Downloads: bằng mắt thấy nhãn 1A2, Material Total 85099.680 MTons, thời điểm 24/10/2026 23:57. Không dùng ảnh chụp màn hình lỗi làm mẫu OCR. Không bấm Điền hoặc Lưu số liệu.
+- Lượt generateContent thật bị Google trả HTTP 401; chưa có kết quả nhận dạng, chưa ghi bảng vận hành. Vì vậy lỗi tái hiện nằm ở xác thực yêu cầu Google, không có bằng chứng do ảnh khó đọc. Chưa suy diễn là key hết hạn hay chắc chắn sai; khóa auth AQ và x-goog-api-key đều là cách dùng được Google hỗ trợ (https://ai.google.dev/gemini-api/docs/api-key).
+- Phát hiện probe models.get HTTP 200 không đủ xác nhận quyền generateContent (bước đọc ảnh sau đó vẫn 401). Sửa probe sang models.list để kiểm tra catalog, trạng thái UI không còn nói đã xác thực được quyền đọc. Cả catalog thành công cũng nêu rõ chưa kiểm tra quyền/quota generateContent. Chỉ hiển thị ErrorInfo reason thuộc whitelist, không trả message hay metadata thô của Google.
+- Thêm test hồi quy trường hợp model metadata 200 không được coi là probe catalog thành công và HTTP 401 không đổ cho ảnh, không lộ nội dung lỗi bí mật. 15 test nhóm Gemini/key/retention đạt. Cần chủ khóa kiểm tra trạng thái/ràng buộc/quyền tại Google AI Studio nếu lỗi xác thực vẫn còn; không thay hoặc nới quyền Google của người dùng trong lượt kiểm tra này.
+

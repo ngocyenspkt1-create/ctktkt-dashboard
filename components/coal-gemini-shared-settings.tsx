@@ -44,7 +44,7 @@ export function CoalGeminiSharedSettings({disabled=false,request=fetch}:{disable
   return <section className={styles.settingsCard} aria-label="Khóa Gemini dùng chung">
     <div className={styles.settingsSummary}>
       <KeyRound size={16} aria-hidden/>
-      <div><strong>Gemini dùng chung</strong><span>{checkMessage?"Đã kiểm tra khóa/model":status?.configured?"Đã lưu khóa · chưa xác nhận kết nối":status?environment?"Đang dùng cấu hình máy chủ":"Chưa có khóa chung":"Đang tải cấu hình…"}{status?.configured&&status.model?` · ${status.model}`:""}</span></div>
+      <div><strong>Gemini dùng chung</strong><span>{checkMessage?"Đã tra cứu danh sách model · chưa kiểm tra đọc ảnh":status?.configured?"Đã lưu khóa · chưa xác nhận kết nối":status?environment?"Đang dùng cấu hình máy chủ":"Chưa có khóa chung":"Đang tải cấu hình…"}{status?.configured&&status.model?` · ${status.model}`:""}</span></div>
       <button type="button" aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)}>{expanded?"Thu gọn":"Cấu hình Gemini"}</button>
     </div>
     {expanded&&<div className={styles.settingsForm}>
