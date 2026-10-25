@@ -6,6 +6,8 @@ import { saveCoalPhoto,reserveCoalPhotoRead } from "@/lib/coal-photo-store";
 import { coalPhotoExpiry } from "@/lib/coal-photo-retention";
 import {parseVisionTimestamp,slotForPhotoTime} from "@/lib/coal-meter-ocr";
 import {coalGeminiConfig} from "@/lib/coal-gemini-config";
+import {loadSharedGemini} from "@/lib/coal-gemini-shared-store";
+import {getRawDb} from "@/db";
 
 // Reading one photo with the vision model usually takes a few seconds, occasionally longer.
 export const maxDuration = 60;
@@ -22,7 +24,11 @@ export async function POST(request: Request) {
   }
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
-  const config=coalGeminiConfig(request.headers,process.env.GEMINI_API_KEY,process.env.GEMINI_VISION_MODEL);
+  let shared:{key:string;model:string}|null=null;
+  if(!request.headers.get("x-coal-gemini-key")?.trim()){
+    try{shared=await loadSharedGemini(getRawDb(),process.env.AUTH_SECRET);}catch{return Response.json({error:"Chưa đọc được khóa dùng chung. Có thể nhập khóa tạm để thử riêng hoặc lưu lại khóa dùng chung."},{status:503});}
+  }
+  const config=coalGeminiConfig(request.headers,shared?.key||process.env.GEMINI_API_KEY,shared?.model||process.env.GEMINI_VISION_MODEL);
   if(!config.ok) return Response.json({error:config.error},{status:config.status});
 
   if(Number(request.headers.get("content-length")||0)>4_000_000) return Response.json({error:"Ảnh quá lớn."},{status:413});

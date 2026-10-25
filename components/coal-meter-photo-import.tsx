@@ -5,6 +5,7 @@ import { Camera, CheckCircle2, ImagePlus, Loader2, TriangleAlert, X } from "luci
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CtktktDayEntries } from "@/lib/ctktkt-report";
 import {DEFAULT_COAL_GEMINI_MODEL} from "@/lib/coal-gemini-config";
+import {CoalGeminiSharedSettings} from "@/components/coal-gemini-shared-settings";
 import {
   ALL_COAL_METER_KEYS,
   COAL_SLOTS,
@@ -228,7 +229,7 @@ export function CoalMeterPhotoImport({
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!busy) changeOpen(next); }}>
-      <DialogContent className="max-h-[92vh] max-w-[calc(100%-1rem)] grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-3 p-4 sm:max-w-6xl sm:p-6">
+      <DialogContent className="max-h-[92vh] max-w-[calc(100%-1rem)] grid-rows-[auto_auto_minmax(240px,1fr)_auto] gap-3 overflow-y-auto p-4 sm:max-w-6xl sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Camera className="size-5 text-indigo-600" aria-hidden /> Đọc công tơ than từ ảnh</DialogTitle>
           <DialogDescription>
@@ -238,7 +239,8 @@ export function CoalMeterPhotoImport({
         </DialogHeader>
 
         <div className="grid gap-2">
-        <details className="rounded-xl border border-border bg-card p-3 text-card-foreground" open>
+        <CoalGeminiSharedSettings disabled={busy}/>
+        <details className="rounded-xl border border-border bg-card p-3 text-card-foreground">
           <summary className="cursor-pointer text-sm font-semibold">Dùng thử bằng khóa Gemini của bạn · không cần vào Vercel</summary>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <label className="grid gap-1 text-xs">Khóa Gemini tạm
@@ -248,7 +250,7 @@ export function CoalMeterPhotoImport({
               <input value={geminiModel} disabled={busy} spellCheck={false} maxLength={110} onChange={event=>setGeminiModel(event.target.value)} className="h-10 rounded-lg border border-input bg-background px-3 text-foreground" />
             </label>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Khóa chỉ giữ trong bộ nhớ cửa sổ này, gửi qua HTTPS đến backend để gọi Google; không lưu vào tài khoản, kho ảnh hoặc GitHub. Đóng cửa sổ sẽ xóa ô khóa. Để trống nếu máy chủ đã cấu hình. Hạn mức/phí theo tài khoản Google của khóa bạn nhập.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Khóa tạm dùng riêng cho lượt đọc của bạn, không thay khóa chung trên server. Để trống để dùng khóa chung. Đóng cửa sổ sẽ xóa ô khóa tạm. Hạn mức/phí theo tài khoản Google của khóa được dùng.</p>
           {temporaryKey && <button type="button" disabled={busy} onClick={()=>setTemporaryKey("")} className="mt-2 text-xs underline">Xóa khóa tạm</button>}
         </details>
         <div className="flex flex-wrap items-center gap-2">

@@ -2,6 +2,17 @@
 
 ## Kích hoạt
 
+### Khóa dùng chung cho VHV (không cần vào Vercel)
+
+Trong Đọc công tơ từ ảnh, phần **Khóa API Gemini dùng chung**: nhập khóa và model, bấm **Lưu khóa dùng chung lên server**. Sau thông báo lưu thành công, VHV khác có quyền nhập công tơ để trống ô khóa tạm và dùng ngay. Không cần lấy khóa từ người lưu hoặc nhập lại.
+
+- Theo yêu cầu, mọi tài khoản có quyền nhóm may_nghien_coal_s1 hoặc may_nghien_coal_s2 đều được lưu/thay khóa chung. Quyền này không dành cho người chỉ xem báo cáo. Thay khóa ảnh hưởng tất cả người dùng chức năng.
+- Máy chủ mã hóa AES-256-GCM, dẫn xuất khóa mã hóa riêng theo ngữ cảnh từ AUTH_SECRET đã có của hệ thống đăng nhập; không cần thêm biến Gemini trên Vercel để lưu khóa. Khi xoay AUTH_SECRET phải nhập/lưu lại khóa Gemini; không dùng CSDL riêng để chứa bản rõ.
+- GET chỉ trả đã cấu hình/model/phiên bản/người và thời điểm cập nhật, không trả key hoặc cipher. Hai người lưu cùng phiên bản thì một người bị báo xung đột và phải tải lại trạng thái. Nhật ký thay khóa không chứa key/cipher.
+- Thứ tự dùng: khóa tạm của lượt đọc → khóa chung trong CSDL → GEMINI_API_KEY môi trường. Nếu khóa chung không giải mã được thì báo lỗi, không âm thầm dùng khóa khác; vẫn có thể nhập khóa tạm để thử riêng.
+- Ô khóa được xóa sau lưu. Khóa nhập trước khi bấm lưu chỉ ở bộ nhớ trang, không localStorage. Không tự nhập khóa đã gửi trong chat. Chỉ kiểm tra định dạng khi lưu, chưa xác thực Google hoặc cam kết miễn phí/hạn mức.
+- CSDL tự tạo coal_gemini_settings và coal_gemini_settings_events; không ghi số liệu vận hành. Cấu hình này không thay CRON_SECRET; lịch dọn ảnh nền vẫn cần cấu hình riêng.
+
 ### Dùng thử không cần quyền Vercel
 
 Mở Đọc công tơ từ ảnh, nhập khóa vào ô Khóa Gemini tạm, chọn model tài khoản có quyền dùng rồi chọn ảnh. Khóa chỉ giữ trong React state của cửa sổ và gửi bằng header riêng qua HTTPS đến backend/Google; không lưu CSDL, localStorage hoặc Git. Đóng cửa sổ hoặc bấm Xóa khóa tạm để xóa giá trị khỏi state. Không dán khóa vào mã nguồn. Không tự lấy khóa từ chat.

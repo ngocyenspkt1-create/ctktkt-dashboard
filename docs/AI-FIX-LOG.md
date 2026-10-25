@@ -248,3 +248,11 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Khóa tạm không sửa biến môi trường. Header model chỉ có tác dụng với khóa tạm; dùng khóa server thì không cho client chọn model khác để tránh phát sinh chi phí ngoài cấu hình.
 - TypeScript và 15 test chuyên biệt đạt. Chưa gọi Gemini thật hoặc thử bằng ảnh công tơ thực tế. Đẩy GitHub theo yêu cầu kích hoạt đang tiếp tục; sau deploy có thể thử bằng khóa tạm, còn cron nền vẫn chưa kích hoạt nếu thiếu CRON_SECRET.
 
+# 2026-10-25 — Ô nhập khóa Gemini dùng chung cho VHV (local)
+
+- Người dùng yêu cầu VHV có thể nhập/lưu khóa lên server cho các VHV khác dùng chung. API mới /api/coal-gemini-settings dùng session + quyền nhập nhóm than S1 hoặc S2; không public và không mở rộng quyền tài khoản xem báo cáo.
+- Khóa dùng chung mã hóa AES-256-GCM bằng khóa dẫn xuất riêng theo ngữ cảnh từ AUTH_SECRET đã tồn tại; plaintext không vào Git, DB hay log. GET chỉ trả trạng thái/model/version/người-thời điểm thay khóa.
+- Compare-and-swap version chống ghi đè đồng thời; audit thay khóa không lưu bí mật. Khóa chung dùng cho tất cả VHV có quyền, không phải chỉ người đã lưu. Tạm theo lượt đọc ưu tiên hơn khóa chung; môi trường là fallback khi chưa có khóa chung.
+- UI có ô password và Lưu khóa dùng chung lên server, xóa giá trị ô sau lưu, hiển thị người lưu. Khóa tạm giữ trong mục riêng. Bảng đối chiếu có vùng cuộn để form mới không che bảng trên màn hình nhỏ.
+- TypeScript, ESLint, next build và toàn bộ test đạt; 18 test liên quan gồm mã hóa/khóa sai/tamper, lưu và thay giữa hai VHV trên SQLite memory, metadata/audit không có key và CAS conflict. Xuất bản GitHub trong luồng yêu cầu kích hoạt đang tiếp tục. Chưa lưu khóa thật, chưa gọi Google hoặc xác nhận UI/DB production.
+
