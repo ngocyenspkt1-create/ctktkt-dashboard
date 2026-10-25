@@ -256,3 +256,10 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - UI có ô password và Lưu khóa dùng chung lên server, xóa giá trị ô sau lưu, hiển thị người lưu. Khóa tạm giữ trong mục riêng. Bảng đối chiếu có vùng cuộn để form mới không che bảng trên màn hình nhỏ.
 - TypeScript, ESLint, next build và toàn bộ test đạt; 18 test liên quan gồm mã hóa/khóa sai/tamper, lưu và thay giữa hai VHV trên SQLite memory, metadata/audit không có key và CAS conflict. Xuất bản GitHub trong luồng yêu cầu kích hoạt đang tiếp tục. Chưa lưu khóa thật, chưa gọi Google hoặc xác nhận UI/DB production.
 
+# 2026-10-25 — Nút TKĐ đối chiếu ảnh và số bảng than (local)
+
+- Thêm nút Đối chiếu ảnh & số liệu cạnh Đọc công tơ từ ảnh tại S1/S2. Cửa sổ ảnh lớn + AI đọc + số màn hình hiện tại + chênh lệch, đơn vị tấn. Chỉ đọc, không tự sửa/ghi bảng hoặc đánh dấu đã xác nhận.
+- TKĐ được xem chéo ảnh các VHV qua scope=review nếu có quyền ctktkt_tkd_trend hoặc quyền rộng hơn (edit_ctktkt/admin). VHV chỉ nhập than giữ quyền ảnh của mình; viewer không được xem chéo. Kiểm tra quyền và expires_at cả list và URL ảnh.
+- Hiển thị rõ ô trống/không rõ máy/không rõ số/ảnh lỗi, không biến chúng thành khớp. Cho TKĐ chọn lại máy/ca để đối chiếu mà không sửa bảng. Cảnh báo số trên màn hình có thể chưa lưu và số AI có thể sai.
+- Test quyền TKĐ, ô S1/S2 theo ca, giữ nguyên dữ liệu và trạng thái thiếu/mất số đạt; TypeScript và lint component mới đạt. Người dùng yêu cầu xuất bản GitHub; 15 test liên quan chạy lại đạt. Chưa thử UI/ảnh thật trên production.
+

@@ -18,10 +18,13 @@ import {
   RefreshCw,
   Mail,
   Camera,
+  Images,
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
 import { CoalMeterPhotoImport } from "@/components/coal-meter-photo-import";
+import {CoalMeterPhotoReview} from "@/components/coal-meter-photo-review";
+import {canReviewCoalPhotos} from "@/lib/coal-photo-review";
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 import { useSessionUser } from "@/components/session-context";
 import { canEditOperatingDate, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
@@ -273,6 +276,7 @@ export function CtktktReport() {
   const [exportMissingItems, setExportMissingItems] = useState<MissingDataItem[]>([]);
   const [pendingReportOutput, setPendingReportOutput] = useState<"excel" | "email" | null>(null);
   const [coalPhotoOpen, setCoalPhotoOpen] = useState(false);
+  const [coalReviewUnit,setCoalReviewUnit]=useState<"S1"|"S2"|null>(null);
   const canEditCoalCell = useCallback((cell: string) => canEditSelectedDate && canEditCtktktField(user, cell), [user, canEditSelectedDate]);
   const [extensionVersion, setExtensionVersion] = useState("");
   const extensionOutdated = isQlktExtensionOutdated(extensionVersion);
@@ -2278,6 +2282,7 @@ export function CtktktReport() {
                         <button type="button" onClick={() => setCoalPhotoOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100" title="Tải ảnh công tơ, web tự đọc số và điền vào bảng">
                           <Camera className="size-3.5" aria-hidden /> Đọc công tơ từ ảnh
                         </button>
+                        {canReviewCoalPhotos(user)&&<button type="button" onClick={()=>setCoalReviewUnit("S1")} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700"><Images className="size-3.5" aria-hidden/>Đối chiếu ảnh & số liệu</button>}
                         <span className="text-[11px] font-bold text-slate-800">
                           Cương vị nhập: Vận hành viên Máy nghiền S1
                         </span>
@@ -2600,6 +2605,7 @@ export function CtktktReport() {
                         <button type="button" onClick={() => setCoalPhotoOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100" title="Tải ảnh công tơ, web tự đọc số và điền vào bảng">
                           <Camera className="size-3.5" aria-hidden /> Đọc công tơ từ ảnh
                         </button>
+                        {canReviewCoalPhotos(user)&&<button type="button" onClick={()=>setCoalReviewUnit("S2")} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700"><Images className="size-3.5" aria-hidden/>Đối chiếu ảnh & số liệu</button>}
                         <span className="text-[11px] font-bold text-slate-800">
                           Cương vị nhập: Vận hành viên Máy nghiền S2
                         </span>
@@ -3754,6 +3760,7 @@ export function CtktktReport() {
           setMessage(`Đã điền ${values.length} chỉ số công tơ than từ ảnh. Kiểm tra bảng rồi bấm “Lưu số liệu”.`);
         }}
       />
+      {coalReviewUnit&&<CoalMeterPhotoReview key={`${date}-${coalReviewUnit}`} open onOpenChange={open=>{if(!open)setCoalReviewUnit(null);}} date={date} unit={coalReviewUnit} current={current}/>}
     </section>
   );
 }

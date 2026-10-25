@@ -29,7 +29,13 @@ Chọn ngày báo cáo, mốc 08/16/24 khi ảnh không có giờ; tải tối �
 
 Đọc tổng lũy kế tấn, không lấy tấn/giờ. Máy cấp theo nhãn 1A1…1F2/2A1…2F2, không đoán theo số gần giống. Giữ số AI gốc để đối chiếu; ô bảng theo quy tắc cũ cắt 2 số lẻ. Người dùng đối chiếu ảnh lớn cạnh bảng, sửa nếu cần, tích Ghi và bấm Điền. Sau đó bấm Lưu số liệu. Không ghi dữ liệu vận hành tự động chỉ từ AI.
 
-Mở lại cửa sổ cùng ngày để xem ảnh đã lưu của chính tài khoản. Nhãn/số trong danh sách ảnh là kết quả AI ban đầu, không phải giá trị cuối đã lưu vào bảng. Chưa chia sẻ ảnh giữa tài khoản.
+Mở lại cửa sổ đọc ảnh cùng ngày để xem ảnh đã lưu của chính tài khoản. Nhãn/số trong danh sách ảnh là kết quả AI ban đầu, không phải giá trị cuối đã lưu vào bảng.
+
+### TKĐ đối chiếu lại
+
+Cạnh nút Đọc công tơ từ ảnh ở khối than S1/S2 có nút Đối chiếu ảnh & số liệu. Người có quyền `ctktkt_tkd_trend` (hoặc quyền toàn bộ CTKTKT/admin) được xem ảnh các VHV còn hạn trong ngày báo cáo. Tài khoản chỉ nhập than vẫn chỉ xem ảnh của mình qua cửa sổ nhập ảnh; không tự có quyền xem chéo ảnh.
+
+Cửa sổ chỉ đọc: ảnh lớn cạnh số AI gốc/số cắt 2 lẻ/số đang trên màn hình bảng/chênh lệch. Số trên màn hình có thể chưa lưu; không phải một lần đọc lại riêng từ CSDL. Chọn máy/ca khác chỉ đổi ô đem so, không sửa dữ liệu hay lưu xác nhận. Khớp số AI không chứng minh AI đọc đúng; TKĐ vẫn phải xem ảnh. Ảnh lỗi/hết hạn, nhãn/số thiếu hoặc ô trống không được báo là đối chiếu xong. Phân quyền scope=review và thời hạn ảnh áp dụng cả danh sách lẫn URL ảnh.
 
 ## Bốn mốc ca
 
