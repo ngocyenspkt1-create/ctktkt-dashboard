@@ -19,6 +19,7 @@
     "storage:optimize": "node scripts/optimize-read-index.mjs"
   },
   "dependencies": {
+    "@animate-ui/react": "^2.2.1",
     "@anthropic-ai/sdk": "^0.128.0",
     "@base-ui/react": "^1.7.0",
     "@hookform/resolvers": "^5.7.1",
@@ -34,6 +35,7 @@
     "input-otp": "^1.4.2",
     "jose": "^6.2.12",
     "lucide-react": "^1.31.0",
+    "motion": "^14.6.0",
     "next": "16.3.4",
     "next-themes": "^0.4.6",
     "quill": "^2.0.3",

@@ -50,15 +50,32 @@ export async function POST(request: Request) {
   if(!signature) return Response.json({error:"Nội dung ảnh không đúng định dạng."},{status:400});
   try {
     if(!await reserveCoalPhotoRead(user.id)) return Response.json({error:"Đã đủ 72 lượt đọc ảnh/giờ cho tài khoản này. Hãy thử lại giờ tiếp theo."},{status:429});
+  } catch {
+    return Response.json({error:"Chưa kết nối được kho ảnh để kiểm tra lượt đọc. Chưa gửi ảnh tới Gemini; giữ ảnh và bấm Đọc lại sau."},{status:503});
+  }
+  try {
     const reading = await readCoalMeterGemini({data,mediaType},config.key,config.model);
     const timestamp=parseVisionTimestamp(reading.photo_timestamp),timing=timestamp?slotForPhotoTime(timestamp):null;
     const photoDate=typeof body?.exifDate==="string"?body.exifDate:timing?.operatingDate;
     const photoSlot=typeof body?.exifSlot==="string"?body.exifSlot:timing?.slot;
-    const photo=photoDate&&photoDate!==reportDate?null:await saveCoalPhoto(user.id,reportDate,photoSlot||slot,mediaType,data,reading);
-    return Response.json({ reading, photo },{headers:{"Cache-Control":"no-store"}});
+    let photo = null;
+    let warning = "";
+    if (photoDate && photoDate !== reportDate) {
+      warning = "Chưa lưu ảnh: ngày chụp khác ngày báo cáo. Kiểm tra lại ngày trước khi nhập.";
+    } else {
+      try {
+        photo = await saveCoalPhoto(user.id,reportDate,photoSlot||slot,mediaType,data,reading);
+        if (!photo) warning = "Chưa lưu ảnh: ca này đã quá hạn giữ 4 mốc ca.";
+      } catch {
+        // Preserve a successful OCR result even when storage is unavailable. Do not make
+        // operators call Gemini again just to see the digits it already returned.
+        warning = "Đã đọc số nhưng chưa lưu được ảnh đối chiếu lên máy chủ. Ảnh chỉ còn trong lượt nhập này; đọc lại sau nếu cần lưu ảnh cho TKĐ.";
+      }
+    }
+    return Response.json({ reading, photo, warning },{headers:{"Cache-Control":"no-store"}});
   } catch (error) {
     if (error instanceof CoalMeterVisionError) return Response.json({ error: error.message }, { status: error.status });
     // Never log provider errors, keys or photo content.
-    return Response.json({ error: "Chưa đọc/lưu được ảnh. Có thể Gemini quá thời gian hoặc kho ảnh không truy cập được; hãy thử lại." }, { status: 503 });
+    return Response.json({ error: "Chưa xử lý được kết quả đọc ảnh. Ảnh vẫn ở đây; bấm Đọc lại hoặc thay ảnh rõ hơn." }, { status: 502 });
   }
 }

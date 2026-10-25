@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, CheckCircle2, ImagePlus, Loader2, TriangleAlert, X } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Camera, CheckCircle2, ImagePlus, Loader2, RefreshCw, Trash2, TriangleAlert, Expand, ArrowRight, Images } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/coal-dialog";
+import styles from "./coal-meter-photo-import.module.css";
 import type { CtktktDayEntries } from "@/lib/ctktkt-report";
 import {DEFAULT_COAL_GEMINI_MODEL} from "@/lib/coal-gemini-config";
 import {CoalGeminiSharedSettings} from "@/components/coal-gemini-shared-settings";
@@ -70,19 +71,20 @@ type VisionReading = {
   note: string;
 };
 
-async function readPhoto(file: File, reportDate:string, slot:CoalSlot, temporaryKey:string, model:string) {
+async function readPhoto(file: File, reportDate:string, slot:CoalSlot, temporaryKey:string, model:string, signal:AbortSignal, request:typeof fetch) {
   const exifTime = readExifTime(await file.arrayBuffer());
   const exifSlot=exifTime?slotForPhotoTime(exifTime):null;
-  const response = await fetch("/api/coal-meter-ocr", {
+  const response = await request("/api/coal-meter-ocr", {
     method: "POST",
+    signal,
     headers: { "Content-Type": "application/json",...(temporaryKey.trim()?{"x-coal-gemini-key":temporaryKey.trim(),"x-coal-gemini-model":model.trim()}:{}) },
     body: JSON.stringify({ data: await photoAsJpegBase64(file), mediaType: "image/jpeg",reportDate,slot:exifSlot?.operatingDate===reportDate?exifSlot.slot:slot,exifDate:exifSlot?.operatingDate,exifSlot:exifSlot?.slot }),
   });
-  const body = await response.json().catch(() => ({})) as { reading?: VisionReading; error?: string;photo?:unknown };
+  const body = await response.json().catch(() => ({})) as { reading?: VisionReading; error?: string;photo?:unknown;warning?:string };
   if (!response.ok || !body.reading) throw new Error(body.error || "Không đọc được ảnh.");
   const reading = body.reading;
   const aiReasons: string[] = [];
-  if(!body.photo) aiReasons.push("Chưa lưu ảnh: ngày chụp khác ngày báo cáo hoặc ca đã quá hạn 4 mốc");
+  if(!body.photo) aiReasons.push(body.warning || "Chưa lưu ảnh đối chiếu trên máy chủ.");
   if (reading.screen_type === "no_total_visible") aiReasons.push("Màn hình trong ảnh không hiện chỉ số tổng");
   if (reading.screen_type === "not_a_meter") aiReasons.push("Ảnh không phải màn hình công tơ than");
   if (reading.confidence !== "high") aiReasons.push(`AI chưa chắc chắn${reading.note ? `: ${reading.note}` : ""}`);
@@ -98,13 +100,7 @@ const SLOT_LABELS: Record<CoalSlot, string> = { "08": "08h (Ca 1)", "16": "16h (
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 3 });
 
 export function CoalMeterPhotoImport({
-  open,
-  onOpenChange,
-  reportDate,
-  current,
-  previous,
-  canEditCell,
-  onApply,
+  open, onOpenChange, reportDate, current, previous, canEditCell, onApply, request = fetch,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -113,30 +109,59 @@ export function CoalMeterPhotoImport({
   previous?: CtktktDayEntries;
   canEditCell: (cell: string) => boolean;
   onApply: (values: Array<{ cell: string; value: string }>) => void;
+  request?: typeof fetch;
 }) {
   const [rows, setRows] = useState<PhotoRow[]>([]);
+  const [selectedId, setSelectedId] = useState("");
   const [defaultSlot, setDefaultSlot] = useState<CoalSlot>("08");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [preview, setPreview] = useState<PhotoRow | null>(null);
-  const [comparison,setComparison]=useState<string|null>(null);
+  const [preview, setPreview] = useState<{url:string;fileName:string}|null>(null);
   const [archive,setArchive]=useState<{id:string;slot:string;reading:VisionReading;expiresAt:number}[]>([]);
   const [archiveError,setArchiveError]=useState("");
+  const [archiveVersion,setArchiveVersion]=useState(0);
   const [temporaryKey,setTemporaryKey]=useState("");
   const [geminiModel,setGeminiModel]=useState(DEFAULT_COAL_GEMINI_MODEL);
-  const changeOpen=(next:boolean)=>{if(!next)setTemporaryKey("");onOpenChange(next);};
   const fileInput = useRef<HTMLInputElement>(null);
-  const urlsRef = useRef<string[]>([]);
+  const uploadButton = useRef<HTMLButtonElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const returnFocus = useRef<HTMLElement|null>(null);
+  const replaceId = useRef<string|null>(null);
+  const filesRef = useRef(new Map<string,File>());
+  const urlsRef = useRef(new Map<string,string>());
+  const batch = useRef(0);
+  const controllers = useRef(new Map<string,AbortController>());
 
-  useEffect(() => () => urlsRef.current.forEach(url => URL.revokeObjectURL(url)), []);
+  function stopReading() {
+    batch.current++;
+    controllers.current.forEach(controller => controller.abort());
+    controllers.current.clear();
+    setBusy(false);
+    setRows(old => old.map(row => row.state === "pending" || row.state === "reading"
+      ? {...row,state:"error",write:false,error:"Đã dừng đọc ảnh. Bấm Đọc lại để tiếp tục."} : row));
+  }
+
+  function changeOpen(next:boolean) {
+    if (!next) { stopReading(); setTemporaryKey(""); setPreview(null); }
+    onOpenChange(next);
+  }
+
+  useEffect(() => () => {
+    batch.current++;
+    controllers.current.forEach(controller => controller.abort());
+    urlsRef.current.forEach(url => URL.revokeObjectURL(url));
+  }, []);
   useEffect(()=>{
     if(!open) return;
     const controller=new AbortController();
-    fetch(`/api/coal-meter-photos?date=${encodeURIComponent(reportDate)}`,{signal:controller.signal}).then(async response=>{if(!response.ok) throw new Error("Chưa tải được ảnh lưu.");return response.json() as Promise<{photos:typeof archive}>;}).then(body=>{setArchive(body.photos||[]);setArchiveError("");}).catch(()=>{if(!controller.signal.aborted)setArchiveError("Chưa tải được ảnh lưu; không thể xác nhận ảnh còn hạn.");});
+    request(`/api/coal-meter-photos?date=${encodeURIComponent(reportDate)}`,{signal:controller.signal,cache:"no-store"})
+      .then(async response=>{
+        if(!response.ok) throw new Error("Chưa tải được ảnh lưu.");
+        return response.json() as Promise<{photos:typeof archive}>;
+      }).then(body=>{setArchive(body.photos||[]);setArchiveError("");})
+      .catch(()=>{if(!controller.signal.aborted)setArchiveError("Chưa tải được ảnh đã lưu. Có thể thử tải lại bên dưới.");});
     return ()=>controller.abort();
-  },[open,reportDate]);
-
-  const previousOf = (key: CoalMeterKey, slot: CoalSlot) => previousCoalReading(key, slot, current, previous);
+  },[open,reportDate,archiveVersion,request]);
 
   const reviewed = useMemo(() => rows.map(row => {
     const slot = row.slot || null;
@@ -146,246 +171,233 @@ export function CoalMeterPhotoImport({
     const match = { key: row.key || null, previous: previousValue, delta: numeric !== null && previousValue !== null ? numeric - previousValue : null, source: null };
     const duplicate = Boolean(row.key && slot && rows.some(other => other.id !== row.id && other.key === row.key && other.slot === slot));
     const review = row.state === "done"
-      ? reviewCoalReading({ value: numeric, match, label: row.label, slot, photoDate: row.photoDate, reportDate, duplicate })
-      : null;
-    if (review && row.aiReasons.length) {
-      review.reasons.unshift(...row.aiReasons);
-      review.level = "check";
-    }
+      ? reviewCoalReading({ value: numeric, match, label: row.label, slot, photoDate: row.photoDate, reportDate, duplicate }) : null;
+    if (review && row.aiReasons.length) { review.reasons.unshift(...row.aiReasons); review.level = "check"; }
     const cell = row.key && slot ? coalMeterCell(row.key, slot) : null;
-    return { row, numeric, match, review, cell, allowed: cell ? canEditCell(cell) : false };
+    const allowed = cell ? canEditCell(cell) : false;
+    return { row, numeric, match, review, cell, allowed,
+      canWrite: row.state === "done" && numeric !== null && numeric >= 0 && allowed && !duplicate };
   }), [rows, current, previous, reportDate, canEditCell]);
-
-  const updateRow = (id: string, patch: Partial<PhotoRow>) => setRows(old => old.map(row => (row.id === id ? { ...row, ...patch } : row)));
-
-  async function addFiles(files: FileList | null) {
-    if (!files?.length) return;
-    setError("");
-    const selected=Array.from(files).filter(file=>["image/jpeg","image/png","image/webp"].includes(file.type)&&file.size<=15_000_000).slice(0,24-rows.length);
-    if(selected.length!==files.length) setError("Chỉ nhận JPEG/PNG/WebP tối đa 15 MB/ảnh, tối đa 24 ảnh mỗi lượt. Các file không phù hợp đã bỏ qua.");
-    const added: PhotoRow[] = selected.map((file, index) => {
-      const url = URL.createObjectURL(file);
-      urlsRef.current.push(url);
-      return { id: `${Date.now()}-${index}-${file.name}`, fileName: file.name, url, state: "pending", ocrValue: null, value: "", label: null, key: "", slot: "", photoDate: null, aiReasons: [], error: "", write: false };
-    });
-    const fileById = new Map(added.map((row, index) => [row.id, selected[index]]));
-    setRows(old => [...old, ...added]);
-    setBusy(true);
-    try {
-      const queue = [...added];
-      const readNext = async (): Promise<void> => {
-        const row = queue.shift();
-        if (!row) return;
-        setRows(old => old.map(item => (item.id === row.id ? { ...item, state: "reading" } : item)));
-        try {
-          const result = await readPhoto(fileById.get(row.id)!,reportDate,defaultSlot,temporaryKey,geminiModel);
-          const timing = result.time ? slotForPhotoTime(result.time) : null;
-          const slot = timing?.slot ?? defaultSlot;
-          // A nearby number is not evidence of a feeder name. Never guess another meter.
-          const previousValue=result.label?previousOf(result.label,slot):null;
-          const match = result.label ? {key:result.label,previous:previousValue,delta:result.value!==null&&previousValue!==null?result.value-previousValue:null,source:"label" as const} : null;
-          const numeric = result.value === null ? null : truncateTwoDecimals(result.value);
-          setRows(old => old.map(item => {
-            if (item.id !== row.id) return item;
-            const next: PhotoRow = { ...item, state: "done", ocrValue: result.value, value: numeric === null ? "" : String(numeric), label: result.label, key: match?.key ?? result.label ?? "", slot, photoDate: timing?.operatingDate ?? null, aiReasons: result.aiReasons };
-            return { ...next, write: false }; // Operator explicitly confirms every row against its image.
-          }));
-        } catch (caught) {
-          const message = caught instanceof Error ? caught.message : "Không đọc được ảnh.";
-          setRows(old => old.map(item => (item.id === row.id ? { ...item, state: "error", error: message } : item)));
-        }
-        await readNext();
-      };
-      await Promise.all(Array.from({ length: Math.min(PARALLEL_READS, queue.length) }, () => readNext()));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Không đọc được ảnh.");
-    } finally {
-      setBusy(false);
-      if (fileInput.current) fileInput.current.value = "";
-    }
-  }
-
-  function removeRow(id: string) {
-    if(rows.find(row=>row.id===id)?.url===comparison) setComparison(null);
-    setRows(old => {
-      const row = old.find(item => item.id === id);
-      if (row) URL.revokeObjectURL(row.url);
-      return old.filter(item => item.id !== id);
-    });
-  }
-
-  const writable = reviewed.filter(item => item.row.write && item.row.state==="done" && item.cell && item.numeric !== null && item.numeric>=0 && item.allowed && !(item.review?.reasons.includes("Trùng công tơ và mốc với ảnh khác")));
+  const active = reviewed.find(item => item.row.id === selectedId) || reviewed[0];
+  const writable = reviewed.filter(item => item.row.write && item.canWrite);
+  const failed = rows.filter(row => row.state === "error");
   const done = rows.filter(row => row.state === "done" || row.state === "error").length;
 
-  function apply() {
-    onApply(writable.map(item => ({ cell: item.cell!, value: String(item.numeric) })));
-    urlsRef.current.forEach(url => URL.revokeObjectURL(url));
-    urlsRef.current = [];
-    setRows([]);
-    setComparison(null);
-    setPreview(null);
-    changeOpen(false);
+  // Any correction invalidates the previous confirmation, including a changed target cell.
+  function updateRow(id:string, patch:Partial<PhotoRow>) {
+    setRows(old=>old.map(row=>row.id===id?{...row,...patch,write:false}:row));
   }
 
-  return (
-    <Dialog open={open} onOpenChange={next => { if (!busy) changeOpen(next); }}>
-      <DialogContent className="max-h-[92vh] max-w-[calc(100%-1rem)] grid-rows-[auto_auto_minmax(240px,1fr)_auto] gap-3 overflow-y-auto p-4 sm:max-w-6xl sm:p-6">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Camera className="size-5 text-indigo-600" aria-hidden /> Đọc công tơ than từ ảnh</DialogTitle>
-          <DialogDescription>
-            Chọn ảnh chụp màn hình công tơ các máy cấp (S1 và S2 đều được). Web đọc chỉ số, tự gán công tơ theo mã máy cấp và số lần đọc trước,
-            mốc giờ theo giờ chụp. Ảnh thu nhỏ gửi Google Gemini để đọc tổng lũy kế (tấn), không lấy lưu lượng tấn/giờ. Chọn đúng ngày/ca trước khi tải. Ảnh giữ theo 4 mốc ca gần nhất; số liệu không bị xóa khi ảnh hết hạn. Bạn phải đối chiếu rồi tích “Ghi” trước khi điền.
-          </DialogDescription>
-        </DialogHeader>
+  async function processRows(items: PhotoRow[]) {
+    if (!items.length || busy) return;
+    const generation = ++batch.current;
+    const queue = [...items];
+    setBusy(true);
+    setRows(old=>old.map(row=>items.some(item=>item.id===row.id)?{...row,state:"pending",error:"",write:false}:row));
+    const worker = async () => {
+      while (queue.length && generation === batch.current) {
+        const row = queue.shift()!;
+        const file = filesRef.current.get(row.id);
+        if (!file) continue; // Removed while waiting in the queue.
+        const controller = new AbortController();
+        controllers.current.set(row.id,controller);
+        setRows(old=>old.map(item=>item.id===row.id?{...item,state:"reading",error:""}:item));
+        try {
+          const result = await readPhoto(file,reportDate,row.slot||defaultSlot,temporaryKey,geminiModel,controller.signal,request);
+          if (generation !== batch.current || !filesRef.current.has(row.id) || controller.signal.aborted) continue;
+          const timing = result.time ? slotForPhotoTime(result.time) : null;
+          const numeric = result.value === null ? null : truncateTwoDecimals(result.value);
+          setRows(old=>old.map(item=>item.id===row.id?{
+            ...item,state:"done",ocrValue:result.value,value:numeric===null?"":String(numeric),
+            label:result.label,key:result.label??"",slot:timing?.slot??defaultSlot,
+            photoDate:timing?.operatingDate??null,aiReasons:result.aiReasons,error:"",write: false,
+          }:item));
+        } catch (caught) {
+          if (generation !== batch.current || !filesRef.current.has(row.id) || controller.signal.aborted) continue;
+          const message = caught instanceof Error ? caught.message : "Không đọc được ảnh. Thử đọc lại hoặc thay ảnh khác.";
+          setRows(old=>old.map(item=>item.id===row.id?{...item,state:"error",error:message,write:false}:item));
+        } finally {
+          if (controllers.current.get(row.id)===controller) controllers.current.delete(row.id);
+        }
+      }
+    };
+    try { await Promise.all(Array.from({length:Math.min(PARALLEL_READS,queue.length)},worker)); }
+    finally {
+      if (generation === batch.current) { setBusy(false); setArchiveVersion(v=>v+1); }
+    }
+  }
 
-        <div className="grid gap-2">
-        <CoalGeminiSharedSettings disabled={busy}/>
-        <details className="rounded-xl border border-border bg-card p-3 text-card-foreground">
-          <summary className="cursor-pointer text-sm font-semibold">Dùng thử bằng khóa Gemini của bạn · không cần vào Vercel</summary>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <label className="grid gap-1 text-xs">Khóa Gemini tạm
-              <input type="password" value={temporaryKey} disabled={busy} autoComplete="off" spellCheck={false} maxLength={256} onChange={event=>setTemporaryKey(event.target.value)} placeholder="Dán khóa API tại đây" className="h-10 rounded-lg border border-input bg-background px-3 text-foreground" />
-            </label>
-            <label className="grid gap-1 text-xs">Model Gemini
-              <input value={geminiModel} disabled={busy} spellCheck={false} maxLength={110} onChange={event=>setGeminiModel(event.target.value)} className="h-10 rounded-lg border border-input bg-background px-3 text-foreground" />
-            </label>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">Khóa tạm dùng riêng cho lượt đọc của bạn, không thay khóa chung trên server. Để trống để dùng khóa chung. Đóng cửa sổ sẽ xóa ô khóa tạm. Hạn mức/phí theo tài khoản Google của khóa được dùng.</p>
-          {temporaryKey && <button type="button" disabled={busy} onClick={()=>setTemporaryKey("")} className="mt-2 text-xs underline">Xóa khóa tạm</button>}
-        </details>
-        <div className="flex flex-wrap items-center gap-2">
-          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={event => void addFiles(event.target.files)} />
-          <button type="button" disabled={busy} onClick={() => fileInput.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60">
-            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ImagePlus className="size-4" aria-hidden />}
-            {busy ? `Đang đọc ${done}/${rows.length} ảnh…` : "Chọn / chụp ảnh công tơ"}
-          </button>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            Mốc khi ảnh không có giờ chụp
-            <select value={defaultSlot} onChange={event => setDefaultSlot(event.target.value as CoalSlot)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm">
-              {COAL_SLOTS.map(slot => <option key={slot} value={slot}>{SLOT_LABELS[slot]}</option>)}
-            </select>
-          </label>
-          {rows.length > 0 && <span className="ml-auto text-xs text-slate-500">Mỗi ảnh mất khoảng 5–15 giây, đọc song song 3 ảnh.</span>}
-        </div>
-        </div>
+  function removeRow(id:string) {
+    controllers.current.get(id)?.abort();
+    controllers.current.delete(id);
+    filesRef.current.delete(id);
+    const url=urlsRef.current.get(id);
+    if (url) URL.revokeObjectURL(url);
+    urlsRef.current.delete(id);
+    if (preview?.url === url) setPreview(null);
+    setRows(old=>old.filter(row=>row.id!==id));
+    if (selectedId===id) setSelectedId("");
+    if (busy) heading.current?.focus(); else uploadButton.current?.focus();
+  }
 
-        <div className="grid min-h-0 gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="min-h-0 overflow-auto rounded-xl border border-slate-200">
-          {error && <p role="alert" className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          {rows.length === 0 ? (
-            <div className="grid place-items-center gap-2 px-4 py-14 text-center text-sm text-slate-500">
-              <ImagePlus className="size-8 text-slate-300" aria-hidden />
-              Chưa có ảnh. Có thể chọn cùng lúc cả 24 ảnh của hai tổ máy.
+  function clearAll() {
+    stopReading();
+    urlsRef.current.forEach(url=>URL.revokeObjectURL(url));
+    urlsRef.current.clear(); filesRef.current.clear();
+    replaceId.current=null;
+    setRows([]); setSelectedId(""); setPreview(null); setError("");
+    if (fileInput.current) fileInput.current.value="";
+    if (busy) heading.current?.focus(); else uploadButton.current?.focus();
+  }
+
+  function chooseFiles(id?:string) {
+    replaceId.current=id??null;
+    fileInput.current?.click();
+  }
+
+  function addFiles(files: FileList | null) {
+    if (!files?.length || busy) return;
+    const replacing=replaceId.current;
+    replaceId.current=null;
+    const selected=Array.from(files).filter(file=>["image/jpeg","image/png","image/webp"].includes(file.type)&&file.size>0&&file.size<=15_000_000)
+      .slice(0,replacing?1:Math.max(0,24-rows.length));
+    setError(selected.length!==files.length ? "Nhận tối đa 24 ảnh JPEG/PNG/WebP, không quá 15 MB/ảnh. Các file không phù hợp đã bỏ qua." : "");
+    if (fileInput.current) fileInput.current.value=""; // Re-selecting the same file must trigger change.
+    if (!selected.length) return;
+    if (replacing) removeRow(replacing);
+    const added:PhotoRow[]=selected.map(file=>{
+      const id=crypto.randomUUID(),url=URL.createObjectURL(file);
+      urlsRef.current.set(id,url); filesRef.current.set(id,file);
+      return {id,fileName:file.name,url,state:"pending",ocrValue:null,value:"",label:null,key:"",slot:"",photoDate:null,aiReasons:[],error:"",write: false};
+    });
+    setRows(old=>[...old,...added]); setSelectedId(added[0].id);
+    void processRows(added);
+  }
+
+  function apply() {
+    if (busy || !writable.length) return;
+    onApply(writable.map(item=>({cell:item.cell!,value:String(item.numeric)})));
+    clearAll(); changeOpen(false);
+  }
+
+  const stateLabel = (row:PhotoRow) => row.state==="reading"?"Đang đọc…":row.state==="pending"?"Đang chờ":row.state==="error"?"Đọc chưa thành công":row.write?"Đã đối chiếu":"Chờ đối chiếu";
+
+  return <Dialog open={open} onOpenChange={changeOpen}>
+    <DialogContent className={styles.dialog} onOpenAutoFocus={event=>{event.preventDefault();returnFocus.current=document.activeElement as HTMLElement;uploadButton.current?.focus();}} onCloseAutoFocus={event=>{event.preventDefault();returnFocus.current?.focus();}}>
+      <header className={styles.header}>
+        <div className={styles.headingIcon}><Camera size={22} aria-hidden /></div>
+        <div><p className={styles.eyebrow}>NHẬP CHỈ SỐ · {reportDate.split("-").reverse().join("/")}</p>
+          <DialogTitle ref={heading} tabIndex={-1} className={styles.title}>Đọc công tơ than từ ảnh</DialogTitle>
+          <DialogDescription className={styles.description}>Đọc tổng lũy kế (tấn), đối chiếu ảnh rồi xác nhận điền vào bảng.</DialogDescription>
+        </div>
+      </header>
+      <div className={styles.body}>
+        <div className={styles.settings}>
+          <CoalGeminiSharedSettings disabled={busy} request={request}/>
+          <details className={styles.temporary}>
+            <summary>Khóa tạm cho lượt nhập này</summary>
+            <div className={styles.fields}>
+              <label>Khóa Gemini tạm<input type="password" value={temporaryKey} disabled={busy} autoComplete="off" spellCheck={false} maxLength={256} onChange={e=>setTemporaryKey(e.target.value)} placeholder="Để trống để dùng khóa chung"/></label>
+              <label>Model Gemini tạm<input value={geminiModel} disabled={busy} spellCheck={false} maxLength={110} onChange={e=>setGeminiModel(e.target.value)}/></label>
             </div>
-          ) : (
-            <table className="w-full min-w-[920px] text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs font-semibold text-slate-500">
-                <tr>
-                  <th className="p-2">Ảnh</th>
-                  <th className="p-2">Công tơ</th>
-                  <th className="p-2">Mốc</th>
-                  <th className="p-2 text-right">Chỉ số ghi (t)</th>
-                  <th className="p-2 text-right">Lần trước</th>
-                  <th className="p-2 text-right">Tăng</th>
-                  <th className="p-2">Kiểm tra</th>
-                  <th className="p-2 text-center">Ghi</th>
-                  <th className="p-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {reviewed.map(({ row, numeric, match, review, allowed }) => (
-                  <tr key={row.id} className={review?.level === "check" ? "bg-amber-50/60" : undefined}>
-                    <td className="p-2">
-                      <button type="button" onClick={() => setComparison(row.url)} className="block overflow-hidden rounded-lg ring-1 ring-slate-200 hover:ring-indigo-400" title="Đối chiếu ảnh bên cạnh">
-                        {/* eslint-disable-next-line @next/next/no-img-element -- local object URL, never uploaded */}
-                        <img src={row.url} alt={`Ảnh ${row.fileName}`} className="h-16 w-12 object-cover" />
-                      </button>
-                    </td>
-                    <td className="p-2">
-                      <select value={row.key} disabled={row.state !== "done"} onChange={event => updateRow(row.id, { key: event.target.value as CoalMeterKey | "" })} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm">
-                        <option value="">— Chọn —</option>
-                        {ALL_COAL_METER_KEYS.map(key => <option key={key} value={key}>{coalMeterLabel(key)}</option>)}
-                      </select>
-                      {row.label && <p className="mt-0.5 text-[11px] text-slate-400">Nhãn trên ảnh: {coalMeterLabel(row.label)}</p>}
-                    </td>
-                    <td className="p-2">
-                      <select value={row.slot} disabled={row.state !== "done"} onChange={event => updateRow(row.id, { slot: event.target.value as CoalSlot })} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm">
-                        {COAL_SLOTS.map(slot => <option key={slot} value={slot}>{SLOT_LABELS[slot]}</option>)}
-                      </select>
-                    </td>
-                    <td className="p-2 text-right">
-                      {row.state === "reading" || row.state === "pending" ? (
-                        <span className="inline-flex items-center gap-1 text-slate-400"><Loader2 className="size-3.5 animate-spin" aria-hidden /> {row.state === "reading" ? "Đang đọc" : "Chờ"}</span>
-                      ) : (
-                        <>
-                          <input value={row.value} inputMode="decimal" onChange={event => updateRow(row.id, { value: event.target.value })} className="h-9 w-32 rounded-lg border border-slate-200 bg-white px-2 text-right font-mono text-sm" />
-                          {row.ocrValue !== null && <p className="mt-0.5 text-[11px] text-slate-400">Đọc được: {row.ocrValue}</p>}
-                        </>
-                      )}
-                    </td>
-                    <td className="p-2 text-right font-mono text-slate-500">{match.previous === null ? "—" : numberFormat.format(match.previous)}</td>
-                    <td className={`p-2 text-right font-mono ${match.delta !== null && (match.delta < 0 || match.delta > 1500) ? "font-semibold text-red-600" : "text-slate-700"}`}>
-                      {match.delta === null ? "—" : numberFormat.format(Math.round(match.delta * 1000) / 1000)}
-                    </td>
-                    <td className="p-2">
-                      {row.state === "error" && <span className="inline-flex items-center gap-1 text-xs text-red-600"><TriangleAlert className="size-3.5" aria-hidden /> {row.error || "Không đọc được ảnh"}</span>}
-                      {review?.level === "ok" && <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><CheckCircle2 className="size-3.5" aria-hidden /> Khớp</span>}
-                      {review?.level === "check" && (
-                        <ul className="space-y-0.5 text-[11px] text-amber-800">
-                          {review.reasons.map(reason => <li key={reason} className="flex gap-1"><TriangleAlert className="mt-px size-3 shrink-0" aria-hidden />{reason}</li>)}
-                        </ul>
-                      )}
-                      {!allowed && row.key && <p className="text-[11px] text-slate-400">Bạn không có quyền nhập ô này</p>}
-                    </td>
-                    <td className="p-2 text-center">
-                      <input type="checkbox" aria-label="Ghi chỉ số này vào bảng" checked={row.write} disabled={row.state !== "done" || numeric === null || !allowed} onChange={event => updateRow(row.id, { write: event.target.checked })} className="size-4 accent-indigo-600" />
-                    </td>
-                    <td className="p-2">
-                      <button type="button" onClick={() => removeRow(row.id)} disabled={busy} aria-label="Bỏ ảnh này" className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="size-4" aria-hidden /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <aside className="min-h-0 overflow-auto rounded-xl border border-slate-200 bg-card p-3 text-card-foreground">
-          <h3 className="text-sm font-semibold">Ảnh đối chiếu · đơn vị tấn</h3>
-          {(comparison||rows[0]?.url||archive[0]) && <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- authenticated temporary image or local object URL */}
-            <img src={comparison||rows[0]?.url||`/api/coal-meter-photos?id=${archive[0].id}`} alt="Ảnh công tơ để đối chiếu tên máy cấp và chỉ số" className="my-2 max-h-[52vh] w-full rounded-lg object-contain" />
-          </>}
-          {rows.find(row=>row.url===(comparison||rows[0]?.url)) && <button type="button" className="text-sm underline" onClick={()=>setPreview(rows.find(row=>row.url===(comparison||rows[0]?.url))!)}>Phóng to ảnh</button>}
-          <p className="my-2 text-xs text-muted-foreground">Không đọc rõ tên máy cấp hoặc chữ số: chọn/sửa thủ công, không đoán theo số lần trước.</p>
-          <h4 className="mt-3 text-sm font-semibold">Ảnh đã lưu của bạn · {reportDate}</h4>
-          {archiveError && <p role="alert" className="text-xs text-red-700">{archiveError}</p>}
-          {archive.length===0 && <p className="text-xs text-muted-foreground">Chưa có ảnh còn hạn cho ngày này. Mở lại sau khi đọc để tải ảnh đã lưu.</p>}
-          <div className="mt-2 grid grid-cols-2 gap-2">{archive.map(photo=><button type="button" key={photo.id} onClick={()=>setComparison(`/api/coal-meter-photos?id=${photo.id}`)} className="rounded-lg border border-border p-2 text-left text-xs"><strong>{photo.reading.meter_label||"Chưa rõ máy cấp"}</strong><br/>{photo.reading.total_display||"—"} t · {photo.slot}h</button>)}</div>
-        </aside>
+            <p>Không thay khóa chung. Đóng cửa sổ sẽ xóa ô khóa tạm.</p>
+            {temporaryKey&&<button type="button" disabled={busy} onClick={()=>setTemporaryKey("")}>Xóa khóa tạm</button>}
+          </details>
         </div>
 
-        <DialogFooter className="items-center gap-2 sm:justify-between">
-          <p className="text-xs text-slate-500">
-            {rows.length > 0 && `${writable.length} chỉ số sẽ được điền · ${reviewed.filter(item => item.review?.level === "check").length} ảnh cần đối chiếu. `}
-            Sau khi điền, kiểm tra bảng rồi bấm “Lưu số liệu”.
-          </p>
-          <div className="flex gap-2">
-            <button type="button" disabled={busy} onClick={() => changeOpen(false)} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">Đóng</button>
-            <button type="button" disabled={busy || writable.length === 0} onClick={apply} className="h-10 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50">Điền {writable.length} chỉ số vào bảng</button>
-          </div>
-        </DialogFooter>
+        <section className={styles.toolbar} aria-label="Chọn ảnh công tơ">
+          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e=>addFiles(e.target.files)}/>
+          <button ref={uploadButton} type="button" className={styles.primary} disabled={busy||rows.length>=24} onClick={()=>chooseFiles()}><ImagePlus size={17} aria-hidden/>Thêm ảnh công tơ</button>
+          <label className={styles.shiftLabel}>Ca khi ảnh không có giờ chụp
+            <select value={defaultSlot} disabled={busy} onChange={e=>setDefaultSlot(e.target.value as CoalSlot)}>{COAL_SLOTS.map(slot=><option key={slot} value={slot}>{SLOT_LABELS[slot]}</option>)}</select>
+          </label>
+          <span className={styles.toolbarNote}>JPEG, PNG, WebP · tối đa 24 ảnh</span>
+        </section>
+        <div role="status" aria-live="polite" className={styles.progress}>
+          <span>{busy?<><Loader2 size={15} aria-hidden/> Đang xử lý {done}/{rows.length} ảnh. Bạn có thể xóa ảnh hoặc dừng lượt đọc.</>:rows.length?`${rows.length} ảnh · ${writable.length} đã xác nhận · ${failed.length} lỗi`:"01 Chọn ảnh → 02 Đối chiếu số → 03 Điền vào bảng"}</span>
+          {rows.length>0&&<div>
+            {failed.length>0&&<button type="button" disabled={busy} onClick={()=>void processRows(failed)}><RefreshCw size={14} aria-hidden/>Đọc lại ảnh lỗi</button>}
+            <button type="button" onClick={clearAll}><Trash2 size={14} aria-hidden/>Xóa tất cả{busy?" / dừng":""}</button>
+          </div>}
+        </div>
+        {error&&<p role="alert" className={styles.error}>{error}</p>}
 
+        {active ? <div className={styles.workspace}>
+          <nav className={styles.photoList} aria-label="Danh sách ảnh">
+            <div className={styles.listTitle}><Images size={15} aria-hidden/>Ảnh đã chọn <span>{rows.length}/24</span></div>
+            <ol>{reviewed.map(({row,canWrite},index)=><li key={row.id} data-active={row.id===active.row.id}>
+              <button type="button" className={styles.photoSelect} aria-current={row.id===active.row.id?"true":undefined} onClick={()=>setSelectedId(row.id)}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- local object URL */}
+                <img src={row.url} alt=""/>
+                <span><strong>{index+1}. {row.key?coalMeterLabel(row.key):"Chưa rõ máy cấp"}</strong>
+                  <small title={row.fileName}>{row.fileName}</small>
+                  <em data-error={row.state==="error"} data-confirmed={row.write&&canWrite}>{stateLabel(row)}</em>
+                </span>
+              </button>
+              <button type="button" className={styles.remove} aria-label={`Xóa ảnh ${index+1}`} title="Bỏ ảnh khỏi lượt nhập" onClick={()=>removeRow(row.id)}><Trash2 size={15} aria-hidden/></button>
+            </li>)}</ol>
+            <p>Xóa ở đây chỉ bỏ ảnh khỏi lượt nhập, không xóa số liệu trong bảng hay ảnh đã lưu.</p>
+          </nav>
+          <section className={styles.editor} aria-label="Đối chiếu ảnh và nhập chỉ số">
+            <div className={styles.editorHeader}><div><span className={styles.eyebrow}>ẢNH {rows.findIndex(row=>row.id===active.row.id)+1} / {rows.length}</span><h3>{active.row.key?coalMeterLabel(active.row.key):"Chọn công tơ để ghi số"}</h3></div>
+              <div className={styles.actions}>
+                <button type="button" disabled={busy} onClick={()=>chooseFiles(active.row.id)}><ImagePlus size={15} aria-hidden/>Thay ảnh</button>
+                <button type="button" disabled={busy} onClick={()=>void processRows([active.row])}><RefreshCw size={15} aria-hidden/>Đọc lại</button>
+              </div>
+            </div>
+            <div className={styles.comparison}>
+              <figure className={styles.imageFrame}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- local object URL */}
+                <img src={active.row.url} alt={`Ảnh công tơ ${active.row.fileName}`}/>
+                <button type="button" onClick={()=>setPreview(active.row)}><Expand size={15} aria-hidden/>Phóng to ảnh</button>
+                <figcaption>Đối chiếu tên máy cấp và dòng “Total / Material Total”.</figcaption>
+              </figure>
+              <div className={styles.reading}>
+                {(active.row.state==="reading"||active.row.state==="pending")&&<div className={styles.notice}><Loader2 size={18} aria-hidden/><span>{stateLabel(active.row)}<small>Giữ nguyên ảnh trong khi chờ. Chỉ số sẽ không tự ghi vào bảng.</small></span></div>}
+                {active.row.state==="error"&&<div role="alert" className={styles.error}><TriangleAlert size={18} aria-hidden/><span><strong>Chưa đọc được ảnh</strong>{active.row.error}<small>Ảnh được giữ để đọc lại hoặc thay ảnh mới. Chưa có chỉ số nào được điền.</small><button type="button" onClick={()=>updateRow(active.row.id,{state:"done",slot:defaultSlot,ocrValue:null,value:"",label:null,key:"",photoDate:null,aiReasons:["Nhập tay từ ảnh, chưa có kết quả AI và chưa lưu ảnh lên máy chủ."],error:""})}>Nhập tay từ ảnh</button></span></div>}
+                <div className={styles.fields}>
+                  <label>Công tơ / máy cấp<select value={active.row.key} disabled={active.row.state!=="done"} onChange={e=>updateRow(active.row.id,{key:e.target.value as CoalMeterKey|""})}>
+                    <option value="">Chọn công tơ</option>{ALL_COAL_METER_KEYS.map(key=><option key={key} value={key}>{coalMeterLabel(key)}</option>)}
+                  </select></label>
+                  <label>Mốc ghi chỉ số<select value={active.row.slot} disabled={active.row.state!=="done"} onChange={e=>updateRow(active.row.id,{slot:e.target.value as CoalSlot})}>
+                    <option value="" disabled>Chọn mốc ca</option>{COAL_SLOTS.map(slot=><option key={slot} value={slot}>{SLOT_LABELS[slot]}</option>)}
+                  </select></label>
+                </div>
+                <label className={styles.totalLabel}>Chỉ số lũy kế <span>tấn</span>
+                  <input value={active.row.value} disabled={active.row.state!=="done"} inputMode="decimal" placeholder="Chưa có kết quả" onChange={e=>updateRow(active.row.id,{value:e.target.value})}/>
+                </label>
+                <p className={styles.aiValue}>AI đọc: <strong>{active.row.ocrValue===null?"—":String(active.row.ocrValue)}</strong>{active.row.label?` · Nhãn: ${coalMeterLabel(active.row.label)}`:" · Chưa rõ nhãn máy cấp"}</p>
+                <dl className={styles.measurements}><div><dt>Lần ghi trước</dt><dd>{active.match.previous===null?"—":numberFormat.format(active.match.previous)}</dd></div><div><dt>Tăng so với lần trước</dt><dd data-warning={active.match.delta!==null&&(active.match.delta<0||active.match.delta>1500)}>{active.match.delta===null?"—":numberFormat.format(Math.round(active.match.delta*1000)/1000)} <small>tấn</small></dd></div></dl>
+                {active.review?.level==="ok"&&<p className={styles.success}><CheckCircle2 size={16} aria-hidden/>Không phát hiện bất thường. Vẫn cần đối chiếu ảnh.</p>}
+                {active.review?.level==="check"&&<ul className={styles.warnings}>{active.review.reasons.map((reason,i)=><li key={i}><TriangleAlert size={14} aria-hidden/>{reason}</li>)}</ul>}
+                {!active.allowed&&active.row.key&&<p className={styles.error}>Bạn không có quyền nhập ô này.</p>}
+                <label className={styles.confirmation} data-checked={active.row.write&&active.canWrite}>
+                  <input type="checkbox" checked={active.row.write&&active.canWrite} disabled={!active.canWrite} onChange={e=>setRows(old=>old.map(row=>row.id===active.row.id?{...row,write:e.target.checked}:row))}/>
+                  <span>Tôi đã đối chiếu ảnh và số liệu<small>Đồng ý điền chỉ số này vào bảng.</small></span>
+                </label>
+              </div>
+            </div>
+          </section>
+        </div>:<div className={styles.empty}><div><Camera size={32} aria-hidden/></div><h3>Chọn ảnh màn hình công tơ</h3><p>Chụp rõ mã máy cấp và tổng lũy kế. Có thể tải ảnh của cả S1 và S2 trong cùng một lượt.</p><button type="button" className={styles.primary} onClick={()=>chooseFiles()}><ImagePlus size={17} aria-hidden/>Chọn ảnh để bắt đầu</button></div>}
+
+        <details className={styles.archive}><summary>Ảnh đã lưu của bạn · {archive.length} ảnh còn hạn</summary>
+          <p>Ảnh giữ theo 4 mốc ca gần nhất. Hết hạn chỉ xóa ảnh, số liệu được giữ lại.</p>
+          {archiveError&&<p role="alert" className={styles.error}>{archiveError}</p>}
+          <button type="button" onClick={()=>setArchiveVersion(v=>v+1)}><RefreshCw size={14} aria-hidden/>Tải lại ảnh đã lưu</button>
+          <div className={styles.archiveItems}>{archive.map(photo=><button type="button" key={photo.id} onClick={()=>setPreview({url:`/api/coal-meter-photos?id=${photo.id}`,fileName:photo.reading.meter_label||"Ảnh đã lưu"})}><strong>{photo.reading.meter_label||"Chưa rõ máy cấp"}</strong><span>{photo.reading.total_display||"—"} t · {photo.slot}h</span></button>)}</div>
+        </details>
+      </div>
+      <footer className={styles.footer}>
+        <p><strong>{writable.length} chỉ số đã xác nhận</strong><span>Sau khi điền, bấm “Lưu số liệu” ở bảng chính.</span></p>
+        <div><button type="button" onClick={()=>changeOpen(false)}>Đóng{busy?" / dừng đọc":""}</button><button type="button" className={styles.primary} disabled={busy||!writable.length} onClick={apply}>Điền {writable.length} chỉ số <ArrowRight size={16} aria-hidden/></button></div>
+      </footer>
+    </DialogContent>
+    <Dialog open={preview!==null} onOpenChange={next=>{if(!next)setPreview(null);}}>
+      <DialogContent className={styles.lightbox} aria-describedby={undefined}>
+        <DialogTitle className={styles.lightboxTitle}>Ảnh đối chiếu · {preview?.fileName}</DialogTitle>
+        {preview&&/* eslint-disable-next-line @next/next/no-img-element -- local or authenticated temporary image */
+          <img src={preview.url} alt={`Ảnh ${preview.fileName}`}/>}
       </DialogContent>
-
-      <Dialog open={preview !== null} onOpenChange={next => { if (!next) setPreview(null); }}>
-        <DialogContent className="max-h-[95vh] max-w-[calc(100%-1rem)] bg-slate-950 p-2 sm:max-w-3xl">
-          <DialogTitle className="sr-only">Ảnh công tơ {preview?.fileName}</DialogTitle>
-          {preview && (
-            // eslint-disable-next-line @next/next/no-img-element -- local object URL, never uploaded
-            <img src={preview.url} alt={`Ảnh ${preview.fileName}`} className="max-h-[88vh] w-full rounded-md object-contain" />
-          )}
-        </DialogContent>
-      </Dialog>
     </Dialog>
-  );
+  </Dialog>;
 }
