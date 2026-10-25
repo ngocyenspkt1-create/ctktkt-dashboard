@@ -100,6 +100,9 @@
 .settingsSummary > button { margin-left:auto; font-size:11px; min-height:32px; flex-shrink:0; }
 .settingsForm { display:grid; gap:10px; padding-top:13px; margin-top:10px; border-top:1px solid var(--coal-line); }
 .settingsForm > p { font-size:11px; color:var(--coal-muted); }
+.keySource { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px; border-left:3px solid var(--coal-blue); padding:8px 11px; background:var(--coal-card); border-radius:6px; }
+.keySource strong { font-size:12px; }
+.keySource p { color:var(--coal-muted); font-size:10px; margin-top:2px; }
 .temporary { min-height:54px; border:1px solid var(--coal-line); border-radius:10px; background:var(--coal-card); padding:16px 13px; }
 .temporary summary, .archive summary { cursor:pointer; font-size:12px; font-weight:600; color:var(--coal-muted); }
 .temporary .fields { margin-top:12px; }

@@ -5,7 +5,7 @@ import { Camera, CheckCircle2, ImagePlus, Loader2, RefreshCw, Trash2, TriangleAl
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/coal-dialog";
 import styles from "./coal-meter-photo-import.module.css";
 import type { CtktktDayEntries } from "@/lib/ctktkt-report";
-import {DEFAULT_COAL_GEMINI_MODEL} from "@/lib/coal-gemini-config";
+import {coalGeminiRequestHeaders,DEFAULT_COAL_GEMINI_MODEL} from "@/lib/coal-gemini-config";
 import {CoalGeminiSharedSettings} from "@/components/coal-gemini-shared-settings";
 import {
   ALL_COAL_METER_KEYS,
@@ -77,7 +77,7 @@ async function readPhoto(file: File, reportDate:string, slot:CoalSlot, temporary
   const response = await request("/api/coal-meter-ocr", {
     method: "POST",
     signal,
-    headers: { "Content-Type": "application/json",...(temporaryKey.trim()?{"x-coal-gemini-key":temporaryKey.trim(),"x-coal-gemini-model":model.trim()}:{}) },
+    headers: coalGeminiRequestHeaders(temporaryKey,model),
     body: JSON.stringify({ data: await photoAsJpegBase64(file), mediaType: "image/jpeg",reportDate,slot:exifSlot?.operatingDate===reportDate?exifSlot.slot:slot,exifDate:exifSlot?.operatingDate,exifSlot:exifSlot?.slot }),
   });
   const body = await response.json().catch(() => ({})) as { reading?: VisionReading; error?: string;photo?:unknown;warning?:string };
@@ -122,6 +122,9 @@ export function CoalMeterPhotoImport({
   const [archiveVersion,setArchiveVersion]=useState(0);
   const [temporaryKey,setTemporaryKey]=useState("");
   const [geminiModel,setGeminiModel]=useState(DEFAULT_COAL_GEMINI_MODEL);
+  const [keyCheck,setKeyCheck]=useState<{state:"idle"|"checking"|"ok"|"error";message:string}>({state:"idle",message:""});
+  const keyCheckController=useRef<AbortController|null>(null);
+  const locked=busy||keyCheck.state==="checking";
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadButton = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -142,15 +145,46 @@ export function CoalMeterPhotoImport({
   }
 
   function changeOpen(next:boolean) {
-    if (!next) { stopReading(); setTemporaryKey(""); setPreview(null); }
+    if (!next) { stopReading(); resetKeyCheck(); setTemporaryKey(""); setPreview(null); }
     onOpenChange(next);
   }
 
   useEffect(() => () => {
+    keyCheckController.current?.abort();
     batch.current++;
     controllers.current.forEach(controller => controller.abort());
     urlsRef.current.forEach(url => URL.revokeObjectURL(url));
   }, []);
+
+  function resetKeyCheck() {
+    keyCheckController.current?.abort();
+    keyCheckController.current=null;
+    setKeyCheck({state:"idle",message:""});
+  }
+
+  function switchToSharedKey() {
+    resetKeyCheck();setTemporaryKey("");
+  }
+
+  async function checkActiveKey() {
+    if(locked)return;
+    const controller=new AbortController();
+    keyCheckController.current=controller;
+    setKeyCheck({state:"checking",message:"Đang gửi yêu cầu thử tới Gemini…"});
+    try {
+      const response=await request("/api/coal-gemini-settings/check",{
+        method:"POST",headers:coalGeminiRequestHeaders(temporaryKey,geminiModel),body:"{}",cache:"no-store",
+        signal:AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]),
+      });
+      const body=await response.json() as {message?:string;error?:string};
+      if(!response.ok||!body.message)throw new Error(body.error||"Chưa kiểm tra được Gemini.");
+      if(!controller.signal.aborted)setKeyCheck({state:"ok",message:body.message});
+    } catch(error) {
+      if(!controller.signal.aborted)setKeyCheck({state:"error",message:error instanceof Error?error.message:"Chưa kiểm tra được Gemini."});
+    } finally {
+      if(keyCheckController.current===controller)keyCheckController.current=null;
+    }
+  }
   useEffect(()=>{
     if(!open) return;
     const controller=new AbortController();
@@ -189,7 +223,7 @@ export function CoalMeterPhotoImport({
   }
 
   async function processRows(items: PhotoRow[]) {
-    if (!items.length || busy) return;
+    if (!items.length || locked) return;
     const generation = ++batch.current;
     const queue = [...items];
     setBusy(true);
@@ -242,6 +276,7 @@ export function CoalMeterPhotoImport({
 
   function clearAll() {
     stopReading();
+    resetKeyCheck();
     urlsRef.current.forEach(url=>URL.revokeObjectURL(url));
     urlsRef.current.clear(); filesRef.current.clear();
     replaceId.current=null;
@@ -251,12 +286,13 @@ export function CoalMeterPhotoImport({
   }
 
   function chooseFiles(id?:string) {
+    if(locked)return;
     replaceId.current=id??null;
     fileInput.current?.click();
   }
 
   function addFiles(files: FileList | null) {
-    if (!files?.length || busy) return;
+    if (!files?.length || locked) return;
     const replacing=replaceId.current;
     replaceId.current=null;
     const selected=Array.from(files).filter(file=>["image/jpeg","image/png","image/webp"].includes(file.type)&&file.size>0&&file.size<=15_000_000)
@@ -275,7 +311,7 @@ export function CoalMeterPhotoImport({
   }
 
   function apply() {
-    if (busy || !writable.length) return;
+    if (locked || !writable.length) return;
     onApply(writable.map(item=>({cell:item.cell!,value:String(item.numeric)})));
     clearAll(); changeOpen(false);
   }
@@ -293,30 +329,36 @@ export function CoalMeterPhotoImport({
       </header>
       <div className={styles.body}>
         <div className={styles.settings}>
-          <CoalGeminiSharedSettings disabled={busy} request={request}/>
+          <CoalGeminiSharedSettings disabled={locked} request={request} onSaved={switchToSharedKey}/>
           <details className={styles.temporary}>
             <summary>Khóa tạm cho lượt nhập này</summary>
             <div className={styles.fields}>
-              <label>Khóa Gemini tạm<input type="password" value={temporaryKey} disabled={busy} autoComplete="off" spellCheck={false} maxLength={256} onChange={e=>setTemporaryKey(e.target.value)} placeholder="Để trống để dùng khóa chung"/></label>
-              <label>Model Gemini tạm<input value={geminiModel} disabled={busy} spellCheck={false} maxLength={110} onChange={e=>setGeminiModel(e.target.value)}/></label>
+              <label>Khóa Gemini tạm<input type="password" value={temporaryKey} disabled={locked} autoComplete="off" spellCheck={false} maxLength={256} onChange={e=>{resetKeyCheck();setTemporaryKey(e.target.value);}} placeholder="Để trống để dùng khóa chung"/></label>
+              <label>Model Gemini tạm<input value={geminiModel} disabled={locked} spellCheck={false} maxLength={110} onChange={e=>{resetKeyCheck();setGeminiModel(e.target.value);}}/></label>
             </div>
             <p>Không thay khóa chung. Đóng cửa sổ sẽ xóa ô khóa tạm.</p>
-            {temporaryKey&&<button type="button" disabled={busy} onClick={()=>setTemporaryKey("")}>Xóa khóa tạm</button>}
+            {temporaryKey&&<button type="button" disabled={locked} onClick={switchToSharedKey}>Xóa khóa tạm / dùng khóa chung</button>}
           </details>
         </div>
 
+        <section className={styles.keySource} aria-label="Nguồn khóa đang dùng">
+          <div><strong>{temporaryKey.trim()?`Đang dùng khóa tạm của bạn · ${geminiModel}`:"Đang dùng khóa chung / cấu hình máy chủ"}</strong><p>Kiểm tra Gemini gửi một yêu cầu văn bản ngắn, có dùng hạn mức Google.</p></div>
+          <div className={styles.actions}>{temporaryKey.trim()&&<button type="button" disabled={locked} onClick={switchToSharedKey}>Dùng khóa chung</button>}<button type="button" disabled={locked} onClick={()=>void checkActiveKey()}><RefreshCw size={14} aria-hidden/>{keyCheck.state==="checking"?"Đang kiểm tra…":"Kiểm tra Gemini"}</button></div>
+        </section>
+        <div role="status" aria-live="polite">{keyCheck.state!=="idle"&&<p className={keyCheck.state==="error"?styles.error:keyCheck.state==="ok"?styles.success:styles.notice}>{keyCheck.message}</p>}</div>
+
         <section className={styles.toolbar} aria-label="Chọn ảnh công tơ">
           <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e=>addFiles(e.target.files)}/>
-          <button ref={uploadButton} type="button" className={styles.primary} disabled={busy||rows.length>=24} onClick={()=>chooseFiles()}><ImagePlus size={17} aria-hidden/>Thêm ảnh công tơ</button>
+          <button ref={uploadButton} type="button" className={styles.primary} disabled={locked||rows.length>=24} onClick={()=>chooseFiles()}><ImagePlus size={17} aria-hidden/>Thêm ảnh công tơ</button>
           <label className={styles.shiftLabel}>Ca khi ảnh không có giờ chụp
-            <select value={defaultSlot} disabled={busy} onChange={e=>setDefaultSlot(e.target.value as CoalSlot)}>{COAL_SLOTS.map(slot=><option key={slot} value={slot}>{SLOT_LABELS[slot]}</option>)}</select>
+            <select value={defaultSlot} disabled={locked} onChange={e=>setDefaultSlot(e.target.value as CoalSlot)}>{COAL_SLOTS.map(slot=><option key={slot} value={slot}>{SLOT_LABELS[slot]}</option>)}</select>
           </label>
           <span className={styles.toolbarNote}>JPEG, PNG, WebP · tối đa 24 ảnh</span>
         </section>
         <div role="status" aria-live="polite" className={styles.progress}>
           <span>{busy?<><Loader2 size={15} aria-hidden/> Đang xử lý {done}/{rows.length} ảnh. Bạn có thể xóa ảnh hoặc dừng lượt đọc.</>:rows.length?`${rows.length} ảnh · ${writable.length} đã xác nhận · ${failed.length} lỗi`:"01 Chọn ảnh → 02 Đối chiếu số → 03 Điền vào bảng"}</span>
           {rows.length>0&&<div>
-            {failed.length>0&&<button type="button" disabled={busy} onClick={()=>void processRows(failed)}><RefreshCw size={14} aria-hidden/>Đọc lại ảnh lỗi</button>}
+            {failed.length>0&&<button type="button" disabled={locked} onClick={()=>void processRows(failed)}><RefreshCw size={14} aria-hidden/>Đọc lại ảnh lỗi</button>}
             <button type="button" onClick={clearAll}><Trash2 size={14} aria-hidden/>Xóa tất cả{busy?" / dừng":""}</button>
           </div>}
         </div>
@@ -341,8 +383,8 @@ export function CoalMeterPhotoImport({
           <section className={styles.editor} aria-label="Đối chiếu ảnh và nhập chỉ số">
             <div className={styles.editorHeader}><div><span className={styles.eyebrow}>ẢNH {rows.findIndex(row=>row.id===active.row.id)+1} / {rows.length}</span><h3>{active.row.key?coalMeterLabel(active.row.key):"Chọn công tơ để ghi số"}</h3></div>
               <div className={styles.actions}>
-                <button type="button" disabled={busy} onClick={()=>chooseFiles(active.row.id)}><ImagePlus size={15} aria-hidden/>Thay ảnh</button>
-                <button type="button" disabled={busy} onClick={()=>void processRows([active.row])}><RefreshCw size={15} aria-hidden/>Đọc lại</button>
+                <button type="button" disabled={locked} onClick={()=>chooseFiles(active.row.id)}><ImagePlus size={15} aria-hidden/>Thay ảnh</button>
+                <button type="button" disabled={locked} onClick={()=>void processRows([active.row])}><RefreshCw size={15} aria-hidden/>Đọc lại</button>
               </div>
             </div>
             <div className={styles.comparison}>
@@ -354,7 +396,7 @@ export function CoalMeterPhotoImport({
               </figure>
               <div className={styles.reading}>
                 {(active.row.state==="reading"||active.row.state==="pending")&&<div className={styles.notice}><Loader2 size={18} aria-hidden/><span>{stateLabel(active.row)}<small>Giữ nguyên ảnh trong khi chờ. Chỉ số sẽ không tự ghi vào bảng.</small></span></div>}
-                {active.row.state==="error"&&<div role="alert" className={styles.error}><TriangleAlert size={18} aria-hidden/><span><strong>Chưa đọc được ảnh</strong>{active.row.error}<small>Ảnh được giữ để đọc lại hoặc thay ảnh mới. Chưa có chỉ số nào được điền.</small><button type="button" onClick={()=>updateRow(active.row.id,{state:"done",slot:defaultSlot,ocrValue:null,value:"",label:null,key:"",photoDate:null,aiReasons:["Nhập tay từ ảnh, chưa có kết quả AI và chưa lưu ảnh lên máy chủ."],error:""})}>Nhập tay từ ảnh</button></span></div>}
+                {active.row.state==="error"&&<div role="alert" className={styles.error}><TriangleAlert size={18} aria-hidden/><span><strong>Chưa đọc được ảnh</strong>{active.row.error}<small>Đây là kết quả lần đọc trước. Sau khi thay hoặc lưu lại khóa, bấm Đọc lại để lấy kết quả mới. Chưa có chỉ số nào được điền.</small><button type="button" onClick={()=>updateRow(active.row.id,{state:"done",slot:defaultSlot,ocrValue:null,value:"",label:null,key:"",photoDate:null,aiReasons:["Nhập tay từ ảnh, chưa có kết quả AI và chưa lưu ảnh lên máy chủ."],error:""})}>Nhập tay từ ảnh</button></span></div>}
                 <div className={styles.fields}>
                   <label>Công tơ / máy cấp<select value={active.row.key} disabled={active.row.state!=="done"} onChange={e=>updateRow(active.row.id,{key:e.target.value as CoalMeterKey|""})}>
                     <option value="">Chọn công tơ</option>{ALL_COAL_METER_KEYS.map(key=><option key={key} value={key}>{coalMeterLabel(key)}</option>)}
@@ -389,7 +431,7 @@ export function CoalMeterPhotoImport({
       </div>
       <footer className={styles.footer}>
         <p><strong>{writable.length} chỉ số đã xác nhận</strong><span>Sau khi điền, bấm “Lưu số liệu” ở bảng chính.</span></p>
-        <div><button type="button" onClick={()=>changeOpen(false)}>Đóng{busy?" / dừng đọc":""}</button><button type="button" className={styles.primary} disabled={busy||!writable.length} onClick={apply}>Điền {writable.length} chỉ số <ArrowRight size={16} aria-hidden/></button></div>
+        <div><button type="button" onClick={()=>changeOpen(false)}>Đóng{busy?" / dừng đọc":""}</button><button type="button" className={styles.primary} disabled={locked||!writable.length} onClick={apply}>Điền {writable.length} chỉ số <ArrowRight size={16} aria-hidden/></button></div>
       </footer>
     </DialogContent>
     <Dialog open={preview!==null} onOpenChange={next=>{if(!next)setPreview(null);}}>

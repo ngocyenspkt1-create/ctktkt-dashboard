@@ -1,5 +1,12 @@
 export const DEFAULT_COAL_GEMINI_MODEL = "gemini-3.8-flash";
 
+/** Browser-to-server headers shared by OCR and its active-key diagnostic.
+ * The server alone forwards the raw key as x-goog-api-key to Google. */
+export function coalGeminiRequestHeaders(temporaryKey:string,model:string):Record<string,string> {
+  const key=temporaryKey.trim();
+  return {"Content-Type":"application/json",...(key?{"x-coal-gemini-key":key,"x-coal-gemini-model":model.trim()}:{})};
+}
+
 export function coalGeminiConfig(headers:Headers, serverKey?:string, serverModel?:string) {
   const temporaryKey=headers.get("x-coal-gemini-key")?.trim();
   const key=temporaryKey || serverKey?.trim();

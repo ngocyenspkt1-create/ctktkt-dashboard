@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   const signature=mediaType==="image/jpeg"?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:mediaType==="image/png"?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):bytes.toString("ascii",0,4)==="RIFF"&&bytes.toString("ascii",8,12)==="WEBP";
   if(!signature) return Response.json({error:"Nội dung ảnh không đúng định dạng."},{status:400});
   try {
-    if(!await reserveCoalPhotoRead(user.id)) return Response.json({error:"Đã đủ 72 lượt đọc ảnh/giờ cho tài khoản này. Hãy thử lại giờ tiếp theo."},{status:429});
+    if(!await reserveCoalPhotoRead(user.id)) return Response.json({error:"Đã đủ 72 lượt đọc ảnh/kiểm tra Gemini trong giờ này. Hãy thử lại giờ tiếp theo."},{status:429});
   } catch {
     return Response.json({error:"Chưa kết nối được kho ảnh để kiểm tra lượt đọc. Chưa gửi ảnh tới Gemini; giữ ảnh và bấm Đọc lại sau."},{status:503});
   }

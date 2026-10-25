@@ -5,6 +5,7 @@ import {loadSharedGemini} from "@/lib/coal-gemini-shared-store";
 import {coalGeminiConfig} from "@/lib/coal-gemini-config";
 import {checkCoalGeminiConnection} from "@/lib/coal-meter-gemini";
 import {CoalMeterVisionError} from "@/lib/coal-meter-vision";
+import {reserveCoalPhotoRead} from "@/lib/coal-photo-store";
 
 export const runtime="nodejs";
 export const maxDuration=30;
@@ -15,11 +16,14 @@ export async function POST(request:Request) {
   if(!user)return json({error:"Chưa đăng nhập."},401);
   if(!canEditCtktktGroup(user,"may_nghien_coal_s1")&&!canEditCtktktGroup(user,"may_nghien_coal_s2"))return json({error:"Bạn không có quyền kiểm tra cấu hình công tơ than."},403);
   if(request.headers.get("origin")!==new URL(request.url).origin)return json({error:"Nguồn yêu cầu không hợp lệ."},403);
-  let shared:{key:string;model:string}|null;
-  try {shared=await loadSharedGemini(getRawDb(),process.env.AUTH_SECRET);}
+  let shared:{key:string;model:string}|null=null;
+  try {if(!request.headers.get("x-coal-gemini-key")?.trim())shared=await loadSharedGemini(getRawDb(),process.env.AUTH_SECRET);}
   catch {return json({error:"Chưa đọc được khóa dùng chung từ máy chủ. Đây là lỗi cấu hình/kho khóa, chưa gửi yêu cầu tới Google."},503);}
-  const config=coalGeminiConfig(new Headers(),shared?.key||process.env.GEMINI_API_KEY,shared?.model||process.env.GEMINI_VISION_MODEL);
+  const config=coalGeminiConfig(request.headers,shared?.key||process.env.GEMINI_API_KEY,shared?.model||process.env.GEMINI_VISION_MODEL);
   if(!config.ok)return json({error:config.error},config.status);
+  // Probe now generates a small response, so include it in the same per-user cap.
+  try {if(!await reserveCoalPhotoRead(user.id))return json({error:"Đã đủ 72 lượt đọc ảnh/kiểm tra Gemini trong giờ này. Hãy thử lại giờ tiếp theo."},429);}
+  catch{return json({error:"Chưa kiểm tra được hạn mức nội bộ. Chưa gửi yêu cầu thử tới Google."},503);}
   try {return json(await checkCoalGeminiConnection(config.key,config.model));}
   catch(error){return json({error:error instanceof CoalMeterVisionError?error.message:"Chưa kiểm tra được kết nối Google. Không có ảnh hoặc số liệu nào được thay đổi."},error instanceof CoalMeterVisionError?error.status:502);}
 }
