@@ -3742,6 +3742,7 @@ export function CtktktReport() {
       )}
 
       <CoalMeterPhotoImport
+        key={date}
         open={coalPhotoOpen}
         onOpenChange={setCoalPhotoOpen}
         reportDate={date}

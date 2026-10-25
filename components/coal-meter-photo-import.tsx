@@ -9,7 +9,6 @@ import {
   COAL_SLOTS,
   coalMeterCell,
   coalMeterLabel,
-  matchCoalMeter,
   parseMeterLabel,
   parseVisionTimestamp,
   parseVisionTotal,
@@ -69,17 +68,19 @@ type VisionReading = {
   note: string;
 };
 
-async function readPhoto(file: File) {
+async function readPhoto(file: File, reportDate:string, slot:CoalSlot) {
   const exifTime = readExifTime(await file.arrayBuffer());
+  const exifSlot=exifTime?slotForPhotoTime(exifTime):null;
   const response = await fetch("/api/coal-meter-ocr", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data: await photoAsJpegBase64(file), mediaType: "image/jpeg" }),
+    body: JSON.stringify({ data: await photoAsJpegBase64(file), mediaType: "image/jpeg",reportDate,slot:exifSlot?.operatingDate===reportDate?exifSlot.slot:slot,exifDate:exifSlot?.operatingDate,exifSlot:exifSlot?.slot }),
   });
-  const body = await response.json().catch(() => ({})) as { reading?: VisionReading; error?: string };
+  const body = await response.json().catch(() => ({})) as { reading?: VisionReading; error?: string;photo?:unknown };
   if (!response.ok || !body.reading) throw new Error(body.error || "Không đọc được ảnh.");
   const reading = body.reading;
   const aiReasons: string[] = [];
+  if(!body.photo) aiReasons.push("Chưa lưu ảnh: ngày chụp khác ngày báo cáo hoặc ca đã quá hạn 4 mốc");
   if (reading.screen_type === "no_total_visible") aiReasons.push("Màn hình trong ảnh không hiện chỉ số tổng");
   if (reading.screen_type === "not_a_meter") aiReasons.push("Ảnh không phải màn hình công tơ than");
   if (reading.confidence !== "high") aiReasons.push(`AI chưa chắc chắn${reading.note ? `: ${reading.note}` : ""}`);
@@ -116,10 +117,19 @@ export function CoalMeterPhotoImport({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<PhotoRow | null>(null);
+  const [comparison,setComparison]=useState<string|null>(null);
+  const [archive,setArchive]=useState<{id:string;slot:string;reading:VisionReading;expiresAt:number}[]>([]);
+  const [archiveError,setArchiveError]=useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const urlsRef = useRef<string[]>([]);
 
   useEffect(() => () => urlsRef.current.forEach(url => URL.revokeObjectURL(url)), []);
+  useEffect(()=>{
+    if(!open) return;
+    const controller=new AbortController();
+    fetch(`/api/coal-meter-photos?date=${encodeURIComponent(reportDate)}`,{signal:controller.signal}).then(async response=>{if(!response.ok) throw new Error("Chưa tải được ảnh lưu.");return response.json() as Promise<{photos:typeof archive}>;}).then(body=>{setArchive(body.photos||[]);setArchiveError("");}).catch(()=>{if(!controller.signal.aborted)setArchiveError("Chưa tải được ảnh lưu; không thể xác nhận ảnh còn hạn.");});
+    return ()=>controller.abort();
+  },[open,reportDate]);
 
   const previousOf = (key: CoalMeterKey, slot: CoalSlot) => previousCoalReading(key, slot, current, previous);
 
@@ -146,12 +156,14 @@ export function CoalMeterPhotoImport({
   async function addFiles(files: FileList | null) {
     if (!files?.length) return;
     setError("");
-    const added: PhotoRow[] = Array.from(files).filter(file => file.type.startsWith("image/")).map((file, index) => {
+    const selected=Array.from(files).filter(file=>["image/jpeg","image/png","image/webp"].includes(file.type)&&file.size<=15_000_000).slice(0,24-rows.length);
+    if(selected.length!==files.length) setError("Chỉ nhận JPEG/PNG/WebP tối đa 15 MB/ảnh, tối đa 24 ảnh mỗi lượt. Các file không phù hợp đã bỏ qua.");
+    const added: PhotoRow[] = selected.map((file, index) => {
       const url = URL.createObjectURL(file);
       urlsRef.current.push(url);
       return { id: `${Date.now()}-${index}-${file.name}`, fileName: file.name, url, state: "pending", ocrValue: null, value: "", label: null, key: "", slot: "", photoDate: null, aiReasons: [], error: "", write: false };
     });
-    const fileById = new Map(added.map((row, index) => [row.id, Array.from(files)[index]]));
+    const fileById = new Map(added.map((row, index) => [row.id, selected[index]]));
     setRows(old => [...old, ...added]);
     setBusy(true);
     try {
@@ -161,16 +173,17 @@ export function CoalMeterPhotoImport({
         if (!row) return;
         setRows(old => old.map(item => (item.id === row.id ? { ...item, state: "reading" } : item)));
         try {
-          const result = await readPhoto(fileById.get(row.id)!);
+          const result = await readPhoto(fileById.get(row.id)!,reportDate,defaultSlot);
           const timing = result.time ? slotForPhotoTime(result.time) : null;
           const slot = timing?.slot ?? defaultSlot;
-          const match = result.value === null ? null : matchCoalMeter(result.value, result.label, key => previousOf(key, slot));
+          // A nearby number is not evidence of a feeder name. Never guess another meter.
+          const previousValue=result.label?previousOf(result.label,slot):null;
+          const match = result.label ? {key:result.label,previous:previousValue,delta:result.value!==null&&previousValue!==null?result.value-previousValue:null,source:"label" as const} : null;
           const numeric = result.value === null ? null : truncateTwoDecimals(result.value);
           setRows(old => old.map(item => {
             if (item.id !== row.id) return item;
             const next: PhotoRow = { ...item, state: "done", ocrValue: result.value, value: numeric === null ? "" : String(numeric), label: result.label, key: match?.key ?? result.label ?? "", slot, photoDate: timing?.operatingDate ?? null, aiReasons: result.aiReasons };
-            const status = reviewCoalReading({ value: numeric, match: match ?? { key: null, previous: null, delta: null, source: null }, label: result.label, slot, photoDate: next.photoDate, reportDate, duplicate: false });
-            return { ...next, write: status.level === "ok" && result.aiReasons.length === 0 };
+            return { ...next, write: false }; // Operator explicitly confirms every row against its image.
           }));
         } catch (caught) {
           const message = caught instanceof Error ? caught.message : "Không đọc được ảnh.";
@@ -188,6 +201,7 @@ export function CoalMeterPhotoImport({
   }
 
   function removeRow(id: string) {
+    if(rows.find(row=>row.id===id)?.url===comparison) setComparison(null);
     setRows(old => {
       const row = old.find(item => item.id === id);
       if (row) URL.revokeObjectURL(row.url);
@@ -195,7 +209,7 @@ export function CoalMeterPhotoImport({
     });
   }
 
-  const writable = reviewed.filter(item => item.row.write && item.cell && item.numeric !== null && item.allowed && !(item.review?.reasons.includes("Trùng công tơ và mốc với ảnh khác")));
+  const writable = reviewed.filter(item => item.row.write && item.row.state==="done" && item.cell && item.numeric !== null && item.numeric>=0 && item.allowed && !(item.review?.reasons.includes("Trùng công tơ và mốc với ảnh khác")));
   const done = rows.filter(row => row.state === "done" || row.state === "error").length;
 
   function apply() {
@@ -203,6 +217,8 @@ export function CoalMeterPhotoImport({
     urlsRef.current.forEach(url => URL.revokeObjectURL(url));
     urlsRef.current = [];
     setRows([]);
+    setComparison(null);
+    setPreview(null);
     onOpenChange(false);
   }
 
@@ -213,12 +229,12 @@ export function CoalMeterPhotoImport({
           <DialogTitle className="flex items-center gap-2"><Camera className="size-5 text-indigo-600" aria-hidden /> Đọc công tơ than từ ảnh</DialogTitle>
           <DialogDescription>
             Chọn ảnh chụp màn hình công tơ các máy cấp (S1 và S2 đều được). Web đọc chỉ số, tự gán công tơ theo mã máy cấp và số lần đọc trước,
-            mốc giờ theo giờ chụp. Ảnh được thu nhỏ rồi gửi tới dịch vụ AI Claude để đọc số, không lưu lại trên hệ thống. Trưởng kíp đối chiếu ảnh trước khi điền vào bảng.
+            mốc giờ theo giờ chụp. Ảnh thu nhỏ gửi Google Gemini để đọc tổng lũy kế (tấn), không lấy lưu lượng tấn/giờ. Chọn đúng ngày/ca trước khi tải. Ảnh giữ theo 4 mốc ca gần nhất; số liệu không bị xóa khi ảnh hết hạn. Bạn phải đối chiếu rồi tích “Ghi” trước khi điền.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-wrap items-center gap-2">
-          <input ref={fileInput} type="file" accept="image/*" multiple className="hidden" onChange={event => void addFiles(event.target.files)} />
+          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={event => void addFiles(event.target.files)} />
           <button type="button" disabled={busy} onClick={() => fileInput.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60">
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ImagePlus className="size-4" aria-hidden />}
             {busy ? `Đang đọc ${done}/${rows.length} ảnh…` : "Chọn / chụp ảnh công tơ"}
@@ -232,6 +248,7 @@ export function CoalMeterPhotoImport({
           {rows.length > 0 && <span className="ml-auto text-xs text-slate-500">Mỗi ảnh mất khoảng 5–15 giây, đọc song song 3 ảnh.</span>}
         </div>
 
+        <div className="grid min-h-0 gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-h-0 overflow-auto rounded-xl border border-slate-200">
           {error && <p role="alert" className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           {rows.length === 0 ? (
@@ -258,7 +275,7 @@ export function CoalMeterPhotoImport({
                 {reviewed.map(({ row, numeric, match, review, allowed }) => (
                   <tr key={row.id} className={review?.level === "check" ? "bg-amber-50/60" : undefined}>
                     <td className="p-2">
-                      <button type="button" onClick={() => setPreview(row)} className="block overflow-hidden rounded-lg ring-1 ring-slate-200 hover:ring-indigo-400" title="Phóng to ảnh">
+                      <button type="button" onClick={() => setComparison(row.url)} className="block overflow-hidden rounded-lg ring-1 ring-slate-200 hover:ring-indigo-400" title="Đối chiếu ảnh bên cạnh">
                         {/* eslint-disable-next-line @next/next/no-img-element -- local object URL, never uploaded */}
                         <img src={row.url} alt={`Ảnh ${row.fileName}`} className="h-16 w-12 object-cover" />
                       </button>
@@ -310,6 +327,20 @@ export function CoalMeterPhotoImport({
               </tbody>
             </table>
           )}
+        </div>
+        <aside className="min-h-0 overflow-auto rounded-xl border border-slate-200 bg-card p-3 text-card-foreground">
+          <h3 className="text-sm font-semibold">Ảnh đối chiếu · đơn vị tấn</h3>
+          {(comparison||rows[0]?.url||archive[0]) && <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- authenticated temporary image or local object URL */}
+            <img src={comparison||rows[0]?.url||`/api/coal-meter-photos?id=${archive[0].id}`} alt="Ảnh công tơ để đối chiếu tên máy cấp và chỉ số" className="my-2 max-h-[52vh] w-full rounded-lg object-contain" />
+          </>}
+          {rows.find(row=>row.url===(comparison||rows[0]?.url)) && <button type="button" className="text-sm underline" onClick={()=>setPreview(rows.find(row=>row.url===(comparison||rows[0]?.url))!)}>Phóng to ảnh</button>}
+          <p className="my-2 text-xs text-muted-foreground">Không đọc rõ tên máy cấp hoặc chữ số: chọn/sửa thủ công, không đoán theo số lần trước.</p>
+          <h4 className="mt-3 text-sm font-semibold">Ảnh đã lưu của bạn · {reportDate}</h4>
+          {archiveError && <p role="alert" className="text-xs text-red-700">{archiveError}</p>}
+          {archive.length===0 && <p className="text-xs text-muted-foreground">Chưa có ảnh còn hạn cho ngày này. Mở lại sau khi đọc để tải ảnh đã lưu.</p>}
+          <div className="mt-2 grid grid-cols-2 gap-2">{archive.map(photo=><button type="button" key={photo.id} onClick={()=>setComparison(`/api/coal-meter-photos?id=${photo.id}`)} className="rounded-lg border border-border p-2 text-left text-xs"><strong>{photo.reading.meter_label||"Chưa rõ máy cấp"}</strong><br/>{photo.reading.total_display||"—"} t · {photo.slot}h</button>)}</div>
+        </aside>
         </div>
 
         <DialogFooter className="items-center gap-2 sm:justify-between">

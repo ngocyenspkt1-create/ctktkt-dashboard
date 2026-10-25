@@ -232,3 +232,12 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - Test auth/header/query và tháng đạt. Hướng dẫn kích hoạt ở docs/INTEGRATION-API.md. Người dùng yêu cầu đẩy mã lên GitHub; không đẩy khóa. Chưa thêm env Vercel, chưa chuyển khóa sang InfinityFree.
 - Lưu ý chưa xác minh đối chiếu dữ liệu SHN/NH3 từ KTKT lưu với tổng hợp động của báo cáo; cần hoàn tất đối chiếu trước sử dụng vận hành. Không có rate limit phân tán, giới hạn một tháng mỗi query.
 
+# 2026-10-25 — Gemini đọc ảnh công tơ than, đối chiếu và lưu bốn mốc ca (local)
+
+- Người dùng yêu cầu Gemini đọc tên máy cấp và chỉ số lũy kế tấn; xác nhận giữ theo 4 mốc ca gần nhất. Khóa gửi trong chat không được ghi vào mã/env/log hoặc dùng để gọi API; cần thu hồi và cấu hình khóa mới.
+- Route OCR chuyển sang Gemini REST, schema Zod, kiểm tra đơn vị tấn, timeout, lỗi quota; chỉ server đọc GEMINI_API_KEY/GEMINI_VISION_MODEL. Chưa cấu hình trả 503. Giới hạn body stream, chữ ký ảnh, 72 lượt/giờ/tài khoản và kho 40 triệu ký tự base64.
+- Giữ nhãn/giá trị ảnh, không gán máy cấp dựa trên số gần giống; sửa lỗi ánh xạ FileList khi có file không hợp lệ. Ảnh lớn cạnh bảng; người nhập phải tích Ghi rồi Điền và Lưu số liệu. Key={date} tránh mang ảnh sang ngày báo cáo khác.
+- Kho ảnh có quyền tài khoản, owner_id và expires_at; nhãn/số lưu là AI ban đầu. Hết hạn theo endpoint ca +4 mốc (08/16/24 giờ VN), không theo thời điểm upload. Ảnh hết hạn chặn xem ngay; dọn vật lý theo truy cập và cron hằng ngày, có thể trễ 24h; không xóa số liệu vận hành. Đổi cron dọn ba lần/ngày cần scheduler phù hợp, chưa tự mở dịch vụ trả phí.
+- Đã kiểm tra TypeScript, ESLint các file mới, 12 test chuyên biệt (gồm guard archive) và toàn bộ test hiện có đều đạt. Chưa thử Gemini thật, DB/cron production hoặc kiểm tra UI bằng ảnh công tơ thật. Hướng dẫn ở docs/COAL-METER-GEMINI.md.
+- Người dùng yêu cầu đẩy GitHub và kích hoạt ngày 25/10. Đã kiểm tra Vercel nhưng đang ở trang login; chưa cấu hình GEMINI_API_KEY/GEMINI_VISION_MODEL/CRON_SECRET. Mã được xuất bản riêng, không đưa bí mật vào Git và không tuyên bố đã kích hoạt.
+
