@@ -300,3 +300,17 @@ Người dùng yêu cầu: «Tạo hiệu ứng menu cho web giống như tôi �
 - HTTP 503 được phân loại dịch vụ quá tải/tạm không khả dụng và giữ status 503; không yêu cầu thay khóa khi chỉ có 503. 401 vẫn là xác thực, không tự retry bằng phương thức khác. Không ghi log lỗi Google thô.
 - 28 test công tơ/khóa/quyền/retention đạt, gồm khóa AQ tổng hợp giữ nguyên từng ký tự qua browser/server/Google, không Authorization/key trong URL/body, chuyển sang khóa chung bỏ cả hai header tạm, probe thực và lỗi 503. TypeScript, ESLint và production build đạt. Điều khiển trình duyệt đang bị tắt trong Work nên chưa kiểm tra tương tác bản này trên production; cần tải lại web, xem nguồn khóa và thử lại bằng khóa mong muốn sau triển khai.
 
+
+# 2026-10-25 — Đọc công tơ than: tự thử lại khi Gemini quá tải
+
+Hiện tượng (ảnh người dùng gửi): «Chưa đọc được ảnh — Dịch vụ Gemini đang quá tải hoặc tạm thời không khả dụng… (Google HTTP 503)». Đây là lỗi tạm thời phía Google (model đang quá tải), không phải lỗi khóa hay lỗi ảnh. Trước đây `readCoalMeterGemini` gọi Google đúng 1 lần nên gặp 503 là báo lỗi ngay, người dùng phải tự bấm Đọc lại nhiều lần.
+
+- `lib/coal-meter-gemini.ts`: khi Google trả 500/502/503/504 hoặc lỗi mạng, tự thử lại tối đa 2 lần, chờ 2 s rồi 5 s (tôn trọng `Retry-After` ≤ 8 s). Tổng thời gian ≤ 55 s, nằm trong `maxDuration = 60` của `/api/coal-meter-ocr`; không thử lại nếu không còn đủ 10 s cho một lần gọi. Hết thời gian chờ (timeout) thì không thử lại. Không thử lại 429 (hết hạn mức), 400/401/403/404 (khóa/model sai). Nếu vẫn lỗi, thông báo ghi thêm «Đã tự thử lại N lần».
+- Mỗi lượt bấm Đọc vẫn chỉ tính 1 lượt trong giới hạn 72 lượt/giờ, vì giới hạn được trừ ở route trước khi gọi Gemini.
+- Phía trình duyệt không giới hạn thời gian cho yêu cầu đọc ảnh, nên các lần thử lại không bị ngắt.
+- `tests/coal-gemini.test.mjs`: thêm test cho 503→503→thành công, 503 liên tục (báo số lần thử lại), 429/401/400 không thử lại, và giữ trong ngân sách thời gian. Các test cũ dùng `sleep` giả nên không chậm.
+- `tests/work-px-workspace.test.mjs`: đổi tên biến `module` → `cjsModule` để hết lỗi ESLint `no-assign-module-variable` có sẵn, không đổi hành vi.
+- Kiểm tra: tsc sạch, lint 0 lỗi, test 448/448.
+- Nếu Google quá tải kéo dài, vẫn có thể báo 503 sau khi đã thử lại. Khi đó dùng «Nhập tay từ ảnh» hoặc đổi model trong Cấu hình Gemini.
+- Theo yêu cầu người dùng, đưa bản sửa Claude lên GitHub cùng nhật ký. Codex kiểm tra lại: toàn bộ test, TypeScript, ESLint cho các file sửa và `git diff --check` đạt. Chưa xác nhận đọc ảnh thành công trên production; cơ chế thử lại không sửa lỗi xác thực HTTP 401.
+- Kiểm tra build local: Turbopack lỗi nội bộ khi khởi tạo tiến trình xử lý `app/interface.css`, kể cả khi chạy ngoài giới hạn tiến trình. `next build --webpack` hoàn tất thành công. Không thay cấu hình triển khai; cần theo dõi kết quả Vercel sau khi đẩy.

@@ -5,6 +5,7 @@ import {coalPhotoExpiry} from "../lib/coal-photo-retention.ts";
 import {readCoalMeterGemini,checkCoalGeminiConnection} from "../lib/coal-meter-gemini.ts";
 const reading={screen_type:"led_total",meter_label:"1A1",total_display:"8939.810",total_unit:"t",photo_timestamp:null,confidence:"high",note:""};
 function mock(result,status=200){return async()=>new Response(JSON.stringify(result),{status,headers:{"Content-Type":"application/json"}});}
+const noWait={sleep:async()=>{}};
 test("retention follows shift endpoints not upload time, across months and leap day",()=>{
   assert.equal(coalPhotoExpiry("2026-10-25","08"),Date.parse("2026-10-26T16:00:00+07:00"));
   assert.equal(coalPhotoExpiry("2026-10-31","24"),Date.parse("2026-11-02T08:00:00+07:00"));
@@ -30,7 +31,7 @@ test("network errors and timeouts become actionable errors without leaking provi
   for (const [name,status,word] of [["TimeoutError",504,"45 giây"],["AbortError",504,"45 giây"],["TypeError",502,"kết nối"]]) {
     await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"private-key","test",async()=>{
       throw Object.assign(new Error("provider debug private-key"),{name});
-    }),error=>error.status===status&&error.message.includes(word)&&!error.message.includes("private-key"));
+    },noWait),error=>error.status===status&&error.message.includes(word)&&!error.message.includes("private-key"));
   }
 });
 test("connection check runs a bounded text generation with raw key in the header only",async()=>{
@@ -61,7 +62,7 @@ test("401 identifies authentication instead of image legibility, with only a saf
 });
 test("provider key, permission, model, quota and service errors stay distinct and redact raw messages",async()=>{
   for (const [status,reason,word] of [[400,"API_KEY_INVALID","Khóa Gemini"],[403,"","quyền"],[404,"","model"],[429,"","hạn mức"],[503,"","dịch vụ"]]) {
-    await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"private-key","test",mock({error:{message:"secret private-key",details:[{reason}]}},status)),
+    await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"private-key","test",mock({error:{message:"secret private-key",details:[{reason}]}},status),noWait),
       error=>error.message.toLowerCase().includes(word.toLowerCase())&&!error.message.includes("private-key"));
   }
   await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"private-key","test",async()=>new Response("upstream html")),error=>error.status===502&&error.message.includes("không hợp lệ"));
@@ -80,4 +81,30 @@ test("archive access is owner-scoped and expiry-gated; cleanup never deletes ope
   assert.ok(routeOcr.includes("reserveCoalPhotoRead(user.id)"));
   assert.ok(routeOcr.includes("GEMINI_API_KEY"));
   assert.ok(!routeOcr.includes("ANTHROPIC_API_KEY"));
+});
+
+test("temporary Gemini overload (503) is retried with backoff, then reads normally",async()=>{
+  const statuses=[503,503,200],waits=[];let calls=0;
+  const result=await readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"key","test",async()=>{
+    const status=statuses[calls++];
+    return status===200?mock({candidates:[{finishReason:"STOP",content:{parts:[{text:JSON.stringify(reading)}]}}]})():mock({error:{message:"high demand"}},status)();
+  },{sleep:async ms=>{waits.push(ms);}});
+  assert.equal(calls,3);assert.deepEqual(waits,[2000,5000]);assert.equal(result.total_display,"8939.810");
+});
+test("persistent overload reports how many retries ran; quota (429) and auth errors are not retried",async()=>{
+  let calls=0;
+  await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"key","test",async()=>{calls++;return mock({},503)();},noWait),
+    error=>error.status===503&&error.message.includes("Đã tự thử lại 2 lần")&&error.message.includes("HTTP 503"));
+  assert.equal(calls,3);
+  for(const status of [429,401,400]){
+    calls=0;
+    await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"key","test",async()=>{calls++;return mock({},status)();},noWait),error=>error.status!==undefined);
+    assert.equal(calls,1,`HTTP ${status}`);
+  }
+});
+test("retries stay inside the route time budget",async()=>{
+  let clock=0,calls=0;
+  await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"key","test",async()=>{calls++;clock+=46000;return mock({},503)();},{sleep:async ms=>{clock+=ms;},now:()=>clock}),
+    error=>error.status===503);
+  assert.equal(calls,1);
 });

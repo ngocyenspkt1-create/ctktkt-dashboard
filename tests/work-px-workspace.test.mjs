@@ -13,15 +13,15 @@ function harness(user=actor){
  let states=[],refs=[],cursor=0,refCursor=0,current=item(),posts=[],events=[];
  const seed={items:[current],members:[{id:2,displayName:'Synthetic 2',position:'Synthetic'}],today:'2026-10-14'};
  const hooks={...React,useState:initial=>{const i=cursor++;if(!(i in states))states[i]=i===0?seed:typeof initial==='function'?initial():initial;return[states[i],value=>{states[i]=typeof value==='function'?value(states[i]):value;}];},useRef:initial=>{const i=refCursor++;if(!refs[i])refs[i]={current:initial};return refs[i];},useEffect:()=>{},useMemo:fn=>fn(),useCallback:fn=>fn};
- const module={exports:{}};
+ const cjsModule={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(new URL('../components/work-px-client.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText;
  const fetch=async(url,options)=>{
   if(options?.method==='POST') {const body=JSON.parse(options.body);posts.push(body);const changed=domain.changeWork(current,user,body.action,body,'2026-10-14');current={...changed.item,version:current.version+1};events.push({id:String(events.length+1),itemId:current.id,actorId:user.id,actorName:user.displayName,action:body.action,text:changed.text,createdAt:current.updatedAt,snapshot:current});return{ok:true,json:async()=>({item:current})};}
   return{ok:true,json:async()=>({events})};
  };
  const dependencies=name=>name==='react'?hooks:name==='@/lib/work-px'?domain:name==='./work-report-editor'?{__esModule:true,default:function Editor(){}}:name==='@/components/session-context'?{useSessionUser:()=>user}:name.endsWith('.css')?{}:require(name);
- vm.runInNewContext(code,{module,exports:module.exports,require:dependencies,fetch,FileReader:class{},Date,console,crypto:globalThis.crypto,window:{confirm:()=>false}},{filename:'work-px-client.cjs'});
- return{render(){cursor=0;refCursor=0;return module.exports.WorkPxWorkspace({user});},posts,get current(){return current;}};
+ vm.runInNewContext(code,{module:cjsModule,exports:cjsModule.exports,require:dependencies,fetch,FileReader:class{},Date,console,crypto:globalThis.crypto,window:{confirm:()=>false}},{filename:'work-px-client.cjs'});
+ return{render(){cursor=0;refCursor=0;return cjsModule.exports.WorkPxWorkspace({user});},posts,get current(){return current;}};
 }
 function nodes(root){const all=[];function visit(node){if(Array.isArray(node))return node.forEach(visit);if(!node||typeof node!=='object')return;all.push(node);visit(node.props?.children);}visit(root);return all;}
 function text(root){if(Array.isArray(root))return root.map(text).join('');if(typeof root==='string'||typeof root==='number')return String(root);return root?.props?text(root.props.children):'';}
