@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   coalMeterCell,
+  compareCoalMeterOrder,
   matchCoalMeter,
   parseDigitsLine,
   parseMeterLabel,
@@ -13,6 +14,19 @@ import {
   slotForPhotoTime,
   truncateTwoDecimals,
 } from "../lib/coal-meter-ocr.ts";
+
+test("photos follow table meter order and shift order, with unidentified images last and ties stable", () => {
+  const input = [
+    {id:'f2',key:'S1-F2',slot:'08'}, {id:'unknown',key:null,slot:'08'},
+    {id:'a2',key:'S1-A2',slot:'08'}, {id:'a1-24',key:'S1-A1',slot:'24'},
+    {id:'s2',key:'S2-A1',slot:'08'}, {id:'a1-16',key:'S1-A1',slot:'16'},
+    {id:'a1-08',key:'S1-A1',slot:'08'}, {id:'duplicate',key:'S1-A1',slot:'08'},
+    {id:'missing-shift',key:'S1-A1',slot:''},
+  ];
+  assert.deepEqual([...input].sort(compareCoalMeterOrder).map(row=>row.id),
+    ['a1-08','duplicate','a1-16','a1-24','missing-shift','a2','f2','s2','unknown']);
+  assert.equal(input[0].id,'f2','sorting a display copy must not change upload order');
+});
 
 test("feeder label, display total and photo stamp from the 1E2 sample photo", () => {
   const ocr = "25 Sep 2026 at 15:58:46\nVinh Long\n1E2\nTotal: 75859.247 MTons\n0.00 MTons/hr\nMODE REMOTE OFF LOCAL";

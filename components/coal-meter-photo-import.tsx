@@ -13,6 +13,7 @@ import {
   coalMeterCell,
   coalMeterLabel,
   coalPhotoUnitIssue,
+  compareCoalMeterOrder,
   parseMeterLabel,
   parseVisionTimestamp,
   parseVisionTotal,
@@ -253,7 +254,7 @@ export function CoalMeterPhotoImport({
     const allowed = cell ? canEditCell(cell) : false;
     return { row, numeric, match, review, cell, allowed,unitIssue,
       canWrite: !unitIssue && row.state === "done" && numeric !== null && numeric >= 0 && allowed && !duplicate && !changedReadDate && (!row.needsManual||row.manual===true) && !row.saved };
-  }), [rows, current, previous, reportDate, canEditCell,selectedUnit]);
+  }).sort((a,b)=>compareCoalMeterOrder({key:a.row.key||a.row.label,slot:a.row.slot},{key:b.row.key||b.row.label,slot:b.row.slot})), [rows, current, previous, reportDate, canEditCell,selectedUnit]);
   const active = reviewed.find(item => item.row.id === selectedId) || reviewed[0];
   const writable = reviewed.filter(item => item.row.write && item.canWrite);
   const failed = rows.filter(row => row.state === "error");
@@ -516,7 +517,7 @@ export function CoalMeterPhotoImport({
           <p>Ảnh giữ theo 4 mốc ca gần nhất. Hết hạn chỉ xóa ảnh, số liệu được giữ lại.</p>
           {archiveError&&<p role="alert" className={styles.error}>{archiveError}</p>}
           <button type="button" onClick={()=>setArchiveVersion(v=>v+1)}><RefreshCw size={14} aria-hidden/>Tải lại ảnh đã lưu</button>
-          <div className={styles.archiveItems}>{archive.map(photo=><button type="button" key={photo.id} onClick={()=>setPreview({url:`/api/coal-meter-photos?id=${photo.id}`,fileName:photo.reading.meter_label||"Ảnh đã lưu"})}><strong>{photo.reading.meter_label||"Chưa rõ máy cấp"}</strong><span>{photo.reading.total_display||"—"} t · {photo.slot}h</span></button>)}</div>
+          <div className={styles.archiveItems}>{[...archive].sort((a,b)=>compareCoalMeterOrder({key:parseMeterLabel(a.reading.meter_label||""),slot:a.slot},{key:parseMeterLabel(b.reading.meter_label||""),slot:b.slot})).map(photo=><button type="button" key={photo.id} onClick={()=>setPreview({url:`/api/coal-meter-photos?id=${photo.id}`,fileName:photo.reading.meter_label||"Ảnh đã lưu"})}><strong>{photo.reading.meter_label||"Chưa rõ máy cấp"}</strong><span>{photo.reading.total_display||"—"} t · {photo.slot}h</span></button>)}</div>
         </details>
       </div>
       <footer className={styles.footer}>

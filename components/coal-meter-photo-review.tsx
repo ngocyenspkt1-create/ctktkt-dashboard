@@ -2,7 +2,7 @@
 import {useEffect,useState} from "react";
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/components/ui/dialog";
 import {coalPhotoComparison} from "@/lib/coal-photo-review";
-import {ALL_COAL_METER_KEYS,COAL_SLOTS,coalMeterLabel,parseMeterLabel,type CoalMeterKey,type CoalSlot} from "@/lib/coal-meter-ocr";
+import {ALL_COAL_METER_KEYS,COAL_SLOTS,coalMeterLabel,compareCoalMeterOrder,parseMeterLabel,type CoalMeterKey,type CoalSlot} from "@/lib/coal-meter-ocr";
 type Photo={id:string;slot:CoalSlot;expiresAt:number;reading:{meter_label:string|null;total_display:string|null;confidence?:string;note?:string}};
 const display=(n:number|null)=>n===null?"—":new Intl.NumberFormat("vi-VN",{maximumFractionDigits:3}).format(n);
 const labels={unmapped:"Chưa rõ máy cấp",unreadable:"Chưa đọc được số",empty:"Ô bảng đang trống",match:"Khớp số AI",different:"Khác số — cần kiểm tra"};
@@ -16,11 +16,15 @@ export function CoalMeterPhotoReview({open,onOpenChange,date,unit,current}:{open
     async function load(){setLoading(true);setError("");try{const response=await fetch(`/api/coal-meter-photos?scope=review&date=${encodeURIComponent(date)}`,{signal:controller.signal,cache:"no-store"});const body=await response.json() as {photos?:Photo[];error?:string};if(!response.ok)throw new Error(body.error||"Chưa tải được ảnh.");if(!controller.signal.aborted)setPhotos(body.photos||[]);}catch(error){if(!controller.signal.aborted){setPhotos([]);setError(error instanceof Error?error.message:"Chưa tải được ảnh.");}}finally{if(!controller.signal.aborted)setLoading(false);}}
     void load();return ()=>controller.abort();
   },[open,date,reload]);
-  const visible=photos.filter(photo=>!parseMeterLabel(photo.reading.meter_label||"")||parseMeterLabel(photo.reading.meter_label||"")?.startsWith(unit));
+  const visible=photos.filter(photo=>!parseMeterLabel(photo.reading.meter_label||"")||parseMeterLabel(photo.reading.meter_label||"")?.startsWith(unit))
+    .sort((a,b)=>compareCoalMeterOrder(
+      {key:overrides[a.id]?.meter||parseMeterLabel(a.reading.meter_label||""),slot:overrides[a.id]?.slot||a.slot},
+      {key:overrides[b.id]?.meter||parseMeterLabel(b.reading.meter_label||""),slot:overrides[b.id]?.slot||b.slot},
+    ));
   const photo=visible.find(p=>p.id===selected)||visible[0];
   const selection=photo?overrides[photo.id]||{meter:parseMeterLabel(photo.reading.meter_label||"")||"",slot:photo.slot}:null;
   const comparison=photo&&selection?coalPhotoComparison(photo.reading,selection.slot,current,selection.meter||null):null;
-  function change(patch:Partial<{meter:CoalMeterKey|"";slot:CoalSlot}>){if(photo&&selection)setOverrides(old=>({...old,[photo.id]:{...selection,...patch}}));}
+  function change(patch:Partial<{meter:CoalMeterKey|"";slot:CoalSlot}>){if(photo&&selection){setSelected(photo.id);setOverrides(old=>({...old,[photo.id]:{...selection,...patch}}));}}
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] max-w-[calc(100%-1rem)] gap-3 overflow-y-auto p-4 sm:max-w-6xl">
     <DialogHeader><DialogTitle>Đối chiếu ảnh & số liệu than {unit} · {date}</DialogTitle><DialogDescription>TKĐ đối chiếu ảnh VHV đã tải với số hiện trên màn hình bảng, kể cả số chưa lưu. Chỉ xem, không sửa dữ liệu. Ảnh chỉ còn trong 4 mốc ca; tối đa 200 ảnh gần nhất của ngày.</DialogDescription></DialogHeader>
     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{visible.length} ảnh còn hạn · Nhãn và số AI có thể đọc sai, cần xem ảnh gốc</span><button type="button" disabled={loading} onClick={()=>setReload(n=>n+1)} className="rounded-lg border border-border px-3 py-2">{loading?"Đang tải…":"Tải lại ảnh"}</button></div>

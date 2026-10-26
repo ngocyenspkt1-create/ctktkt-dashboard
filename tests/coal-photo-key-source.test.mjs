@@ -68,6 +68,19 @@ test('temporary probe uses explicit key; switching, saving shared and closing di
 });
 
 const photo=()=>({id:'test-photo',fileName:'synthetic.jpg',url:'blob:synthetic',state:'done',ocrValue:123.456,value:'123.45',label:'S1-A1',key:'S1-A1',slot:'08',photoDate:'2026-10-24',readDate:'2026-10-24',aiReasons:[],error:'',write:true});
+
+test('import review table sorts by meter and shift instead of upload order, retaining row identity',()=>{
+  const rows=[['f2','S1-F2','08'],['a2','S1-A2','08'],['late','S1-A1','24'],['early','S1-A1','08']]
+    .map(([id,key,slot])=>({...photo(),id,key,label:key,slot}));
+  const h=harness({rows});let tree=h.render();
+  const table=nodes(tree).find(n=>n.type==='table');
+  const body=nodes(table).find(n=>n.type==='tbody');
+  assert.deepEqual(nodes(body).filter(n=>n.type==='tr').map(n=>n.key),['early','late','a2','f2']);
+  const originalFourth=nodes(body).find(n=>n.props?.['aria-label']==='Xác nhận ảnh 4');
+  originalFourth.props.onChange({target:{checked:false}});tree=h.render();
+  assert.equal(nodes(tree).find(n=>n.props?.['aria-label']==='Xác nhận ảnh 4').props.checked,false);
+  assert.equal(nodes(tree).find(n=>n.props?.['aria-label']==='Xác nhận ảnh 1').props.checked,true);
+});
 test('date defaults to the report date; changing date clears confirmation and blocks stale OCR save',()=>{
   const h=harness({rows:[photo()],onSave:async()=>assert.fail('not confirmed')});let tree=h.render();
   const date=nodes(tree).find(n=>n.type==='input'&&n.props.type==='date');

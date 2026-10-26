@@ -18,6 +18,16 @@ const SLOT_COLUMNS: Record<CoalUnit, Record<CoalSlot, string>> = {
 
 export const ALL_COAL_METER_KEYS: CoalMeterKey[] = (["S1", "S2"] as const).flatMap(unit => COAL_METER_CODES.map(code => `${unit}-${code}` as CoalMeterKey));
 
+/** Report order: S1/S2, A1–F2, then 08/16/24h. Unidentified photos go last. */
+export function compareCoalMeterOrder(
+  a: {key: CoalMeterKey | "" | null; slot: string},
+  b: {key: CoalMeterKey | "" | null; slot: string},
+) {
+  const meterRank = (key: typeof a.key) => key ? ALL_COAL_METER_KEYS.indexOf(key) : ALL_COAL_METER_KEYS.length;
+  const slotRank = (slot: string) => {const index=COAL_SLOTS.indexOf(slot as CoalSlot);return index<0?COAL_SLOTS.length:index;};
+  return meterRank(a.key) - meterRank(b.key) || slotRank(a.slot) - slotRank(b.slot);
+}
+
 export function coalMeterCell(key: CoalMeterKey, slot: CoalSlot): string {
   const [unit, code] = key.split("-") as [CoalUnit, CoalMeterCode];
   return `${SLOT_COLUMNS[unit][slot]}${16 + COAL_METER_CODES.indexOf(code)}`;

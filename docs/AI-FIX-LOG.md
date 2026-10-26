@@ -360,3 +360,10 @@ Hiện tượng (ảnh người dùng gửi): «Chưa đọc được ảnh — 
 - `saveReviewedCoalEntries` kiểm danh sách chỉ thuộc một tổ và đúng tổ đang chọn trước khi gửi; gửi thêm coalUnit. API CTKTKT kiểm lại coalUnit với ô công tơ thực tế, từ chối lượt OCR bị lẫn trước khi ghi. Các lượt lưu báo cáo chung không có coalUnit giữ hành vi cũ để không ảnh hưởng nhập các nhóm số liệu khác; quyền và khóa ngày không thay đổi.
 - 19 test liên quan đạt, gồm phân loại 1D1/2D1, không lách qua đổi đích, cảnh báo batch trộn, đổi tổ xóa xác nhận và chặn request lẫn ô S1/S2 trước khi gửi. Toàn bộ bộ test, TypeScript trong build Webpack và ESLint các file logic sửa đều đạt. Không lưu số vận hành thật khi thử UI.
 - Production **e9ee7a1** triển khai thành công: chọn S2 rồi tải ảnh máy cấp S1 đã được cho phép, Gemini vẫn nhận đúng nhãn gốc; banner khác tổ xuất hiện, checkbox đối chiếu và nút lưu bị khóa. Không xác nhận/lưu số vận hành. Sửa lời hướng dẫn khi chưa có ảnh để yêu cầu ảnh đúng tổ, tránh dòng hướng dẫn cũ mời tải lẫn hai tổ. Ảnh bằng chứng lưu local ngoài Git.
+
+# 2026-10-26 — Sắp thứ tự ảnh công tơ theo bảng báo cáo
+
+- Dùng chung `compareCoalMeterOrder`: S1 rồi S2; trong mỗi tổ A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2; cùng công tơ theo 08h, 16h, 24h. Ảnh chưa xác định máy cấp xếp cuối; cùng công tơ/ca giữ thứ tự gốc để không che ảnh trùng.
+- Áp dụng cho danh sách ảnh đang đọc, bảng xác nhận dưới ảnh, ảnh đã lưu trong cửa sổ nhập và danh sách đối chiếu TKĐ. Sắp bản hiển thị, không đổi thứ tự hàng nguồn hoặc ID; dấu xác nhận và ảnh đang chọn vẫn gắn đúng ảnh khi OCR hoàn tất/đổi công tơ. Danh sách TKĐ xét cả công tơ/ca đối chiếu đã chọn tay.
+- 17 test liên quan đạt, bao gồm ảnh tải lộn thứ tự, ca, mã chưa rõ, ảnh trùng và xác nhận đúng ID sau sắp. ESLint các file sửa đạt. Không ghi số liệu vận hành thật.
+- Bản dựng production Webpack và TypeScript đạt. Lần chạy trong quyền hạn chế gặp EPERM khi tạo thư mục .next; chạy lại với quyền tạo tệp đầy đủ đạt. Khi sửa máy/ca đối chiếu, giữ nguyên ảnh đang chọn dù vị trí danh sách thay đổi.
