@@ -8,10 +8,11 @@ import {createRequire} from 'node:module';
 import * as config from '../lib/coal-gemini-config.ts';
 import * as meter from '../lib/coal-meter-ocr.ts';
 const require=createRequire(import.meta.url);
-function harness(){
+function harness(options={}){
   const states=[],refs=[],calls=[];let cursor=0,refCursor=0;
+  let reportDate=options.date||'2026-10-24';
   const hooks={...React,useState:initial=>{
-    const i=cursor++;if(!(i in states))states[i]=typeof initial==='function'?initial():initial;
+    const i=cursor++;if(!(i in states))states[i]=i===0&&options.rows?structuredClone(options.rows):typeof initial==='function'?initial():initial;
     return [states[i],value=>{states[i]=typeof value==='function'?value(states[i]):value;}];
   },useRef:initial=>{const i=refCursor++;return refs[i]??(refs[i]={current:initial});},useEffect:()=>{},useMemo:fn=>fn()};
   const SharedSettings=function SharedSettings(){};
@@ -24,8 +25,8 @@ function harness(){
   }).outputText;
   const cjsModule={exports:{}};
   const request=async(url,options)=>{calls.push({url,headers:new Headers(options.headers)});return Response.json({message:'Synthetic probe result'});};
-  vm.runInNewContext(code,{module:cjsModule,exports:cjsModule.exports,require:dependencies,fetch:request,AbortController,AbortSignal,Number,Intl,Map,Set},{filename:'coal-photo-import.cjs'});
-  return {calls,SharedSettings,render(){cursor=0;refCursor=0;return cjsModule.exports.CoalMeterPhotoImport({open:true,onOpenChange:()=>{},reportDate:'2026-10-24',current:{},canEditCell:()=>true,onApply:()=>{},request});}};
+  vm.runInNewContext(code,{module:cjsModule,exports:cjsModule.exports,require:dependencies,fetch:request,AbortController,AbortSignal,Number,Intl,Map,Set,Error},{filename:'coal-photo-import.cjs'});
+  return {calls,SharedSettings,render(){cursor=0;refCursor=0;return cjsModule.exports.CoalMeterPhotoImport({open:true,onOpenChange:()=>{},reportDate,current:{},canEditCell:options.canEditCell||(()=>true),onApply:()=>{},request,onSave:options.onSave,onDateChange:date=>{reportDate=date;}});}};
 }
 function nodes(root){const all=[];function visit(n){if(Array.isArray(n))return n.forEach(visit);if(!n||typeof n!=='object')return;all.push(n);visit(n.props?.children);}visit(root);return all;}
 function text(n){if(Array.isArray(n))return n.map(text).join('');if(typeof n==='string'||typeof n==='number')return String(n);return text(n?.props?.children??'');}
@@ -64,4 +65,33 @@ test('temporary probe uses explicit key; switching, saving shared and closing di
     button(tree,'Kiểm tra Gemini').props.onClick();await flush();
     assert.equal(h.calls.at(-1).headers.has('x-coal-gemini-key'),false,reset);
   }
+});
+
+const photo=()=>({id:'test-photo',fileName:'synthetic.jpg',url:'blob:synthetic',state:'done',ocrValue:123.456,value:'123.45',label:'S1-A1',key:'S1-A1',slot:'08',photoDate:'2026-10-24',readDate:'2026-10-24',aiReasons:[],error:'',write:true});
+test('date defaults to the report date; changing date clears confirmation and blocks stale OCR save',()=>{
+  const h=harness({rows:[photo()],onSave:async()=>assert.fail('not confirmed')});let tree=h.render();
+  const date=nodes(tree).find(n=>n.type==='input'&&n.props.type==='date');
+  assert.equal(date.props.value,'2026-10-24');assert.equal(button(tree,'Lưu 1 chỉ số').props.disabled,false);
+  date.props.onChange({target:{value:'2026-10-25'}});tree=h.render();
+  assert.equal(nodes(tree).find(n=>n.type==='input'&&n.props.type==='date').props.value,'2026-10-25');
+  assert.equal(button(tree,'Lưu 0 chỉ số').props.disabled,true);
+  assert.ok(text(tree).includes('Ngày ghi đã thay đổi'));
+});
+test('unclear AI values need manual re-entry and confirmation before save; success is shown only after callback',async()=>{
+  const saved=[];const h=harness({rows:[{...photo(),needsManual:true,manual:false}],onSave:async values=>saved.push(values)});let tree=h.render();
+  assert.equal(button(tree,'Lưu 0 chỉ số').props.disabled,true);assert.ok(text(tree).includes('Ảnh chưa đọc rõ'));
+  button(tree,'Nhập tay từ ảnh').props.onClick();tree=h.render();
+  const value=nodes(tree).find(n=>n.type==='input'&&n.props.placeholder==='Chưa có kết quả');assert.equal(value.props.value,'');
+  value.props.onChange({target:{value:'124.56'}});tree=h.render();
+  nodes(tree).find(n=>n.type==='input'&&n.props['aria-label']==='Xác nhận ảnh 1').props.onChange({target:{checked:true}});tree=h.render();
+  button(tree,'Lưu 1 chỉ số').props.onClick();await flush();tree=h.render();
+  assert.deepEqual(JSON.parse(JSON.stringify(saved)),[[{cell:'X16',value:'124.56'}]]);
+  assert.ok(text(tree).includes('Đã lưu và kiểm tra lại 1 chỉ số ngày 24/10/2026'));
+});
+test('failed save retains the picture, values and confirmation for a deliberate retry',async()=>{
+  const h=harness({rows:[photo()],onSave:async()=>{throw new Error('Synthetic save failure');}});let tree=h.render();
+  button(tree,'Lưu 1 chỉ số').props.onClick();await flush();tree=h.render();
+  assert.ok(text(tree).includes('Synthetic save failure'));assert.ok(text(tree).includes('synthetic.jpg'));
+  assert.equal(button(tree,'Lưu 1 chỉ số').props.disabled,false);
+  assert.ok(!text(tree).includes('Đã lưu và kiểm tra lại'));
 });

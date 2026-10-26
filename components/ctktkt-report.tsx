@@ -23,6 +23,7 @@ import {
 import { DateField } from "@/components/ui/date-field";
 import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
 import { CoalMeterPhotoImport } from "@/components/coal-meter-photo-import";
+import {saveReviewedCoalEntries} from "@/lib/coal-photo-save";
 import {CoalMeterPhotoReview} from "@/components/coal-meter-photo-review";
 import {canReviewCoalPhotos} from "@/lib/coal-photo-review";
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
@@ -3748,13 +3749,32 @@ export function CtktktReport() {
       )}
 
       <CoalMeterPhotoImport
-        key={date}
         open={coalPhotoOpen}
         onOpenChange={setCoalPhotoOpen}
         reportDate={date}
         current={current}
         previous={previous}
         canEditCell={canEditCoalCell}
+        disabled={loading||saving||syncingPmis}
+        maxDate={vietnamDateIso()}
+        onDateChange={value=>{
+          if(dirtyCellsRef.current.size>0||saving||syncingPmis)return "Hãy lưu số liệu ngày đang nhập trước khi chuyển ngày.";
+          if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||value>vietnamDateIso())return "Ngày ghi chỉ số không hợp lệ hoặc ở tương lai.";
+          if(!canEditOperatingDate(value,isAdminUser(user)))return "Bạn chỉ được nhập ngày hôm nay hoặc hôm qua; ngày cũ cần quản trị viên.";
+          if(value.slice(0,7)!==period)setLoading(true);
+          setDate(value);setError("");setMessage("");
+        }}
+        onSave={async values=>{
+          if(loading||saving||!canEditSelectedDate)throw new Error("Ngày này chưa sẵn sàng hoặc bạn không có quyền lưu.");
+          setSaving(true);
+          try{
+            const verified=await saveReviewedCoalEntries(fetch,date,values);
+            setByDate(old=>({...old,[date]:{...(old[date]||{}),...Object.fromEntries(verified.map(entry=>[entry.cell,entry.value]))}}));
+            for(const entry of verified)dirtyCellsRef.current.delete(entry.cell);
+            setDirty(dirtyCellsRef.current.size>0);
+            setMessage(`Đã lưu và kiểm tra lại ${verified.length} chỉ số công tơ than ngày ${date.split("-").reverse().join("/")}.`);
+          }finally{setSaving(false);}
+        }}
         onApply={values => {
           for (const { cell, value } of values) update(cell, value);
           setMessage(`Đã điền ${values.length} chỉ số công tơ than từ ảnh. Kiểm tra bảng rồi bấm “Lưu số liệu”.`);
