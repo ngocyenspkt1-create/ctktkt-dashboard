@@ -377,3 +377,10 @@ Hiện tượng (ảnh người dùng gửi): «Chưa đọc được ảnh — 
 - Các phép thử mới kiểm API SQLite, dữ liệu sau ghép các đợt, số truy vấn, phạm vi ngày, hủy lượt tháng, thu hồi quyền và từ chối ghi trực tiếp ngoài nhóm. Tài liệu kiến trúc, ma trận quyền và giới hạn đo: docs/DATA-LOADING-AND-PERMISSIONS.md. Không ghi/sửa số vận hành thật để kiểm tra.
 - Phân trang bảng PMIS/PPA tối đa 30 ngày trong DOM, không cắt nguồn biểu đồ/tổng hợp/Excel. PPA giữ mới nhất trước, PMIS giữ thứ tự cột ngày; trang đầu/trang cuối/rỗng và ghép mọi trang đủ dữ liệu có test riêng. Toàn bộ test đạt; bản dựng production Webpack/TypeScript đạt, ESLint không lỗi (còn hai cảnh báo cũ dùng location.assign cho tải Excel).
 - Production aff8730: Vercel báo triển khai thành công. Tab kiểm tra riêng xác nhận báo cáo ngày tải xong, bật xuất sau khi đủ dữ liệu, tab công tơ hiện số và cửa sổ ảnh lazy-load mở được. PMIS chọn 01/09–25/10 (55 ngày): trang 1 có 30 cột ngày, trang 2 có 25; không báo lỗi. PPA chọn Tất cả tải được 86 ngày, trang 1 hiện 1–30, trang 2 hiện 31–60. Không gửi đồng bộ, upload ảnh hoặc lưu số liệu thật; đã đóng tab kiểm tra. Ảnh minh chứng phân trang lưu local ngoài Git.
+
+# 2026-10-26 — Chọn vùng ô, hàng/cột và copy sang Excel
+
+- Thêm thanh Chọn ô để copy Excel ở báo cáo CTKTKT, ghim dưới header khi cuộn đến công tơ. Bật rõ ràng trước khi chọn; Vùng ô/Hàng/Cột, kéo chuột hoặc Shift+bấm ô cuối, Ctrl+C/nút Copy vùng chọn, Esc/Bỏ chọn. Tắt chọn trở lại nhập liệu bình thường.
+- Chế độ chọn chặn pointer vào ô nhập để không sửa số vô tình; chỉ đọc giá trị input hiện trên màn hình, kể cả ô khóa/chưa lưu. Không gọi API ghi và không thay quyền. Phạm vi giới hạn bảng CTKTKT, bỏ ô ẩn, xử lý rowspan/colspan; vùng chọn tô xanh. Nhãn/cột tính sẵn có thể copy theo hàng/cột.
+- Clipboard có cả TSV và HTML table cho Excel, giữ hàng/cột và ô trống; đánh dấu numeric x:num để Excel nhận số, giữ số 0 và độ chính xác. Escape HTML và vô hiệu hóa văn bản giống công thức để ghi chú không thành công thức khi dán.
+- Kiểm thử vùng chọn ngược, hàng/cột đầy đủ, TSV, số/ô trống, HTML/formula injection và dán Excel hiện có đạt. Không thay dữ liệu vận hành khi thử.
