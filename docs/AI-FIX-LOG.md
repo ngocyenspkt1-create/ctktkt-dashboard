@@ -402,3 +402,9 @@ Hiện tượng (ảnh người dùng gửi): «Chưa đọc được ảnh — 
 - Chọn ngày đang mở so với current (kể cả ô chưa lưu). Chọn ngày khác đọc số đã lưu đúng ngày bằng scope=stored, không kéo cả tháng/lũy kế năm. Chỉ đưa kết quả ra sau khi cả ảnh và số cùng ngữ cảnh đã tải xong; hủy request cũ, xóa chọn/override khi áp dụng bộ lọc để tránh so nhầm ngày/ca. Không có ảnh do hết hạn 4 mốc ca có thông báo rõ.
 - Không đổi quyền TKĐ xem ảnh, không ghi dữ liệu hay kéo dài thời gian lưu ảnh. Kiểm thử giao điều kiện bộ lọc, máy cấp 1/2, nhãn chưa rõ và quyền xem hiện có đạt; build Webpack/TypeScript và ESLint đạt.
 - Production 52faae7 triển khai thành công. Kiểm Chrome: mở nút đối chiếu hiện bộ chọn mặc định S1/ngày báo cáo/tất cả ca/tất cả công tơ; đổi S2 tự trả meter về all, chỉ có 2A1..2F2; chọn 2D1 ca16 áp dụng đúng. Chọn ngày khác (24/10 so với bảng 25/10) đọc xong không lỗi và nêu rõ so với số đã lưu đúng ngày. Không có ảnh còn hạn cho bộ lọc thử, nên không thử so ảnh thật; đã đóng tab, không ghi vận hành. Ảnh minh chứng form lưu local ngoài Git.
+
+# 2026-10-26 — Đưa chọn/copy Excel lên header chung
+
+- Chuyển SpreadsheetCopyTools khỏi nội dung CTKTKT lên AppShell/header cạnh tìm kiếm, chỉ một nút dùng chung. Các điều khiển chọn vùng/hàng/cột xuất hiện ngay dưới header, không phụ thuộc vị trí bảng đang cuộn; nhãn gọn Copy Excel trên màn hình nhỏ.
+- Phạm vi chọn mở cho mọi bảng bên trong main của trang hiện tại, gồm KPI và các báo cáo PMIS/PPA/nước/BCSX, thay vì section CTKTKT riêng. Loại sidebar/header khỏi vùng dữ liệu, không đổi quyền hoặc gọi API ghi. Khi chuyển module thì dọn chế độ chọn và highlight; Ctrl+C dùng được khi tiêu điểm ở body hoặc nút copy trên header.
+- Giữ thao tác kéo/Shift+bấm và định dạng clipboard Excel cũ. Test copy và bản dựng/ESLint kiểm tra trước triển khai; QA kiểm hai trang và tắt chọn không làm thay đổi số liệu.

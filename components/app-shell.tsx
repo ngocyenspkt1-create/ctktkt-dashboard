@@ -8,6 +8,7 @@ import { SessionProvider } from "@/components/session-context";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileNav, QuickSearch, SidebarNav } from "@/components/app-navigation";
 import { SpreadsheetInputBehavior } from "@/components/spreadsheet-input-behavior";
+import { SpreadsheetCopyTools } from "@/components/spreadsheet-copy-tools";
 import { GoogleMirrorLinks } from "@/components/google-mirror-links";
 
 function Brand() {
@@ -35,7 +36,7 @@ export async function AppShell({ children, active }: { children: ReactNode; acti
   return (
     <SessionProvider user={user}>
       <SpreadsheetInputBehavior />
-      <div className="app-workspace min-h-screen bg-[var(--app-bg)] text-slate-900">
+      <div data-app-copy-scope className="app-workspace min-h-screen bg-[var(--app-bg)] text-slate-900">
         <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-64 flex-col lg:flex">
           <div className="app-sidebar-brand flex h-20 items-center px-5"><Brand /></div>
           <div className="flex-1 overflow-y-auto px-3 py-5">
@@ -65,6 +66,7 @@ export async function AppShell({ children, active }: { children: ReactNode; acti
               <h1 className="truncate text-base font-bold text-slate-900 sm:text-lg">{current?.label ?? "Vận hành 1"}</h1>
               {current && <p className="hidden truncate text-xs text-slate-500 sm:block">{current.description}</p>}
             </div>
+            <SpreadsheetCopyTools key={active}/>
             <QuickSearch isAdmin={isAdmin} />
             <div className="flex items-center gap-1 lg:hidden">
               <Link href="/doi-mat-khau" title="Đổi mật khẩu" aria-label="Đổi mật khẩu" className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">

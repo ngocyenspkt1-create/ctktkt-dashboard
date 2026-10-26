@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import {SpreadsheetCopyTools} from "@/components/spreadsheet-copy-tools";
 import {
   Download,
   Save,
@@ -1054,7 +1053,6 @@ export function CtktktReport() {
 
   return (
     <section className="module-report ktkt-workspace mx-auto grid w-full min-w-0 max-w-full gap-3">
-      <SpreadsheetCopyTools key={date}/>
       {extrasState!=="ready"&&<div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
         <span>{loading?"Đang tải số liệu ngày…":extrasState==="loading"?"Số liệu ngày đã sẵn sàng. Đang tải tiếp tồn kho và giờ lũy kế…":"Chưa tải đủ số liệu tổng hợp. Hãy lưu ô đang nhập rồi tải lại trước khi xuất báo cáo."}</span>
         {extrasState==="error"&&<button type="button" disabled={dirty||saving||syncingPmis} onClick={()=>{setError("");setReloadVersion(v=>v+1);}} className="rounded border border-slate-300 px-3 py-1 disabled:opacity-50">Tải lại dữ liệu</button>}

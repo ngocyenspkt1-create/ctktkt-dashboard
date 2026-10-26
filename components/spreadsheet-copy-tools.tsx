@@ -44,7 +44,7 @@ export function SpreadsheetCopyTools(){
     selection.current=null;drag.current=false;
   }
   useEffect(()=>{
-    const scope=root.current?.closest("section");
+    const scope=root.current?.closest("[data-app-copy-scope]")?.querySelector("main");
     if(!scope||!enabled)return;
     scope.setAttribute("data-copy-mode","true");
     scope.classList.add(styles.selectionScope);
@@ -98,7 +98,7 @@ export function SpreadsheetCopyTools(){
     const up=()=>{drag.current=false;};
     const copy=(event:ClipboardEvent)=>{
       if(!selection.current||!event.clipboardData||!scope.contains(selection.current.table))return;
-      if(event.target instanceof Element&&!scope.contains(event.target))return;
+      if(event.target instanceof Element&&event.target!==document.body&&!scope.contains(event.target)&&!root.current?.contains(event.target))return;
       const data=payload.current();if(!data.html)return;
       event.preventDefault();event.clipboardData.setData("text/plain",data.text);event.clipboardData.setData("text/html",data.html);
       setMessage("Đã copy. Mở Excel, chọn ô bắt đầu rồi Ctrl+V.");
@@ -117,7 +117,7 @@ export function SpreadsheetCopyTools(){
     }catch{setMessage("Trình duyệt chưa cho copy bằng nút. Nhấn Ctrl+C để copy vùng đã chọn.");}
   };
   return <div ref={root} className={styles.toolbar}>
-    <button type="button" aria-pressed={enabled} onClick={()=>{setEnabled(value=>!value);setMessage("");}}>{enabled?"Thoát chọn · Nhập số":"Chọn ô để copy Excel"}</button>
-    {enabled&&<><label>Chọn<select aria-label="Kiểu chọn dữ liệu" value={mode} onChange={event=>{setMode(event.target.value as CopyMode);setMessage("");}}><option value="cells">Vùng ô</option><option value="rows">Hàng</option><option value="columns">Cột</option></select></label><button type="button" onClick={copySelected}>Copy vùng chọn</button><button type="button" onClick={()=>{clear();setMessage("Đã bỏ vùng chọn.");}}>Bỏ chọn</button><span role="status">{message||"Kéo chuột chọn vùng hoặc Shift+bấm ô cuối → Ctrl+C. Esc để bỏ chọn."}</span></>}
+    <button type="button" aria-label={enabled?"Thoát chọn · Nhập số":"Chọn ô để copy Excel"} aria-pressed={enabled} onClick={()=>{setEnabled(value=>!value);setMessage("");}}><span className={styles.fullLabel}>{enabled?"Thoát chọn · Nhập số":"Chọn ô để copy Excel"}</span><span className={styles.shortLabel}>{enabled?"Thoát chọn":"Copy Excel"}</span></button>
+    {enabled&&<div className={styles.options}><label>Chọn<select aria-label="Kiểu chọn dữ liệu" value={mode} onChange={event=>{setMode(event.target.value as CopyMode);setMessage("");}}><option value="cells">Vùng ô</option><option value="rows">Hàng</option><option value="columns">Cột</option></select></label><button type="button" onClick={copySelected}>Copy vùng chọn</button><button type="button" onClick={()=>{clear();setMessage("Đã bỏ vùng chọn.");}}>Bỏ chọn</button><span role="status">{message||"Chọn vùng trong bất kỳ bảng nào trên trang · Kéo chuột hoặc Shift+bấm ô cuối → Ctrl+C."}</span></div>}
   </div>;
 }
