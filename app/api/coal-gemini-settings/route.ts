@@ -2,7 +2,7 @@ import {getRawDb} from "@/db";
 import {getSessionUser} from "@/lib/auth/server";
 import {canEditCtktktGroup} from "@/lib/ctktkt-permissions";
 import {coalGeminiConfig} from "@/lib/coal-gemini-config";
-import {sharedGeminiStatus,saveSharedGemini,SharedGeminiConflict} from "@/lib/coal-gemini-shared-store";
+import {sharedGeminiStatus,saveSharedGemini,updateSharedGeminiModel,SharedGeminiConflict} from "@/lib/coal-gemini-shared-store";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"}});
@@ -28,6 +28,14 @@ export async function PUT(request:Request){
   if(typeof body.key!=="string"||typeof body.model!=="string"||!Number.isSafeInteger(body.expectedVersion)||Number(body.expectedVersion)<0)return json({error:"Khóa/model/phiên bản không hợp lệ."},400);
   // Validate first, without ever returning credentials to a client.
   if(body.key.length>256||body.model.length>110||/[^\x20-\x7e]/.test(body.key+body.model))return json({error:"Định dạng khóa/model không hợp lệ."},400);
+  if(!body.key.trim()){
+    const model=body.model.trim();
+    if(!/^gemini-[a-zA-Z0-9.-]{1,100}$/.test(model))return json({error:"Tên model Gemini không hợp lệ."},400);
+    try{
+      const shared=await updateSharedGeminiModel(getRawDb(),{model,expectedVersion:Number(body.expectedVersion),actorId:session.user.id,actorName:session.user.displayName});
+      return json({shared});
+    }catch(error){return json({error:error instanceof SharedGeminiConflict?error.message:"Chưa cập nhật được model dùng chung."},error instanceof SharedGeminiConflict?409:503);}
+  }
   const config=coalGeminiConfig(new Headers({"x-coal-gemini-key":body.key,"x-coal-gemini-model":body.model}));
   if(!config.ok)return json({error:config.error},400);
   try{

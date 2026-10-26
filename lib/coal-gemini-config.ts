@@ -1,4 +1,5 @@
-export const DEFAULT_COAL_GEMINI_MODEL = "gemini-3.8-flash";
+// Matches the lightweight image-reading model used by VibraControl.
+export const DEFAULT_COAL_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 /** Browser-to-server headers shared by OCR and its active-key diagnostic.
  * The server alone forwards the raw key as x-goog-api-key to Google. */

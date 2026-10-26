@@ -1,5 +1,21 @@
 import { CoalMeterReadingSchema, CoalMeterVisionError, COAL_METER_SYSTEM_PROMPT } from "./coal-meter-vision.ts";
 
+// Keep the wire schema small, as in VibraControl; still validate the answer locally.
+const nullableString={type:"STRING",nullable:true};
+const readingResponseSchema={type:"OBJECT",properties:{
+  screen_type:{type:"STRING",enum:["led_total","touch_material_total","no_total_visible","not_a_meter"]},
+  meter_label:nullableString,total_display:nullableString,total_unit:nullableString,photo_timestamp:nullableString,
+  confidence:{type:"STRING",enum:["high","medium","low"]},note:{type:"STRING"},
+},required:["screen_type","meter_label","total_display","total_unit","photo_timestamp","confidence","note"]};
+
+function fastReadingConfig(model:string){
+  // These levels are supported by the documented model families. Leave custom
+  // models alone rather than sending a parameter they might reject with 400.
+  if(/^gemini-3\.(5|1)-flash-lite(?:$|-)/.test(model))return {thinkingConfig:{thinkingLevel:"minimal"}};
+  if(/^gemini-3\.(8|7)-flash(?:$|-)/.test(model))return {thinkingConfig:{thinkingLevel:"low"}};
+  return {};
+}
+
 export async function coalGeminiHttpError(response: Response) {
   // Only enumerated reasons are used. Provider messages may echo credentials.
   const failure = await response.json().catch(() => null) as {error?:{details?:{reason?:string}[]}} | null;
@@ -32,7 +48,7 @@ export async function checkCoalGeminiConnection(key:string,model:string,call:typ
   try {
     response=await call(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{
       method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},signal:AbortSignal.timeout(12000),cache:"no-store",
-      body:JSON.stringify({contents:[{role:"user",parts:[{text:"Reply OK."}]}],generationConfig:{maxOutputTokens:32}}),
+      body:JSON.stringify({contents:[{role:"user",parts:[{text:"Reply OK."}]}],generationConfig:{...fastReadingConfig(model),maxOutputTokens:256}}),
     });
   } catch {
     throw new CoalMeterVisionError("Google chưa trả kết quả kiểm tra trong 12 giây. Chưa gửi ảnh; nếu yêu cầu đã tới Google thì vẫn có thể dùng hạn mức.",504);
@@ -68,7 +84,7 @@ export async function readCoalMeterGemini(image: {data:string;mediaType:string},
   const now = retry.now ?? Date.now;
   const sleep = retry.sleep ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)));
   const deadline = now() + (retry.budgetMs ?? 55000);
-  const requestBody = JSON.stringify({systemInstruction:{parts:[{text:COAL_METER_SYSTEM_PROMPT}]},contents:[{role:"user",parts:[{inlineData:{mimeType:image.mediaType,data:image.data}},{text:"Read the cumulative coal total in metric tonnes, not the hourly flow. Return only JSON with screen_type, meter_label, total_display, total_unit, photo_timestamp, confidence, note. screen_type: led_total, touch_material_total, no_total_visible or not_a_meter. confidence: high, medium or low. Missing strings must be null except note. Never infer an unreadable label or digit."}]}],generationConfig:{temperature:0,responseMimeType:"application/json",maxOutputTokens:4096}});
+  const requestBody = JSON.stringify({systemInstruction:{parts:[{text:COAL_METER_SYSTEM_PROMPT}]},contents:[{role:"user",parts:[{inlineData:{mimeType:image.mediaType,data:image.data}},{text:"Read the cumulative coal total in metric tonnes, not the hourly flow. Return only JSON with screen_type, meter_label, total_display, total_unit, photo_timestamp, confidence, note. screen_type: led_total, touch_material_total, no_total_visible or not_a_meter. confidence: high, medium or low. Missing strings must be null except note. Never infer an unreadable label or digit."}]}],generationConfig:{...fastReadingConfig(model),temperature:0,responseMimeType:"application/json",responseSchema:readingResponseSchema,maxOutputTokens:4096}});
   let response!: Response;
   for (let attempt = 0; ; attempt++) {
     const timeoutMs = Math.min(45000, Math.max(MIN_ATTEMPT_MS, deadline - now()));
@@ -80,7 +96,7 @@ export async function readCoalMeterGemini(image: {data:string;mediaType:string},
     } catch (error) {
       const timedOut = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name);
       // Hết thời gian chờ thì không gọi lại: đã dùng gần hết ngân sách thời gian của yêu cầu.
-      if (timedOut) throw new CoalMeterVisionError(`Gemini chưa phản hồi sau ${Math.round(timeoutMs / 1000)} giây. Ảnh vẫn ở đây; bấm Đọc lại hoặc thay ảnh rõ hơn.`, 504);
+      if (timedOut) throw new CoalMeterVisionError(`Gemini chưa phản hồi sau ${Math.round(timeoutMs / 1000)} giây. Giữ nguyên ảnh và thử lại sau; có thể chọn model đọc nhanh trong Cấu hình Gemini. Đây chưa phải lỗi chất lượng ảnh.`, 504);
       networkError = new CoalMeterVisionError("Không kết nối được Google Gemini. Ảnh vẫn ở đây; kiểm tra kết nối và bấm Đọc lại.", 502);
     }
     const transient = networkError !== null || TRANSIENT_GEMINI_STATUSES.has(response.status);

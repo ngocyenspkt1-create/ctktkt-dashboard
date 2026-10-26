@@ -41,7 +41,8 @@ type PhotoRow = {
 };
 
 const MAX_UPLOAD_SIDE = 1600;
-const PARALLEL_READS = 3;
+// Avoid bursts against free-tier per-minute limits; retain the ordered queue.
+const PARALLEL_READS = 1;
 
 /** Downscales on the device before upload: faster, cheaper, and plenty for the display digits. */
 async function photoAsJpegBase64(file: File) {

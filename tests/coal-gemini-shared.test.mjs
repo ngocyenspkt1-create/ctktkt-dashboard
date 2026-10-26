@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {DatabaseSync} from "node:sqlite";
 import {readFileSync} from "node:fs";
 import {sealCoalGeminiKey,openCoalGeminiKey} from "../lib/coal-gemini-secret.ts";
-import {sharedGeminiStatus,saveSharedGemini,loadSharedGemini,SharedGeminiConflict} from "../lib/coal-gemini-shared-store.ts";
+import {sharedGeminiStatus,saveSharedGemini,loadSharedGemini,updateSharedGeminiModel,SharedGeminiConflict} from "../lib/coal-gemini-shared-store.ts";
 const secret="test-root-secret-"+"a".repeat(32),key="dummy-gemini-key-"+"b".repeat(32);
 function memoryDb(){
   const sqlite=new DatabaseSync(":memory:");
@@ -42,4 +42,23 @@ test("settings route checks coal edit permission, origin, version; never sends s
   assert.ok(route.includes("getSessionUser()"));assert.ok(route.includes('canEditCtktktGroup(user,"may_nghien_coal_s1")'));assert.ok(route.includes('canEditCtktktGroup(user,"may_nghien_coal_s2")'));
   assert.ok(route.includes('request.headers.get("origin")!==new URL(request.url).origin'));assert.ok(route.includes("body.expectedVersion"));assert.ok(!route.includes("loadSharedGemini"));
   const ocr=readFileSync(new URL("../app/api/coal-meter-ocr/route.ts",import.meta.url),"utf8");assert.ok(ocr.includes("loadSharedGemini(getRawDb(),process.env.AUTH_SECRET)"));
+});
+
+test("model-only update preserves encrypted key, checks version and audits without secrets",async()=>{
+  const {sqlite,db}=memoryDb();
+  const input={model:"gemini-3.5-flash-lite",expectedVersion:0,actorId:1,actorName:"Synthetic operator"};
+  try{
+    await assert.rejects(()=>updateSharedGeminiModel(db,input),SharedGeminiConflict);
+    await saveSharedGemini(db,secret,{...input,key,model:"gemini-3.8-flash"});
+    const before=sqlite.prepare("SELECT cipher FROM coal_gemini_settings").get().cipher;
+    const result=await updateSharedGeminiModel(db,{...input,expectedVersion:1});
+    assert.equal(result.model,input.model);assert.equal(result.version,2);
+    assert.equal(sqlite.prepare("SELECT cipher FROM coal_gemini_settings").get().cipher,before);
+    assert.deepEqual(await loadSharedGemini(db,secret),{key,model:input.model});
+    await assert.rejects(()=>updateSharedGeminiModel(db,{...input,model:"gemini-stale",expectedVersion:1}),SharedGeminiConflict);
+    assert.equal((await sharedGeminiStatus(db)).model,input.model);
+    const events=sqlite.prepare("SELECT action FROM coal_gemini_settings_events ORDER BY version").all();
+    assert.deepEqual(events.map(row=>row.action),["replace","model"]);
+    assert.ok(!JSON.stringify(result).includes(key));
+  }finally{sqlite.close();}
 });

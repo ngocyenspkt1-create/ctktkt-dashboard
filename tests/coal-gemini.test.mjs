@@ -39,7 +39,7 @@ test("connection check runs a bounded text generation with raw key in the header
     assert.equal(url,"https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent");
     assert.equal(options.method,"POST");assert.equal(options.headers["x-goog-api-key"],"private-key");
     assert.equal(new Headers(options.headers).has("Authorization"),false);
-    const body=JSON.parse(options.body);assert.ok(body.generationConfig.maxOutputTokens<=32);
+    const body=JSON.parse(options.body);assert.ok(body.generationConfig.maxOutputTokens<=256);
     assert.ok(!options.body.includes("private-key"));assert.ok(!options.body.includes("inlineData"));
     return mock({candidates:[{finishReason:"STOP",content:{parts:[{text:"OK"}]}}]})();
   });
@@ -107,4 +107,22 @@ test("retries stay inside the route time budget",async()=>{
   await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"key","test",async()=>{calls++;clock+=46000;return mock({},503)();},{sleep:async ms=>{clock+=ms;},now:()=>clock}),
     error=>error.status===503);
   assert.equal(calls,1);
+});
+
+test("image calls use a compact response schema and supported low-latency thinking levels",async()=>{
+  for(const [model,level] of [["gemini-3.5-flash-lite","minimal"],["gemini-3.8-flash","low"],["gemini-custom",undefined]]){
+    await readCoalMeterGemini({data:"synthetic-image",mediaType:"image/jpeg"},"synthetic-key",model,async(url,options)=>{
+      const body=JSON.parse(options.body),cfg=body.generationConfig;
+      assert.equal(cfg.thinkingConfig?.thinkingLevel,level);
+      assert.equal(cfg.responseSchema.type,"OBJECT");
+      assert.deepEqual(cfg.responseSchema.required,Object.keys(reading));
+      assert.deepEqual(cfg.responseSchema.properties.total_display,{type:"STRING",nullable:true});
+      assert.equal(cfg.responseMimeType,"application/json");
+      return mock({candidates:[{finishReason:"STOP",content:{parts:[{text:JSON.stringify(reading)}]}}]})();
+    });
+    await checkCoalGeminiConnection("synthetic-key",model,async(url,options)=>{
+      assert.equal(JSON.parse(options.body).generationConfig.thinkingConfig?.thinkingLevel,level);
+      return mock({candidates:[{finishReason:"STOP"}]})();
+    });
+  }
 });
