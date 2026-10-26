@@ -394,3 +394,10 @@ Hiện tượng (ảnh người dùng gửi): «Chưa đọc được ảnh — 
 - Excel giữ nguyên bảng 20 cột, thêm sheet Hieu chinh cong to với 4 cột bù khi có hiệu chỉnh; sửa công thức lượng dùng trong sheet chính để Excel tính lại vẫn giữ phần bù thay vì chỉ hiển thị cached result đúng tạm thời. Test xuất và đọc lại workbook xác minh số bù và công thức.
 - Test: reset tự động/nhập tay/0/null, chỉ bù một ca, mốc qua tháng, hệ số nước/điện, tổng ngày, migration và POST/GET SQLite, sửa một trường không xóa bù đã lưu, chặn quyền khác nhóm/giá trị sai, workbook công thức sau reset. Không ghi số vận hành thật trong QA.
 - Toàn bộ tests, build Webpack/TypeScript và ESLint file sửa đạt (chỉ còn cảnh báo location.assign cũ của xuất Excel). Production 5e99520 triển khai thành công, trang nước đọc dữ liệu cũ bình thường sau migration nullable. Mở Thêm ca ở tab riêng, xác nhận 4 ô hiệu chỉnh trống mặc định; nhập thử nước S1=100 và bình ngưng S2=50 làm preview tăng đúng 100/50 khi chỉ số giữ nguyên. Đóng không lưu và đóng tab, ảnh minh chứng lưu local ngoài Git.
+
+# 2026-10-26 — Bộ chọn đối chiếu ảnh công tơ
+
+- Nút Đối chiếu ảnh & số liệu mở form chọn tổ S1/S2, ca (tất cả/08h/16h/24h), ngày, công tơ (mặc định Tất cả công tơ). Tổ/ngày lấy từ bảng đang mở; đổi tổ trả công tơ về Tất cả. Chỉ tải khi bấm Xem đối chiếu, không tải ngay toàn bộ lúc mở.
+- Lọc giao các điều kiện tổ/ca/công tơ; giữ thứ tự A1..F2 và ca. Nhãn chưa rõ vẫn xuất hiện khi Tất cả công tơ để kiểm tra tay, không giả khớp một công tơ cụ thể. Hiển thị rõ bộ lọc đã áp dụng; thay bộ lọc chưa bấm xem không làm đổi ngữ cảnh kết quả cũ.
+- Chọn ngày đang mở so với current (kể cả ô chưa lưu). Chọn ngày khác đọc số đã lưu đúng ngày bằng scope=stored, không kéo cả tháng/lũy kế năm. Chỉ đưa kết quả ra sau khi cả ảnh và số cùng ngữ cảnh đã tải xong; hủy request cũ, xóa chọn/override khi áp dụng bộ lọc để tránh so nhầm ngày/ca. Không có ảnh do hết hạn 4 mốc ca có thông báo rõ.
+- Không đổi quyền TKĐ xem ảnh, không ghi dữ liệu hay kéo dài thời gian lưu ảnh. Kiểm thử giao điều kiện bộ lọc, máy cấp 1/2, nhãn chưa rõ và quyền xem hiện có đạt; build Webpack/TypeScript và ESLint đạt.
