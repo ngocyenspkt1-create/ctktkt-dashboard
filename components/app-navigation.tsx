@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Menu, Search } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { visibleGroups, type NavItem } from "@/lib/navigation";
@@ -12,47 +12,10 @@ function normalize(text: string) {
 }
 
 const NAV_COLLAPSED_KEY = "qlkt-nav-collapsed";
-const NAV_SLIDE_MS = 380;
-
-// Hiệu ứng menu bên theo web theo dõi độ rung (nav-fx.js): thanh sáng trượt tới mục đang rê chuột/đang chọn,
-// rời chuột thì trượt về mục đang mở; nhóm menu mở/thu mượt và các mục hiện lần lượt. Tắt khi «giảm chuyển động».
 function NavList({ active, isAdmin, onNavigate }: { active: string; isAdmin: boolean; onNavigate?: () => void }) {
   const groups = visibleGroups(isAdmin);
-  const navRef = useRef<HTMLElement>(null);
-  const glowRef = useRef<HTMLSpanElement>(null);
-  const barRef = useRef<HTMLSpanElement>(null);
-  const placedRef = useRef(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [reveal, setReveal] = useState<{ title: string; tick: number } | null>(null);
   const activeGroup = groups.find(group => group.items.some(item => item.key === active))?.title;
-
-  const moveGlow = useCallback((item: HTMLElement | null | undefined, instant = false) => {
-    const nav = navRef.current;
-    const layers = [glowRef.current, barRef.current].filter((layer): layer is HTMLSpanElement => Boolean(layer));
-    if (!nav || layers.length < 2) return;
-    if (!item || !item.offsetParent || item.closest("[data-collapsed='true']")) {
-      layers.forEach(layer => { layer.style.opacity = "0"; });
-      return;
-    }
-    const navBox = nav.getBoundingClientRect();
-    const box = item.getBoundingClientRect();
-    // Lấy chiều ngang theo danh sách (không bị dịch khi mục trượt vào / rê chuột), chiều dọc theo chính mục.
-    const row = item.closest(".app-nav-items")?.getBoundingClientRect() ?? box;
-    for (const layer of layers) {
-      if (instant) layer.style.transition = "none";
-      layer.style.opacity = "1";
-      layer.style.transform = `translate(${row.left - navBox.left}px, ${box.top - navBox.top}px)`;
-      layer.style.width = `${row.width}px`;
-      layer.style.height = `${box.height}px`;
-      layer.classList.toggle("is-active", item.getAttribute("aria-current") === "page");
-      if (instant) { void layer.offsetWidth; layer.style.transition = ""; }
-    }
-  }, []);
-
-  const syncToActive = useCallback(() => {
-    moveGlow(navRef.current?.querySelector<HTMLElement>(".app-nav-link[aria-current='page']"), !placedRef.current);
-    placedRef.current = true;
-  }, [moveGlow]);
 
   // Khôi phục nhóm đã thu sau khi hydrate (máy chủ luôn render mọi nhóm mở để không lệch HTML).
   useEffect(() => {
@@ -66,50 +29,22 @@ function NavList({ active, isAdmin, onNavigate }: { active: string; isAdmin: boo
     return () => cancelAnimationFrame(frame);
   }, [activeGroup]);
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(syncToActive);
-    const onResize = () => requestAnimationFrame(syncToActive);
-    window.addEventListener("resize", onResize);
-    return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", onResize); };
-  }, [active, syncToActive]);
-
-  // Đặt lại thanh sáng khi chiều cao các nhóm đã trượt xong.
-  useEffect(() => {
-    const timer = window.setTimeout(syncToActive, NAV_SLIDE_MS);
-    return () => window.clearTimeout(timer);
-  }, [collapsed, syncToActive]);
-
   const toggleGroup = (title: string) => {
     const opening = collapsed.has(title);
     const next = new Set(collapsed);
     if (opening) next.delete(title); else next.add(title);
     setCollapsed(next);
-    if (opening) setReveal(previous => ({ title, tick: (previous?.tick ?? 0) + 1 }));
     try { localStorage.setItem(NAV_COLLAPSED_KEY, JSON.stringify([...next])); } catch { /* bỏ qua */ }
-  };
-
-  const hoverLink = (target: EventTarget) => {
-    const link = target instanceof Element ? target.closest<HTMLElement>(".app-nav-link") : null;
-    if (link) moveGlow(link);
   };
 
   return (
     <nav
-      ref={navRef}
       aria-label="Chức năng"
-      data-fx=""
       className="app-nav relative flex flex-col gap-4"
-      onMouseOver={event => hoverLink(event.target)}
-      onFocus={event => hoverLink(event.target)}
-      onMouseLeave={syncToActive}
-      onBlur={event => { if (!navRef.current?.contains(event.relatedTarget as Node | null)) syncToActive(); }}
     >
-      <span ref={glowRef} className="app-nav-glow" aria-hidden />
-      <span ref={barRef} className="app-nav-glow-bar" aria-hidden />
       {groups.map((group, groupIndex) => {
         const isCollapsed = collapsed.has(group.title);
         const listId = `app-nav-group-${groupIndex}`;
-        const revealing = reveal?.title === group.title;
         return (
         <div key={group.title}>
           <button
@@ -123,18 +58,18 @@ function NavList({ active, isAdmin, onNavigate }: { active: string; isAdmin: boo
             <span className="app-nav-rule" aria-hidden />
             <ChevronRight className="app-nav-chevron size-3.5 shrink-0" aria-hidden />
           </button>
-          <div id={listId} className="app-nav-items" data-collapsed={isCollapsed ? "true" : "false"} inert={isCollapsed}>
-          <ul key={revealing ? `reveal-${reveal.tick}` : "static"} className="flex flex-col gap-1">
-            {group.items.map((item, itemIndex) => {
+          <div id={listId} className="app-nav-items" hidden={isCollapsed}>
+          <ul className="flex flex-col gap-1">
+            {group.items.map(item => {
               const selected = item.key === active;
               const Icon = item.icon;
               return (
-                <li key={item.key} className={revealing ? "app-nav-fx-in" : undefined} style={revealing ? { "--fx-i": itemIndex } as React.CSSProperties : undefined}>
+                <li key={item.key}>
                   <Link
                     href={item.href}
                     onClick={onNavigate}
                     aria-current={selected ? "page" : undefined}
-                    className={`app-nav-link group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
+                    className={`app-nav-link group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium ${
                       selected ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     }`}
                   >

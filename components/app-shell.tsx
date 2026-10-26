@@ -8,7 +8,6 @@ import { SessionProvider } from "@/components/session-context";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileNav, QuickSearch, SidebarNav } from "@/components/app-navigation";
 import { SpreadsheetInputBehavior } from "@/components/spreadsheet-input-behavior";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { GoogleMirrorLinks } from "@/components/google-mirror-links";
 
 function Brand() {
@@ -67,7 +66,6 @@ export async function AppShell({ children, active }: { children: ReactNode; acti
               {current && <p className="hidden truncate text-xs text-slate-500 sm:block">{current.description}</p>}
             </div>
             <QuickSearch isAdmin={isAdmin} />
-            <ThemeToggle />
             <div className="flex items-center gap-1 lg:hidden">
               <Link href="/doi-mat-khau" title="Đổi mật khẩu" aria-label="Đổi mật khẩu" className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
                 <KeyRound className="size-4" aria-hidden />
