@@ -9,8 +9,10 @@ import { ensureWaterSchema } from "@/lib/water-report/schema";
 
 const monthPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 
+import {waterAdjustmentsFromRow} from "@/lib/water-report/adjustments";
 function rowToLog(row: Record<string, unknown>): WaterShiftLog {
   return {
+    ...waterAdjustmentsFromRow(row),
     id: Number(row.id || 0),
     logDate: String(row.log_date || ""),
     shiftTime: String(row.shift_time || ""),
@@ -268,6 +270,11 @@ export async function exportReport(request: Request) {
         }
 
         const prevIdx = currentRowIdx - 1;
+        const meterFormula=(column:string,adjustment:number|null|undefined,rollover=0)=>{
+          const difference=`${column}${currentRowIdx}-${column}${prevIdx}`;
+          const correction=adjustment!=null?String(adjustment):rollover?`IF(AND(${difference}<0,${difference}>-${rollover}),${rollover},0)`:"0";
+          return `IF(AND(${column}${prevIdx}>0,${column}${currentRowIdx}${adjustment!=null?">=":">"}0),ROUND(${difference}+${correction},2),0)`;
+        };
         // Col G: Sản lượng điện phát S1 = E[r] - E[r-1]
         row.getCell(7).value = { formula: `E${currentRowIdx}-E${prevIdx}`, result: item.elecGenS1 };
         // Col H: Sản lượng điện phát S2 = F[r] - F[r-1]
@@ -279,9 +286,9 @@ export async function exportReport(request: Request) {
         row.getCell(10).value = item.waterRecS2;
 
         // Col K: Lượng nước bổ sung S1 = I[r] - I[r-1]
-        row.getCell(11).value = { formula: `I${currentRowIdx}-I${prevIdx}`, result: item.waterUsedS1 };
+        row.getCell(11).value = { formula: meterFormula("I",item.waterAdjustmentS1,25000), result: item.waterUsedS1 };
         // Col L: Lượng nước bổ sung S2 = J[r] - J[r-1]
-        row.getCell(12).value = { formula: `J${currentRowIdx}-J${prevIdx}`, result: item.waterUsedS2 };
+        row.getCell(12).value = { formula: meterFormula("J",item.waterAdjustmentS2,25000), result: item.waterUsedS2 };
 
         // Col M: Hệ số S1 = K[r] / G[r]
         row.getCell(13).value = { formula: `IF(G${currentRowIdx}>0, K${currentRowIdx}/G${currentRowIdx}, 0)`, result: item.waterRatioS1 };
@@ -294,9 +301,9 @@ export async function exportReport(request: Request) {
         row.getCell(16).value = item.condenserRecS2;
 
         // Col Q: Lượng nước bình ngưng dùng S1 = O[r] - O[r-1]
-        row.getCell(17).value = { formula: `O${currentRowIdx}-O${prevIdx}`, result: item.condenserUsedS1 };
+        row.getCell(17).value = { formula: meterFormula("O",item.condenserAdjustmentS1), result: item.condenserUsedS1 };
         // Col R: Lượng nước bình ngưng dùng S2 = P[r] - P[r-1]
-        row.getCell(18).value = { formula: `P${currentRowIdx}-P${prevIdx}`, result: item.condenserUsedS2 };
+        row.getCell(18).value = { formula: meterFormula("P",item.condenserAdjustmentS2), result: item.condenserUsedS2 };
 
         // Col S, T: Tái sinh hạt 24h
         row.getCell(19).value = item.resinWaterS1_24h ?? 0;
@@ -355,6 +362,13 @@ export async function exportReport(request: Request) {
       }
     }
 
+    const adjusted=monthShifts.filter(shift=>Object.values(waterAdjustmentsFromRow(shift as unknown as Record<string,unknown>)).some(value=>value!==null));
+    if(adjusted.length){
+      const correctionSheet=workbook.addWorksheet("Hieu chinh cong to");
+      correctionSheet.addRow(["Ngày","Ca","Nước nhận S1 (m³)","Nước nhận S2 (m³)","Bình ngưng S1 (m³)","Bình ngưng S2 (m³)","Ghi chú"]);
+      for(const shift of adjusted)correctionSheet.addRow([shift.logDate,shift.shiftTime,shift.waterAdjustmentS1??null,shift.waterAdjustmentS2??null,shift.condenserAdjustmentS1??null,shift.condenserAdjustmentS2??null,shift.note||""]);
+      for(let column=1;column<=7;column++)correctionSheet.getColumn(column).width=23;
+    }
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `Theo_doi_luong_nuoc_Thang_${monthStr}_${year}.xlsx`;
 

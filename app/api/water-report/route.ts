@@ -7,12 +7,14 @@ import {
 } from "@/lib/water-report/calculations";
 import { canEditAnyWaterField, canEditWaterField, canDeleteWaterShift } from "@/lib/water-report/permissions";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
+import {WATER_ADJUSTMENT_FIELDS,normalizeWaterAdjustment,waterAdjustmentsFromRow} from "@/lib/water-report/adjustments";
 
 const monthPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
 function rowToLog(row: Record<string, unknown>): WaterShiftLog {
   return {
+    ...waterAdjustmentsFromRow(row),
     id: Number(row.id || 0),
     logDate: String(row.log_date || ""),
     shiftTime: String(row.shift_time || ""),
@@ -140,6 +142,7 @@ export async function POST(request: Request) {
 
     const inputList = body.shifts && Array.isArray(body.shifts) ? body.shifts : body.shift ? [body.shift] : [];
     const allowedChangedFields = new Set<keyof WaterShiftLog>([
+      ...Object.keys(WATER_ADJUSTMENT_FIELDS) as Array<keyof WaterShiftLog>,
       "shiftTeam", "shiftLeader", "elecRecS1", "elecRecS2", "waterRecS1", "waterRecS2",
       "condenserRecS1", "condenserRecS2", "resinWaterS1_24h", "resinWaterS2_24h", "note",
     ]);
@@ -180,6 +183,11 @@ export async function POST(request: Request) {
 
       const prevLog = existing ? rowToLog(existing) : null;
       const shouldUpdate = (field: keyof WaterShiftLog) => !prevLog || !changedFields || changedFields.has(field);
+      const adjustments=waterAdjustmentsFromRow({});
+      for(const field of Object.keys(WATER_ADJUSTMENT_FIELDS) as Array<keyof typeof WATER_ADJUSTMENT_FIELDS>){
+        if(!canEditIntake&&Object.hasOwn(item,field)&&normalizeWaterAdjustment(item[field])!==(prevLog?.[field]??null))return Response.json({error:"Bạn không có quyền hiệu chỉnh công tơ nước."},{status:403});
+        adjustments[field]=canEditIntake&&shouldUpdate(field)&&Object.hasOwn(item,field)?normalizeWaterAdjustment(item[field]):prevLog?.[field]??null;
+      }
 
       const shiftTeam = canEditMeta && shouldUpdate("shiftTeam") ? String(item.shiftTeam || prevLog?.shiftTeam || "") : prevLog?.shiftTeam || "";
       const shiftLeader = canEditMeta
@@ -217,8 +225,8 @@ export async function POST(request: Request) {
             water_rec_s1, water_rec_s2, water_used_s1, water_used_s2,
             water_ratio_s1, water_ratio_s2,
             condenser_rec_s1, condenser_rec_s2, condenser_used_s1, condenser_used_s2,
-            resin_water_s1_24h, resin_water_s2_24h, note, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0, 0, 0, 0, ?, ?, 0, 0, ?, ?, ?, CURRENT_TIMESTAMP)
+            resin_water_s1_24h, resin_water_s2_24h, note, water_adjustment_s1, water_adjustment_s2, condenser_adjustment_s1, condenser_adjustment_s2, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0, 0, 0, 0, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
           ON CONFLICT(log_date, shift_time) DO UPDATE SET
             shift_team = excluded.shift_team,
             shift_leader = excluded.shift_leader,
@@ -231,6 +239,10 @@ export async function POST(request: Request) {
             resin_water_s1_24h = excluded.resin_water_s1_24h,
             resin_water_s2_24h = excluded.resin_water_s2_24h,
             note = excluded.note,
+            water_adjustment_s1 = excluded.water_adjustment_s1,
+            water_adjustment_s2 = excluded.water_adjustment_s2,
+            condenser_adjustment_s1 = excluded.condenser_adjustment_s1,
+            condenser_adjustment_s2 = excluded.condenser_adjustment_s2,
             updated_at = CURRENT_TIMESTAMP`
         )
         .bind(
@@ -246,7 +258,8 @@ export async function POST(request: Request) {
           condenserRecS2,
           resinWaterS1_24h,
           resinWaterS2_24h,
-          note
+          note,
+          adjustments.waterAdjustmentS1,adjustments.waterAdjustmentS2,adjustments.condenserAdjustmentS1,adjustments.condenserAdjustmentS2
         )
         .run();
     }

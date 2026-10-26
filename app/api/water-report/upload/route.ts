@@ -4,11 +4,13 @@ import { canEditAnyWaterField } from "@/lib/water-report/permissions";
 import { ensureWaterSchema } from "@/lib/water-report/schema";
 import { extractWorkbookShifts, scanWorkbookBuffer } from "@/lib/water-report/excel-importer";
 import { recalculateWaterShiftChain, type WaterShiftLog } from "@/lib/water-report/calculations";
+import {waterAdjustmentsFromRow} from "@/lib/water-report/adjustments";
 
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 
 function rowToLog(row: Record<string, unknown>): WaterShiftLog {
   return {
+    ...waterAdjustmentsFromRow(row),
     id: Number(row.id || 0),
     logDate: String(row.log_date || ""),
     shiftTime: String(row.shift_time || ""),

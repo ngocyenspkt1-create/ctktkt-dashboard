@@ -1,4 +1,5 @@
 import type { getRawDb } from "@/db";
+import {WATER_ADJUSTMENT_FIELDS} from "./adjustments.ts";
 
 export const DEFAULT_SHIFT_LEADERS = ["Việt", "Lễ", "Trọng", "Ni", "Châu", "Đàm"];
 export const SHIFT_TEAMS = ["A", "B", "C", "D", "E", "F"] as const;
@@ -80,6 +81,18 @@ export async function ensureWaterSchema(rawDb: ReturnType<typeof getRawDb>) {
     console.error("Lỗi khởi tạo bảng water_shift_logs:", err);
   }
 
+  // Nullable: old rows keep the existing automatic 25,000 m³ rollover policy.
+  const {results:columns}=await rawDb.prepare("PRAGMA table_info(water_shift_logs)").all();
+  const existingColumns=new Set(columns.map(column=>String(column.name)));
+  for(const column of Object.values(WATER_ADJUSTMENT_FIELDS)){
+    if(existingColumns.has(column))continue;
+    try{await rawDb.prepare(`ALTER TABLE water_shift_logs ADD COLUMN ${column} REAL DEFAULT NULL`).run();}
+    catch(error){
+      // Another server instance may have added it concurrently; don't hide other failures.
+      const check=await rawDb.prepare("PRAGMA table_info(water_shift_logs)").all();
+      if(!check.results.some(item=>String(item.name)===column))throw error;
+    }
+  }
   waterSchemaEnsured = true;
 }
 

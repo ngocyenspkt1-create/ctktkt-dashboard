@@ -1,4 +1,10 @@
+import {waterMeterUsage} from "./adjustments.ts";
+
 export type WaterShiftLog = {
+  waterAdjustmentS1?:number|null;
+  waterAdjustmentS2?:number|null;
+  condenserAdjustmentS1?:number|null;
+  condenserAdjustmentS2?:number|null;
   id?: number;
   logDate: string; // 'YYYY-MM-DD'
   shiftTime: "06h00" | "14h00" | "22h00" | string;
@@ -107,9 +113,16 @@ export function calculateDailyWaterUsages(shifts: WaterShiftLog[]): Map<string, 
   const result = new Map<string, DailyWaterUsage>();
   for (const [logDate, current] of dayEndByDate) {
     const previous = dayEndByDate.get(previousIsoDate(logDate));
-    if (!previous || current.waterRecS1 <= 0 || current.waterRecS2 <= 0 || previous.waterRecS1 <= 0 || previous.waterRecS2 <= 0) continue;
-    const totalWaterUsedS1 = roundTo(current.waterRecS1 - previous.waterRecS1, 2);
-    const totalWaterUsedS2 = roundTo(current.waterRecS2 - previous.waterRecS2, 2);
+    if (!previous || current.waterRecS1 < 0 || current.waterRecS2 < 0 || previous.waterRecS1 <= 0 || previous.waterRecS2 <= 0) continue;
+    const day=sorted.filter(shift=>shift.logDate===logDate);
+    const adjustment=(field:"waterAdjustmentS1"|"waterAdjustmentS2")=>{
+      const values=day.map(shift=>shift[field]).filter((value):value is number=>value!=null);
+      return values.length?values.reduce((sum,value)=>sum+value,0):null;
+    };
+    const correctionS1=adjustment("waterAdjustmentS1"),correctionS2=adjustment("waterAdjustmentS2");
+    if((current.waterRecS1===0&&correctionS1===null)||(current.waterRecS2===0&&correctionS2===null))continue;
+    const totalWaterUsedS1 = waterMeterUsage(current.waterRecS1,previous.waterRecS1,correctionS1,25000);
+    const totalWaterUsedS2 = waterMeterUsage(current.waterRecS2,previous.waterRecS2,correctionS2,25000);
     const resin = resinByDate.get(logDate) || { s1: 0, s2: 0 };
     result.set(logDate, {
       logDate,
@@ -159,20 +172,8 @@ export function recalculateWaterShiftChain(shifts: WaterShiftLog[]): WaterShiftL
 
       // 2. Lượng nước bổ sung sử dụng trong ca (m3) = Nhận ca này - Nhận ca trước
       // Tự động bù tràn số vòng tua đồng hồ nước (chu kỳ đồng hồ 25.000 m3 tại nhà máy)
-      if (curr.waterRecS1 > 0 && prev.waterRecS1 > 0) {
-        let diff = curr.waterRecS1 - prev.waterRecS1;
-        if (diff < 0 && diff > -25000) {
-          diff += 25000;
-        }
-        curr.waterUsedS1 = roundTo(diff, 2);
-      }
-      if (curr.waterRecS2 > 0 && prev.waterRecS2 > 0) {
-        let diff = curr.waterRecS2 - prev.waterRecS2;
-        if (diff < 0 && diff > -25000) {
-          diff += 25000;
-        }
-        curr.waterUsedS2 = roundTo(diff, 2);
-      }
+      curr.waterUsedS1 = waterMeterUsage(curr.waterRecS1,prev.waterRecS1,curr.waterAdjustmentS1,25000);
+      curr.waterUsedS2 = waterMeterUsage(curr.waterRecS2,prev.waterRecS2,curr.waterAdjustmentS2,25000);
 
       // 3. Hệ số (Nước / Công suất) m3/MWh = Lượng nước bổ sung / Sản lượng điện phát
       if (curr.elecGenS1 > 0) {
@@ -188,12 +189,8 @@ export function recalculateWaterShiftChain(shifts: WaterShiftLog[]): WaterShiftL
       }
 
       // 4. Lượng nước cấp vào bình ngưng trong ca (m3) = Nhận ca này - Nhận ca trước
-      if (curr.condenserRecS1 > 0 && prev.condenserRecS1 > 0) {
-        curr.condenserUsedS1 = roundTo(curr.condenserRecS1 - prev.condenserRecS1, 2);
-      }
-      if (curr.condenserRecS2 > 0 && prev.condenserRecS2 > 0) {
-        curr.condenserUsedS2 = roundTo(curr.condenserRecS2 - prev.condenserRecS2, 2);
-      }
+      curr.condenserUsedS1 = waterMeterUsage(curr.condenserRecS1,prev.condenserRecS1,curr.condenserAdjustmentS1);
+      curr.condenserUsedS2 = waterMeterUsage(curr.condenserRecS2,prev.condenserRecS2,curr.condenserAdjustmentS2);
     } else {
       // Bản ghi đầu tiên (ví dụ ca mốc 22h00 tháng trước hoặc ca đầu dữ liệu)
       // Nếu đã có sẵn chỉ số phát thì giữ nguyên, ngược lại nếu không có mốc trước thì = 0
