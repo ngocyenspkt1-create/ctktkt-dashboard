@@ -93,15 +93,18 @@ export function BcsxReport() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller=new AbortController();
     async function load() {
       setLoading(true); setError(null);
       try {
-        const [readingsRes, eventsRes, totalsRes, ctktktRes] = [
-          await fetch(`/api/shift-readings?date=${operatingDate}`),
-          await fetch(`/api/operating-events?date=${operatingDate}`),
-          await fetch(`/api/daily-inputs?period=${operatingDate.slice(0, 7)}&date=${operatingDate}`),
-          await fetch(`/api/ctktkt-report?period=${operatingDate.slice(0, 7)}&date=${operatingDate}&scope=daily-links`),
-        ];
+        const [readingsRes, eventsRes] = await Promise.all([
+          fetch(`/api/shift-readings?date=${operatingDate}`,{signal:controller.signal}),
+          fetch(`/api/operating-events?date=${operatingDate}`,{signal:controller.signal}),
+        ]);
+        const [totalsRes, ctktktRes] = await Promise.all([
+          fetch(`/api/daily-inputs?period=${operatingDate.slice(0, 7)}&date=${operatingDate}&scope=non-ktkt`,{signal:controller.signal}),
+          fetch(`/api/ctktkt-report?period=${operatingDate.slice(0, 7)}&date=${operatingDate}&scope=daily-links`,{signal:controller.signal}),
+        ]);
         const readingsJson = await readingsRes.json() as { entries?: { unit: Unit; timeSlot: string; metric: ShiftMetric; value: string }[]; error?: string };
         const eventsJson = await eventsRes.json() as { events?: (OperatingEvent & { unit: Unit })[]; error?: string };
         const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[]; error?: string };
@@ -154,7 +157,7 @@ export function BcsxReport() {
       }
     }
     void load();
-    return () => { cancelled = true; };
+    return () => { cancelled = true;controller.abort(); };
   }, [operatingDate]);
 
   const grid = grids[unit];

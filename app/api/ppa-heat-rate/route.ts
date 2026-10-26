@@ -2,6 +2,7 @@ import { getRawDb } from "@/db";
 import { calculatePpaHeatRate, type PpaSourceData } from "@/lib/ppa-heat-rate";
 import { PPA_HEAT_RATE_UPSERT_SQL } from "@/lib/ppa-heat-rate-persistence";
 import { requireAnyPermission, requireSession } from "@/lib/auth/server";
+import {reportQueryRange} from "@/lib/report-read-range";
 
 const datePattern = /^(20\d{2})-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const periodPattern = /^20\d{2}-(0[1-9]|1[0-2])$/;
@@ -22,11 +23,11 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const period = url.searchParams.get("period") || "";
   const includeSource = url.searchParams.get("includeSource") === "1";
-  if (!periodPattern.test(period)) return Response.json({ error: "Tháng theo dõi không hợp lệ." }, { status: 400 });
-  const [year, month] = period.split("-").map(Number), next = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;
+  const range=reportQueryRange(url.searchParams);
+  if (!periodPattern.test(period)||!range) return Response.json({ error: "Tháng theo dõi không hợp lệ." }, { status: 400 });
   try {
     const columns = `operating_date AS operatingDate, source_files AS sourceFiles, gross_s1_kwh AS grossS1Kwh, net_s1_kwh AS netS1Kwh, gross_s2_kwh AS grossS2Kwh, net_s2_kwh AS netS2Kwh, ppa_plant AS ppaPlant, ppa_s1 AS ppaS1, ppa_s2 AS ppaS2, note_s1 AS noteS1, note_s2 AS noteS2, updated_at AS updatedAt${includeSource ? ", source_data AS sourceData" : ""}`;
-    const { results } = await getRawDb().prepare(`SELECT ${columns} FROM ppa_heat_rate_daily WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date`).bind(`${period}-01`, `${next}-01`).all();
+    const { results } = await getRawDb().prepare(`SELECT ${columns} FROM ppa_heat_rate_daily WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date`).bind(range.from, range.next).all();
     const entries = includeSource
       ? results.map(row => {
           const record = row as Record<string, unknown>;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { PpaUnitCard } from "@/components/ppa-unit-card";
 import { PpaNotePreview } from "@/components/ppa-note-preview";
 import "./ppa-detail-table.css";
@@ -14,6 +14,8 @@ import { hasPermission } from "@/lib/auth/session";
 import { PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE } from "@/lib/google-sheet-sync";
 import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 import { mergeDailyInputsWithCtktkt } from "@/lib/daily-source-links";
+import {loadReportPeriods,reportPeriodQuery,reportPage} from "@/lib/report-loading";
+import {ReportTablePager} from "@/components/report-table-pager";
 import {buildUnitSheet,buildMeterSheet,buildPlantSheet} from "@/lib/ppa-sheet-export";
 import { ExportMissingDialog } from "@/components/export-missing-dialog";
 import type { MissingDataItem } from "@/components/missing-data-alert";
@@ -81,6 +83,9 @@ export function PpaHeatRateDashboard() {
   const [entries, setEntries] = useState<StoredPpa[]>([]);
   const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tablePage,setTablePage]=useState(0);
+  const loadControllerRef=useRef<AbortController|null>(null);
+  useEffect(()=>()=>loadControllerRef.current?.abort(),[]);
   const [error, setError] = useState("");
   const [restoredCount, setRestoredCount] = useState<number | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
@@ -168,14 +173,20 @@ export function PpaHeatRateDashboard() {
   }
 
   async function loadRange(from: string, to: string, clampToData: boolean) {
+    loadControllerRef.current?.abort();
+    const controller=new AbortController();loadControllerRef.current=controller;
+    setTablePage(0);
     setLoading(true); setError("");
     try {
       const periods = periodsBetween(from, to);
-      const responses = await Promise.all(periods.map(period => Promise.all([
-        fetch(`/api/ppa-heat-rate?period=${period}`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: StoredPpa[]; error?: string }>),
-        fetch(`/api/daily-inputs?period=${period}`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: DailyInput[]; error?: string }>),
-        fetch(`/api/ctktkt-report?period=${period}&scope=daily-links`, { cache: "no-store" }).then(response => response.json() as Promise<{ entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string }>),
-      ])));
+      const responses = await loadReportPeriods(periods,period => {
+        const query=reportPeriodQuery(period,from,to);
+        return Promise.all([
+          fetch(`/api/ppa-heat-rate?${query}`, { cache: "no-store",signal:controller.signal }).then(response => response.json() as Promise<{ entries?: StoredPpa[]; error?: string }>),
+          fetch(`/api/daily-inputs?${query}&scope=non-ktkt`, { cache: "no-store",signal:controller.signal }).then(response => response.json() as Promise<{ entries?: DailyInput[]; error?: string }>),
+          fetch(`/api/ctktkt-report?${query}&scope=daily-links`, { cache: "no-store",signal:controller.signal }).then(response => response.json() as Promise<{ entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string }>),
+        ]);
+      },controller.signal);
       for (const bodies of responses) {
         for (const body of bodies) if (body.error) throw new Error(body.error);
       }
@@ -199,8 +210,8 @@ export function PpaHeatRateDashboard() {
       setDailyInputs(allDaily.filter(entry => entry.operatingDate >= from && entry.operatingDate <= to));
       setRestoredCount(filteredPpa.length);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu so sánh.");
-    } finally { setLoading(false); }
+      if(!controller.signal.aborted)setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu so sánh.");
+    } finally { if(loadControllerRef.current===controller)setLoading(false); }
   }
 
   async function goToPpaMissingRow(item: MissingDataItem) {
@@ -296,6 +307,9 @@ export function PpaHeatRateDashboard() {
     }
     return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [rows]);
+  const visiblePage=useMemo(()=>reportPage([...rows].sort((a,b)=>b.date.localeCompare(a.date)),tablePage),[rows,tablePage]);
+  const visibleDates=new Set(visiblePage.items.map(row=>row.date));
+  const visibleRowsByMonth=rowsByMonth.map(([month,monthRows])=>[month,monthRows.filter(row=>visibleDates.has(row.date))] as const).filter(([,monthRows])=>monthRows.length>0);
 
   function summaryFor(unit: UnitKey) {
     const pairs = rows.map(row => {
@@ -473,7 +487,7 @@ export function PpaHeatRateDashboard() {
             </tr>
           </thead>
           <tbody>
-            {[...rowsByMonth].reverse().map(([period, monthRows]) => <Fragment key={period}>
+            {[...visibleRowsByMonth].reverse().map(([period, monthRows]) => <Fragment key={period}>
               <tr className="bg-slate-100"><td colSpan={17} className="ppa-month-label px-2 py-1.5 text-left font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
               {[...monthRows].sort((a, b) => b.date.localeCompare(a.date)).map(row => {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
@@ -567,6 +581,7 @@ export function PpaHeatRateDashboard() {
           </tbody>
         </table>
       </div>}
+      <ReportTablePager {...visiblePage} onChange={setTablePage} disabled={loading}/>
     </div>
 
     {editModal.isOpen && (

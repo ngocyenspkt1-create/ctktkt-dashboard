@@ -60,7 +60,7 @@ export function PpaHeatRateComparison() {
     try {
       const [dailyResponse, ctktktResponse, ppaResponse] = await Promise.all([
         fetch(`/api/daily-inputs?period=${period}`, { cache: "no-store", signal: controller.signal }),
-        fetch(`/api/ctktkt-report?period=${period}`, { cache: "no-store", signal: controller.signal }),
+        fetch(`/api/ctktkt-report?period=${period}&scope=daily-links`, { cache: "no-store", signal: controller.signal }),
         fetch(`/api/ppa-heat-rate?period=${period}`, { cache: "no-store", signal: controller.signal }),
       ]);
       const dailyBody = await dailyResponse.json() as { entries?: DailyInput[]; error?: string };

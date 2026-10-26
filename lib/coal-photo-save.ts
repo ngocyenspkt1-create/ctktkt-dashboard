@@ -11,7 +11,7 @@ export async function saveReviewedCoalEntries(request:typeof fetch,date:string,e
   const response=await request("/api/ctktkt-report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operatingDate:date,coalUnit:unit,entries})});
   const body=await response.json() as {error?:string};
   if(!response.ok)throw new Error(body.error||"Chưa lưu được chỉ số công tơ.");
-  const verified=await request(`/api/ctktkt-report?period=${date.slice(0,7)}`,{cache:"no-store"});
+  const verified=await request(`/api/ctktkt-report?period=${date.slice(0,7)}&date=${date}&scope=stored`,{cache:"no-store"});
   const result=await verified.json() as {entries?:Array<{operatingDate:string;cell:string;value:string}>;error?:string};
   if(!verified.ok||!Array.isArray(result.entries))throw new Error(result.error||"Đã gửi nhưng chưa kiểm tra lại được số liệu; giữ ảnh và kiểm tra trước khi lưu lại.");
   const persisted=Object.fromEntries(result.entries.filter(item=>item.operatingDate===date).map(item=>[item.cell,item.value]));

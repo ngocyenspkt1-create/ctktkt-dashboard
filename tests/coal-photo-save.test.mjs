@@ -10,6 +10,7 @@ test('save targets the chosen date, sends only coal cells and reads back before 
   },'2026-10-24',[{cell:'X16',value:'123.45'}]);
   assert.deepEqual(JSON.parse(calls[0].options.body),{operatingDate:'2026-10-24',coalUnit:'S1',entries:[{cell:'X16',value:'123.45'}]});
   assert.equal(calls[1].options.cache,'no-store');assert.deepEqual(result,[{cell:'X16',value:'123.45'}]);
+  assert.equal(calls[1].url,'/api/ctktkt-report?period=2026-10&date=2026-10-24&scope=stored');
 });
 
 test('mixed S1/S2 cells and cells outside the chosen unit are blocked before sending',async()=>{

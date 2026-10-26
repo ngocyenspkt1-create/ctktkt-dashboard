@@ -9,6 +9,8 @@ import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
 import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
 import { mergeDailyInputsWithCtktkt } from "@/lib/daily-source-links";
+import {loadReportPeriods,reportPeriodQuery,reportPage} from "@/lib/report-loading";
+import {ReportTablePager} from "@/components/report-table-pager";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type CtktktInput = { operatingDate: string; cell: string; value: string };
@@ -92,19 +94,22 @@ export function PmisReport() {
   const [chartFromDate, setChartFromDate] = useState(() => addDaysIso(defaultOperatingDate(), -9));
   const [chartToDate, setChartToDate] = useState(defaultDate);
   const cancelRangeRef = useRef(false);
+  const loadControllerRef=useRef<AbortController|null>(null);
+  useEffect(()=>()=>loadControllerRef.current?.abort(),[]);
 
-  // Không cắt kết quả về đúng [from,to] nữa — giữ nguyên toàn bộ dữ liệu của các tháng đã tải, vì
-  // bảng và biểu đồ có thể đang xem 2 khoảng ngày khác nhau cùng lúc (xem reloadForBothRanges bên
-  // dưới); mỗi nơi tự lọc theo đúng danh sách ngày của mình khi hiển thị (valueFor chỉ được gọi cho
-  // các ngày trong "dates"/"chartDates"), nên giữ dư dữ liệu ở đây không ảnh hưởng gì.
+  // Bảng và biểu đồ có thể xem hai khoảng khác nhau. Chỉ tải phần tháng giao với
+  // khoảng gộp, lần lượt từng tháng; yêu cầu mới hủy yêu cầu cũ.
   async function loadRange(from: string, to: string) {
+    loadControllerRef.current?.abort();
+    const controller=new AbortController();loadControllerRef.current=controller;
     setLoading(true); setError("");
     try {
       const periods = periodsBetween(from, to);
-      const responses = await Promise.all(periods.map(async period => {
+      const responses = await loadReportPeriods(periods,async period => {
+        const query=reportPeriodQuery(period,from,to);
         const [dailyResponse, ctktktResponse] = await Promise.all([
-          fetch(`/api/daily-inputs?period=${period}`, { cache: "no-store" }),
-          fetch(`/api/ctktkt-report?period=${period}`, { cache: "no-store" }),
+          fetch(`/api/daily-inputs?${query}&scope=non-ktkt`, { cache: "no-store",signal:controller.signal }),
+          fetch(`/api/ctktkt-report?${query}&scope=daily-links`, { cache: "no-store",signal:controller.signal }),
         ]);
         const dailyBody = await dailyResponse.json() as { entries?: DailyInput[]; error?: string };
         const ctktktBody = await ctktktResponse.json() as { entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string };
@@ -115,14 +120,14 @@ export function PmisReport() {
           [...(ctktktBody.entries || []), ...(ctktktBody.linkedEntries || [])],
           period,
         );
-      }));
+      },controller.signal);
       const all = responses.flat();
       setDailyInputs(all);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu."); }
-    finally { setLoading(false); }
+    } catch (caught) { if(!controller.signal.aborted)setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu."); }
+    finally { if(loadControllerRef.current===controller)setLoading(false); }
   }
 
-  // Luôn tải đủ tháng cho CẢ khoảng ngày của bảng lẫn của biểu đồ (gộp lại), để đổi riêng 1 trong 2
+  // Luôn tải đủ ngày cho CẢ khoảng của bảng lẫn của biểu đồ (gộp lại), để đổi riêng 1 trong 2
   // khoảng không làm mất dữ liệu của khoảng còn lại.
   function reloadForBothRanges() {
     const from = fromDate < chartFromDate ? fromDate : chartFromDate;
@@ -312,7 +317,7 @@ export function PmisReport() {
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-800">{error}</p>}
     {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900">{message}</p>}
 
-    <PmisTable dates={dates} valueFor={valueFor}/>
+    <PmisPagedTable key={`${fromDate}:${toDate}`} dates={dates} valueFor={valueFor}/>
 
     <div className="pmis-chart-toolbar">
       <div><h2>Xu hướng chỉ tiêu PMIS</h2><p>Đối chiếu từng chỉ tiêu giữa hai tổ máy</p></div>
@@ -331,6 +336,12 @@ export function PmisReport() {
 }
 
 type ValueFor = (unit: Unit, metric: typeof METRICS[number], date: string) => number | null;
+
+function PmisPagedTable({dates,valueFor}:{dates:string[];valueFor:ValueFor}){
+  const [page,setPage]=useState(0);
+  const visible=reportPage(dates,page);
+  return <div className="grid gap-2"><PmisTable dates={visible.items} valueFor={valueFor}/><ReportTablePager {...visible} onChange={setPage}/></div>;
+}
 
 // 1 bảng duy nhất, cuộn ngang khi nhiều ngày (đã bỏ kiểu đóng băng 5 ngày đầu trước đây theo yêu
 // cầu) — cột nhãn chỉ tiêu vẫn đứng yên bên trái nhờ `sticky left-0` (không cần tách 2 <table>/2

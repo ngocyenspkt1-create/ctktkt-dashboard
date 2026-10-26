@@ -10,3 +10,13 @@ export function reportReadRange(period: string, date: string | null, includePrev
   if (includePreviousDay) start.setUTCDate(start.getUTCDate() - 1);
   return { from: start.toISOString().slice(0, 10), next: end.toISOString().slice(0, 10) };
 }
+
+/** Optional inclusive bounds inside a month; never silently broaden invalid requests. */
+export function reportQueryRange(params: URLSearchParams, includePreviousDay = false) {
+  const period=params.get("period")||"",date=params.get("date");
+  const from=params.get("from"),to=params.get("to");
+  if(from===null&&to===null)return reportReadRange(period,date,includePreviousDay);
+  if(date!==null||from===null||to===null||from>to)return null;
+  const start=reportReadRange(period,from,includePreviousDay),end=reportReadRange(period,to);
+  return start&&end?{from:start.from,next:end.next}:null;
+}

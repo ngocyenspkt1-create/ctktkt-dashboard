@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   Download,
   Save,
@@ -21,11 +22,11 @@ import {
   Images,
 } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
-import { CtktktEmailModal } from "@/components/ctktkt-email-modal";
-import { CoalMeterPhotoImport } from "@/components/coal-meter-photo-import";
 import {saveReviewedCoalEntries} from "@/lib/coal-photo-save";
-import {CoalMeterPhotoReview} from "@/components/coal-meter-photo-review";
 import {canReviewCoalPhotos} from "@/lib/coal-photo-review";
+const CtktktEmailModal=dynamic(()=>import("@/components/ctktkt-email-modal").then(module=>module.CtktktEmailModal),{ssr:false});
+const CoalMeterPhotoImport=dynamic(()=>import("@/components/coal-meter-photo-import").then(module=>module.CoalMeterPhotoImport),{ssr:false});
+const CoalMeterPhotoReview=dynamic(()=>import("@/components/coal-meter-photo-review").then(module=>module.CoalMeterPhotoReview),{ssr:false});
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 import { useSessionUser } from "@/components/session-context";
 import { canEditOperatingDate, defaultOperatingDate, vietnamDateIso } from "@/lib/operating-date";
@@ -266,6 +267,8 @@ export function CtktktReport() {
   const [operationKind, setOperationKind] = useState<CtktktOperationKind>("startup");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [extrasState,setExtrasState]=useState<"loading"|"ready"|"error">("loading");
+  const [reloadVersion,setReloadVersion]=useState(0);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState("");
@@ -276,7 +279,9 @@ export function CtktktReport() {
   const [exportMissingOpen, setExportMissingOpen] = useState(false);
   const [exportMissingItems, setExportMissingItems] = useState<MissingDataItem[]>([]);
   const [pendingReportOutput, setPendingReportOutput] = useState<"excel" | "email" | null>(null);
-  const [coalPhotoOpen, setCoalPhotoOpen] = useState(false);
+  const [coalPhotoOpen, setCoalPhotoOpenState] = useState(false);
+  const [coalPhotoMounted,setCoalPhotoMounted]=useState(false);
+  const setCoalPhotoOpen=(open:boolean)=>{if(open)setCoalPhotoMounted(true);setCoalPhotoOpenState(open);};
   const [coalReviewUnit,setCoalReviewUnit]=useState<"S1"|"S2"|null>(null);
   const canEditCoalCell = useCallback((cell: string) => canEditSelectedDate && canEditCtktktField(user, cell), [user, canEditSelectedDate]);
   const [extensionVersion, setExtensionVersion] = useState("");
@@ -409,11 +414,8 @@ export function CtktktReport() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/ctktkt-report?period=${encodeURIComponent(period)}`, {
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then(async response => {
+    const load=async(query:string)=>{
+        const response=await fetch(`/api/ctktkt-report?${query}`,{cache:"no-store",signal:controller.signal});
         const body = (await response.json()) as {
           entries?: LoadedEntry[];
           linkedEntries?: LoadedEntry[];
@@ -422,30 +424,43 @@ export function CtktktReport() {
           error?: string;
         };
         if (!response.ok) throw new Error(body.error || "Không tải được dữ liệu.");
-        setHoursMissingDates(body.operatingHoursMissingDates || []);
-        const next: Record<string, CtktktDayEntries> = {};
-        for (const entry of body.entries || []) {
-          next[entry.operatingDate] ||= {};
-          next[entry.operatingDate][entry.cell] = entry.value;
+        controller.signal.throwIfAborted();
+        return body;
+    };
+    const group=(entries:LoadedEntry[]=[])=>{
+      const result:Record<string,CtktktDayEntries>={};
+      for(const entry of entries){result[entry.operatingDate]||={};result[entry.operatingDate][entry.cell]=entry.value;}
+      return result;
+    };
+    async function run(){
+      setLoading(true);setExtrasState("loading");setHoursMissingDates([]);
+      try{
+        // The editable day and previous readings are ready before monthly/annual totals.
+        const day=await load(new URLSearchParams({period,date,scope:"daily-links"}).toString());
+        setByDate(group(day.entries));setLinkedByDate(group(day.linkedEntries));setLinkWarnings(day.warnings||[]);
+        setLoading(false);
+        const previous=previousIsoDate(date);
+        if(previous>`${period}-01`){
+          const context=await load(new URLSearchParams({period,from:`${period}-01`,to:previous,scope:"daily-links"}).toString());
+          // Do not replace today's inputs or yesterday's readings with a late response.
+          const earlier=(entries:LoadedEntry[]=[])=>entries.filter(entry=>entry.operatingDate<previous);
+          setByDate(old=>({...group(earlier(context.entries)),...old}));
+          setLinkedByDate(old=>({...group(earlier(context.linkedEntries)),...old}));
         }
-        const nextLinked: Record<string, CtktktDayEntries> = {};
-        for (const entry of body.linkedEntries || []) {
-          nextLinked[entry.operatingDate] ||= {};
-          nextLinked[entry.operatingDate][entry.cell] = entry.value;
-        }
-        setByDate(next);
-        setLinkedByDate(nextLinked);
-        setLinkWarnings(body.warnings || []);
-      })
-      .catch(reason => {
-        if (!controller.signal.aborted)
-          setError(reason instanceof Error ? reason.message : "Không tải được dữ liệu.");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
+        const hours=await load(new URLSearchParams({period,date,scope:"operating-hours"}).toString());
+        setLinkedByDate(old=>{
+          const next={...old};
+          for(const [day,values] of Object.entries(group(hours.linkedEntries)))next[day]={...next[day],...values};
+          return next;
+        });
+        setHoursMissingDates(hours.operatingHoursMissingDates||[]);setExtrasState("ready");
+      }catch(reason){
+        if(!controller.signal.aborted){setExtrasState("error");setError(reason instanceof Error?reason.message:"Không tải được dữ liệu.");setLoading(false);}
+      }
+    }
+    void run();
     return () => controller.abort();
-  }, [period]);
+  }, [period,date,reloadVersion]);
 
   const previousDate = previousIsoDate(date);
   const previous = useMemo(() => {
@@ -542,6 +557,7 @@ export function CtktktReport() {
   const hasPreviousManualData = Boolean(byDate[previousDate]);
 
   const beginCtktktOutput = (output: "excel" | "email") => {
+    if(loading||extrasState!=="ready"){setError("Chờ tải đủ dữ liệu tồn kho và giờ lũy kế trước khi xuất báo cáo.");return;}
     if (missingCtktktForExport.length > 0) {
       setPendingReportOutput(output);
       setExportMissingItems(missingCtktktForExport);
@@ -693,7 +709,7 @@ export function CtktktReport() {
 
       // Đọc lại ngay từ CSDL để không báo thành công giả. Lỗi từng gặp ở cụm
       // NH3 là giao diện vẫn giữ số vừa nhập nhưng tải lại trang thì mất.
-      const verifyResponse = await fetch(`/api/ctktkt-report?period=${period}`, { cache: "no-store" });
+      const verifyResponse = await fetch(`/api/ctktkt-report?period=${period}&date=${date}&scope=stored`, { cache: "no-store" });
       const verifyBody = (await verifyResponse.json()) as { entries?: LoadedEntry[]; error?: string };
       if (!verifyResponse.ok) throw new Error(verifyBody.error || "Đã gửi dữ liệu nhưng chưa kiểm tra lại được CSDL.");
       const persisted = Object.fromEntries(
@@ -724,7 +740,7 @@ export function CtktktReport() {
   const syncPmis02PdFromQlkt = () => {
     setError("");
     setMessage("");
-    if (!canEditSelectedDate || (!canEditCtktktGroup(user, "pmis_reports") && !userCanEditAny)) {
+    if (!canEditSelectedDate || !canEditCtktktGroup(user, "pmis_reports")) {
       setError("Tài khoản chưa được phân quyền cập nhật nhóm Báo cáo PMIS 02-PĐ.");
       return;
     }
@@ -1037,6 +1053,10 @@ export function CtktktReport() {
 
   return (
     <section className="module-report ktkt-workspace mx-auto grid w-full min-w-0 max-w-full gap-3">
+      {extrasState!=="ready"&&<div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+        <span>{loading?"Đang tải số liệu ngày…":extrasState==="loading"?"Số liệu ngày đã sẵn sàng. Đang tải tiếp tồn kho và giờ lũy kế…":"Chưa tải đủ số liệu tổng hợp. Hãy lưu ô đang nhập rồi tải lại trước khi xuất báo cáo."}</span>
+        {extrasState==="error"&&<button type="button" disabled={dirty||saving||syncingPmis} onClick={()=>{setError("");setReloadVersion(v=>v+1);}} className="rounded border border-slate-300 px-3 py-1 disabled:opacity-50">Tải lại dữ liệu</button>}
+      </div>}
       <ExportMissingDialog
         open={exportMissingOpen}
         items={exportMissingItems}
@@ -1077,7 +1097,7 @@ export function CtktktReport() {
                     setError("Hãy lưu số liệu ngày đang nhập trước khi chuyển sang ngày khác.");
                     return;
                   }
-                  if (value.slice(0, 7) !== period) setLoading(true);
+                  setLoading(true);
                   setDate(value);
                   dirtyCellsRef.current.clear();
                   setDirty(false);
@@ -1101,7 +1121,7 @@ export function CtktktReport() {
             <button
               type="button"
               onClick={() => beginCtktktOutput("excel")}
-              disabled={loading}
+              disabled={loading||extrasState!=="ready"}
               className="flex h-9 items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-800"
             >
               <Download className="size-3.5" />
@@ -1111,6 +1131,7 @@ export function CtktktReport() {
             <button
               type="button"
               onClick={() => beginCtktktOutput("email")}
+              disabled={loading||extrasState!=="ready"}
               className="flex h-9 items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-blue-700 active:scale-95"
               title="Mở mẫu báo cáo gửi mail hàng ngày font Times New Roman theo file chỉ tiêu"
             >
@@ -3348,7 +3369,7 @@ export function CtktktReport() {
             const kSum = (k157 ?? 0) + (k158 ?? 0);
             const lSum = (l157 ?? 0) + (l158 ?? 0);
 
-            const canEditPmis = canEditSelectedDate && (userCanEditAny || canEditCtktktGroup(user, "pmis_reports"));
+            const canEditPmis = canEditSelectedDate && canEditCtktktGroup(user, "pmis_reports");
 
             return (
               <div className="space-y-6">
@@ -3748,7 +3769,7 @@ export function CtktktReport() {
         />
       )}
 
-      <CoalMeterPhotoImport
+      {coalPhotoMounted&&<CoalMeterPhotoImport
         open={coalPhotoOpen}
         onOpenChange={setCoalPhotoOpen}
         reportDate={date}
@@ -3762,7 +3783,7 @@ export function CtktktReport() {
           if(dirtyCellsRef.current.size>0||saving||syncingPmis)return "Hãy lưu số liệu ngày đang nhập trước khi chuyển ngày.";
           if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||value>vietnamDateIso())return "Ngày ghi chỉ số không hợp lệ hoặc ở tương lai.";
           if(!canEditOperatingDate(value,isAdminUser(user)))return "Bạn chỉ được nhập ngày hôm nay hoặc hôm qua; ngày cũ cần quản trị viên.";
-          if(value.slice(0,7)!==period)setLoading(true);
+          setLoading(true);
           setDate(value);setError("");setMessage("");
         }}
         onSave={async (values,unit)=>{
@@ -3780,7 +3801,7 @@ export function CtktktReport() {
           for (const { cell, value } of values) update(cell, value);
           setMessage(`Đã điền ${values.length} chỉ số công tơ than từ ảnh. Kiểm tra bảng rồi bấm “Lưu số liệu”.`);
         }}
-      />
+      />}
       {coalReviewUnit&&<CoalMeterPhotoReview key={`${date}-${coalReviewUnit}`} open onOpenChange={open=>{if(!open)setCoalReviewUnit(null);}} date={date} unit={coalReviewUnit} current={current}/>}
     </section>
   );

@@ -153,7 +153,8 @@ test('each report keeps its intended data action and NH3 overlaps link from CTKT
   assert.match(dailySource, /Đồng bộ dữ liệu ngày/);
   assert.match(bcsxSource, /Nhập file lệnh & xuất QLKT/);
   assert.match(ppaSource, /Lấy công tơ PPA từ QLKT/);
-  assert.match(ppaDashboardSource, /api\/ctktkt-report\?period/);
+  assert.match(ppaDashboardSource, /api\/ctktkt-report\?\$\{query\}&scope=daily-links/);
+  assert.match(ppaDashboardSource, /reportPeriodQuery\(period,from,to\)/);
   assert.match(ppaDashboardSource, /mergeDailyInputsWithCtktkt/);
   assert.match(pmisSource, /Đồng bộ ngày/);
   assert.match(ctktktSource, /Đồng bộ PMIS & 02-PĐ/);

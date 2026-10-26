@@ -15,7 +15,7 @@ import { COAL_STOCK_24H_START_CELL } from "@/lib/coal-stock";
 import { CTKTKT_OPERATING_HOURS_CELLS } from "@/lib/ctktkt-extra-fields";
 import { loadCtktktOperatingHours } from "@/lib/ctktkt-operating-hours-db";
 import { CTKTKT_OPERATION_EVENTS_CELL, normalizeCtktktOperationEvents } from "@/lib/ctktkt-operation-events";
-import { reportReadRange } from "@/lib/report-read-range";
+import { reportQueryRange } from "@/lib/report-read-range";
 import {coalEntriesMatchUnit} from "@/lib/coal-meter-ocr";
 
 const fieldCells = new Set<string>([
@@ -29,13 +29,21 @@ const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 export async function GET(request: Request) {
   const session = await requireSession(); if (!session.ok) return session.response;
   const params = new URL(request.url).searchParams;
-  const range = reportReadRange(params.get("period") || "", params.get("date"), true);
   const scope = params.get("scope");
-  if (!range || (scope !== null && scope !== "daily-links")) return Response.json({ error: "Khoảng đọc dữ liệu không hợp lệ." }, { status: 400 });
+  const range = reportQueryRange(params,scope!=="stored");
+  if (!range || (scope !== null && !["daily-links","stored","operating-hours"].includes(scope)) || (scope==="stored"&&!params.get("date"))) return Response.json({ error: "Khoảng đọc dữ liệu không hợp lệ." }, { status: 400 });
   const { from, next } = range;
   const today = vietnamDateIso();
   try {
     const db = getRawDb();
+    if(scope==="stored"){
+      const {results}=await db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY field_code").bind(from,next).all();
+      return Response.json({entries:(results as Array<{operatingDate:string}>).filter(entry=>!isFutureOperatingDate(entry.operatingDate,today))},{headers:{"Cache-Control":"no-store"}});
+    }
+    if(scope==="operating-hours"){
+      const hours=await loadCtktktOperatingHours(db,from,next);
+      return Response.json({linkedEntries:hours.entries.filter(entry=>!isFutureOperatingDate(entry.operatingDate,today)),operatingHoursMissingDates:hours.missingDates.filter(date=>!isFutureOperatingDate(date,today))},{headers:{"Cache-Control":"no-store"}});
+    }
     await ensureWaterSchema(db);
     const [{ results }, { results: shiftResults }, { results: waterResults }, { results: dailyLinkedResults }] = await Promise.all([
       db.prepare(
@@ -153,6 +161,8 @@ export async function POST(request: Request) {
       if (value && !isText && !/^-?\d+(?:\.\d+)?$/.test(value)) throw new Error(`Ô ${cell} phải là số.`);
       return { cell, value };
     });
+    if(new Set(clean.map(entry=>entry.cell)).size!==clean.length)throw new Error("Danh sách có ô dữ liệu bị trùng. Chưa lưu số liệu.");
+    if(!reportQueryRange(new URLSearchParams({period:body.operatingDate.slice(0,7),date:body.operatingDate})))throw new Error("Ngày ghi dữ liệu không tồn tại.");
 
     if(body.coalUnit!==undefined){
       if((body.coalUnit!=="S1"&&body.coalUnit!=="S2")||!coalEntriesMatchUnit(clean,body.coalUnit))throw new Error("Công tơ S1/S2 bị lẫn hoặc khác tổ máy đã chọn. Chưa lưu số liệu.");
