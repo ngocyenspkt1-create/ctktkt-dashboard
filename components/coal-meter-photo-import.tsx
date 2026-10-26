@@ -500,7 +500,7 @@ export function CoalMeterPhotoImport({
               </div>
             </div>
           </section>
-        </div>:<div className={styles.empty}><div><Camera size={32} aria-hidden/></div><h3>Chọn ảnh màn hình công tơ</h3><p>Chụp rõ mã máy cấp và tổng lũy kế. Có thể tải ảnh của cả S1 và S2 trong cùng một lượt.</p><button type="button" className={styles.primary} onClick={()=>chooseFiles()}><ImagePlus size={17} aria-hidden/>Chọn ảnh để bắt đầu</button></div>}
+        </div>:<div className={styles.empty}><div><Camera size={32} aria-hidden/></div><h3>Chọn ảnh màn hình công tơ</h3><p>Chụp rõ mã máy cấp và tổng lũy kế. Chọn ảnh đúng tổ máy đang nhập; ảnh khác tổ sẽ bị chặn xác nhận.</p><button type="button" className={styles.primary} onClick={()=>chooseFiles()}><ImagePlus size={17} aria-hidden/>Chọn ảnh để bắt đầu</button></div>}
 
         {rows.length>0&&<section className={styles.reviewSection} aria-label="Bảng thông số công tơ chờ xác nhận">
           <div className={styles.reviewHeading}><div><h3>Bảng thông số công tơ · {selectedUnit}</h3><p>Ngày {reportDate.split("-").reverse().join("/")} · Chỉ lưu công tơ thuộc {selectedUnit} đã tích xác nhận.</p></div><span>{writable.length}/{rows.length} đã xác nhận</span></div>
