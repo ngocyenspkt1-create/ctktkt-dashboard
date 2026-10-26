@@ -3755,6 +3755,7 @@ export function CtktktReport() {
         current={current}
         previous={previous}
         canEditCell={canEditCoalCell}
+        initialUnit={unitView==="s2"?"S2":"S1"}
         disabled={loading||saving||syncingPmis}
         maxDate={vietnamDateIso()}
         onDateChange={value=>{
@@ -3764,11 +3765,11 @@ export function CtktktReport() {
           if(value.slice(0,7)!==period)setLoading(true);
           setDate(value);setError("");setMessage("");
         }}
-        onSave={async values=>{
+        onSave={async (values,unit)=>{
           if(loading||saving||!canEditSelectedDate)throw new Error("Ngày này chưa sẵn sàng hoặc bạn không có quyền lưu.");
           setSaving(true);
           try{
-            const verified=await saveReviewedCoalEntries(fetch,date,values);
+            const verified=await saveReviewedCoalEntries(fetch,date,values,unit);
             setByDate(old=>({...old,[date]:{...(old[date]||{}),...Object.fromEntries(verified.map(entry=>[entry.cell,entry.value]))}}));
             for(const entry of verified)dirtyCellsRef.current.delete(entry.cell);
             setDirty(dirtyCellsRef.current.size>0);

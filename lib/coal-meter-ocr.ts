@@ -28,6 +28,20 @@ export function coalMeterLabel(key: CoalMeterKey) {
   return `${unit} · ${code}`;
 }
 
+export function coalPhotoUnitIssue(unit:CoalUnit,key:CoalMeterKey|""|null,label:CoalMeterKey|null) {
+  // Check the observed label too: changing only the destination must not turn
+  // a photo of 2D1 into a valid S1 reading.
+  const foreign=[label,key].find(value=>value&&!value.startsWith(unit+"-"));
+  if(!foreign)return null;
+  const [actual,code]=foreign.split("-");
+  return `Máy cấp ${actual.slice(1)}${code} thuộc ${actual}, khác tổ ${unit} đang chọn. Bỏ ảnh khỏi lượt này hoặc chọn đúng tổ máy.`;
+}
+
+export function coalEntriesMatchUnit(entries:Array<{cell:string}>,unit:CoalUnit){
+  const cells=new Set(ALL_COAL_METER_KEYS.filter(key=>key.startsWith(unit+"-")).flatMap(key=>COAL_SLOTS.map(slot=>coalMeterCell(key,slot))));
+  return entries.length>0&&entries.every(entry=>cells.has(entry.cell));
+}
+
 function numberOf(entries: CtktktDayEntries | undefined, cell: string) {
   const raw = entries?.[cell]?.trim().replace(",", ".");
   if (!raw) return null;

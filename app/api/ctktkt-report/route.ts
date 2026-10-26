@@ -16,6 +16,7 @@ import { CTKTKT_OPERATING_HOURS_CELLS } from "@/lib/ctktkt-extra-fields";
 import { loadCtktktOperatingHours } from "@/lib/ctktkt-operating-hours-db";
 import { CTKTKT_OPERATION_EVENTS_CELL, normalizeCtktktOperationEvents } from "@/lib/ctktkt-operation-events";
 import { reportReadRange } from "@/lib/report-read-range";
+import {coalEntriesMatchUnit} from "@/lib/coal-meter-ocr";
 
 const fieldCells = new Set<string>([
   ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
@@ -115,7 +116,7 @@ export async function POST(request: Request) {
   try {
     const raw = await request.text();
     if (raw.length > 150_000) return Response.json({ error: "Dữ liệu gửi lên quá lớn." }, { status: 413 });
-    const body = JSON.parse(raw) as { operatingDate?: unknown; entries?: unknown };
+    const body = JSON.parse(raw) as { operatingDate?: unknown; entries?: unknown; coalUnit?:unknown };
     if (typeof body.operatingDate !== "string" || !datePattern.test(body.operatingDate) || !Array.isArray(body.entries) || body.entries.length > 400) {
       throw new Error("Ngày hoặc danh sách ô nhập không hợp lệ.");
     }
@@ -153,6 +154,9 @@ export async function POST(request: Request) {
       return { cell, value };
     });
 
+    if(body.coalUnit!==undefined){
+      if((body.coalUnit!=="S1"&&body.coalUnit!=="S2")||!coalEntriesMatchUnit(clean,body.coalUnit))throw new Error("Công tơ S1/S2 bị lẫn hoặc khác tổ máy đã chọn. Chưa lưu số liệu.");
+    }
     // Chỉ lưu những ô mà người dùng có thẩm quyền theo cương vị / vai trò
     const authorizedEntries = clean.filter(entry => canEditCtktktField(user, entry.cell));
     if (authorizedEntries.length !== clean.length) {

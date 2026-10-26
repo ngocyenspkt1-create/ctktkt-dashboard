@@ -26,7 +26,7 @@ function harness(options={}){
   const cjsModule={exports:{}};
   const request=async(url,options)=>{calls.push({url,headers:new Headers(options.headers)});return Response.json({message:'Synthetic probe result'});};
   vm.runInNewContext(code,{module:cjsModule,exports:cjsModule.exports,require:dependencies,fetch:request,AbortController,AbortSignal,Number,Intl,Map,Set,Error},{filename:'coal-photo-import.cjs'});
-  return {calls,SharedSettings,render(){cursor=0;refCursor=0;return cjsModule.exports.CoalMeterPhotoImport({open:true,onOpenChange:()=>{},reportDate,current:{},canEditCell:options.canEditCell||(()=>true),onApply:()=>{},request,onSave:options.onSave,onDateChange:date=>{reportDate=date;}});}};
+  return {calls,SharedSettings,render(){cursor=0;refCursor=0;return cjsModule.exports.CoalMeterPhotoImport({open:true,onOpenChange:()=>{},reportDate,current:{},initialUnit:options.unit||'S1',canEditCell:options.canEditCell||(()=>true),onApply:()=>{},request,onSave:options.onSave,onDateChange:date=>{reportDate=date;}});}};
 }
 function nodes(root){const all=[];function visit(n){if(Array.isArray(n))return n.forEach(visit);if(!n||typeof n!=='object')return;all.push(n);visit(n.props?.children);}visit(root);return all;}
 function text(n){if(Array.isArray(n))return n.map(text).join('');if(typeof n==='string'||typeof n==='number')return String(n);return text(n?.props?.children??'');}
@@ -94,4 +94,25 @@ test('failed save retains the picture, values and confirmation for a deliberate 
   assert.ok(text(tree).includes('Synthetic save failure'));assert.ok(text(tree).includes('synthetic.jpg'));
   assert.equal(button(tree,'Lưu 1 chỉ số').props.disabled,false);
   assert.ok(!text(tree).includes('Đã lưu và kiểm tra lại'));
+});
+
+test('1D1 belongs to S1 and 2D1 belongs to S2; changing destination does not erase observed unit',()=>{
+  assert.equal(meter.parseMeterLabel('Máy cấp 1D1'),'S1-D1');
+  assert.equal(meter.parseMeterLabel('Máy cấp 2D1'),'S2-D1');
+  assert.equal(meter.coalPhotoUnitIssue('S1','S1-D1','S1-D1'),null);
+  assert.match(meter.coalPhotoUnitIssue('S1','S1-D1','S2-D1'),/2D1 thuộc S2/);
+  const h=harness({rows:[{...photo(),key:'S1-D1',label:'S2-D1'}],onSave:async()=>assert.fail('wrong unit')});
+  const tree=h.render();assert.equal(button(tree,'Lưu 0 chỉ số').props.disabled,true);
+  assert.ok(text(tree).includes('2D1 thuộc S2'));assert.ok(!nodes(tree).some(n=>n.props?.['aria-label']==='Xác nhận ảnh 1'));
+});
+test('mixed photos flag foreign rows; changing unit clears previous confirmations and disables other-unit options',()=>{
+  const h=harness({rows:[photo(),{...photo(),id:'second',key:'S2-D1',label:'S2-D1'}],onSave:async()=>{}});let tree=h.render();
+  assert.ok(text(tree).includes('Phát hiện lẫn công tơ S1 và S2'));
+  assert.equal(button(tree,'Lưu 1 chỉ số').props.disabled,false);
+  const select=nodes(tree).find(n=>n.type==='select'&&nodes(n).some(child=>child.type==='option'&&child.props.value==='S1'));
+  assert.equal(select.props.value,'S1');select.props.onChange({target:{value:'S2'}});tree=h.render();
+  assert.equal(button(tree,'Lưu 0 chỉ số').props.disabled,true);
+  assert.ok(!nodes(tree).some(n=>n.props?.['aria-label']==='Xác nhận ảnh 1'));
+  assert.ok(nodes(tree).some(n=>n.props?.['aria-label']==='Xác nhận ảnh 2'));
+  assert.equal(nodes(tree).find(n=>n.type==='option'&&n.props.value==='S1-A1').props.disabled,true);
 });

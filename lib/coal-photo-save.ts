@@ -1,12 +1,14 @@
-import {ALL_COAL_METER_KEYS,COAL_SLOTS,coalMeterCell} from "./coal-meter-ocr.ts";
+import {ALL_COAL_METER_KEYS,COAL_SLOTS,coalMeterCell,coalEntriesMatchUnit,type CoalUnit} from "./coal-meter-ocr.ts";
 import {normalizeCtktktInputValue} from "./ctktkt-extra-fields.ts";
 
 /** Save only the explicitly reviewed coal cells; read them back before reporting success. */
-export async function saveReviewedCoalEntries(request:typeof fetch,date:string,entries:Array<{cell:string;value:string}>) {
+export async function saveReviewedCoalEntries(request:typeof fetch,date:string,entries:Array<{cell:string;value:string}>,expectedUnit?:CoalUnit) {
   const cells=new Set(ALL_COAL_METER_KEYS.flatMap(key=>COAL_SLOTS.map(slot=>coalMeterCell(key,slot))));
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+"T00:00:00Z"))||new Date(date+"T00:00:00Z").toISOString().slice(0,10)!==date)throw new Error("Ngày ghi chỉ số không hợp lệ.");
   if(!entries.length||entries.some(entry=>!cells.has(entry.cell)||!/^\d+(?:\.\d+)?$/.test(entry.value)||!Number.isFinite(Number(entry.value)))||new Set(entries.map(entry=>entry.cell)).size!==entries.length)throw new Error("Danh sách công tơ xác nhận không hợp lệ.");
-  const response=await request("/api/ctktkt-report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operatingDate:date,entries})});
+  const unit=expectedUnit??(coalEntriesMatchUnit(entries,"S1")?"S1":"S2");
+  if((unit!=="S1"&&unit!=="S2")||!coalEntriesMatchUnit(entries,unit))throw new Error("Danh sách công tơ bị lẫn S1/S2 hoặc khác tổ máy đang chọn. Chưa gửi số liệu.");
+  const response=await request("/api/ctktkt-report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operatingDate:date,coalUnit:unit,entries})});
   const body=await response.json() as {error?:string};
   if(!response.ok)throw new Error(body.error||"Chưa lưu được chỉ số công tơ.");
   const verified=await request(`/api/ctktkt-report?period=${date.slice(0,7)}`,{cache:"no-store"});
