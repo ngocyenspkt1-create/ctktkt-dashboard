@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "./interface.css";
+import "./interface-light.css";
 import "./engineering-workspace.css";
 
 export const metadata: Metadata = {
