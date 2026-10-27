@@ -29,3 +29,16 @@ export function addDaysIso(iso: string, days: number) {
 export function defaultOperatingDate(date = new Date()) {
   return addDaysIso(vietnamDateIso(date), -1);
 }
+
+/** BCSX shift entry opens today's sheet from 06:00 Vietnam time. */
+export function defaultBcsxDate(date=new Date()){
+  const hour=Number(new Intl.DateTimeFormat("en-GB",{timeZone:VN_TIME_ZONE,hour:"2-digit",hourCycle:"h23"}).format(date));
+  return addDaysIso(vietnamDateIso(date),hour<6?-1:0);
+}
+
+export function millisecondsToBcsxRollover(date=new Date()){
+  const today=vietnamDateIso(date);
+  const boundary=Date.parse(`${today}T06:00:00+07:00`);
+  const next=date.getTime()<boundary?boundary:Date.parse(`${addDaysIso(today,1)}T06:00:00+07:00`);
+  return next-date.getTime();
+}

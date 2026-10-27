@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addDaysIso, canEditOperatingDate, defaultOperatingDate, isFutureOperatingDate, vietnamDateIso } from "../lib/operating-date.ts";
+import { addDaysIso, canEditOperatingDate, defaultOperatingDate,defaultBcsxDate,millisecondsToBcsxRollover, isFutureOperatingDate, vietnamDateIso } from "../lib/operating-date.ts";
+
+test("BCSX switches D-1 to D at exactly 06:00 Vietnam time independently of host timezone",()=>{
+  assert.equal(defaultBcsxDate(new Date('2026-10-26T22:59:59.999Z')),'2026-10-26');
+  assert.equal(defaultBcsxDate(new Date('2026-10-26T23:00:00.000Z')),'2026-10-27');
+  assert.equal(defaultBcsxDate(new Date('2026-10-27T16:59:59.999Z')),'2026-10-27');
+  assert.equal(defaultBcsxDate(new Date('2026-10-27T17:00:00.000Z')),'2026-10-27','midnight still belongs to previous day until 06h');
+  assert.equal(defaultBcsxDate(new Date('2026-12-31T22:59:59Z')),'2026-12-31');
+  assert.equal(defaultBcsxDate(new Date('2026-12-31T23:00:00Z')),'2027-01-01');
+  assert.equal(defaultBcsxDate(new Date('2028-02-29T23:00:00Z')),'2028-03-01');
+});
+test('BCSX schedules next 06h boundary instead of polling or switching at midnight',()=>{
+  assert.equal(millisecondsToBcsxRollover(new Date('2026-10-26T22:59:59Z')),1000);
+  assert.equal(millisecondsToBcsxRollover(new Date('2026-10-26T23:00:00Z')),24*3600000);
+  assert.equal(millisecondsToBcsxRollover(new Date('2026-10-27T17:00:00Z')),6*3600000);
+});
 
 test("ngày vận hành mặc định là D-1 theo múi giờ Việt Nam", () => {
   const instant = new Date("2026-09-21T00:30:00Z"); // 07:30 ngày 21/09 tại Việt Nam

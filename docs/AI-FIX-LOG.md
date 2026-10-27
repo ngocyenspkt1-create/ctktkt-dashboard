@@ -447,3 +447,10 @@ Người dùng: «web có nhiều thiết kế hơi dư thừa, chưa gọn; gi�
 
 - Kiểm lại toàn bộ diff đang chờ: gỡ module Công việc Phân xưởng theo nhật ký Claude, giữ bảng dữ liệu cũ; giao diện compact toàn web; loại thư viện chỉ phục vụ module đã gỡ; sửa tên biến test. Đưa cả app/compact.css mới vào bản triển khai.
 - Chạy lại toàn bộ tests đạt; npm run lint không lỗi (12 cảnh báo hiện có). Kiểm tra bản dựng production Webpack/TypeScript trước khi đẩy. Không đưa cấu hình riêng .claude/, AGENTS.md, CLAUDE.md hoặc pnpm-lock.yaml vào commit.
+
+# 2026-10-27 — BCSX đổi ngày mặc định lúc 06:00 Việt Nam
+
+- Tách defaultBcsxDate khỏi defaultOperatingDate: BCSX trước 06:00 dùng D-1, từ đúng 06:00 dùng D, theo Asia/Ho_Chi_Minh (không theo múi giờ máy). Các báo cáo/đồng bộ khác giữ chính sách D-1 cũ.
+- Khởi tạo cả ngày BCSX và ngày dự thảo sự kiện bằng ngày mới. Trang đang mở đặt timer tới mốc 06h kế tiếp, kiểm lại khi quay lại tab/focus sau ngủ máy, không polling liên tục. Khi chưa thao tác dữ liệu tự chuyển ngày, reset dự thảo trắng và hủy tải ngày cũ qua cleanup hiện có.
+- Ngừng tự chuyển khi người dùng nhập/chọn/dán dữ liệu, xóa sự kiện hoặc chọn ngày thủ công để không xóa số, dự thảo và than tồn kho đang nhập. Tải lại trang sẽ mở ngày mặc định theo giờ hiện tại. Không ghi số liệu vận hành tự động.
+- Test mốc 05:59:59.999/06:00, nửa đêm, đầu năm, năm nhuận và thời gian hẹn mốc kế tiếp đạt; kiểm ngày D/D-1 và quyền chỉnh ngày hiện có không đổi.

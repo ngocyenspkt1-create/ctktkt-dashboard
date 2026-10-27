@@ -9,7 +9,7 @@ import { deriveDailyValuesFromCtktkt } from "@/lib/daily-source-links";
 import { previousIsoDate, type CtktktDayEntries } from "@/lib/ctktkt-report";
 import { useSessionUser } from "@/components/session-context";
 import { hasPermission } from "@/lib/auth/session";
-import { defaultOperatingDate } from "@/lib/operating-date";
+import { defaultBcsxDate,millisecondsToBcsxRollover } from "@/lib/operating-date";
 import { MissingDataAlert, type MissingDataItem } from "@/components/missing-data-alert";
 import { ExportMissingDialog } from "@/components/export-missing-dialog";
 import { isMissingValue, listBcsxMissing } from "@/lib/data-completeness";
@@ -69,11 +69,11 @@ function ctktktEntriesByDate(entries: Array<{ operatingDate: string; cell: strin
 export function BcsxReport() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_bcsx");
-  const [operatingDate, setOperatingDate] = useState(defaultOperatingDate);
+  const [operatingDate, setOperatingDate] = useState(defaultBcsxDate);
   const [unit, setUnit] = useState<Unit>("S1");
   const [grids, setGrids] = useState<Record<Unit, ReadingsGrid>>({ S1: emptyGrid(), S2: emptyGrid() });
   const [events, setEvents] = useState<Record<Unit, OperatingEvent[]>>({ S1: [], S2: [] });
-  const [draft, setDraft] = useState<EventDraft>(() => blankEventDraft(defaultOperatingDate()));
+  const [draft, setDraft] = useState<EventDraft>(() => blankEventDraft(defaultBcsxDate()));
   const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
   const [totals, setTotals] = useState<Record<Unit, TotalsDraft>>({ S1: blankTotals(), S2: blankTotals() });
   const [loading, setLoading] = useState(false);
@@ -90,6 +90,24 @@ export function BcsxReport() {
   const section1ImportRef = useRef<HTMLInputElement | null>(null);
   const operationImportRef = useRef<HTMLInputElement | null>(null);
   const dirtyReadingsRef = useRef(new Set<string>());
+  const autoDateEnabled=useRef(true);
+  const automaticDate=useRef(operatingDate);
+
+  useEffect(()=>{
+    let timer:ReturnType<typeof setTimeout>;
+    const check=()=>{
+      clearTimeout(timer);
+      const next=defaultBcsxDate();
+      if(autoDateEnabled.current&&automaticDate.current!==next){
+        automaticDate.current=next;setLoading(true);setOperatingDate(next);setDraft(blankEventDraft(next));setEditingEventIndex(null);
+        setNotice("Đã chuyển ngày BCSX theo mốc 06:00 giờ Việt Nam.");
+      }
+      timer=setTimeout(check,millisecondsToBcsxRollover()+100);
+    };
+    check();
+    window.addEventListener("focus",check);document.addEventListener("visibilitychange",check);
+    return ()=>{clearTimeout(timer);window.removeEventListener("focus",check);document.removeEventListener("visibilitychange",check);};
+  },[]);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +208,7 @@ export function BcsxReport() {
   }
 
   function changeOperatingDate(nextDate: string) {
+    autoDateEnabled.current=false;
     setOperatingDate(nextDate);
     setDraft(blankEventDraft(nextDate));
     setEditingEventIndex(null);
@@ -464,6 +483,7 @@ export function BcsxReport() {
 
   function removeEvent(index: number) {
     if (isViewer) return;
+    autoDateEnabled.current=false;
     setEvents(old => ({ ...old, [unit]: old[unit].filter((_, i) => i !== index) }));
     setEditingEventIndex(null);
     setDraft(blankEventDraft(operatingDate));
@@ -699,7 +719,7 @@ export function BcsxReport() {
     if (target) void exportFile(target);
   }
 
-  return <div className="module-report bcsx-workspace flex flex-col gap-3">
+  return <div className="module-report bcsx-workspace flex flex-col gap-3" onChangeCapture={()=>{autoDateEnabled.current=false;}} onPasteCapture={()=>{autoDateEnabled.current=false;}}>
     <ExportMissingDialog
       open={exportMissingOpen}
       items={exportMissingItems}
