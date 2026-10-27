@@ -1,3 +1,5 @@
+> **ĐÃ GỠ BỎ (27/10/2026):** Mục Công việc Phân xưởng đã chuyển sang web khác theo yêu cầu người dùng; toàn bộ mã nguồn của mục này đã được xóa khỏi dự án. Tài liệu dưới đây chỉ giữ để tra cứu lịch sử. Các bảng `px_work_items`, `px_work_events` trong CSDL **không bị xóa**.
+
 # Công việc Phân xưởng PXVH1 — 13/10/2026
 
 ## Phạm vi đã thống nhất

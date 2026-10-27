@@ -484,7 +484,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
 
           {/* Hướng dẫn ngắn */}
           <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-slate-700 leading-relaxed">
-            💡 <strong>Hướng dẫn phân quyền:</strong> Tích chọn các quyền chức năng cho từng Cương vị dưới đây. Khi bạn bấm <strong>&quot;Lưu phân quyền Cương vị&quot;</strong>, toàn bộ nhân sự thuộc cương vị đó sẽ tự động kế thừa các quyền được chọn ngay ở lần thao tác tiếp theo; màn hình cập nhật khi quay lại cửa sổ hoặc trong vòng 1 phút. Công việc Phân xưởng dùng để ghi nhận, nhận việc và báo cáo; Quản lý công việc Phân xưởng dùng để phân công và xác nhận hoàn thành. KTKT, Nước và Hóa chất có thể cấp riêng từng nhóm bằng mục Chi tiết. Quản trị có toàn quyền; quyền đồng bộ cần đi kèm quyền nhập của mục nhận dữ liệu.
+            💡 <strong>Hướng dẫn phân quyền:</strong> Tích chọn các quyền chức năng cho từng Cương vị dưới đây. Khi bạn bấm <strong>&quot;Lưu phân quyền Cương vị&quot;</strong>, toàn bộ nhân sự thuộc cương vị đó sẽ tự động kế thừa các quyền được chọn ngay ở lần thao tác tiếp theo; màn hình cập nhật khi quay lại cửa sổ hoặc trong vòng 1 phút. KTKT, Nước và Hóa chất có thể cấp riêng từng nhóm bằng mục Chi tiết. Quản trị có toàn quyền; quyền đồng bộ cần đi kèm quyền nhập của mục nhận dữ liệu.
           </div>
 
           {/* Bảng Ma trận Phân quyền */}
@@ -496,7 +496,7 @@ export function AdminUsersPanel({ initialUsers }: { initialUsers: UserRow[] }) {
                   <th className="p-3 font-bold text-center">Khối</th>
                   <th className="p-3 font-bold text-center">Nhân sự</th>
                   <th className="p-3 font-bold">Vai trò đại diện</th>
-                  {PERMISSION_MODULES.map(module => <th key={module.permission} className={`p-2 text-center font-bold text-blue-900 ${["work_px", "manage_work_px"].includes(module.permission) ? "min-w-32" : ""}`} title={PERMISSION_LABELS[module.permission]}>{module.label}</th>)}
+                  {PERMISSION_MODULES.map(module => <th key={module.permission} className="p-2 text-center font-bold text-blue-900" title={PERMISSION_LABELS[module.permission]}>{module.label}</th>)}
                   <th className="p-3 text-right font-bold">Gán nhanh</th>
                 </tr>
               </thead>

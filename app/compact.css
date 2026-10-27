@@ -1,0 +1,114 @@
+/* Giao diện gọn (27/10/2026): giữ nguyên cấu trúc trang, chỉ giảm khoảng trống, chiều cao và trang trí lặp lại.
+   Nạp sau cùng trong app/layout.tsx; mọi bộ chọn có tiền tố .app-workspace để thắng CSS riêng của từng mục.
+   Không đổi công thức, định dạng số hay quyền ô dữ liệu. */
+
+/* ---- Thanh bên ---- */
+.app-workspace .app-sidebar-brand { height: 60px; padding-inline: 16px; }
+.app-workspace .app-brand { gap: 10px; }
+.app-workspace .app-brand > span:first-child { width: 34px; height: 34px; border-radius: 9px; }
+.app-workspace .app-brand > span:first-child svg { width: 18px; height: 18px; }
+.app-workspace .app-brand-title { font-size: 15px; }
+.app-workspace .app-brand-subtitle { font-size: 11px; }
+.app-workspace .app-sidebar-scroll { padding: 10px 10px 12px; }
+.app-workspace .app-nav { gap: 8px; }
+.app-workspace .app-nav-group-toggle { padding: 2px 10px 4px; }
+.app-workspace .app-nav-group { font-size: 10px; }
+.app-workspace .app-nav-items > ul { gap: 2px; }
+.app-workspace .app-nav .app-nav-link { min-height: 36px; padding: 7px 10px; gap: 10px; border-radius: 8px; font-size: 13.5px; }
+.app-workspace .app-nav .app-nav-link svg { width: 17px; height: 17px; }
+.app-workspace .app-sidebar-footer { padding: 8px 10px; }
+.app-workspace .app-sidebar-tagline { display: none; }
+.app-workspace .app-user-card { padding: 6px 8px; }
+.app-workspace .app-user-avatar { width: 32px; height: 32px; }
+
+/* ---- Thanh đầu trang: bỏ dòng đường dẫn lặp lại tên đơn vị đã có ở thanh bên ---- */
+.app-workspace .app-header,
+.app-workspace:has(.engineering-workspace) .app-header { height: 60px; }
+.app-workspace .app-breadcrumb { display: none; }
+.app-workspace .app-header h1 { font-size: 17px; line-height: 1.3; }
+.app-workspace .app-page-desc { font-size: 12px; line-height: 1.35; }
+
+/* ---- Vùng nội dung ---- */
+.app-workspace .app-content:not(.engineering-workspace) { padding: 12px; }
+.app-workspace .engineering-workspace { padding: 12px; }
+@media (min-width: 640px) {
+  .app-workspace .app-content:not(.engineering-workspace),
+  .app-workspace .engineering-workspace { padding: 14px 18px 20px; }
+}
+
+/* Dải Google Sheets: một hàng mảnh thay cho khung cao. */
+.app-workspace .google-mirror-bar { margin-bottom: 12px; padding: 6px 10px; gap: 4px 14px; border-radius: 10px; }
+.app-workspace .google-mirror-bar > div { flex-direction: row; align-items: center; gap: 10px; }
+.app-workspace .google-mirror-bar a { min-height: 30px; padding-inline: 10px; font-size: 13px; }
+
+/* ---- Trang Dữ liệu các tháng ---- */
+.app-workspace .monthly-workspace.space-y-5 > :not(:last-child) { margin-block-end: 12px; }
+/* Băng tiêu đề: giữ tên mục và tháng, bỏ trang trí và câu mô tả trùng với thanh đầu trang. */
+.app-workspace .monthly-heading { gap: 14px; padding: 12px 18px; border-radius: 12px; box-shadow: none; }
+.app-workspace .monthly-heading::before,
+.app-workspace .monthly-heading::after { display: none; }
+.app-workspace .monthly-heading-icon { width: 40px; height: 40px; border-radius: 10px; }
+.app-workspace .monthly-heading-icon svg { width: 20px; height: 20px; }
+.app-workspace .monthly-heading .monthly-eyebrow { font-size: 10px; }
+.app-workspace .monthly-heading h2 { margin-top: 2px; font-size: 22px; line-height: 1.2; }
+.app-workspace .monthly-heading h2 + p { display: none; }
+.app-workspace .monthly-period-badge { gap: 8px; padding: 7px 12px; border-radius: 9px; font-size: 14px; }
+/* Thanh công cụ: bỏ câu hướng dẫn lặp lại nhãn THÁNG. */
+.app-workspace .monthly-toolbar { gap: 12px; padding: 10px 16px; border-radius: 12px; }
+.app-workspace .monthly-toolbar-label > p + p { display: none; }
+.app-workspace .monthly-toolbar-controls { gap: 10px; }
+.app-workspace .monthly-notice { padding: 8px 14px; border-radius: 10px; font-size: 13px; }
+/* Thẻ thống kê. */
+.app-workspace .monthly-stats { gap: 10px; }
+.app-workspace .monthly-stat { gap: 12px; padding: 12px 16px; border-radius: 12px; box-shadow: none; }
+.app-workspace .monthly-stat::before { inset: 12px auto 12px 0; }
+.app-workspace .monthly-stat::after { display: none; }
+.app-workspace .monthly-stat p:first-child { font-size: 26px; line-height: 1.1; }
+.app-workspace .monthly-stat p:last-child { margin-top: 2px; font-size: 13px; }
+.app-workspace .monthly-stat-icon { width: 38px; height: 38px; border-radius: 10px; }
+/* Biểu đồ, đồng bộ nhiều ngày, bảng. */
+.app-workspace .monthly-overview { border-radius: 14px; box-shadow: none; }
+.app-workspace .monthly-overview-header { gap: 12px; padding: 12px 18px 4px; }
+.app-workspace .monthly-overview-header h3 { margin-top: 2px; font-size: 18px; }
+.app-workspace .monthly-detail-button { margin-top: 0; padding: 7px 10px; }
+.app-workspace .monthly-overview-canvas { margin: 4px 12px; }
+.app-workspace .monthly-overview-footer { padding: 8px 18px; }
+.app-workspace .monthly-range { border-radius: 12px; }
+.app-workspace .monthly-range-summary { padding: 10px 16px; border-radius: 12px; }
+.app-workspace .monthly-range-controls { padding: 12px 16px; }
+.app-workspace .monthly-table-heading { padding: 10px 18px; }
+.app-workspace .monthly-table-heading h3 { font-size: 16px; }
+.app-workspace .monthly-chart-hint { padding: 6px 10px; }
+.app-workspace .monthly-table-filters { padding: 10px 16px; }
+.app-workspace .monthly-grid thead th { height: 64px; }
+.app-workspace .monthly-grid tbody tr { height: 38px; }
+
+/* ---- Sáu mục nghiệp vụ (KTKT, BCSX, Nước, Hóa chất, PPA, PMIS) ---- */
+.app-workspace .module-hero { padding: 8px; border-radius: 12px; box-shadow: none; }
+.app-workspace .module-heading-copy { padding: 10px 14px; border-radius: 10px; }
+.app-workspace .module-heading-copy :is(h1,h2) { font-size: 18px; }
+.app-workspace .module-heading-copy p { line-height: 1.45; }
+.app-workspace .module-section-heading { padding: 9px 14px; }
+.app-workspace .module-filter-bar { padding: 8px 12px; }
+.app-workspace .module-page-tabs { padding: 4px; }
+.app-workspace .module-page-tabs button { min-height: 32px; }
+.app-workspace .module-stat-grid > button { padding: 10px 14px; border-radius: 12px; box-shadow: none; }
+.app-workspace .module-stat-grid > button > p:nth-child(2) { font-size: 20px; }
+.app-workspace .module-chart-grid > div { border-radius: 12px; box-shadow: none; }
+
+/* Khối tiêu đề các mục: giữ tên mục; bỏ câu mô tả, dòng nhãn phụ và huy hiệu trùng với thanh đầu trang/thanh bên. */
+.app-workspace .module-heading-copy > p,
+.app-workspace .module-heading-copy > div:first-child:has(+ :is(h1,h2)),
+.app-workspace .module-heading-copy span.rounded-full,
+.app-workspace .ppa-control-heading > p { display: none; }
+.app-workspace .module-heading-copy :is(h1,h2) { margin-top: 0; }
+.app-workspace .module-heading-copy > div:first-child:has(> h1) { margin-bottom: 0; }
+
+@media (max-width: 767px) {
+  .app-workspace .app-header,
+  .app-workspace:has(.engineering-workspace) .app-header { height: 56px; }
+  .app-workspace .monthly-heading { padding: 10px 14px; }
+  .app-workspace .monthly-heading h2 { font-size: 19px; }
+  .app-workspace .monthly-stat { padding: 10px 12px; }
+  .app-workspace .monthly-stat p:first-child { font-size: 22px; }
+}

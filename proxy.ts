@@ -6,7 +6,6 @@ const PUBLIC_PATHS = new Set(["/login", "/api/auth/login"]);
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (process.env.NODE_ENV === "development" && pathname === "/wb-preview") return NextResponse.next();
-  if (process.env.NODE_ENV === "development" && pathname === "/work-px-preview") return NextResponse.next();
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
   if (pathname === "/api/cron/coal-photos") return NextResponse.next(); // Own CRON_SECRET guard, never public data.
   // This one read-only route authenticates its own Bearer key; all other APIs retain session checks.

@@ -12,8 +12,6 @@ export const ROLE_LABELS: Record<Role, string> = {
 };
 
 export const PERMISSIONS = [
-  "work_px",
-  "manage_work_px",
   "manage_users",
   "edit_monthly_kpi",
   "edit_daily_inputs",
@@ -52,8 +50,6 @@ export const PERMISSIONS = [
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
-  work_px: "Công việc Phân xưởng: ghi nhận, nhận việc và báo cáo tiến độ",
-  manage_work_px: "Quản lý công việc Phân xưởng: phân công và xác nhận hoàn thành",
   manage_users: "Quản trị hệ thống & Phân quyền",
   edit_monthly_kpi: "Nhập chỉ tiêu KTKT tháng (7 chỉ tiêu)",
   edit_daily_inputs: "Nhập số liệu sản xuất ngày",

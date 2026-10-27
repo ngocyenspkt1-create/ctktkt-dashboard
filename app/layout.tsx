@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./interface-light.css";
 import "./engineering-workspace.css";
+import "./compact.css";
 
 export const metadata: Metadata = {
   title: "Quản lý chỉ tiêu KTKT PXVH1",

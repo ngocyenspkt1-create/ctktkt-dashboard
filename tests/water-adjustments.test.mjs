@@ -39,7 +39,7 @@ function loader(overrides){
   const cache=new Map();
   function load(file){
     if(cache.has(file))return cache.get(file).exports;
-    const module={exports:{}};cache.set(file,module);
+    const cjsModule={exports:{}};cache.set(file,cjsModule);
     const code=ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
     const localRequire=name=>{
       if(name in overrides)return overrides[name];
@@ -48,7 +48,7 @@ function loader(overrides){
       const target=[base,base+'.ts',path.join(base,'index.ts')].find(f=>f.endsWith('.ts')&&existsSync(f));
       if(!target)throw new Error('Missing dependency '+name);return load(target);
     };
-    vm.runInThisContext('(function(exports,require,module){'+code+'\n})')(module.exports,localRequire,module);return module.exports;
+    vm.runInThisContext('(function(exports,require,module){'+code+'\n})')(cjsModule.exports,localRequire,cjsModule);return cjsModule.exports;
   }
   return relative=>load(path.join(root,relative));
 }

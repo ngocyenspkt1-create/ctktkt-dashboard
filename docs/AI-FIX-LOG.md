@@ -409,3 +409,41 @@ Hiện tượng (ảnh người dùng gửi): «Chưa đọc được ảnh — 
 - Phạm vi chọn mở cho mọi bảng bên trong main của trang hiện tại, gồm KPI và các báo cáo PMIS/PPA/nước/BCSX, thay vì section CTKTKT riêng. Loại sidebar/header khỏi vùng dữ liệu, không đổi quyền hoặc gọi API ghi. Khi chuyển module thì dọn chế độ chọn và highlight; Ctrl+C dùng được khi tiêu điểm ở body hoặc nút copy trên header.
 - Giữ thao tác kéo/Shift+bấm và định dạng clipboard Excel cũ. Test copy và bản dựng/ESLint kiểm tra trước triển khai; QA kiểm hai trang và tắt chọn không làm thay đổi số liệu.
 - Production c2b215a triển khai thành công. Chrome xác nhận nút nằm trong banner/header PMIS và CTKTKT (mỗi trang chỉ 1 nút). PMIS chọn 2×3, Ctrl+C đọc clipboard đúng 2 dòng/3 cột; CTKTKT chọn được 1×2 ô Điện đầu cực ở KPI, ngoài bảng công tơ. Tắt chọn/đổi trang dọn trạng thái, không ghi số liệu; ảnh minh chứng header và vùng PMIS lưu local ngoài Git.
+
+# 2026-10-27 — Gỡ mục «Công việc Phân xưởng» (local, chưa đẩy GitHub)
+
+Người dùng: «Xóa mục Công việc phân xưởng, tôi đã chuyển qua web khác».
+
+- Xóa trang `/work-px`, `/work-px-preview`, API `/api/work-px` và `/api/work-px/attachments`. Xóa giao diện `components/work-px-client.tsx`, `work-px.css`, `work-report-editor.tsx`; nghiệp vụ `lib/work-px*.ts` (5 file); 5 file test `tests/work-px*.test.mjs`.
+- `lib/navigation.ts`: bỏ nhóm menu «Điều hành Phân xưởng» và khóa `work-px`. `proxy.ts`: bỏ ngoại lệ dev `/work-px-preview`.
+- Phân quyền: bỏ `work_px`, `manage_work_px` khỏi `PERMISSIONS`/`PERMISSION_LABELS` (`lib/auth/session.ts`), khỏi ma trận cương vị (`lib/auth/permission-modules.ts`), cùng dòng giải thích trong `components/admin-users-panel.tsx`. Các cấu hình cương vị đã lưu có hai quyền này vẫn hợp lệ: `normalizePermissions` tự lọc quyền không còn tồn tại. Không cần chạy migration.
+- **Không xóa dữ liệu**: hai bảng `px_work_items`, `px_work_events` vẫn nằm trong CSDL, chỉ không còn được dùng. Chỉ xóa khi người dùng xác nhận đã chuyển hết dữ liệu sang web mới.
+- `docs/HANDOFF_WORK_PX.md` giữ lại để tra cứu lịch sử, có ghi chú «đã gỡ bỏ» ở đầu.
+- Kèm theo: `tests/water-adjustments.test.mjs` đổi tên biến `module` → `cjsModule` để hết lỗi ESLint có sẵn.
+- Đã xóa thư mục kiểu tự sinh `.next/types`, `.next/dev/types` (cache, không theo dõi bởi git) vì còn tham chiếu trang cũ.
+- Kiểm tra: tsc sạch, lint 0 lỗi, test 434/434 (giảm do bỏ 5 file test work-px), `npm run build` thành công.
+- Gỡ thư viện chỉ mục này dùng: `quill`, `sanitize-html`, `@types/sanitize-html` (`npm uninstall`, cập nhật `package.json` và `package-lock.json`).
+- Khi đẩy GitHub: commit các file đã xóa (`git rm` đã đánh dấu sẵn), `package.json`, `package-lock.json` và các file đã sửa nêu trên, cùng `docs/AI-FIX-LOG.md`.
+
+# 2026-10-27 — Giao diện gọn (local, chưa đẩy GitHub)
+
+Người dùng: «web có nhiều thiết kế hơi dư thừa, chưa gọn; giữ nguyên cấu trúc web, thiết kế lại cho gọn».
+
+- Thêm `app/compact.css`, nạp sau cùng trong `app/layout.tsx`. Chỉ đổi trình bày: không đổi cấu trúc trang, công thức, định dạng số hay quyền ô. Mọi bộ chọn có tiền tố `.app-workspace` để thắng CSS riêng của từng mục. Muốn trở về giao diện cũ thì chỉ cần bỏ dòng import này.
+- Thanh bên: logo 60 px (trước 80), mục menu 36 px (trước 44 + đệm 12), nhóm sát hơn. Ẩn dòng chữ «PXVH1 · Quản lý chỉ tiêu KTKT» ở chân thanh bên (trùng logo).
+- Thanh đầu trang: 60 px (trước 80/66). Ẩn dòng đường dẫn «Duyên Hải 1 › Vận hành 1» (trùng logo).
+- Dải Google Sheets: gom thành một hàng mảnh (nút + thời điểm cập nhật cùng hàng).
+- Dữ liệu các tháng:
+  - Băng tiêu đề tối thành dải mỏng (~64 px, trước ~210 px). Bỏ hoa văn trang trí và câu mô tả trùng với thanh đầu trang; vẫn giữ tên mục và tháng.
+  - Thanh công cụ bỏ câu «Chọn tháng để xem…» (trùng nhãn THÁNG).
+  - Thẻ thống kê, khung biểu đồ, tiêu đề bảng giảm đệm. Dòng bảng 38 px, tiêu đề cột 64 px.
+- Sáu mục nghiệp vụ: giảm đệm băng tiêu đề, thanh lọc, thẻ thống kê, tab và khung biểu đồ.
+- Markup chỉ thêm tên class để CSS bám vào: `app-sidebar-scroll`, `app-sidebar-tagline`, `app-breadcrumb`, `app-page-desc` (`components/app-shell.tsx`); `google-mirror-bar` (`components/google-mirror-links.tsx`); `monthly-notice` (`components/daily-production-table.tsx`).
+- Đã xem trên `/wb-preview?live=1` ở 1440 px và 375 px: không tràn ngang. tsc sạch, lint 0 lỗi, test 434/434.
+- Khi đẩy GitHub: commit `app/compact.css`, `app/layout.tsx`, `components/app-shell.tsx`, `components/google-mirror-links.tsx`, `components/daily-production-table.tsx`, `docs/AI-FIX-LOG.md`.
+- Bổ sung (27/10/2026, «tiếp, sửa cho tôi»): khối tiêu đề của 6 mục nghiệp vụ chỉ giữ tên mục. Ẩn câu mô tả, dòng nhãn phụ và huy hiệu trùng thanh đầu trang: BCSX (câu «Nhập 1 lần trên web…»), Hóa chất («Theo dõi theo ngày» + câu về cột Cương vị), KTKT («Báo cáo gốc · Tự tính…», «PXVH1 · Phân quyền…»), Nước (huy hiệu «Phân xưởng Vận hành 1» + câu mô tả), PMIS (dòng «Phân tích hiệu suất»), PPA (dòng «Theo dõi hiệu suất vận hành» và «Kết quả theo ngày…»). Đã kiểm tra bộ chọn bằng mẫu DOM trong `/wb-preview`; trang thật cần đăng nhập nên chưa xem trực tiếp. Lint 0 lỗi, test 434/434.
+
+# 2026-10-27 — Đẩy các thay đổi Claude lên GitHub/Vercel
+
+- Kiểm lại toàn bộ diff đang chờ: gỡ module Công việc Phân xưởng theo nhật ký Claude, giữ bảng dữ liệu cũ; giao diện compact toàn web; loại thư viện chỉ phục vụ module đã gỡ; sửa tên biến test. Đưa cả app/compact.css mới vào bản triển khai.
+- Chạy lại toàn bộ tests đạt; npm run lint không lỗi (12 cảnh báo hiện có). Kiểm tra bản dựng production Webpack/TypeScript trước khi đẩy. Không đưa cấu hình riêng .claude/, AGENTS.md, CLAUDE.md hoặc pnpm-lock.yaml vào commit.
