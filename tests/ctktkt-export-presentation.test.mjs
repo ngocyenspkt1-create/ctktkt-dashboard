@@ -67,7 +67,10 @@ test('rich text keeps its text and emphasis while adopting Times New Roman',()=>
 
 test('export applies presentation after writing data and before serializing workbook',()=>{
  const source=readFileSync(new URL('../lib/report-exports/ctktkt.ts',import.meta.url),'utf8');
- assert.match(source,/applyCtktktExportPresentation\(workbook\);\s*hideCtktktExportScratchArea\(workbook\);\s*const output = new Uint8Array\(await workbook\.xlsx\.writeBuffer\(\)\)/);
+ const wrapper=source.slice(source.indexOf('export async function exportReport'),source.indexOf('export async function buildCtktktWorkbook'));
+ assert.match(wrapper,/const workbook = await buildCtktktWorkbook\(period\);\s*const output = new Uint8Array\(await workbook\.xlsx\.writeBuffer\(\)\)/);
+ assert.match(source,/buildCtktktWorkbook\(period: string, presentation = true\)/);
+ assert.match(source,/if \(presentation\) \{\s*applyCtktktExportPresentation\(workbook\);\s*hideCtktktExportScratchArea\(workbook\);\s*\}\s*return workbook/);
 });
 
 test('scratch display is hidden without removing report values or formula dependencies',async()=>{

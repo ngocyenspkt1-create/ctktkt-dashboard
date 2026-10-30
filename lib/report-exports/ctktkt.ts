@@ -139,6 +139,26 @@ export async function exportReport(request: Request) {
     return Response.json({ error: "Chưa thể xuất dữ liệu cho tháng trong tương lai." }, { status: 400 });
   }
   try {
+    const workbook = await buildCtktktWorkbook(period);
+    const output = new Uint8Array(await workbook.xlsx.writeBuffer());
+    return new Response(output, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="CHI_TIEU_KTKT_${period}.xlsx"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (error) {
+    console.error("Không xuất được file Chỉ tiêu KTKT.", error);
+    return Response.json({ error: "Không xuất được file Chỉ tiêu KTKT." }, { status: 500 });
+  }
+}
+
+/** Internal report builder shared by Excel downloads and the authenticated Sheets mirror. */
+export async function buildCtktktWorkbook(period: string, presentation = true) {
+  if (!periodPattern.test(period)) throw new Error("Tháng không hợp lệ.");
+  const today = vietnamDateIso();
+  if (period > today.slice(0, 7)) throw new Error("Tháng trong tương lai.");
     const { year, month, previous, next } = monthBounds(period);
     const throughExclusive = period === today.slice(0, 7) ? addDaysIso(today, 1) : next;
     const db = getRawDb();
@@ -276,18 +296,11 @@ export async function exportReport(request: Request) {
     const totalSheet = workbook.getWorksheet("Tổng hợp tháng");
     if (totalSheet) totalSheet.getCell("A1").value = `Tổng hợp tháng ${month}/${year}`;
     workbook.calcProperties.fullCalcOnLoad = true;
-    applyCtktktExportPresentation(workbook);
-    hideCtktktExportScratchArea(workbook);
-    const output = new Uint8Array(await workbook.xlsx.writeBuffer());
-    return new Response(output, {
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="CHI_TIEU_KTKT_${period}.xlsx"`,
-        "Cache-Control": "no-store",
-      },
-    });
-  } catch (error) {
-    console.error("Không xuất được file Chỉ tiêu KTKT.", error);
-    return Response.json({ error: "Không xuất được file Chỉ tiêu KTKT." }, { status: 500 });
-  }
+    // The Sheets mirror writes only values/formulas into its existing template.
+    // Excel-only font, fill and print work is unnecessary for that projection.
+    if (presentation) {
+      applyCtktktExportPresentation(workbook);
+      hideCtktktExportScratchArea(workbook);
+    }
+    return workbook;
 }

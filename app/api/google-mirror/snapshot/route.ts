@@ -1,5 +1,4 @@
 import {mirrorAuthorized} from '@/lib/google-mirror-auth';
-import {buildMirrorSnapshot} from '@/lib/google-mirror-snapshot';
 import {validMirrorPeriod} from '@/lib/google-mirror';
 import {vietnamDateIso} from '@/lib/operating-date';
 import {getOperationalReadVersions} from '@/db';
@@ -17,7 +16,8 @@ export async function GET(request:Request){
   const etag='"'+createHash('sha256').update(JSON.stringify(revision)).digest('hex')+'"';
   const headers={'Cache-Control':'no-store',ETag:etag};
   if(process.env.CTKTKT_READ_CACHE!=='off'&&request.headers.get('if-none-match')===etag)return new Response(null,{status:304,headers});
-  return Response.json(await buildMirrorSnapshot(period),{headers});
+  const {buildMirrorSnapshot}=await import('@/lib/google-mirror-snapshot');
+  return Response.json(await buildMirrorSnapshot(period,versions),{headers});
  }
  catch{return Response.json({error:'Không tạo được bản đồng bộ. File Google Sheets cũ được giữ nguyên.'},{status:503});}
 }

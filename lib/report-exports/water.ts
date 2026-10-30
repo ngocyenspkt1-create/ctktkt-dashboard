@@ -47,6 +47,27 @@ export async function exportReport(request: Request) {
   }
 
   try {
+    const workbook = await buildWaterWorkbook(month);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const [year, monthStr] = month.split("-");
+    const filename = `Theo_doi_luong_nuoc_Thang_${monthStr}_${year}.xlsx`;
+
+    return new Response(buffer, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    console.error("Lỗi xuất file Excel theo dõi lượng nước:", err);
+    return Response.json({ error: "Không thể xuất file Excel." }, { status: 500 });
+  }
+}
+
+/** Internal report builder shared by Excel downloads and the authenticated Sheets mirror. */
+export async function buildWaterWorkbook(month: string) {
+  if (!monthPattern.test(month)) throw new Error("Tháng không hợp lệ.");
     const rawDb = getRawDb();
     await ensureWaterSchema(rawDb);
 
@@ -369,18 +390,5 @@ export async function exportReport(request: Request) {
       for(const shift of adjusted)correctionSheet.addRow([shift.logDate,shift.shiftTime,shift.waterAdjustmentS1??null,shift.waterAdjustmentS2??null,shift.condenserAdjustmentS1??null,shift.condenserAdjustmentS2??null,shift.note||""]);
       for(let column=1;column<=7;column++)correctionSheet.getColumn(column).width=23;
     }
-    const buffer = await workbook.xlsx.writeBuffer();
-    const filename = `Theo_doi_luong_nuoc_Thang_${monthStr}_${year}.xlsx`;
-
-    return new Response(buffer, {
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
-      },
-    });
-  } catch (err) {
-    console.error("Lỗi xuất file Excel theo dõi lượng nước:", err);
-    return Response.json({ error: "Không thể xuất file Excel." }, { status: 500 });
-  }
+    return workbook;
 }

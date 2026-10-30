@@ -1,8 +1,8 @@
-import ExcelJS from 'exceljs';
-import {getRawDb} from '@/db';
+import {mirrorWorkbookTabs} from './google-mirror-workbook';
+import {indexMirrorReadings} from './google-mirror-readings';
+import {cachedMirrorReport,mirrorReportRevision} from './google-mirror-report-cache';
+import {getRawDb,getOperationalReadVersions} from '@/db';
 import {createHash} from 'node:crypto';
-import {exportReport as exportCtktkt} from './report-exports/ctktkt';
-import {exportReport as exportWater} from './report-exports/water';
 import {deriveCtktktCellsFromBcsx} from './ctktkt-bcsx-link';
 import {ctktktWaterLogFromRow,deriveCtktktCellsFromWater} from './ctktkt-water-link';
 import {mergeDailyInputsWithCtktkt} from './daily-source-links';
@@ -27,27 +27,10 @@ function matrixAdapter(){return {utils:{aoa_to_sheet:(rows:Matrix)=>rows}} as un
 function empty(rows:number,cols:number):Matrix{return Array.from({length:rows},()=>Array(cols).fill(null));}
 function column(code:string){return [...code].reduce((n,c)=>n*26+c.charCodeAt(0)-64,0)-1;}
 function put(rows:Matrix,address:string,value:MirrorCell){const m=/^([A-Z]+)(\d+)$/.exec(address);if(m&&rows[Number(m[2])-1])rows[Number(m[2])-1][column(m[1])]=value;}
-async function exportTabs(exporter:(r:Request)=>Promise<Response>,query:string):Promise<MirrorTab[]>{
- const response=await exporter(new Request('https://internal.invalid/?'+query));
- if(!response.ok)throw new Error('Không tạo được báo cáo đồng bộ.');
- const w=new ExcelJS.Workbook();await w.xlsx.load(await response.arrayBuffer());
- return w.worksheets.map(s=>{
-  const rows=empty(Math.min(s.rowCount,210),Math.min(s.columnCount,49));
-  s.eachRow(row=>row.eachCell(c=>{
-   if(Number(c.row)>210||Number(c.col)>49||c.isMerged&&c.master.address!==c.address)return;
-   let v:MirrorCell=null;
-   if(c.formula)v={formula:c.formula};
-   else if(c.value instanceof Date)v=c.value.toLocaleDateString('en-GB',{timeZone:'UTC'});
-   else if(typeof c.value==='string'||typeof c.value==='number'||typeof c.value==='boolean')v=c.value;
-   else if(c.value&&typeof c.value==='object'&&'richText' in c.value)v=c.value.richText.map(x=>x.text).join('');
-   rows[Number(c.row)-1][Number(c.col)-1]=v;
-  }));
-  return {name:s.name,rows,clearRows:210,clearColumns:49};
- });
-}
-
 /** A bounded month read, with the preceding day for counter carry-over. No personnel/ACL tables. */
-export async function buildMirrorSnapshot(period:string){
+export async function buildMirrorSnapshot(period:string,versions?:Record<string,number>){
+ const sourceVersions=versions??await getOperationalReadVersions();
+ const day=vietnamDateIso();
  const db=getRawDb(),from=period+'-01',next=addDaysIso(period+'-28',4).slice(0,7)+'-01',previous=addDaysIso(from,-1);
  const end=period===vietnamDateIso().slice(0,7)?addDaysIso(vietnamDateIso(),1):next;
  const read=async(sql:string)=> (await db.prepare(sql).bind(previous,end).all()).results as DbRow[];
@@ -59,6 +42,7 @@ export async function buildMirrorSnapshot(period:string){
   read('SELECT usage_date,chemical_code,chemical_name,material_code,unit,quantity,purpose,plant_unit,reference FROM chemical_usage_logs WHERE usage_date>=? AND usage_date<? AND deleted_at IS NULL ORDER BY usage_date,id'),
   read('SELECT operating_date,unit,start_at,end_at,event_type,description FROM operating_events WHERE operating_date>=? AND operating_date<? ORDER BY operating_date,unit,start_at'),
  ]);
+ const findReading=indexMirrorReadings(shift);
  const ct=new Map<string,CtktktDayEntries>();
  for(const r of daily)if(String(r.field_code).startsWith('KTKT:')){const day=String(r.operating_date),values=ct.get(day)||{};values[String(r.field_code).slice(5)]=String(r.value??'');ct.set(day,values);}
  const count=Number(addDaysIso(next,-1).slice(8)),dates=Array.from({length:count},(_,i)=>`${period}-${String(i+1).padStart(2,'0')}`);
@@ -78,7 +62,16 @@ export async function buildMirrorSnapshot(period:string){
  const inputs=Object.values(mirrorFields).flat().filter(f=>'input' in f&&f.input&&/^[A-Z]{1,2}$/.test(f.code));
  for(let day=1;day<=31;day++){put(monthRows,'A'+(day+5),day);for(const f of inputs)put(monthRows,f.code+(day+5),f.code==='CW'?byDate.get(dates[day-1])?.[f.code]||null:num(byDate.get(dates[day-1])?.[f.code]));}
  tabs.set('data',[{name:'T'+period.slice(5).replace(/^0/,''),template:'T10',rows:monthRows,clearRows:45,clearColumns:102}]);
- const [kt,wat]=await Promise.all([exportTabs(exportCtktkt,'period='+period),exportTabs(exportWater,'month='+period)]);
+ const [kt,wat]=await Promise.all([
+  cachedMirrorReport(mirrorReportRevision('ctktkt',period,day,sourceVersions),async()=>{
+   const {buildCtktktWorkbook}=await import('./report-exports/ctktkt');
+   return mirrorWorkbookTabs(await buildCtktktWorkbook(period,false));
+  }),
+  cachedMirrorReport(mirrorReportRevision('water',period,day,sourceVersions),async()=>{
+   const {buildWaterWorkbook}=await import('./report-exports/water');
+   return mirrorWorkbookTabs(await buildWaterWorkbook(period));
+  }),
+ ]);
  tabs.set('ctktkt',kt);tabs.set('water',wat.map(t=>({...t,template:'T10.2026'})));
  // Water exporter writes the same report layout; retain its missing title labels from the reference.
  const wtab=tabs.get('water')![0];wtab.startRow=3;wtab.rows=wtab.rows.slice(2);wtab.rows[0][0]=previous.split('-').reverse().join('/');wtab.clearRows=210;
@@ -96,7 +89,7 @@ export async function buildMirrorSnapshot(period:string){
   for(const date of dates){
    const row=byDate.get(date)||{},r=empty(160,8);
    put(r,'A7',`BÁO CÁO VẬN HÀNH NGÀY ${date.split('-').reverse().join('/')} – ${unit==='A0'?'TOÀN NHÀ MÁY':unit}`);
-   const readings=(u:string)=>Object.fromEntries(['P','Q','D','E'].map(metric=>[metric,SHIFT_TIME_SLOTS.map(time=>num(shift.find(x=>x.operating_date===date&&x.unit===u&&x.time_slot===time&&x.metric===metric)?.value))]));
+   const readings=(u:string)=>Object.fromEntries(['P','Q','D','E'].map(metric=>[metric,SHIFT_TIME_SLOTS.map(time=>num(findReading(date,u,time,metric)?.value))]));
    const s1r=readings('S1'),s2r=readings('S2');const rr=unit==='A0'?deriveA0Readings(s1r,s2r):unit==='S1'?s1r:s2r;
    for(let i=0;i<48;i++)for(const [j,m] of (['P','Q','D','E'] as const).entries())r[10+i][1+j]=rr[m]?.[i]??null;
    const get=(a:string,b:string)=>unit==='S1'?num(row[a]):unit==='S2'?num(row[b]):num(row[a])===null&&num(row[b])===null?null:(num(row[a])??0)+(num(row[b])??0);
