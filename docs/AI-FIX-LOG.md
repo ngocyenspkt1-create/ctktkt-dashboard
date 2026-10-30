@@ -1,5 +1,12 @@
 # Nhật ký kiểm tra và sửa lỗi
 
+## 2026-10-30 — Hướng dẫn OCR phân biệt 0/8 trên công tơ chấm sáng
+
+- Phản ánh: chữ số 0/8 trên màn hình xanh LED/VFD bị đọc nhầm. Kiểm tra mã thấy prompt chung chỉ yêu cầu không đoán, chưa hướng dẫn kiểm tra cấu trúc chấm sáng; chưa tái hiện lỗi bằng một lần gọi model thật.
+- Bổ sung vào COAL_METER_SYSTEM_PROMPT dùng chung Gemini/Claude: xét nét phát sáng và khoảng trống của 0/8, phân biệt nét chéo trong số 0 với thanh ngang giữa số 8; so mẫu cùng font trên chính màn hình, không lấy bàn phím làm mẫu; đọc trái sang phải rồi kiểm lại phải sang trái, giữ đủ số lẻ và số 0 cuối. Không suy từ chỉ số trước hay tự thay hàng loạt 0/8.
+- Nếu còn một chữ số không rõ: yêu cầu total_display=null, confidence=low và ghi vị trí nghi ngờ bằng tiếng Việt. Luồng hiện có chặn xác nhận/lưu cho đến khi nhập tay; người dùng cũng có thể tải ảnh rõ hơn. Không đổi số liệu đã lưu, không nhúng ảnh hoặc giá trị mẫu của người dùng vào prompt.
+- Kiểm chứng: 32 tests Gemini/OCR/nhập ảnh đạt, gồm yêu cầu phân biệt 0/8 trong payload, bảo toàn chuỗi số và số lẻ cuối, kết quả mơ hồ null/low, chặn lưu trước nhập tay. Đây là kiểm thử giả lập hợp đồng, không chứng minh độ chính xác suy luận với ảnh thật; chưa gọi Gemini thật bằng hai ảnh mới và chưa triển khai thay đổi này.
+
 ## 2026-10-12
 
 ### Phạm vi

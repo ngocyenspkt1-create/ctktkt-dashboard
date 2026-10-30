@@ -20,6 +20,30 @@ test("Gemini keeps visible digits, uses header key, returns parsed JSON",async()
   });
   assert.ok(called);assert.equal(result.total_display,"8939.810");
 });
+
+test("OCR request checks dot-matrix 0/8 strokes without rewriting visible totals",async()=>{
+  for(const total of ["30122.960","88824.149","80808.080"]){
+    const result=await readCoalMeterGemini({data:"synthetic-image",mediaType:"image/jpeg"},"synthetic-key","test",async(url,options)=>{
+      const prompt=JSON.parse(options.body).systemInstruction.parts[0].text;
+      assert.match(prompt,/slash inside 0 is NOT the middle horizontal bar of 8/);
+      assert.match(prompt,/SAME display\/font/);
+      assert.match(prompt,/right to left/);
+      assert.match(prompt,/total_display null and confidence "low"/);
+      assert.match(prompt,/Never globally change 0 to 8 or 8 to 0/);
+      return mock({candidates:[{finishReason:"STOP",content:{parts:[{text:JSON.stringify({...reading,total_display:total})}]}}]})();
+    });
+    assert.equal(result.total_display,total);
+  }
+});
+
+test("ambiguous 0/8 remains unreadable and low confidence for manual review",async()=>{
+  const unclear={...reading,total_display:null,confidence:"low",note:"Chưa phân biệt được 0/8 ở chữ số thứ 2; nhập tay hoặc chụp lại ảnh."};
+  const result=await readCoalMeterGemini({data:"synthetic-image",mediaType:"image/jpeg"},"synthetic-key","test",
+    mock({candidates:[{finishReason:"STOP",content:{parts:[{text:JSON.stringify(unclear)}]}}]}));
+  assert.equal(result.total_display,null);
+  assert.equal(result.confidence,"low");
+  assert.match(result.note,/0\/8/);
+});
 test("Gemini rejects hallucinated units, invalid schema, truncated output and quota failure",async()=>{
   for(const value of [{...reading,total_unit:"t/h"},{...reading,confidence:"certain"}]) {
     await assert.rejects(()=>readCoalMeterGemini({data:"x",mediaType:"image/jpeg"},"key","test",mock({candidates:[{finishReason:"STOP",content:{parts:[{text:JSON.stringify(value)}]}}]})));
