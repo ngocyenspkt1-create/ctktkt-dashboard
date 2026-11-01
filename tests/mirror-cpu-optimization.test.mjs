@@ -48,7 +48,15 @@ function load(relative, overrides, baseline=false, modules=new Map(), env={}) {
     return load(path.relative(root,target),overrides,baseline,modules,env);
   };
   const isBaseline=baseline&&['lib/google-mirror-snapshot.ts','lib/report-exports/ctktkt.ts','lib/report-exports/water.ts'].includes(path.relative(root,filename).replaceAll('\\','/'));
-  const source=isBaseline?execFileSync('git',['show',`a1cfe95:${path.relative(root,filename).replaceAll('\\','/')}`],{cwd:root,encoding:'utf8',maxBuffer:8_000_000}):fs.readFileSync(filename,'utf8');
+  let source=isBaseline?execFileSync('git',['show',`a1cfe95:${path.relative(root,filename).replaceAll('\\','/')}`],{cwd:root,encoding:'utf8',maxBuffer:8_000_000}):fs.readFileSync(filename,'utf8');
+  // Keep the independent serialized-XLSX baseline, with the newly agreed
+  // shutdown display rules on BOTH paths. Running-day arithmetic stays intact.
+  if(isBaseline&&filename.endsWith('ctktkt.ts')) source=source.replace('workbook.calcProperties.fullCalcOnLoad = true;', 'require("@/lib/export-zero-division").guardExportZeroDivisions(workbook); workbook.calcProperties.fullCalcOnLoad = true;');
+  if(isBaseline&&filename.endsWith('water.ts')) source=source
+    .replaceAll('K${currentRowIdx}/G${currentRowIdx}, 0)', 'K${currentRowIdx}/G${currentRowIdx}, "")')
+    .replaceAll('L${currentRowIdx}/H${currentRowIdx}, 0)', 'L${currentRowIdx}/H${currentRowIdx}, "")')
+    .replaceAll('result: item.waterRatioS1','result: item.elecGenS1 > 0 ? item.waterRatioS1 : undefined')
+    .replaceAll('result: item.waterRatioS2','result: item.elecGenS2 > 0 ? item.waterRatioS2 : undefined');
   const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
   try { vm.runInNewContext(code,{module:m,exports:m.exports,require:resolver,process:{env},Buffer,structuredClone,console,Date,Intl,Response,Request,URL,atob,Uint8Array,ArrayBuffer}); }
   catch(error) { console.error('Module failure:',relative,error.stack);throw error; }
@@ -166,6 +174,19 @@ test('Excel download retains all sheets, cell values, merges, print layout and a
     assert.equal(a.length,b.length);
     for(let i=0;i<a.length;i++)assert.equal(digest(a[i]),digest(b[i]),`${name}/${a[i].name} Excel content/layout`);
   }
+});
+
+test('all nine mirrors include confirmed shutdown days without inventing interval meter readings',async t=>{
+  const f=fixture(t);
+  for(const cell of ['J157','K157','J158','K158'])f.db.prepare('INSERT INTO daily_inputs VALUES(?,?,?)').run('2026-10-31','KTKT:'+cell,'0');
+  const snapshot=await load('lib/google-mirror-snapshot.ts',f.overrides).buildMirrorSnapshot('2026-10',f.versions);
+  assert.equal(snapshot.files.length,9);
+  const ppa=snapshot.files.find(file=>file.key==='ppa');
+  const day=ppa.tabs[0].rows.find(row=>row[0]==='31/10/2026');
+  assert.ok(day);assert.equal(day[1],null);assert.equal(day[9],'Ngừng máy — không đánh giá');
+  assert.ok(!ppa.tabs.some(tab=>tab.name==='3110'),'daily production is not a fabricated 48-interval meter source');
+  const formulas=snapshot.files.find(file=>file.key==='ctktkt').tabs.flatMap(tab=>tab.rows.flat()).filter(cell=>cell&&typeof cell==='object'&&'formula' in cell).map(cell=>cell.formula);
+  assert.ok(formulas.some(formula=>formula.includes('ERROR.TYPE(')));
 });
 
 test('cache revisions cover historical carryovers, source edits, midnight, namespace and release; concurrent requests build once',async()=>{

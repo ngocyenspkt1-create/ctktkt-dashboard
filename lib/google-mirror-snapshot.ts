@@ -7,7 +7,7 @@ import {deriveCtktktCellsFromBcsx} from './ctktkt-bcsx-link';
 import {ctktktWaterLogFromRow,deriveCtktktCellsFromWater} from './ctktkt-water-link';
 import {mergeDailyInputsWithCtktkt} from './daily-source-links';
 import {calculateDailyProduction} from './daily-production-calculations';
-import {calculateActualHeatRate,calculatePpaHeatRateDetailed,type PpaSourceData} from './ppa-heat-rate';
+import {calculateActualHeatRate,calculatePpaHeatRateDetailed,displayPpaRate,stoppedPpaDays,type PpaSourceData} from './ppa-heat-rate';
 import {buildPlantSheet,buildUnitSheet,buildMeterSheet,type PpaSheetRow} from './ppa-sheet-export';
 import {SHIFT_TIME_SLOTS,deriveA0Readings} from './bcsx';
 import {calculateAuxiliaryElectricity} from './auxiliary-electricity';
@@ -76,12 +76,14 @@ export async function buildMirrorSnapshot(period:string,versions?:Record<string,
  // Water exporter writes the same report layout; retain its missing title labels from the reference.
  const wtab=tabs.get('water')![0];wtab.startRow=3;wtab.rows=wtab.rows.slice(2);wtab.rows[0][0]=previous.split('-').reverse().join('/');wtab.clearRows=210;
  const ppaDays=ppa.filter(r=>String(r.operating_date)>=from),year=Number(period.slice(0,4));
- const pr:PpaSheetRow[]=ppaDays.map(r=>{const date=String(r.operating_date),act=calculateActualHeatRate(byDate.get(date)||{});return {date,ppaPlant:num(r.ppa_plant),ppaS1:num(r.ppa_s1),ppaS2:num(r.ppa_s2),actualPlant:act?.actualPlant??null,actualS1:act?.actualS1??null,actualS2:act?.actualS2??null,netS1Kwh:num(r.net_s1_kwh),netS2Kwh:num(r.net_s2_kwh),availableCapacityS1Mw:null,availableCapacityS2Mw:null,noteS1:String(r.note_s1||''),noteS2:String(r.note_s2||'')};});
+ for(const day of stoppedPpaDays(byDate))if(day.operatingDate>=from&&day.operatingDate<next&&!ppaDays.some(r=>String(r.operating_date)===day.operatingDate))ppaDays.push({operating_date:day.operatingDate,source_data:null,net_s1_kwh:0,net_s2_kwh:0,ppa_plant:0,ppa_s1:0,ppa_s2:0,note_s1:'',note_s2:''});
+ ppaDays.sort((a,b)=>String(a.operating_date).localeCompare(String(b.operating_date)));
+ const pr:PpaSheetRow[]=ppaDays.map(r=>{const date=String(r.operating_date),act=calculateActualHeatRate(byDate.get(date)||{});return {date,ppaPlant:displayPpaRate(num(r.ppa_plant),num(r.net_s1_kwh) === null || num(r.net_s2_kwh) === null ? null : num(r.net_s1_kwh)! + num(r.net_s2_kwh)!),ppaS1:displayPpaRate(num(r.ppa_s1),num(r.net_s1_kwh)),ppaS2:displayPpaRate(num(r.ppa_s2),num(r.net_s2_kwh)),actualPlant:act?.actualPlant??null,actualS1:act?.actualS1??null,actualS2:act?.actualS2??null,netS1Kwh:num(r.net_s1_kwh),netS2Kwh:num(r.net_s2_kwh),availableCapacityS1Mw:null,availableCapacityS2Mw:null,noteS1:String(r.note_s1||''),noteS2:String(r.note_s2||'')};});
  const adapter=matrixAdapter(),plant=buildPlantSheet(adapter,[[period,pr]]) as unknown as Matrix;
  for(const row of plant.slice(1))for(const c of [8,11,14])if(typeof row[c]==='number')row[c]=Number(row[c])/100;
  const pTabs:MirrorTab[]=[{name:'Cả nhà máy DH1',rows:plant.slice(1),startRow:3,clearRows:150,clearColumns:18}];
  const s1=[],s2=[];
- for(const r of ppaDays){const iso=String(r.operating_date),source=JSON.parse(String(r.source_data)) as PpaSourceData,detail=calculatePpaHeatRateDetailed(source,year);s1.push({iso,detail:detail.s1});s2.push({iso,detail:detail.s2});pTabs.push({name:iso.slice(8)+iso.slice(5,7),template:'0110',rows:buildMeterSheet(adapter,iso,source) as unknown as Matrix,clearRows:50,clearColumns:52});}
+ for(const r of ppaDays){if(!r.source_data)continue;const iso=String(r.operating_date),source=JSON.parse(String(r.source_data)) as PpaSourceData,detail=calculatePpaHeatRateDetailed(source,year);s1.push({iso,detail:detail.s1});s2.push({iso,detail:detail.s2});pTabs.push({name:iso.slice(8)+iso.slice(5,7),template:'0110',rows:buildMeterSheet(adapter,iso,source) as unknown as Matrix,clearRows:50,clearColumns:52});}
  for(const [name,days] of [['S1',s1],['S2',s2]] as const)pTabs.push({name,rows:buildUnitSheet(adapter,days,year) as unknown as Matrix,clearRows:200,clearColumns:55});
  tabs.set('ppa',pTabs);
  for(const [unit,key] of [['S1','bcsx-s1'],['S2','bcsx-s2'],['A0','bcsx-a0']] as const){

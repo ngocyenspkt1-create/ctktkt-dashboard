@@ -49,7 +49,7 @@ export function PpaHeatRateBulkImport() {
           });
           const body = await response.json() as { error?: string };
           if (!response.ok) throw new Error(body.error || "Chưa lưu được.");
-          collected.push({ sheet: sheetName, status: "saved", operatingDate, detail: `Đã lưu — SHN PPA chung ${calculation.ppaPlant.toFixed(2)} kJ/kWh.` });
+          collected.push({ sheet: sheetName, status: "saved", operatingDate, detail: calculation.netS1Kwh + calculation.netS2Kwh === 0 ? "Đã lưu — cả hai tổ ngừng, không đánh giá SHN." : `Đã lưu — SHN PPA chung ${calculation.ppaPlant.toFixed(2)} kJ/kWh.` });
         } catch (caught) {
           collected.push({ sheet: sheetName, status: caught instanceof Error && /không phải|chưa đủ|dòng KwhGiao|cấu trúc CSV|CSV rút gọn/.test(caught.message) ? "skipped" : "error", detail: caught instanceof Error ? caught.message : "Không đọc được sheet này." });
         }

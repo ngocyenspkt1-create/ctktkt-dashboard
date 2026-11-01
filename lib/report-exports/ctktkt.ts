@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { guardExportZeroDivisions } from "@/lib/export-zero-division";
 import { applyCtktktExportPresentation, hideCtktktExportScratchArea } from "@/lib/ctktkt-export-presentation";
 import { getRawDb } from "@/db";
 import { calculateDailyProduction } from "@/lib/daily-production-calculations";
@@ -295,6 +296,7 @@ export async function buildCtktktWorkbook(period: string, presentation = true) {
     }
     const totalSheet = workbook.getWorksheet("Tổng hợp tháng");
     if (totalSheet) totalSheet.getCell("A1").value = `Tổng hợp tháng ${month}/${year}`;
+    guardExportZeroDivisions(workbook);
     workbook.calcProperties.fullCalcOnLoad = true;
     // The Sheets mirror writes only values/formulas into its existing template.
     // Excel-only font, fill and print work is unnecessary for that projection.

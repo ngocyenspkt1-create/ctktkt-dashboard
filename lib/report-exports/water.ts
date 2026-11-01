@@ -312,9 +312,9 @@ export async function buildWaterWorkbook(month: string) {
         row.getCell(12).value = { formula: meterFormula("J",item.waterAdjustmentS2,25000), result: item.waterUsedS2 };
 
         // Col M: Hệ số S1 = K[r] / G[r]
-        row.getCell(13).value = { formula: `IF(G${currentRowIdx}>0, K${currentRowIdx}/G${currentRowIdx}, 0)`, result: item.waterRatioS1 };
+        row.getCell(13).value = { formula: `IF(G${currentRowIdx}>0, K${currentRowIdx}/G${currentRowIdx}, "")`, result: item.elecGenS1 > 0 ? item.waterRatioS1 : undefined };
         // Col N: Hệ số S2 = L[r] / H[r]
-        row.getCell(14).value = { formula: `IF(H${currentRowIdx}>0, L${currentRowIdx}/H${currentRowIdx}, 0)`, result: item.waterRatioS2 };
+        row.getCell(14).value = { formula: `IF(H${currentRowIdx}>0, L${currentRowIdx}/H${currentRowIdx}, "")`, result: item.elecGenS2 > 0 ? item.waterRatioS2 : undefined };
 
         // Col O: Nước cấp bình ngưng nhận S1
         row.getCell(15).value = item.condenserRecS1;
