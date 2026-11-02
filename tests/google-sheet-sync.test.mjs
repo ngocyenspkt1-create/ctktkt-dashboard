@@ -20,6 +20,13 @@ const entries = Object.entries({
   [PPA_AVAILABLE_CAPACITY_S1_CODE]: "622,5", [PPA_AVAILABLE_CAPACITY_S2_CODE]: "615,2",
 }).map(([fieldCode, value]) => ({ fieldCode, value }));
 
+test('ngày hai tổ ngừng đồng bộ SHN không áp dụng, giữ ghi chú và sản lượng 0',()=>{
+  const stopped=entries.map(entry=>({...entry,value:['B','C','F','H','I','L','AE','AF'].includes(entry.fieldCode)?'0':entry.value}));
+  const payload=buildGoogleSheetDayPayload('2026-10-31',stopped,{ppaPlant:0,ppaS1:0,ppaS2:0,noteS1:'Bảo dưỡng'});
+  for(const key of ['S1','S2','NMND']){assert.equal(payload[key].sanLuong,0);assert.equal(payload[key].shnPPA,null);assert.equal(payload[key].shnThucTe,null);assert.match(payload[key].danhGia,/không đánh giá/);}
+  assert.match(payload.S1.danhGia,/Bảo dưỡng/);
+});
+
 test("link xem Google Sheet mở đúng bảng tính DH1", () => {
   const url = new URL(GOOGLE_SHEET_VIEW_URL);
   assert.equal(url.protocol, "https:");
