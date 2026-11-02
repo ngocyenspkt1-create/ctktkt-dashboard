@@ -3,6 +3,7 @@ import {validMirrorPeriod} from '@/lib/google-mirror';
 import {vietnamDateIso} from '@/lib/operating-date';
 import {getOperationalReadVersions} from '@/db';
 import {createHash} from 'node:crypto';
+import {mirrorSourceVersions} from '@/lib/google-mirror-revision';
 export const maxDuration=60;
 export async function GET(request:Request){
  if(!await mirrorAuthorized(request))return Response.json({error:'Không có quyền đồng bộ.'},{status:401});
@@ -12,12 +13,16 @@ export async function GET(request:Request){
   const versions=await getOperationalReadVersions();
   // Include day/release as well as source versions: midnight advances the
   // active range, and a new exporter/template must never reuse an old ETag.
-  const revision=['mirror-v2',process.env.VERCEL_GIT_COMMIT_SHA||'local',period,vietnamDateIso(),Object.entries(versions).filter(([key])=>!key.includes(':')).sort(([a],[b])=>a.localeCompare(b))];
+  const revision=['mirror-v3',process.env.VERCEL_GIT_COMMIT_SHA||'local',period,vietnamDateIso(),mirrorSourceVersions(versions)];
   const etag='"'+createHash('sha256').update(JSON.stringify(revision)).digest('hex')+'"';
   const headers={'Cache-Control':'no-store',ETag:etag};
   if(process.env.CTKTKT_READ_CACHE!=='off'&&request.headers.get('if-none-match')===etag)return new Response(null,{status:304,headers});
   const {buildMirrorSnapshot}=await import('@/lib/google-mirror-snapshot');
   return Response.json(await buildMirrorSnapshot(period,versions),{headers});
  }
- catch{return Response.json({error:'Không tạo được bản đồng bộ. File Google Sheets cũ được giữ nguyên.'},{status:503});}
+ catch(error){
+  // Fixed codes only: never log raw source rows, credentials or database errors.
+  console.error('[google-mirror/snapshot]',error instanceof Error&&error.message==='PPA_METER_SOURCE_INVALID'?'PPA_METER_SOURCE_INVALID':'SNAPSHOT_BUILD_FAILED');
+  return Response.json({error:'Không tạo được bản đồng bộ. File Google Sheets cũ được giữ nguyên.'},{status:503});
+ }
 }

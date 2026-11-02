@@ -189,6 +189,19 @@ test('all nine mirrors include confirmed shutdown days without inventing interva
   assert.ok(formulas.some(formula=>formula.includes('ERROR.TYPE(')));
 });
 
+test('notes-only PPA rows keep saved notes without breaking nine-file snapshot or fabricating meters',async t=>{
+  const f=fixture(t);
+  f.db.prepare('INSERT INTO ppa_heat_rate_daily(operating_date,source_data,note_s1,note_s2) VALUES(?,?,?,?)').run('2026-11-01','{}','saved S1 note','saved S2 note');
+  const snapshot=await load('lib/google-mirror-snapshot.ts',f.overrides).buildMirrorSnapshot('2026-11',f.versions);
+  assert.equal(snapshot.files.length,9);
+  const ppa=snapshot.files.find(file=>file.key==='ppa');
+  const row=ppa.tabs[0].rows.find(row=>row[0]==='01/11/2026');
+  assert.ok(row);assert.ok(row.includes('saved S1 note'));assert.ok(row.includes('saved S2 note'));
+  assert.ok(!ppa.tabs.some(tab=>tab.name==='0111'));
+  f.db.exec(`UPDATE ppa_heat_rate_daily SET source_data='{"grossS1":[]}'`);
+  await assert.rejects(()=>load('lib/google-mirror-snapshot.ts',f.overrides).buildMirrorSnapshot('2026-11',f.versions),/PPA_METER_SOURCE_INVALID/);
+});
+
 test('cache revisions cover historical carryovers, source edits, midnight, namespace and release; concurrent requests build once',async()=>{
   const store=new Map(),env={TURSO_DATABASE_URL:'synthetic-a',VERCEL_GIT_COMMIT_SHA:'release-a'};
   const overrides={'next/cache':{unstable_cache:(fn,key)=>async()=>{const k=JSON.stringify(key);if(!store.has(k))store.set(k,await fn());return store.get(k);}}};
@@ -230,6 +243,7 @@ test('snapshot authenticates before metadata/cache access and returns 304 withou
   allowed=true;const response=await route.GET(request());assert.equal(response.status,200);assert.equal(builds,1);
   const etag=response.headers.get('etag');assert.ok(etag);
   assert.equal((await route.GET(request({'if-none-match':etag}))).status,304);assert.equal(builds,1);
+  versions.unrelated_feature=2;assert.equal((await route.GET(request({'if-none-match':etag}))).status,304);assert.equal(builds,1);
   versions.daily_inputs=2;assert.equal((await route.GET(request({'if-none-match':etag}))).status,200);assert.equal(builds,2);
   allowed=false;assert.equal((await route.GET(request({'if-none-match':etag}))).status,401);
 });

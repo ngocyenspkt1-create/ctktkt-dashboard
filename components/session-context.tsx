@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { hasPermission, type Permission, type SessionUser } from "@/lib/auth/session";
+import { createSessionRefreshGate } from "@/lib/session-refresh-gate";
 
 const SessionContext = createContext<SessionUser | null>(null);
 
@@ -26,12 +27,14 @@ export function SessionProvider({ user, children }: { user: SessionUser; childre
         setCurrentUser(data.user);
       } catch { /* Server still enforces current grants if refresh is temporarily unavailable. */ }
     };
-    const timer = window.setInterval(() => void refresh(), 60_000);
-    const onFocus = () => void refresh();
+    const gate = createSessionRefreshGate(refresh);
+    const timer = window.setInterval(() => void gate.request(), 60_000);
+    const onFocus = () => { if (!document.hidden) void gate.request(); };
+    const onPermissionsUpdated = () => { if (!document.hidden) void gate.request(true); };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
-    window.addEventListener("permissions-updated", onFocus);
-    return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus); window.removeEventListener("permissions-updated", onFocus); };
+    window.addEventListener("permissions-updated", onPermissionsUpdated);
+    return () => { active = false; gate.cancel(); window.clearInterval(timer); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus); window.removeEventListener("permissions-updated", onPermissionsUpdated); };
   }, []);
   return <SessionContext.Provider value={currentUser}>{children}</SessionContext.Provider>;
 }
