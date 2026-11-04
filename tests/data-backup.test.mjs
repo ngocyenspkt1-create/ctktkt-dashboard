@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import {BACKUP_TABLES,backupRange,createDataBackup,validateDataBackup} from '../lib/data-backup.ts';
 import * as backup from '../lib/data-backup.ts';
+import {collectBackupParts} from '../lib/data-backup-download.ts';
 
 const require=createRequire(import.meta.url);
 const emptyTables=()=>Object.fromEntries(BACKUP_TABLES.map(table=>[table.name,[]]));
@@ -122,4 +123,38 @@ test('downloaded JSON round-trips through preview and restore with its original 
   assert.equal((await destination.post(file,'restore')).status,200);
   const row=destination.sqlite.prepare('SELECT value,note FROM daily_inputs').get();assert.equal(row.value,'0.080');assert.equal(row.note,'ghi chú tiếng Việt');
   const water=destination.sqlite.prepare('SELECT water_adjustment_s1,water_adjustment_s2 FROM water_shift_logs').get();assert.equal(water.water_adjustment_s1,0);assert.equal(water.water_adjustment_s2,null);
+});
+
+test('all-time export over 12000 rows uses bounded pages with no missing or duplicate rows',async t=>{
+  const source=fixture(),destination=fixture();t.after(()=>{source.sqlite.close();destination.sqlite.close();});
+  const insert=source.sqlite.prepare('INSERT INTO daily_inputs(operating_date,field_code,value,note) VALUES(?,?,?,?)');
+  source.sqlite.exec('BEGIN');for(let i=0;i<13005;i++)insert.run('2026-11-01','LARGE:'+i,String(i),'Synthetic');source.sqlite.exec('COMMIT');
+  const legacy=await source.route.GET(new Request('https://test.local/api/admin/data-backup'));assert.equal(legacy.status,400);
+  const progress=[],requests=[];
+  const result=await collectBackupParts('',async url=>{requests.push(url);return source.route.GET(new Request('https://test.local'+url));},text=>progress.push(text));
+  assert.equal(result.total,13005);assert.equal(result.files.length,14);assert.ok(requests.every(url=>url.includes('action=')));
+  const ids=new Set();
+  for(const file of result.files){
+    const parsed=validateDataBackup(JSON.parse(file.content));
+    assert.ok(parsed.tables.daily_inputs.length<=1000);
+    for(const row of parsed.tables.daily_inputs){assert.ok(!ids.has(row.id));ids.add(row.id);}
+    assert.equal((await destination.post(parsed,'restore')).status,200);
+  }
+  assert.equal(ids.size,13005);assert.equal(destination.sqlite.prepare('SELECT COUNT(*) AS n FROM daily_inputs').get().n,13005);
+  assert.match(progress.at(-1),/ZIP/);
+});
+
+test('paged export rejects invalid cursors, changing counts and any failed page without claiming success',async t=>{
+  const f=fixture();t.after(()=>f.sqlite.close());
+  for(const query of ['action=part&table=users&after=0&ceiling=1','action=part&table=daily_inputs&after=-1&ceiling=1','action=part&table=daily_inputs&after=3&ceiling=1'])assert.equal((await f.route.GET(new Request('https://test.local/?'+query))).status,400);
+  const manifest={tables:[{name:'daily_inputs',label:'Test',total:2,ceiling:2}],range:null};
+  await assert.rejects(()=>collectBackupParts('',async url=>url.includes('manifest')?Response.json(manifest):Response.json({count:0,nextAfter:0,done:true,file:{tables:emptyTables()}}),()=>{}),/thay đổi/);
+  await assert.rejects(()=>collectBackupParts('',async url=>url.includes('manifest')?Response.json(manifest):Response.json({error:'Synthetic failure'},{status:503}),()=>{}),/Synthetic failure/);
+  await assert.rejects(()=>collectBackupParts('',async url=>url.includes('manifest')?Response.json(manifest):Response.json({count:1,nextAfter:0,done:false,file:{tables:emptyTables()}}),()=>{}),/không hợp lệ/);
+});
+
+test('oversized pages split by bytes and remain valid restorable JSON parts',()=>{
+  const rows=Array.from({length:4},(_,i)=>({...day(),id:i+1,field_code:'BIG:'+i,note:'x'.repeat(900000)}));
+  const page=backup.createBackupPage('daily_inputs',rows,null,0);
+  assert.equal(page.count,2);assert.equal(page.nextAfter,2);assert.equal(page.done,false);assert.equal(validateDataBackup(page.file).tables.daily_inputs.length,2);
 });

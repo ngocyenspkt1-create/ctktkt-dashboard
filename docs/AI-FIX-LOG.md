@@ -1,5 +1,14 @@
 # Nhật ký kiểm tra và sửa lỗi
 
+## 2026-11-04 — Sửa tải “Tất cả thời gian” không có tệp
+
+- Tái hiện trực tiếp trên web thật bằng phiên quản trị: bật Tất cả thời gian và bấm tải, nhận lỗi “Dữ liệu vượt dung lượng một tệp...”. Nguyên nhân là endpoint cũ cố ghép dữ liệu vào một JSON giới hạn 3 MB / 12.000 dòng; lỗi đặt sau hai card nên khó thấy. Không phải lỗi bấm chọn checkbox.
+- Thêm GET action=manifest và action=part (giữ kiểm tra admin, no-store, allowlist, bind SQL). Manifest lấy số dòng và ID lớn nhất từng bảng; đọc lần lượt theo id > after AND id <= ceiling, tối đa 1.001 dòng để trả mỗi phần tối đa 1.000 dòng. Phần vượt 3 MB tự giảm số dòng; không cắt bỏ dữ liệu, cursor đi tiếp từ dòng cuối thực trả. Mỗi phần vẫn là JSON v1 có checksum, nạp được bằng API hiện hành.
+- Client tải từng phần tuần tự, hiển thị tiến độ ngay cạnh nút, kiểm tra số dòng thực nhận mỗi bảng và cursor; chỉ nén ZIP sau khi nhận đủ. Nếu một phần lỗi/thiếu thì không tạo gói chưa đủ. JSZip tải động khi dùng; không đẩy toàn bộ dữ liệu vào một phản hồi Vercel hoặc tải nền khi mở trang.
+- Tải ZIP bằng anchor gắn vào DOM và giữ liên kết tải thủ công bên dưới nút; URL blob chỉ hủy khi thay gói hoặc rời trang. Lỗi hiển thị ngay trong khung tải. Checkbox chỉ chọn phạm vi, cần bấm nút tải ZIP. Trong ZIP có hướng dẫn giải nén và nạp lần lượt đủ các JSON; chưa có nạp cả ZIP trong một thao tác. Mỗi lần nạp JSON là một giao dịch riêng.
+- Giới hạn nhất quán: mỗi trang đọc trong snapshot riêng, không phải toàn bộ ZIP cùng snapshot. ID ceiling loại bản ghi tạo sau mốc đầu; so số dòng phát hiện thêm/xóa trong tập ID nhưng không phát hiện giá trị cùng ID được cập nhật trong lúc tải. Hướng dẫn tải khi không có người chỉnh hoặc clone Turso nếu cần snapshot database nguyên tử. Không hứa quá mức về nhất quán.
+- Kiểm thử SQLite đạt: 13.005 dòng tái hiện lỗi cũ rồi tải 14 phần không thiếu/trùng và nạp đủ; trang quá dung lượng tự chia; con trỏ/tên bảng sai bị chặn; mất một phần hoặc thay đổi count không báo thành công. Tổng 11 test backup đạt; sẽ kiểm tra build và thử tải ZIP production sau triển khai. Không ghi dữ liệu thử vào production.
+
 ## 2026-11-04 — Chuẩn bị phát hành sao lưu và gói chuyển dự án
 
 - Gom mã nguồn chức năng Sao lưu & nạp dữ liệu, preview development, lệnh chạy Next.js và công cụ đóng gói cùng hướng dẫn chuyển dự án để đẩy GitHub theo yêu cầu người dùng. Các mục bên dưới ghi trạng thái local tại thời điểm triển khai tính năng, không phải trạng thái phát hành sau commit này.

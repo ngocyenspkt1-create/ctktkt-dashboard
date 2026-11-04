@@ -13,6 +13,7 @@ export const BACKUP_TABLES = [
 ] as const;
 export const MAX_BACKUP_BYTES = 3_000_000;
 export const MAX_BACKUP_ROWS = 12000;
+export const BACKUP_PAGE_ROWS = 1000;
 export type BackupRow = Record<string,string|number|null>;
 export type BackupRange = {from:string;to:string}|null;
 export type DataBackup = {format:"ctktkt-operating-backup";version:1;createdAt:string;range:BackupRange;tables:Record<string,BackupRow[]>;checksum:string};
@@ -38,6 +39,22 @@ export function createDataBackup(tables:DataBackup["tables"],range:BackupRange):
   if(Buffer.byteLength(JSON.stringify(file))>MAX_BACKUP_BYTES || Object.values(tables).reduce((sum,rows)=>sum+rows.length,0)>MAX_BACKUP_ROWS)
     throw new Error("Dữ liệu vượt dung lượng một tệp. Chọn khoảng ngày ngắn hơn, ví dụ từng tháng, rồi tải riêng từng tệp.");
   return file;
+}
+
+/** Each page remains a normal, independently restorable v1 backup. */
+export function createBackupPage(table:string,rows:BackupRow[],range:BackupRange,after:number){
+  if(!BACKUP_TABLES.some(item=>item.name===table))throw new Error("Bảng sao lưu không hợp lệ.");
+  let size=Math.min(rows.length,BACKUP_PAGE_ROWS);
+  while(true){
+    const selected=rows.slice(0,size);
+    try{
+      const file=createDataBackup(Object.fromEntries(BACKUP_TABLES.map(item=>[item.name,item.name===table?selected:[]])),range);
+      return {file,count:selected.length,nextAfter:selected.length?Number(selected[selected.length-1].id):after,done:selected.length===rows.length};
+    }catch(error){
+      if(size<=1)throw error;
+      size=Math.floor(size/2);
+    }
+  }
 }
 export function validateDataBackup(value:unknown):DataBackup {
   if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("Tệp sao lưu không hợp lệ.");

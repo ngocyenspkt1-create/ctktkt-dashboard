@@ -2,7 +2,7 @@ import {getRawDb,readBackupSnapshot} from "@/db";
 import {requireAdmin} from "@/lib/auth/server";
 import {ensureWaterSchema} from "@/lib/water-report/schema";
 import {ensureChemicalUsageSchema} from "@/lib/chemical-usage/schema";
-import {BACKUP_TABLES,MAX_BACKUP_BYTES,MAX_BACKUP_ROWS,backupRange,backupSchemas,createDataBackup,restoreStatements,validateDataBackup,type BackupRow} from "@/lib/data-backup";
+import {BACKUP_TABLES,BACKUP_PAGE_ROWS,MAX_BACKUP_BYTES,MAX_BACKUP_ROWS,backupRange,backupSchemas,createDataBackup,createBackupPage,restoreStatements,validateDataBackup,type BackupRow} from "@/lib/data-backup";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -23,8 +23,29 @@ export async function GET(request:Request){
   try{
     const url=new URL(request.url);
     const range=backupRange(url.searchParams.get("from"),url.searchParams.get("to"));
+    const action=url.searchParams.get("action");
+    if(action==="part"){
+      const table=BACKUP_TABLES.find(item=>item.name===url.searchParams.get("table"));
+      const rawAfter=url.searchParams.get("after"),rawCeiling=url.searchParams.get("ceiling");
+      const after=Number(rawAfter),ceiling=Number(rawCeiling);
+      if(!table||!rawAfter||!rawCeiling||!/^\d+$/.test(rawAfter)||!/^\d+$/.test(rawCeiling)||!Number.isSafeInteger(after)||!Number.isSafeInteger(ceiling)||after>ceiling)return json({error:"Phần sao lưu không hợp lệ."},400);
+      let where="id > ? AND id <= ?";const args:(string|number)[]=[after,ceiling];
+      if(range&&table.date){where+=` AND ${table.date} >= ? AND ${table.date} <= ?`;args.push(...(table.date==="period"?[range.from.slice(0,7),range.to.slice(0,7)+"\uffff"]:[range.from,range.to]));}
+      const [rows]=await readBackupSnapshot([{sql:`SELECT * FROM ${table.name} WHERE ${where} ORDER BY id LIMIT ${BACKUP_PAGE_ROWS+1}`,args}]);
+      return json(createBackupPage(table.name,rows as BackupRow[],range,after));
+    }
     const db=await database(),schemas=await backupSchemas(db);
     const active=BACKUP_TABLES.filter(table=>schemas.get(table.name)?.length);
+    if(action==="manifest"){
+      const queries=active.map(table=>{
+        const where=range&&table.date?` WHERE ${table.date} >= ? AND ${table.date} <= ?`:"";
+        const args=range&&table.date?(table.date==="period"?[range.from.slice(0,7),range.to.slice(0,7)+"\uffff"]:[range.from,range.to]):[];
+        return {sql:`SELECT COUNT(*) AS total, COALESCE(MAX(id),0) AS ceiling FROM ${table.name}${where}`,args};
+      });
+      const counts=await readBackupSnapshot(queries);
+      return json({range,tables:active.map((table,index)=>({name:table.name,label:table.label,total:Number(counts[index][0].total),ceiling:Number(counts[index][0].ceiling)}))});
+    }
+    if(action)return json({error:"Thao tác tải không hợp lệ."},400);
     const queries=active.map(table=>{
       let where="",args:string[]=[];
       if(range&&table.date){
