@@ -126,3 +126,9 @@ export function getRawDb() {
 }
 
 export function getDb() { return drizzle(getClient(), { schema }); }
+
+/** One read transaction keeps backup tables on the same database snapshot. */
+export async function readBackupSnapshot(statements: Array<{sql: string; args: InValue[]}>) {
+  const results = await getClient().batch(statements, 'read');
+  return results.map(result => rowsToObjects(result.columns, result.rows));
+}

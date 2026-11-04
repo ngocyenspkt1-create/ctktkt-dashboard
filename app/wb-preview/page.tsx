@@ -9,10 +9,12 @@ import "@/components/ppa-detail-table.css";
 import { PpaNotePreview } from "@/components/ppa-note-preview";
 import "@/components/ppa-controls.css";
 import {CoalPhotoDesignPreview} from "@/components/coal-photo-design-preview";
+import {DataBackupPanel} from "@/components/data-backup-panel";
 
 // Static, read-only design review. No session, business APIs or database access.
-export default function WbPreview() {
+export default async function WbPreview({searchParams}:{searchParams:Promise<{view?:string}>}) {
   if (process.env.NODE_ENV !== "development") notFound();
+  if((await searchParams).view==="data-backup")return <main className="app-workspace min-h-screen bg-slate-50 p-4 sm:p-8"><DataBackupPanel/></main>;
   const rows = [
     ["01", "7.824,32", "7.108,64", "716,00", "9,15", "24,00"],
     ["02", "8.102,56", "7.379,12", "723,44", "8,93", "24,00"],

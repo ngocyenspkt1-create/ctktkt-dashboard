@@ -1,5 +1,29 @@
 # Nhật ký kiểm tra và sửa lỗi
 
+## 2026-11-04 — Chuẩn bị phát hành sao lưu và gói chuyển dự án
+
+- Gom mã nguồn chức năng Sao lưu & nạp dữ liệu, preview development, lệnh chạy Next.js và công cụ đóng gói cùng hướng dẫn chuyển dự án để đẩy GitHub theo yêu cầu người dùng. Các mục bên dưới ghi trạng thái local tại thời điểm triển khai tính năng, không phải trạng thái phát hành sau commit này.
+- Kiểm lại 8 test sao lưu SQLite đạt và git diff --check sạch trước khi phát hành. ZIP đã được kiểm tra CRC/hash, script đóng gói qua syntax/lint. Thư mục outputs/transfer chứa bản ZIP local; GitHub nhận mã nguồn và script tạo lại gói, không đưa dependency/cache, secrets hoặc cấu hình cá nhân vào commit.
+
+## 2026-11-04 — Gói bàn giao toàn bộ mã nguồn để xây dựng ở nơi khác
+
+- Thêm TRANSFER_README.md ở gốc: hướng dẫn Next.js/Node, cấu hình Turso và AUTH_SECRET, Gemini, cron, đổi domain/extension, lựa chọn giữ database hoặc clone đầy đủ và giới hạn bản JSON vận hành. Tài liệu không coi README starter Sites cũ là hướng dẫn triển khai Next.js hiện hành.
+- Thêm npm scripts dev:next, build:next, start:next, package:transfer; không thay đường chạy Vinext/Sites cũ. Mẫu docs/transfer.env.example chỉ chứa tên biến/giá trị trống, được đưa vào gói thành .env.example.
+- scripts/package-transfer.mjs lấy nội dung working tree hiện tại từ file đã theo dõi và file nguồn mới thuộc thư mục cho phép, gồm chức năng backup chưa commit. Loại cấu hình MCP của máy, dependency/build/cache, file môi trường thật, khóa dạng file, database local và lịch sử Git; giữ tài nguyên, migration, test, public extension, tài liệu và nhật ký.
+- ZIP chứa một thư mục ctktkt-dashboard, TRANSFER_MANIFEST.json với commit nền và SHA-256 từng file; có tệp SHA-256 riêng bên ngoài. Script quét một số mẫu khóa nhà cung cấp/private key (gồm JS/JSON trong extension ZIP), mở lại ZIP với CRC và kiểm tra từng file theo hash. Không cam kết đây là kiểm toán bí mật toàn diện.
+- Gói không chứa dữ liệu đang nằm trên Turso hoặc cấu hình môi trường triển khai. Chưa chuyển hosting/domain/database hoặc đẩy GitHub. Đã tạo và kiểm tra đọc lại gói local; AI tiếp nhận cần dùng hướng dẫn gốc rồi kiểm tra kết nối/quyền tại nơi mới trước khi ghi dữ liệu.
+
+## 2026-11-04 — Sao lưu dữ liệu vận hành và nạp lại từ tệp
+
+- Thêm Hệ thống → Sao lưu & nạp dữ liệu (/admin/data-backup), trang và API /api/admin/data-backup đều requireAdmin; POST bắt buộc Origin cùng nguồn. Mặc định tải từ đầu tháng đến ngày hiện tại theo giờ Việt Nam, có chọn khoảng ngày hoặc tất cả thời gian. Chỉ tải khi bấm nút, không tải nền toàn bộ dữ liệu mỗi lần mở trang.
+- Phạm vi cố định 8 bảng: daily_inputs, shift_readings, operating_events, ppa_heat_rate_daily, water_shift_logs (gồm hiệu chỉnh), chemical_usage_logs (gồm metadata sửa/xóa), measurements và water_shift_leaders. Chỉ tiêu kỳ lấy trọn tháng trong khoảng; danh sách trưởng ca lấy toàn bộ. Không phải bản sao database toàn diện: không bao gồm tài khoản/phân quyền, secrets/API keys, audit cũ, cache, module công việc đã gỡ hoặc ảnh công tơ. Chính sách xóa ảnh 4 mốc ca không thay đổi.
+- GET dùng readBackupSnapshot: một giao dịch đọc libSQL cho các bảng trên, không dùng cache báo cáo; trả tệp JSON version 1, checksum SHA-256 để phát hiện hỏng/sửa tệp, no-store + attachment. Giới hạn 3 MB / 12.000 dòng cho mỗi tệp; vượt thì báo chia theo khoảng ngày, không xuất tệp bị cắt cụt.
+- Nạp có chọn tệp, kiểm tra trước, thống kê số dòng trong tệp và checkbox xác nhận. Đây là thống kê tệp, không dự báo số dòng thay đổi vì dữ liệu server có thể cập nhật sau bước kiểm tra. Mặc định chỉ thêm còn thiếu (ON CONFLICT DO NOTHING); ghi đè phải chọn riêng. Không xóa bản ghi ngoài tệp. Khóa tự nhiên giữ ID tại đích; sự kiện/hóa chất/chỉ tiêu kỳ theo ID, chỉ dùng để khôi phục cùng hệ thống, không dùng ghép hai database độc lập.
+- Server kiểm tra định dạng/checksum/ngày/khóa trùng/tên bảng/tên cột/kiểu dữ liệu theo PRAGMA trước khi ghi; giới hạn cả body stream. SQL dùng allowlist và tham số bind. INSERT nhiều dòng theo nhóm 50 để giảm số câu SQL; tất cả câu ghi và data_restore_audit (người nạp, checksum, cách nạp, số dòng) nằm trong một db.batch giao dịch. Qua lớp DB cũ, thay đổi tiếp tục tăng revision để cache báo cáo hết hiệu lực. Không cập nhật bảng audit lịch sử cũ.
+- Lỗi ràng buộc SQL hoàn tác toàn bộ; mất kết nối sau gửi giao dịch có thể chưa xác định đã commit hay chưa, UI yêu cầu tải bản sao mới kiểm tra trước khi thử lại. Không báo chắc chắn thất bại/hoàn tác nếu chưa nhận được xác nhận.
+- Kiểm chứng: kiểm thử SQLite thật cho tải/xem trước/nạp; quyền quản trị và Origin; file hỏng/cột lạ/kiểu sai; không ghi ở preview; idempotent và bảo toàn ID/0/null; ghi đè chủ động; rollback khi bảng sau xung đột; nhóm 125 dòng; vòng tải JSON rồi nạp lại. Toàn bộ suite hiện có đã đạt trước lần thêm test round-trip cuối; build production Webpack/TypeScript đạt, lint các file sửa không lỗi. Kiểm tra local giao diện, bật tất cả thời gian và đổi cách nạp; chưa nạp dữ liệu vận hành thật, chưa đẩy bản này lên GitHub/Vercel.
+- Preview chỉ trong development: /wb-preview?view=data-backup; không bỏ chặn đăng nhập cho trang/API quản trị. Ảnh giao diện local: data-backup-panel.png trong thư mục visualizations phiên hiện tại.
+
 ## 2026-10-30 — Hướng dẫn OCR phân biệt 0/8 trên công tơ chấm sáng
 
 - Phản ánh: chữ số 0/8 trên màn hình xanh LED/VFD bị đọc nhầm. Kiểm tra mã thấy prompt chung chỉ yêu cầu không đoán, chưa hướng dẫn kiểm tra cấu trúc chấm sáng; chưa tái hiện lỗi bằng một lần gọi model thật.

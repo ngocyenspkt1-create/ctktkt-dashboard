@@ -7,10 +7,11 @@ import {
   FileSpreadsheet,
   Flame,
   ShieldCheck,
+  DatabaseBackup,
   type LucideIcon,
 } from "lucide-react";
 
-export type NavKey = "data" | "ctktkt" | "bcsx" | "water" | "chemical-usage" | "ppa" | "pmis" | "admin-users";
+export type NavKey = "data" | "ctktkt" | "bcsx" | "water" | "chemical-usage" | "ppa" | "pmis" | "admin-users" | "data-backup";
 
 export type NavItem = { key: NavKey; href: string; label: string; description: string; icon: LucideIcon; keywords: string };
 
@@ -37,6 +38,7 @@ const NAV_GROUPS: Array<{ title: string; adminOnly?: boolean; items: NavItem[] }
     adminOnly: true,
     items: [
       { key: "admin-users", href: "/admin/users", label: "Quản lý tài khoản", description: "Người dùng, cương vị và phân quyền", icon: ShieldCheck, keywords: "tai khoan nguoi dung phan quyen cuong vi admin" },
+      { key: "data-backup", href: "/admin/data-backup", label: "Sao lưu & nạp dữ liệu", description: "Tải bản sao về máy và khôi phục khi cần", icon: DatabaseBackup, keywords: "sao luu backup khoi phuc nap lai data du lieu" },
     ],
   },
 ];
