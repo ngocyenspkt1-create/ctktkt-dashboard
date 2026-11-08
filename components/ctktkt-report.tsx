@@ -878,15 +878,23 @@ export function CtktktReport() {
   ) => {
     const text = e.clipboardData.getData("text/plain");
     if (!text) return;
+    // Excel/Google Sheets chỉ đưa số đang hiển thị vào text/plain; HTML giữ giá trị gốc
+    // (vd. độ ẩm 8,2567 hiển thị 8,3) để số dán lên web đúng bằng số trong bảng tính.
+    const html = e.clipboardData.getData("text/html");
 
     // Chỉ can thiệp nếu clipboard chứa tab hoặc xuống dòng (dữ liệu nhiều ô)
     if (!text.includes("\t") && !text.includes("\n") && !text.includes("\r")) {
+      const preciseValue = html ? parseSpreadsheetClipboard(text, html)[0]?.[0] : undefined;
+      if (preciseValue !== undefined && preciseValue !== parseSpreadsheetClipboard(text)[0]?.[0]) {
+        e.preventDefault();
+        update(startCell, preciseValue);
+      }
       return;
     }
 
     e.preventDefault();
 
-    const rows = parseSpreadsheetClipboard(text);
+    const rows = parseSpreadsheetClipboard(text, html);
     if (rows.length === 0) return;
 
     const currentInput = e.currentTarget;
